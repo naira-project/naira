@@ -1,0 +1,126 @@
+---
+# SPDX-FileCopyrightText: 2026 SAP SE or an SAP affiliate company and naira contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: openmetadataadapters.naira.io
+  labels:
+    app.kubernetes.io/part-of: naira
+spec:
+  group: naira.io
+  names:
+    kind: OpenMetadataAdapter
+    listKind: OpenMetadataAdapterList
+    plural: openmetadataadapters
+    singular: openmetadataadapter
+    shortNames:
+      - omadapter
+    categories:
+      - naira
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: URL
+          type: string
+          jsonPath: .spec.url
+        - name: Interval
+          type: string
+          jsonPath: .spec.syncInterval
+        - name: Datasets
+          type: integer
+          jsonPath: .status.datasetsDiscovered
+        - name: Last Sync
+          type: date
+          jsonPath: .status.lastSyncedAt
+      schema:
+        openAPIV3Schema:
+          description: >
+            OpenMetadataAdapter configures and drives the OpenMetadata → Naira
+            Dataset synchronisation. It is the sole component aware of
+            OpenMetadata specifics; no OpenMetadata logic exists in the Naira
+            core or UI layers.
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [url, authSecretRef]
+              description: OpenMetadataAdapterSpec defines the adapter configuration.
+              properties:
+                url:
+                  type: string
+                  description: Base URL of the OpenMetadata instance.
+                authSecretRef:
+                  type: object
+                  required: [name, key]
+                  description: >
+                    Reference to a Kubernetes Secret containing the API token.
+                    The Secret must have a key named "token" (or as specified
+                    by the key field). Credentials are never exposed to users.
+                  properties:
+                    name:
+                      type: string
+                      description: Name of the Secret.
+                    key:
+                      type: string
+                      description: Key within the Secret that holds the token.
+                    optional:
+                      type: boolean
+                syncInterval:
+                  type: string
+                  default: "10m"
+                  description: >
+                    Period between synchronisation runs expressed as a Go
+                    duration string (e.g., "5m", "1h"). Defaults to "10m".
+                targetNamespace:
+                  type: string
+                  description: >
+                    Kubernetes namespace where synced Dataset resources are
+                    created. Defaults to the adapter's own namespace.
+            status:
+              type: object
+              description: OpenMetadataAdapterStatus defines the observed adapter state.
+              properties:
+                conditions:
+                  type: array
+                  x-kubernetes-list-map-keys: [type]
+                  x-kubernetes-list-type: map
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                lastSyncedAt:
+                  type: string
+                  format: date-time
+                  description: Timestamp of the most recent successful sync.
+                datasetsDiscovered:
+                  type: integer
+                  format: int32
+                  description: Number of Dataset resources created or updated in the most recent sync.

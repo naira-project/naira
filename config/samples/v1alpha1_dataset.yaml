@@ -1,0 +1,47 @@
+---
+# SPDX-FileCopyrightText: 2026 SAP SE or an SAP affiliate company and naira contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Sample Dataset resource.
+# In normal operation these are created and managed by adapter controllers
+# (e.g., OpenMetadataAdapter). This sample is for manual testing only.
+
+apiVersion: naira.io/v1alpha1
+kind: Dataset
+metadata:
+  name: sample-orders-table
+  namespace: naira-system
+  labels:
+    naira.io/managed-by: openmetadata-adapter
+    naira.io/adapter-ref: openmetadata-demo
+  annotations:
+    naira.io/source-fqn: default.bigquery.prod.orders
+spec:
+  description: "Production orders table containing all customer purchase records."
+  owner: data-platform-team
+  sourceSystem: openmetadata
+  sourceRegistryURL: "https://openmetadata.example.com/table/default.bigquery.prod.orders"
+  qualityScore: 92
+  tags:
+    - Finance.Revenue
+    - PII.Sensitive
+  schema:
+    columns:
+      - name: id
+        dataType: BIGINT
+        description: Primary key
+      - name: customer_id
+        dataType: BIGINT
+        description: Reference to the customers table
+      - name: email
+        dataType: VARCHAR
+        description: Customer email address
+        tags:
+          - PII.Email
+      - name: amount
+        dataType: DECIMAL
+        description: Order total in USD
+      - name: created_at
+        dataType: TIMESTAMP
+        description: Order creation timestamp

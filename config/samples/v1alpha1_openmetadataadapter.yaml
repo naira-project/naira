@@ -1,0 +1,42 @@
+---
+# SPDX-FileCopyrightText: 2026 SAP SE or an SAP affiliate company and naira contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Sample Secret holding the OpenMetadata API token.
+# In production, use an external secrets operator or Vault to inject this value.
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openmetadata-token
+  namespace: naira-system
+type: Opaque
+stringData:
+  token: "<YOUR_OPENMETADATA_JWT_TOKEN>"
+
+---
+# Sample OpenMetadataAdapter that connects to a running OpenMetadata instance
+# and periodically syncs discovered tables into Dataset resources.
+
+apiVersion: naira.io/v1alpha1
+kind: OpenMetadataAdapter
+metadata:
+  name: openmetadata-demo
+  namespace: naira-system
+spec:
+  # Replace with the base URL of your OpenMetadata installation.
+  url: "https://openmetadata.example.com"
+
+  # Reference to the Secret that holds the API token.
+  # The Secret must exist before applying this resource.
+  authSecretRef:
+    name: openmetadata-token
+    key: token
+
+  # Synchronise every 5 minutes.
+  syncInterval: "5m"
+
+  # Dataset resources are created in the same namespace by default.
+  # Uncomment to override:
+  # targetNamespace: datasets

@@ -1,0 +1,66 @@
+---
+# SPDX-FileCopyrightText: 2026 SAP SE or an SAP affiliate company and naira contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dataset-catalog-controller
+  namespace: naira-system
+  labels:
+    app.kubernetes.io/name: dataset-catalog-controller
+    app.kubernetes.io/part-of: naira
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: naira-dataset-catalog-controller
+  labels:
+    app.kubernetes.io/name: dataset-catalog-controller
+    app.kubernetes.io/part-of: naira
+rules:
+  # Dataset resources
+  - apiGroups: [naira.io]
+    resources: [datasets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [naira.io]
+    resources: [datasets/status]
+    verbs: [get, update, patch]
+  # OpenMetadataAdapter resources
+  - apiGroups: [naira.io]
+    resources: [openmetadataadapters]
+    verbs: [get, list, watch]
+  - apiGroups: [naira.io]
+    resources: [openmetadataadapters/status]
+    verbs: [get, update, patch]
+  # Secrets (for reading auth tokens)
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+  # Events
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+  # Leader election
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: naira-dataset-catalog-controller
+  labels:
+    app.kubernetes.io/name: dataset-catalog-controller
+    app.kubernetes.io/part-of: naira
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: naira-dataset-catalog-controller
+subjects:
+  - kind: ServiceAccount
+    name: dataset-catalog-controller
+    namespace: naira-system

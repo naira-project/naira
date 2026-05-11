@@ -1,0 +1,137 @@
+---
+# SPDX-FileCopyrightText: 2026 SAP SE or an SAP affiliate company and naira contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: datasets.naira.io
+  labels:
+    app.kubernetes.io/part-of: naira
+spec:
+  group: naira.io
+  names:
+    kind: Dataset
+    listKind: DatasetList
+    plural: datasets
+    singular: dataset
+    shortNames:
+      - ds
+    categories:
+      - naira
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Owner
+          type: string
+          jsonPath: .spec.owner
+        - name: Source
+          type: string
+          jsonPath: .spec.sourceSystem
+        - name: Quality
+          type: integer
+          jsonPath: .spec.qualityScore
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          description: >
+            Dataset is the generic, tool-agnostic representation of a data asset
+            within the Naira Context Engine. Adapter controllers (e.g., the
+            OpenMetadata adapter) translate external catalog entries into Dataset
+            resources; the Naira UI queries only Dataset resources and remains
+            completely unaware of the source tool.
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              description: DatasetSpec defines the desired state of a Dataset.
+              properties:
+                description:
+                  type: string
+                  description: Human-readable explanation of the dataset's purpose.
+                owner:
+                  type: string
+                  description: Team or person responsible for this dataset.
+                schema:
+                  type: object
+                  description: Structural schema of the dataset.
+                  properties:
+                    columns:
+                      type: array
+                      items:
+                        type: object
+                        required: [name, dataType]
+                        properties:
+                          name:
+                            type: string
+                          dataType:
+                            type: string
+                          description:
+                            type: string
+                          tags:
+                            type: array
+                            items:
+                              type: string
+                tags:
+                  type: array
+                  description: Classification labels (e.g., pii, gdpr, finance).
+                  items:
+                    type: string
+                qualityScore:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                  maximum: 100
+                  description: Optional numeric quality score between 0 and 100.
+                sourceRegistryURL:
+                  type: string
+                  description: Deep-link URL to the asset in the originating data catalog.
+                sourceSystem:
+                  type: string
+                  description: >
+                    Identifies the external data catalog this dataset was ingested
+                    from (e.g., openmetadata, amundsen, datahub).
+            status:
+              type: object
+              description: DatasetStatus defines the observed state of a Dataset.
+              properties:
+                conditions:
+                  type: array
+                  x-kubernetes-list-map-keys: [type]
+                  x-kubernetes-list-type: map
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                      type:
+                        type: string
+                lastSyncedAt:
+                  type: string
+                  format: date-time
+                  description: Timestamp of the most recent synchronization.

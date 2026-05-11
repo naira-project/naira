@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 SAP SE or an SAP affiliate company and naira contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Go build artifacts
+bin/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go test output
+*.out
+coverage.html
+coverage.xml
+
+# UI build artifacts
+ui/*/build/
+ui/*/node_modules/
+ui/*/.eslintcache
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kubernetes kubeconfig
+kubeconfig
+
+# Local dev
+.env
+.env.local
