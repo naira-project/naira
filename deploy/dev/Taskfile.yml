@@ -104,15 +104,6 @@ tasks:
     cmds:
       - kubectl -n {{.MLFLOW_NAMESPACE}} port-forward {{.MLFLOW_SERVICE}} {{.MLFLOW_LOCAL_PORT}}:{{.MLFLOW_REMOTE_PORT}}
 
-  mlflow:reset-data:
-    desc: Recreate the MLflow PVC for a clean install
-    cmds:
-      - kubectl -n {{.MLFLOW_NAMESPACE}} delete deploy mlflow --ignore-not-found
-      - kubectl -n {{.MLFLOW_NAMESPACE}} delete svc mlflow --ignore-not-found
-      - kubectl -n {{.MLFLOW_NAMESPACE}} delete pvc mlflow-data --ignore-not-found
-      - kubectl apply -f {{.MLFLOW_MANIFEST}}
-      - kubectl -n {{.MLFLOW_NAMESPACE}} rollout status deploy/mlflow --timeout=180s
-
   mlflow:seed:
     desc: Seed a sample model in MLflow
     cmds:
@@ -126,20 +117,6 @@ tasks:
         '{{.MLFLOW_VENV_DIR}}/bin/pip' install -r '{{.MLFLOW_REQUIREMENTS}}'
       - |
         MLFLOW_TRACKING_URI=http://127.0.0.1:{{.MLFLOW_LOCAL_PORT}} '{{.MLFLOW_VENV_DIR}}/bin/python' '{{.MLFLOW_REGISTER_SCRIPT}}'
-
-  litellm:deploy:
-    desc: Deploy LiteLLM to kind
-    deps:
-      - postgres:deploy
-    cmds:
-      - task: litellm:apply
-
-  litellm:apply:
-    internal: true
-    cmds:
-      - kubectl apply -f {{.LITELLM_MANIFEST}}
-      - kubectl -n {{.LITELLM_NAMESPACE}} rollout status deploy/litellm --timeout=900s
-      - kubectl -n {{.LITELLM_NAMESPACE}} get pods
 
   postgres:deploy:
     desc: Deploy PostgreSQL for LiteLLM to kind
@@ -160,6 +137,20 @@ tasks:
     cmds:
       - kubectl delete -f {{.POSTGRES_MANIFEST}} --ignore-not-found
 
+  litellm:deploy:
+    desc: Deploy LiteLLM to kind
+    deps:
+      - postgres:deploy
+    cmds:
+      - task: litellm:apply
+
+  litellm:apply:
+    internal: true
+    cmds:
+      - kubectl apply -f {{.LITELLM_MANIFEST}}
+      - kubectl -n {{.LITELLM_NAMESPACE}} rollout status deploy/litellm --timeout=900s
+      - kubectl -n {{.LITELLM_NAMESPACE}} get pods
+
   litellm:undeploy:
     desc: Remove LiteLLM from kind
     cmds:
@@ -169,23 +160,6 @@ tasks:
     desc: Expose LiteLLM on localhost:4000
     cmds:
       - kubectl -n {{.LITELLM_NAMESPACE}} port-forward {{.LITELLM_SERVICE}} {{.LITELLM_LOCAL_PORT}}:{{.LITELLM_REMOTE_PORT}}
-
-  litellm:models:
-    desc: List configured LiteLLM models through the OpenAI-compatible API
-    cmds:
-      - |
-        curl -fsS \
-          -H 'Authorization: Bearer {{.LITELLM_MASTER_KEY}}' \
-          http://127.0.0.1:{{.LITELLM_LOCAL_PORT}}/v1/models
-
-  litellm:chat:test:
-    desc: Send a sample chat completion request to LiteLLM
-    cmds:
-      - |
-        curl -fsS http://127.0.0.1:{{.LITELLM_LOCAL_PORT}}/v1/chat/completions \
-          -H 'Content-Type: application/json' \
-          -H 'Authorization: Bearer {{.LITELLM_MASTER_KEY}}' \
-          -d '{"model":"idp-gpt-4o-mini","messages":[{"role":"user","content":"Reply with the text ok."}]}'
 
   openmetadata:deploy:
     desc: Deploy OpenMetadata to kind using Helm (dependencies first, then main chart)
@@ -250,31 +224,6 @@ tasks:
         OPENMETADATA_USERNAME={{.OPENMETADATA_USERNAME}} \
         OPENMETADATA_PASSWORD={{.OPENMETADATA_PASSWORD}} \
         python3 '{{.OPENMETADATA_SEED_SCRIPT}}'
-
-  platform:deploy:
-    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, and UI to kind
-    cmds:
-      - task: cluster:create
-      - task: mlflow:apply
-      - task: postgres:apply
-      - task: litellm:apply
-      - task: openmetadata:apply
-      - task: catalog:apply
-      - task: ui:apply
-
-  platform:undeploy:
-    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, and UI from kind
-    cmds:
-      - task: catalog:undeploy
-      - task: litellm:undeploy
-      - task: postgres:undeploy
-      - task: mlflow:undeploy
-      - task: openmetadata:undeploy
-      - task: ui:undeploy
-
-  forward:all:
-    desc: Port-forward all services (MLflow, LiteLLM, Catalog, OpenMetadata, UI)
-    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, openmetadata:port-forward, ui:port-forward]
 
   catalog:image:build:
     desc: Build the catalog Docker image
@@ -349,3 +298,28 @@ tasks:
     desc: Expose the UI on localhost:3001
     cmds:
       - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}
+
+  platform:deploy:
+    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, and UI to kind
+    cmds:
+      - task: cluster:create
+      - task: mlflow:apply
+      - task: postgres:apply
+      - task: litellm:apply
+      - task: openmetadata:apply
+      - task: catalog:apply
+      - task: ui:apply
+
+  platform:undeploy:
+    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, and UI from kind
+    cmds:
+      - task: catalog:undeploy
+      - task: litellm:undeploy
+      - task: postgres:undeploy
+      - task: mlflow:undeploy
+      - task: openmetadata:undeploy
+      - task: ui:undeploy
+
+  forward:all:
+    desc: Port-forward all services (MLflow, LiteLLM, Catalog, OpenMetadata, UI)
+    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, openmetadata:port-forward, ui:port-forward]
