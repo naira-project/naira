@@ -1,0 +1,17 @@
+apiVersion: naira.io/v1alpha1
+kind: AppIdentity
+metadata:
+  name: fraud-detector-agent
+  namespace: default
+spec:
+  team: risk
+  litellmVirtualKey: change-me
+---
+apiVersion: naira.io/v1alpha1
+kind: AppIdentity
+metadata:
+  name: code-assistant
+  namespace: default
+spec:
+  team: engineering
+  litellmVirtualKey: change-me
