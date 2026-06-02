@@ -27,6 +27,7 @@ const (
 
 type Plugin struct {
 	httpClient          *http.Client
+	logger              *log.Logger
 	config              Config
 	appIdentityProvider AppIdentityProvider
 }
@@ -40,6 +41,7 @@ type Config struct {
 func New(httpClient *http.Client, logger *log.Logger, config Config) *Plugin {
 	return &Plugin{
 		httpClient:          httpClient,
+		logger:              logger,
 		config:              config,
 		appIdentityProvider: newAppIdentityProvider(logger),
 	}
@@ -77,7 +79,10 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 
 	apps, err := p.appIdentityProvider.ListAppIdentities(ctx)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing LiteLLM app identities: %w", err)
+		if p.logger != nil {
+			p.logger.Printf("listing LiteLLM app identities failed, continuing without app identities: %v", err)
+		}
+		return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
 	}
 
 	for _, app := range apps {

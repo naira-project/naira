@@ -252,7 +252,6 @@ tasks:
         echo "Port-forwarding all services..."
         echo "----------------------------------------------------------------"
         echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
-        echo "Model Catalog:  http://localhost:{{.CATALOG_LOCAL_PORT}}"
         echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
