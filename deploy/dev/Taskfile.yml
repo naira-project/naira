@@ -45,8 +45,6 @@ vars:
   MLFLOW_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/mlflow-registry'
   OPENMETADATA_TOOL_DIR: tools/openmetadata
   OPENMETADATA_SEED_SCRIPT: '{{.OPENMETADATA_TOOL_DIR}}/seed_dummy_data.py'
-  APPIDENTITY_CRD: infra/kubernetes/apis/appidentity-crd.yaml
-  DUMMY_APPS: infra/kubernetes/apis/dummy-apps.yaml
 
 tasks:
   default:
@@ -140,7 +138,7 @@ tasks:
     internal: true
     cmds:
       - kubectl apply -f {{.LITELLM_MANIFEST}}
-      - kubectl -n {{.LITELLM_NAMESPACE}} rollout status deploy/litellm --timeout=180s
+      - kubectl -n {{.LITELLM_NAMESPACE}} rollout status deploy/litellm --timeout=900s
       - kubectl -n {{.LITELLM_NAMESPACE}} get pods
 
   postgres:deploy:
@@ -188,18 +186,6 @@ tasks:
           -H 'Content-Type: application/json' \
           -H 'Authorization: Bearer {{.LITELLM_MASTER_KEY}}' \
           -d '{"model":"idp-gpt-4o-mini","messages":[{"role":"user","content":"Reply with the text ok."}]}'
-
-  appidentity:setup:
-    desc: Setup AppIdentity CRD and dummy apps in kind
-    cmds:
-      - kubectl apply -f {{.APPIDENTITY_CRD}}
-      - kubectl apply -f {{.DUMMY_APPS}}
-
-  appidentity:teardown:
-    desc: Remove AppIdentity CRD and dummy apps from kind
-    cmds:
-      - kubectl delete -f {{.DUMMY_APPS}} --ignore-not-found
-      - kubectl delete -f {{.APPIDENTITY_CRD}} --ignore-not-found
 
   openmetadata:deploy:
     desc: Deploy OpenMetadata to kind using Helm (dependencies first, then main chart)
@@ -266,20 +252,20 @@ tasks:
         python3 '{{.OPENMETADATA_SEED_SCRIPT}}'
 
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, and OpenMetadata to kind
+    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, and UI to kind
     cmds:
       - task: cluster:create
       - task: mlflow:apply
       - task: postgres:apply
       - task: litellm:apply
       - task: openmetadata:apply
-      - task: appidentity:setup
+      - task: catalog:apply
+      - task: ui:apply
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, and OpenMetadata from kind
+    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, and UI from kind
     cmds:
       - task: catalog:undeploy
-      - task: appidentity:teardown
       - task: litellm:undeploy
       - task: postgres:undeploy
       - task: mlflow:undeploy
@@ -306,7 +292,11 @@ tasks:
     desc: Deploy the catalog to kind
     deps:
       - cluster:create
-      - appidentity:setup
+    cmds:
+      - task: catalog:apply
+
+  catalog:apply:
+    internal: true
     cmds:
       - task: catalog:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
@@ -337,6 +327,13 @@ tasks:
 
   ui:deploy:
     desc: Deploy the UI to kind
+    deps:
+      - cluster:create
+    cmds:
+      - task: ui:apply
+
+  ui:apply:
+    internal: true
     cmds:
       - task: ui:image:load
       - kubectl apply -f {{.UI_MANIFEST}}
