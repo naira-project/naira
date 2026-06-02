@@ -1,12 +1,13 @@
 package httpapi
 
 import (
-	"catalog/internal/catalog"
-	"catalog/pluginapi"
 	"fmt"
 	"log"
 	"math"
 	"net/url"
+
+	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 type Node struct {

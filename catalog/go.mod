@@ -1,4 +1,4 @@
-module catalog
+module github.com/naira-project/naira/catalog
 
 go 1.26.0
 

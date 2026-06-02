@@ -1,8 +1,6 @@
 package httpapi
 
 import (
-	"catalog/internal/catalog"
-	"catalog/pluginapi"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +10,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

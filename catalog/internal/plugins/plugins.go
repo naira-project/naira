@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/http"
 
-	"catalog/internal/plugins/litellm"
-	"catalog/internal/plugins/mlflow"
-	"catalog/pluginapi"
+	"github.com/naira-project/naira/catalog/internal/plugins/litellm"
+	"github.com/naira-project/naira/catalog/internal/plugins/mlflow"
+	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 func Register(config Config, httpClient *http.Client, logger *log.Logger) []pluginapi.Plugin {

@@ -8,8 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"catalog/pluginapi"
-
+	"github.com/naira-project/naira/catalog/pluginapi"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 )

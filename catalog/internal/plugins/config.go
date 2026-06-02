@@ -3,8 +3,8 @@ package plugins
 import (
 	"strings"
 
-	"catalog/internal/plugins/litellm"
-	"catalog/internal/plugins/mlflow"
+	"github.com/naira-project/naira/catalog/internal/plugins/litellm"
+	"github.com/naira-project/naira/catalog/internal/plugins/mlflow"
 )
 
 type Config struct {

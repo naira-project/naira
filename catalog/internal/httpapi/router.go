@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"bytes"
-	"catalog/internal/catalog"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
 type routeHandler func(http.ResponseWriter, *http.Request) error

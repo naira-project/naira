@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"catalog/pluginapi"
+	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 const (

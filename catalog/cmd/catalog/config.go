@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"catalog/internal/plugins"
+	"github.com/naira-project/naira/catalog/internal/plugins"
 
 	"go-simpler.org/env"
 )

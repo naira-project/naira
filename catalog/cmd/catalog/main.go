@@ -1,15 +1,15 @@
 package main
 
 import (
-	"catalog/internal/httpapi"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
-	"catalog/internal/catalog"
-	"catalog/internal/plugins"
+	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/httpapi"
+	"github.com/naira-project/naira/catalog/internal/plugins"
 )
 
 func main() {
