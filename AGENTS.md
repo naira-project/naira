@@ -10,15 +10,13 @@ Naira doesn't implement directly features e.g. for inferencing, AI Gateways and 
 - Understand [codebase patterns] and output [clear docs/tests].
 
 ## This Project Part/Component
-- **Tech Stack:** List technologies/versions (e.g., React 18, TypeScript).
+- **Tech Stack:** Go 1.26 for backend services, Chi HTTP router, React 19, TypeScript 4.9, Tailwind CSS 3, Docker, kind, Helm, Task, and Python helper scripts for local seeding.
 - **File Structure:**
-  - `src/` – Source code.
-  - `tests/` – Tests.
-  - `docs/` – Documentation.
+  - `catalog/` - Go model-catalog service, including HTTP API, plugins, and unit tests.
+  - `deploy/dev/` - Local development environment assets: Taskfile, Kubernetes manifests, Helm values, and helper tooling.
+  - `ui-poc/` - React/TypeScript UI proof of concept.
+  - `README.md` - Project overview and developer quick start.
+  - `Taskfile.yml` - Root developer entrypoints that delegate to the full dev Taskfile.
 
-## Commands (Place first for easy access)
-```bash
-npm run build  # Compiles code
-npm test       # Runs tests (must pass)
-npm run lint   # Lints and fixes
-uv run manage.py runserver  # Example for Python/Django[3]
+## Go Error Handling
+- Wrap propagated errors with `%w` and describe the callee operation, not the caller.
