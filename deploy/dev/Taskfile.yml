@@ -86,6 +86,11 @@ tasks:
     deps:
       - cluster:create
     cmds:
+      - task: mlflow:apply
+
+  mlflow:apply:
+    internal: true
+    cmds:
       - kubectl apply -f {{.MLFLOW_MANIFEST}}
       - kubectl -n {{.MLFLOW_NAMESPACE}} rollout status deploy/mlflow --timeout=180s
       - kubectl -n {{.MLFLOW_NAMESPACE}} get pods
@@ -127,8 +132,12 @@ tasks:
   litellm:deploy:
     desc: Deploy LiteLLM to kind
     deps:
-      - cluster:create
       - postgres:deploy
+    cmds:
+      - task: litellm:apply
+
+  litellm:apply:
+    internal: true
     cmds:
       - kubectl apply -f {{.LITELLM_MANIFEST}}
       - kubectl -n {{.LITELLM_NAMESPACE}} rollout status deploy/litellm --timeout=180s
@@ -138,6 +147,11 @@ tasks:
     desc: Deploy PostgreSQL for LiteLLM to kind
     deps:
       - cluster:create
+    cmds:
+      - task: postgres:apply
+
+  postgres:apply:
+    internal: true
     cmds:
       - kubectl apply -f {{.POSTGRES_MANIFEST}}
       - kubectl -n {{.POSTGRES_NAMESPACE}} rollout status deploy/postgres --timeout=180s
@@ -191,6 +205,11 @@ tasks:
     desc: Deploy OpenMetadata to kind using Helm (dependencies first, then main chart)
     deps:
       - cluster:create
+    cmds:
+      - task: openmetadata:apply
+
+  openmetadata:apply:
+    internal: true
     cmds:
       - helm repo add open-metadata https://helm.open-metadata.org/ 2>/dev/null || true
       - helm repo update open-metadata
@@ -249,21 +268,23 @@ tasks:
   platform:deploy:
     desc: Deploy MLflow, LiteLLM, and OpenMetadata to kind
     cmds:
-      - task mlflow:deploy
-      - task litellm:deploy
-      - task openmetadata:deploy
-      - task appidentity:setup
+      - task: cluster:create
+      - task: mlflow:apply
+      - task: postgres:apply
+      - task: litellm:apply
+      - task: openmetadata:apply
+      - task: appidentity:setup
 
   platform:undeploy:
     desc: Remove MLflow, LiteLLM, and OpenMetadata from kind
     cmds:
-      - task catalog:undeploy
-      - task appidentity:teardown
-      - task litellm:undeploy
-      - task postgres:undeploy
-      - task mlflow:undeploy
-      - task openmetadata:undeploy
-      - task ui:undeploy
+      - task: catalog:undeploy
+      - task: appidentity:teardown
+      - task: litellm:undeploy
+      - task: postgres:undeploy
+      - task: mlflow:undeploy
+      - task: openmetadata:undeploy
+      - task: ui:undeploy
 
   forward:all:
     desc: Port-forward all services (MLflow, LiteLLM, Catalog, OpenMetadata, UI)
@@ -287,7 +308,7 @@ tasks:
       - cluster:create
       - appidentity:setup
     cmds:
-      - task catalog:image:load
+      - task: catalog:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods
@@ -317,7 +338,7 @@ tasks:
   ui:deploy:
     desc: Deploy the UI to kind
     cmds:
-      - task ui:image:load
+      - task: ui:image:load
       - kubectl apply -f {{.UI_MANIFEST}}
       - kubectl -n {{.UI_NAMESPACE}} rollout status deploy/ui --timeout=180s
       - kubectl -n {{.UI_NAMESPACE}} get pods
