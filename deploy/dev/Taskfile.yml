@@ -30,21 +30,11 @@ vars:
   CATALOG_SERVICE: svc/catalog
   CATALOG_LOCAL_PORT: '8090'
   CATALOG_REMOTE_PORT: '8090'
-  OPENMETADATA_BOT_TOKEN: ""
-  OPENMETADATA_USERNAME: admin@open-metadata.org
-  OPENMETADATA_PASSWORD: admin  # local dev default - override via env var for non-default setups
-  OPENMETADATA_NAMESPACE: openmetadata
-  OPENMETADATA_HELM_DIR: infra/helm
-  OPENMETADATA_SERVICE: svc/openmetadata
-  OPENMETADATA_LOCAL_PORT: '8585'
-  OPENMETADATA_REMOTE_PORT: '8585'
   LOCAL_WORK_DIR: ../../.local
   MLFLOW_TOOL_DIR: tools/mlflow
   MLFLOW_REGISTER_SCRIPT: '{{.MLFLOW_TOOL_DIR}}/register_dummy_model.py'
   MLFLOW_REQUIREMENTS: '{{.MLFLOW_TOOL_DIR}}/requirements.txt'
   MLFLOW_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/mlflow-registry'
-  OPENMETADATA_TOOL_DIR: tools/openmetadata
-  OPENMETADATA_SEED_SCRIPT: '{{.OPENMETADATA_TOOL_DIR}}/seed_dummy_data.py'
 
 tasks:
   default:
@@ -161,70 +151,6 @@ tasks:
     cmds:
       - kubectl -n {{.LITELLM_NAMESPACE}} port-forward {{.LITELLM_SERVICE}} {{.LITELLM_LOCAL_PORT}}:{{.LITELLM_REMOTE_PORT}}
 
-  openmetadata:deploy:
-    desc: Deploy OpenMetadata to kind using Helm (dependencies first, then main chart)
-    deps:
-      - cluster:create
-    cmds:
-      - task: openmetadata:apply
-
-  openmetadata:apply:
-    internal: true
-    cmds:
-      - helm repo add open-metadata https://helm.open-metadata.org/ 2>/dev/null || true
-      - helm repo update open-metadata
-      - kubectl create namespace {{.OPENMETADATA_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
-      - |
-        kubectl create secret generic mysql-secrets \
-          --namespace {{.OPENMETADATA_NAMESPACE}} \
-          --from-literal=openmetadata-mysql-password=openmetadata_password \
-          --dry-run=client -o yaml | kubectl apply -f -
-      - |
-        kubectl create secret generic airflow-secrets \
-          --namespace {{.OPENMETADATA_NAMESPACE}} \
-          --from-literal=openmetadata-airflow-password=admin \
-          --dry-run=client -o yaml | kubectl apply -f -
-      - |
-        kubectl create secret generic airflow-mysql-secrets \
-          --namespace {{.OPENMETADATA_NAMESPACE}} \
-          --from-literal=airflow-mysql-password=airflow_pass \
-          --dry-run=client -o yaml | kubectl apply -f -
-      - |
-        helm upgrade --install openmetadata-dependencies open-metadata/openmetadata-dependencies \
-          --namespace {{.OPENMETADATA_NAMESPACE}} \
-          --create-namespace \
-          --values {{.OPENMETADATA_HELM_DIR}}/openmetadata-dependencies-values.yaml \
-          --timeout=15m \
-          --wait
-      - |
-        helm upgrade --install openmetadata open-metadata/openmetadata \
-          --namespace {{.OPENMETADATA_NAMESPACE}} \
-          --values {{.OPENMETADATA_HELM_DIR}}/openmetadata-values.yaml \
-          --timeout=20m \
-          --wait
-      - kubectl -n {{.OPENMETADATA_NAMESPACE}} get pods
-
-  openmetadata:undeploy:
-    desc: Remove OpenMetadata from kind
-    cmds:
-      - helm uninstall openmetadata -n {{.OPENMETADATA_NAMESPACE}} || true
-      - helm uninstall openmetadata-dependencies -n {{.OPENMETADATA_NAMESPACE}} || true
-      - kubectl delete namespace {{.OPENMETADATA_NAMESPACE}} --ignore-not-found
-
-  openmetadata:port-forward:
-    desc: Expose OpenMetadata UI/API on localhost:8585
-    cmds:
-      - kubectl -n {{.OPENMETADATA_NAMESPACE}} port-forward {{.OPENMETADATA_SERVICE}} {{.OPENMETADATA_LOCAL_PORT}}:{{.OPENMETADATA_REMOTE_PORT}}
-
-  openmetadata:seed:
-    desc: Seed dummy tables (users, orders, products) into OpenMetadata
-    cmds:
-      - |
-        OPENMETADATA_URL=http://127.0.0.1:{{.OPENMETADATA_LOCAL_PORT}} \
-        OPENMETADATA_USERNAME={{.OPENMETADATA_USERNAME}} \
-        OPENMETADATA_PASSWORD={{.OPENMETADATA_PASSWORD}} \
-        python3 '{{.OPENMETADATA_SEED_SCRIPT}}'
-
   catalog:image:build:
     desc: Build the catalog Docker image
     cmds:
@@ -300,28 +226,26 @@ tasks:
       - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}
 
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, and UI to kind
+    desc: Deploy MLflow, LiteLLM, Catalog, and UI to kind
     cmds:
       - task: cluster:create
       - task: mlflow:apply
       - task: postgres:apply
       - task: litellm:apply
-      - task: openmetadata:apply
       - task: catalog:apply
       - task: ui:apply
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, and UI from kind
+    desc: Remove MLflow, LiteLLM, Catalog, and UI from kind
     cmds:
       - task: catalog:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
       - task: mlflow:undeploy
-      - task: openmetadata:undeploy
       - task: ui:undeploy
 
   forward:all:
-    desc: Port-forward all services (MLflow, LiteLLM, Catalog, OpenMetadata, UI)
+    desc: Port-forward all services (MLflow, LiteLLM, Catalog, UI)
     silent: true
     cmds:
       - |
@@ -331,10 +255,9 @@ tasks:
         echo "Model Catalog:  http://localhost:{{.CATALOG_LOCAL_PORT}}"
         echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
-        echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
 
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, openmetadata:port-forward, ui:port-forward]
+    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward]
