@@ -322,4 +322,19 @@ tasks:
 
   forward:all:
     desc: Port-forward all services (MLflow, LiteLLM, Catalog, OpenMetadata, UI)
+    silent: true
+    cmds:
+      - |
+        echo "Port-forwarding all services..."
+        echo "----------------------------------------------------------------"
+        echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
+        echo "Model Catalog:  http://localhost:{{.CATALOG_LOCAL_PORT}}"
+        echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
+        echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
+        echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
+        echo "----------------------------------------------------------------"
+      - task: forward:all:tunnels
+
+  forward:all:tunnels:
+    internal: true
     deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, openmetadata:port-forward, ui:port-forward]
