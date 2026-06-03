@@ -36,8 +36,6 @@ export default function NavigationBar() {
       ? 'Dashboard'
       : location.pathname === '/model-registry'
       ? 'Model Registries'
-      : location.pathname === '/dataset-registry'
-      ? 'Dataset Registries'
       : location.pathname === '/catalog-graph'
       ? 'Catalog Graph'
       : 'Dashboard';

@@ -4,16 +4,15 @@ import Markdown from 'react-markdown';
 import { useModelWithId } from '../hooks/useModels';
 import { cn } from '../lib/utils';
 import Stats from './Stats';
-import Files from './Files';
 import CatalogGraph from './CatalogGraph';
 
 export default function ModelSpec() {
   const navigate = useNavigate();
   const { id = '' } = useParams();
   const { model, loading, error } = useModelWithId(decodeURIComponent(decodeURIComponent(id)));
-  const [source, setSource] = useState<'Model docs' | 'Stats' | 'Files' | 'Graph'>('Model docs');
+  const [source, setSource] = useState<'Model docs' | 'Stats' | 'Graph'>('Model docs');
 
-  const tabs = ['Model docs', 'Stats', 'Files', 'Graph'] as const;
+  const tabs = ['Model docs', 'Stats', 'Graph'] as const;
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -56,8 +55,6 @@ export default function ModelSpec() {
                   ? <div className="prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground prose-headings:mb-1 prose-headings:mt-4 prose-p:my-1 prose-ul:my-1 prose-li:my-0"><Markdown>{model?.description ?? ''}</Markdown></div>
                   : source === 'Stats'
                   ? <Stats adopters={model?.adopters ?? []} />
-                  : source === 'Files'
-                  ? <Files />
                   : model
                   ? <CatalogGraph rootNode={{ name: model.resourceName, label: model.name }} />
                   : null}
