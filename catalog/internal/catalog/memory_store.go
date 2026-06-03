@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -16,7 +18,7 @@ type Store interface {
 	ListNodes() []Node
 	GetNode(id NodeID) (Node, error)
 	ListRelations() []Relation
-	UpsertGraph(nodes []NodeClaim, relations []RelationClaim) (int, int, error)
+	UpsertGraph(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error)
 }
 
 type MemoryStore struct {
@@ -27,6 +29,8 @@ type MemoryStore struct {
 
 type Node struct {
 	ID         NodeID
+	Plugin     string
+	SnapshotID uuid.UUID
 	Properties map[string]string
 }
 
@@ -34,6 +38,8 @@ type Relation struct {
 	Kind       string
 	From       NodeID
 	To         NodeID
+	Plugin     string
+	SnapshotID uuid.UUID
 	Properties map[string]string
 }
 
@@ -84,9 +90,17 @@ func (s *MemoryStore) ListRelations() []Relation {
 	return result
 }
 
-func (s *MemoryStore) UpsertGraph(nodes []NodeClaim, relations []RelationClaim) (int, int, error) {
+func (s *MemoryStore) UpsertGraph(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if pluginName == "" {
+		return 0, 0, fmt.Errorf("validate plugin name: %w: plugin name is empty", ErrInvalidIngestion)
+	}
+
+	if snapshotID == uuid.Nil {
+		return 0, 0, fmt.Errorf("validate snapshot ID: %w: snapshot ID is empty", ErrInvalidIngestion)
+	}
 
 	if err := validateIngestionPayload(nodes, relations); err != nil {
 		return 0, 0, fmt.Errorf("validate ingestion payload: %w", err)
@@ -99,11 +113,15 @@ func (s *MemoryStore) UpsertGraph(nodes []NodeClaim, relations []RelationClaim) 
 		existing, ok := s.nodes[id]
 		if ok {
 			existing.ID = id
+			existing.Plugin = pluginName
+			existing.SnapshotID = snapshotID
 			existing.Properties = node.Properties
 			s.nodes[id] = existing
 		} else {
 			s.nodes[id] = Node{
 				ID:         id,
+				Plugin:     pluginName,
+				SnapshotID: snapshotID,
 				Properties: node.Properties,
 			}
 		}
@@ -119,6 +137,8 @@ func (s *MemoryStore) UpsertGraph(nodes []NodeClaim, relations []RelationClaim) 
 		updated := false
 		for idx := range s.relations {
 			if s.relations[idx].Kind == relationKind && s.relations[idx].From == fromID && s.relations[idx].To == toID {
+				s.relations[idx].Plugin = pluginName
+				s.relations[idx].SnapshotID = snapshotID
 				s.relations[idx].Properties = relation.Properties
 				updated = true
 				break
@@ -130,6 +150,8 @@ func (s *MemoryStore) UpsertGraph(nodes []NodeClaim, relations []RelationClaim) 
 				Kind:       relationKind,
 				From:       fromID,
 				To:         toID,
+				Plugin:     pluginName,
+				SnapshotID: snapshotID,
 				Properties: relation.Properties,
 			})
 		}
@@ -137,7 +159,31 @@ func (s *MemoryStore) UpsertGraph(nodes []NodeClaim, relations []RelationClaim) 
 		upsertedRelations++
 	}
 
+	s.pruneRelations(pluginName, snapshotID)
+	s.pruneNodes(pluginName, snapshotID)
+
 	return upsertedNodes, upsertedRelations, nil
+}
+
+func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
+	filtered := s.relations[:0]
+	for _, relation := range s.relations {
+		if relation.Plugin == pluginName && relation.SnapshotID != snapshotID {
+			continue
+		}
+		filtered = append(filtered, relation)
+	}
+	s.relations = filtered
+}
+
+func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
+	for id, node := range s.nodes {
+		if node.Plugin != pluginName || node.SnapshotID == snapshotID {
+			continue
+		}
+
+		delete(s.nodes, id)
+	}
 }
 
 func validateIngestionPayload(nodes []NodeClaim, relations []RelationClaim) error {

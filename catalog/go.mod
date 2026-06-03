@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/go-chi/chi/v5 v5.2.3
+	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.11.1
 	go-simpler.org/env v0.12.0
 	k8s.io/apimachinery v0.36.0

@@ -7,6 +7,8 @@ import (
 	"log"
 	"sort"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -49,7 +51,12 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 		return fmt.Errorf("collecting response from plugin %q: %w", pluginName, err)
 	}
 
-	upsertedNodes, upsertedRelations, err := s.store.UpsertGraph(request.Nodes, request.Relations)
+	snapshotID, err := uuid.NewUUID()
+	if err != nil {
+		return fmt.Errorf("generating snapshot ID: %w", err)
+	}
+
+	upsertedNodes, upsertedRelations, err := s.store.UpsertGraph(pluginName, snapshotID, request.Nodes, request.Relations)
 	if err != nil {
 		return fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err)
 	}
