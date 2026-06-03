@@ -3,6 +3,7 @@ package litellm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -61,6 +62,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	relations := make([]pluginapi.RelationClaim, 0)
 	modelKeys := make(map[string]pluginapi.NodeClaim, len(models))
 	seenRelations := make(map[string]struct{})
+	fetchAllowedModelsErrors := make([]error, 0)
 
 	for _, model := range models {
 		node := pluginapi.NodeClaim{
@@ -102,7 +104,8 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 
 		allowedModels, err := p.fetchAllowedModels(ctx, app.LiteLLMVirtualKey)
 		if err != nil {
-			return pluginapi.IngestionRequest{}, fmt.Errorf("fetching allowed LiteLLM models for app %q: %w", app.Name, err)
+			fetchAllowedModelsErrors = append(fetchAllowedModelsErrors, fmt.Errorf("fetching allowed LiteLLM models for app %q: %w", app.Name, err))
+			continue
 		}
 
 		for _, modelName := range allowedModels {
@@ -139,7 +142,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		}
 	}
 
-	return pluginapi.IngestionRequest{Nodes: dedupeNodes(nodes), Relations: relations}, nil
+	request := pluginapi.IngestionRequest{Nodes: dedupeNodes(nodes), Relations: relations}
+	if len(fetchAllowedModelsErrors) > 0 {
+		return request, errors.Join(fetchAllowedModelsErrors...)
+	}
+
+	return request, nil
 }
 
 func (p *Plugin) fetchModels(ctx context.Context) ([]model, error) {
