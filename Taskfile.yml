@@ -1,0 +1,31 @@
+version: '3'
+
+vars:
+  DEV_TASKFILE: ./deploy/dev/Taskfile.yml
+  CATALOG_DIR: ./catalog
+
+tasks:
+  check:
+    desc: Verify required local tools exist
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} check
+
+  platform:deploy:
+    desc: Deploy the platform to kind
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} platform:deploy
+
+  forward:all:
+    desc: Port-forward the main developer-facing services
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} forward:all
+
+  cluster:delete:
+    desc: Remove the cluster
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} cluster:delete
+
+  catalog:test:
+    desc: Run catalog unit tests
+    cmds:
+      - cd {{.CATALOG_DIR}} && go test -race ./...
