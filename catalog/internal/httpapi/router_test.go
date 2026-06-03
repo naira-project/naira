@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/pluginapi"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +34,7 @@ func (p stubPlugin) Collect(context.Context) (catalog.IngestionRequest, error) {
 func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
 	t.Helper()
 
-	_, _, err := store.ApplyPluginSnapshot(nodes, relations)
+	_, _, err := store.ApplyPluginSnapshot("test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
 	require.NoError(t, err)
 }
 

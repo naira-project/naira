@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,7 +27,7 @@ func (p stubPlugin) Collect(context.Context) (IngestionRequest, error) {
 func applyPluginSnapshot(t *testing.T, store *MemoryStore, nodes []NodeClaim, relations []RelationClaim) {
 	t.Helper()
 
-	_, _, err := store.ApplyPluginSnapshot(nodes, relations)
+	_, _, err := store.ApplyPluginSnapshot("test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
 	require.NoError(t, err)
 }
 
@@ -167,4 +168,57 @@ func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
 	nodes := service.ListNodes(t.Context())
 	require.Len(t, nodes, 1)
 	assert.Equal(t, "mlflow/demo-model", nodes[0].ID.Path)
+}
+
+func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
+	store := NewMemoryStore()
+
+	_, _, err := store.ApplyPluginSnapshot(
+		"mlflow",
+		uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		[]NodeClaim{
+			{
+				ID:         NodeID{Kind: "application", Path: "mlflow/old-app"},
+				Properties: PropertyMap{"source": "mlflow"},
+			},
+			{
+				ID:         NodeID{Kind: "model", Path: "mlflow/shared-model"},
+				Properties: PropertyMap{"source": "mlflow"},
+			},
+		},
+		[]RelationClaim{{
+			Kind: "uses_model",
+			From: NodeID{Kind: "application", Path: "mlflow/old-app"},
+			To:   NodeID{Kind: "model", Path: "mlflow/shared-model"},
+		}},
+	)
+	require.NoError(t, err)
+
+	_, _, err = store.ApplyPluginSnapshot(
+		"litellm",
+		uuid.MustParse("00000000-0000-0000-0000-000000000010"),
+		[]NodeClaim{{
+			ID:         NodeID{Kind: "application", Path: "litellm/current-app"},
+			Properties: PropertyMap{"source": "litellm"},
+		}},
+		nil,
+	)
+	require.NoError(t, err)
+
+	_, _, err = store.ApplyPluginSnapshot(
+		"mlflow",
+		uuid.MustParse("00000000-0000-0000-0000-000000000002"),
+		[]NodeClaim{{
+			ID:         NodeID{Kind: "model", Path: "mlflow/new-model"},
+			Properties: PropertyMap{"source": "mlflow"},
+		}},
+		nil,
+	)
+	require.NoError(t, err)
+
+	nodes := store.ListNodes()
+	require.Len(t, nodes, 2)
+	assert.Equal(t, NodeID{Kind: "application", Path: "litellm/current-app"}, nodes[0].ID)
+	assert.Equal(t, NodeID{Kind: "model", Path: "mlflow/new-model"}, nodes[1].ID)
+	assert.Empty(t, store.ListRelations())
 }
