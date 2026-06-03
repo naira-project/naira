@@ -23,16 +23,16 @@ func (p stubPlugin) Collect(context.Context) (IngestionRequest, error) {
 	return p.request, p.err
 }
 
-func upsertGraph(t *testing.T, store *MemoryStore, nodes []NodeClaim, relations []RelationClaim) {
+func applyPluginSnapshot(t *testing.T, store *MemoryStore, nodes []NodeClaim, relations []RelationClaim) {
 	t.Helper()
 
-	_, _, err := store.UpsertGraph(nodes, relations)
+	_, _, err := store.ApplyPluginSnapshot(nodes, relations)
 	require.NoError(t, err)
 }
 
 func TestListNodesProjectsStoredNode(t *testing.T) {
 	store := NewMemoryStore()
-	upsertGraph(t, store, []NodeClaim{{
+	applyPluginSnapshot(t, store, []NodeClaim{{
 		ID: NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
 		Properties: PropertyMap{
 			"source":      "mlflow",
@@ -56,7 +56,7 @@ func TestListNodesProjectsStoredNode(t *testing.T) {
 
 func TestGetNodeReturnsStoredNode(t *testing.T) {
 	store := NewMemoryStore()
-	upsertGraph(t, store,
+	applyPluginSnapshot(t, store,
 		[]NodeClaim{
 			{
 				ID:         NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
@@ -104,7 +104,7 @@ func TestGetNodeReturnsStoredNode(t *testing.T) {
 
 func TestListRelationsReturnsStoredRelations(t *testing.T) {
 	store := NewMemoryStore()
-	upsertGraph(t, store,
+	applyPluginSnapshot(t, store,
 		[]NodeClaim{
 			{
 				ID:         NodeID{Kind: "application", Path: "litellm/fraud-assistant"},

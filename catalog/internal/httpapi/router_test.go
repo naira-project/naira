@@ -30,16 +30,16 @@ func (p stubPlugin) Collect(context.Context) (catalog.IngestionRequest, error) {
 	return p.request, p.err
 }
 
-func upsertGraph(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
+func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
 	t.Helper()
 
-	_, _, err := store.UpsertGraph(nodes, relations)
+	_, _, err := store.ApplyPluginSnapshot(nodes, relations)
 	require.NoError(t, err)
 }
 
 func TestRouterServesCurrentEndpoints(t *testing.T) {
 	store := catalog.NewMemoryStore()
-	upsertGraph(t, store,
+	applyPluginSnapshot(t, store,
 		[]catalog.NodeClaim{
 			{
 				ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},

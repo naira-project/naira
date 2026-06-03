@@ -56,7 +56,7 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 		return fmt.Errorf("generating snapshot ID: %w", err)
 	}
 
-	upsertedNodes, upsertedRelations, err := s.store.UpsertGraph(pluginName, snapshotID, request.Nodes, request.Relations)
+	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, request.Nodes, request.Relations)
 	if err != nil {
 		return fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err)
 	}

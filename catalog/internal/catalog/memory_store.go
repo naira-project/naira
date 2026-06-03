@@ -18,7 +18,7 @@ type Store interface {
 	ListNodes() []Node
 	GetNode(id NodeID) (Node, error)
 	ListRelations() []Relation
-	UpsertGraph(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error)
+	ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error)
 }
 
 type MemoryStore struct {
@@ -90,7 +90,7 @@ func (s *MemoryStore) ListRelations() []Relation {
 	return result
 }
 
-func (s *MemoryStore) UpsertGraph(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error) {
+func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
