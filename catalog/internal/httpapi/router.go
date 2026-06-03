@@ -155,7 +155,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeError(w http.ResponseWriter, err error) {
-	status := http.StatusBadGateway
+	status := http.StatusInternalServerError
 	message := err.Error()
 	switch {
 	case errors.Is(err, catalog.ErrNodeNotFound):
