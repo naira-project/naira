@@ -1,0 +1,73 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Go unit tests (catalog service) ────────────────────────────────────
+  go-test:
+    name: Test · Catalog
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-go-test.yml@main
+    with:
+      go-version: "1.26"
+      working-directory: "catalog"
+      run-race-detector: true
+      coverage-threshold: 0
+
+  # ── 2. Container build — catalog (build-only, no push on PRs) ─────────────
+  container-build-catalog:
+    name: Container Build · Catalog
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@main
+    with:
+      image-name: "naira-catalog"
+      dockerfile: "catalog/Dockerfile"
+      context: "catalog"
+      platforms: "linux/amd64,linux/arm64"
+      push: false
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 3. Container build — ui (build-only, no push on PRs) ──────────────────
+  container-build-ui:
+    name: Container Build · UI
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@main
+    with:
+      image-name: "naira-ui"
+      dockerfile: "ui-poc/Dockerfile"
+      context: "ui-poc"
+      platforms: "linux/amd64,linux/arm64"
+      push: false
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Gate: single required status check for branch protection ──────────────
+  all-checks:
+    name: All Checks Passed
+    needs: [go-test, container-build-catalog, container-build-ui]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          RESULTS=(
+            "${{ needs.go-test.result }}"
+            "${{ needs.container-build-catalog.result }}"
+            "${{ needs.container-build-ui.result }}"
+          )
+          for r in "${RESULTS[@]}"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "::error::One or more required checks failed: $r"
+              exit 1
+            fi
+          done
+          echo "All checks passed."

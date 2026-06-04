@@ -1,0 +1,36 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # ── 1. Build & push catalog image ─────────────────────────────────────────
+  container-publish-catalog:
+    name: Publish · Catalog
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@main
+    with:
+      image-name: "naira-catalog"
+      dockerfile: "catalog/Dockerfile"
+      context: "catalog"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 2. Build & push UI image ───────────────────────────────────────────────
+  container-publish-ui:
+    name: Publish · UI
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@main
+    with:
+      image-name: "naira-ui"
+      dockerfile: "ui-poc/Dockerfile"
+      context: "ui-poc"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
