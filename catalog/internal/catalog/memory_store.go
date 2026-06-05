@@ -158,15 +158,16 @@ func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUI
 }
 
 func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
-	filtered := s.relations[:0]
+	n := 0
 	for _, relation := range s.relations {
 		if relation.Plugin == pluginName && relation.SnapshotID != snapshotID {
 			continue
 		}
-		filtered = append(filtered, relation)
+		s.relations[n] = relation
+		n++
 	}
-	clear(s.relations[len(filtered):])
-	s.relations = filtered
+	clear(s.relations[n:])
+	s.relations = s.relations[:n]
 }
 
 func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
