@@ -94,16 +94,8 @@ func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUI
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if pluginName == "" {
-		return 0, 0, fmt.Errorf("validate plugin name: %w: plugin name is empty", ErrInvalidIngestion)
-	}
-
-	if snapshotID == uuid.Nil {
-		return 0, 0, fmt.Errorf("validate snapshot ID: %w: snapshot ID is empty", ErrInvalidIngestion)
-	}
-
-	if err := validateIngestionPayload(nodes, relations); err != nil {
-		return 0, 0, fmt.Errorf("validate ingestion payload: %w", err)
+	if err := validateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
+		return 0, 0, fmt.Errorf("validate snapshot input: %w", err)
 	}
 
 	upsertedNodes := 0
@@ -173,6 +165,7 @@ func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
 		}
 		filtered = append(filtered, relation)
 	}
+	clear(s.relations[len(filtered):])
 	s.relations = filtered
 }
 
@@ -186,7 +179,15 @@ func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
 	}
 }
 
-func validateIngestionPayload(nodes []NodeClaim, relations []RelationClaim) error {
+func validateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) error {
+	if pluginName == "" {
+		return fmt.Errorf("validate plugin name: %w: plugin name is empty", ErrInvalidIngestion)
+	}
+
+	if snapshotID == uuid.Nil {
+		return fmt.Errorf("validate snapshot ID: %w: snapshot ID is empty", ErrInvalidIngestion)
+	}
+
 	availableNodes := make(map[NodeID]struct{}, len(nodes))
 
 	for _, node := range nodes {
