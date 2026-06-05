@@ -18,7 +18,7 @@ All workflows call reusable jobs from [`naira-project/naira-github-workflows`](h
 
 **File:** `.github/workflows/pr-validation.yml`
 
-Runs on every pull request targeting `main` and on every direct push to `main`.
+Runs on every pull request targeting `main` and on every push to `main` (i.e. after a PR is merged).
 Concurrent runs on the same branch/PR are cancelled automatically.
 
 ### Jobs
@@ -32,7 +32,7 @@ Runs the catalog service test suite.
 | Go version | `1.26` |
 | Working directory | `catalog/` |
 | Race detector | enabled |
-| Coverage threshold | none (informational only) |
+| Coverage threshold | 0 (informational only — revisit once a baseline is established) |
 
 Uploads a coverage report as a build artifact (`go-coverage-<sha>`, retained 7 days).
 
@@ -62,7 +62,7 @@ Builds the UI container image without pushing it.
 
 #### `all-checks` — Gate
 
-Depends on all three jobs above. Always runs (`if: always()`), fails if any upstream job failed or was cancelled.
+Depends on all three jobs above. Always runs (`if: always()`), fails if any upstream job result is not `success` (covers failure, cancellation, and unexpected skips).
 
 Configure this job name (`All Checks Passed`) as the **only** required status check in branch protection — it acts as a single gate so you never need to update branch protection when jobs are added or renamed.
 
@@ -101,6 +101,10 @@ Builds and pushes the UI image to `ghcr.io/naira-project/naira-ui`.
 | Platforms | `linux/amd64`, `linux/arm64` |
 | Push | `true` |
 
+#### `all-published` — Gate
+
+Depends on both publish jobs. Always runs (`if: always()`), fails if either job result is not `success`. Provides a single status check that surfaces the overall release outcome.
+
 ### Image Tags
 
 Both images are tagged automatically by the shared workflow:
@@ -110,7 +114,7 @@ Both images are tagged automatically by the shared workflow:
 | Full semver | `1.2.3` | On `v1.2.3` tag |
 | Minor semver | `1.2` | On `v1.2.3` tag |
 | Major semver | `1` | On `v1.2.3` tag |
-| `latest` | `latest` | On default branch |
+| `latest` | `latest` | On `v*` tag pushed from the default branch |
 | Branch name | `main` | On branch push |
 | PR number | `pr-42` | On pull request |
 | Short SHA | `sha-abc1234` | Always |
@@ -123,9 +127,8 @@ Both images are tagged automatically by the shared workflow:
 
 Go to **Settings → Actions → General → Workflow permissions** and select:
 - **Read and write permissions**
-- **Allow GitHub Actions to create and approve pull requests**
 
-This is required for `ghcr.io` image pushes using `GITHUB_TOKEN`.
+This grants the auto-provisioned `GITHUB_TOKEN` the `packages: write` scope needed to push images to `ghcr.io`. The "Allow GitHub Actions to create and approve pull requests" setting is unrelated to image publishing and is not required.
 
 ### Branch protection
 

@@ -17,17 +17,19 @@ jobs:
   # ── 1. Go unit tests (catalog service) ────────────────────────────────────
   go-test:
     name: Test · Catalog
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-go-test.yml@main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-go-test.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
     with:
       go-version: "1.26"
       working-directory: "catalog"
       run-race-detector: true
+      # Threshold is 0 (informational only) until a baseline is established;
+      # revisit once the test suite reaches meaningful coverage.
       coverage-threshold: 0
 
   # ── 2. Container build — catalog (build-only, no push on PRs) ─────────────
   container-build-catalog:
     name: Container Build · Catalog
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
@@ -40,7 +42,7 @@ jobs:
   # ── 3. Container build — ui (build-only, no push on PRs) ──────────────────
   container-build-ui:
     name: Container Build · UI
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
     with:
       image-name: "naira-ui"
       dockerfile: "ui-poc/Dockerfile"
@@ -65,8 +67,8 @@ jobs:
             "${{ needs.container-build-ui.result }}"
           )
           for r in "${RESULTS[@]}"; do
-            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
-              echo "::error::One or more required checks failed: $r"
+            if [[ "$r" != "success" ]]; then
+              echo "::error::One or more required checks did not succeed: $r"
               exit 1
             fi
           done
