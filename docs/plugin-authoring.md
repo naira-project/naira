@@ -35,3 +35,7 @@ return pluginapi.IngestionRequest{
 	},
 }, nil
 ```
+
+## Snapshots & Stale Data
+
+Each execution of a plugin is treated as a single, atomic snapshot. New data is ingested, and all previous data from this plugin not present in the current batch is removed.
