@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	deplitellmmodels "github.com/naira-project/naira/catalog/internal/plugins/depl_litellm_models"
 	deplsvcscalls "github.com/naira-project/naira/catalog/internal/plugins/depl_svcs_calls"
 	fluxcddeploys "github.com/naira-project/naira/catalog/internal/plugins/fluxcd_deploys"
 	"github.com/naira-project/naira/catalog/internal/plugins/litellm"
@@ -28,6 +29,10 @@ func Register(config Config, httpClient *http.Client, logger *log.Logger) []plug
 
 	if config.FluxcdDeploys.Enabled {
 		registered = appendIfNotNil(registered, fluxcddeploys.New(config.FluxcdDeploys))
+	}
+
+	if config.DeplLiteLLMModels.Enabled {
+		registered = appendIfNotNil(registered, deplitellmmodels.New(httpClient, config.DeplLiteLLMModels))
 	}
 
 	return registered
