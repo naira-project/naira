@@ -44,7 +44,7 @@ func New(httpClient *http.Client, logger *log.Logger, config Config) *Plugin {
 		httpClient:          httpClient,
 		logger:              logger,
 		config:              config,
-		appIdentityProvider: newAppIdentityProvider(logger),
+		appIdentityProvider: nil,
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
-	"github.com/naira-project/naira/catalog/internal/plugins"
+	"github.com/naira-project/naira/catalog/internal/pluginmanager"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	}
 
 	httpClient := &http.Client{Timeout: config.HTTPTimeout}
-	registeredPlugins, cleanup, err := plugins.Register(config.PluginsDir, httpClient, logger)
+	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginsDir, httpClient, logger)
 	if err != nil {
 		logger.Fatalf("failed to register plugins: %v", err)
 	}
