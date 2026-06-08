@@ -115,11 +115,7 @@ func TestRegisterWithExternalPlugins(t *testing.T) {
 	err = os.Chmod(binPath, 0755)
 	require.NoError(t, err)
 
-	cfg := Config{
-		PluginsDir: pluginsDir,
-	}
-
-	registered, cleanup, err := Register(cfg, nil, nil)
+	registered, cleanup, err := Register(pluginsDir, nil, nil)
 	require.NoError(t, err)
 	defer cleanup()
 

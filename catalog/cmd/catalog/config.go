@@ -4,23 +4,19 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/naira-project/naira/catalog/internal/plugins"
-
 	"go-simpler.org/env"
 )
 
 type config struct {
 	Port        int
 	HTTPTimeout time.Duration
-	Plugins     plugins.Config
+	PluginsDir  string
 }
 
 type envConfig struct {
-	Port        int                      `env:"PORT" default:"8090"`
-	HTTPTimeout time.Duration            `env:"HTTP_TIMEOUT" default:"5s"`
-	MLflow      plugins.MLflowEnvConfig  `env:"MLFLOW_"`
-	LiteLLM     plugins.LiteLLMEnvConfig `env:"LITELLM_"`
-	PluginsDir  string                   `env:"PLUGINS_DIR" default:"/var/lib/naira/plugins"`
+	Port        int           `env:"PORT" default:"8090"`
+	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
+	PluginsDir  string        `env:"PLUGINS_DIR" default:"/var/lib/naira/plugins"`
 }
 
 func loadConfig() (config, error) {
@@ -32,7 +28,7 @@ func loadConfig() (config, error) {
 	cfg := config{
 		Port:        raw.Port,
 		HTTPTimeout: raw.HTTPTimeout,
-		Plugins:     plugins.LoadConfig(raw.MLflow, raw.LiteLLM, raw.PluginsDir),
+		PluginsDir:  raw.PluginsDir,
 	}
 
 	return cfg, nil

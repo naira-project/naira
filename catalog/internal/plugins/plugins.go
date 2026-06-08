@@ -12,26 +12,18 @@ import (
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
-func Register(config Config, httpClient *http.Client, logger *log.Logger) ([]pluginapi.Plugin, func(), error) {
+func Register(pluginsDir string, httpClient *http.Client, logger *log.Logger) ([]pluginapi.Plugin, func(), error) {
 	var registered []pluginapi.Plugin
 	var cleanups []func()
 
-	// if config.MLflow.Enabled {
-	// 	registered = appendIfNotNil(registered, mlflow.New(httpClient, config.MLflow))
-	// }
-
-	// if config.LiteLLM.Enabled {
-	// 	registered = appendIfNotNil(registered, litellm.New(httpClient, logger, config.LiteLLM))
-	// }
-
-	if config.PluginsDir != "" {
-		entries, err := os.ReadDir(config.PluginsDir)
+	if pluginsDir != "" {
+		entries, err := os.ReadDir(pluginsDir)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				for _, cleanup := range cleanups {
 					cleanup()
 				}
-				return nil, nil, fmt.Errorf("reading plugins directory %q: %w", config.PluginsDir, err)
+				return nil, nil, fmt.Errorf("reading plugins directory %q: %w", pluginsDir, err)
 			}
 		} else {
 			for _, entry := range entries {
@@ -49,7 +41,7 @@ func Register(config Config, httpClient *http.Client, logger *log.Logger) ([]plu
 					continue
 				}
 
-				path := filepath.Join(config.PluginsDir, entry.Name())
+				path := filepath.Join(pluginsDir, entry.Name())
 				extPlugin, cleanup, err := LoadExternalPlugin(path)
 				if err != nil {
 					for _, c := range cleanups {

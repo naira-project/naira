@@ -24,7 +24,7 @@ func main() {
 	}
 
 	httpClient := &http.Client{Timeout: config.HTTPTimeout}
-	registeredPlugins, cleanup, err := plugins.Register(config.Plugins, httpClient, logger)
+	registeredPlugins, cleanup, err := plugins.Register(config.PluginsDir, httpClient, logger)
 	if err != nil {
 		logger.Fatalf("failed to register plugins: %v", err)
 	}
@@ -43,10 +43,8 @@ func main() {
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
-		logger.Printf("mlflow plugin source: %s", config.Plugins.MLflow.BaseURL)
-		logger.Printf("litellm plugin source: %s", config.Plugins.LiteLLM.BaseURL)
-		if config.Plugins.PluginsDir != "" {
-			logger.Printf("plugins directory: %s", config.Plugins.PluginsDir)
+		if config.PluginsDir != "" {
+			logger.Printf("plugins directory: %s", config.PluginsDir)
 		}
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
