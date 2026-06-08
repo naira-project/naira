@@ -1,41 +1,37 @@
-package main
+package mlflow
 
 import (
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/go-plugin"
 	"github.com/naira-project/naira/catalog/pluginapi"
-	"github.com/naira-project/naira/plugins/litellm"
 	"go-simpler.org/env"
 )
 
 type pluginConfig struct {
-	Enabled     bool          `env:"LITELLM_ENABLED" default:"true"`
-	BaseURL     string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
-	APIKey      string        `env:"LITELLM_API_KEY"`
+	Enabled     bool          `env:"MLFLOW_ENABLED" default:"true"`
+	BaseURL     string        `env:"MLFLOW_BASE_URL" default:"http://127.0.0.1:5000"`
+	BearerToken string        `env:"MLFLOW_BEARER_TOKEN"`
 	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
 }
 
 func main() {
 	var raw pluginConfig
 	if err := env.Load(&raw, nil); err != nil {
-		log.Fatalf("failed to load litellm config: %v", err)
+		log.Fatalf("failed to load mlflow config: %v", err)
 	}
-
-	logger := log.New(os.Stdout, "litellm-plugin ", log.LstdFlags)
 
 	httpClient := &http.Client{
 		Timeout: raw.HTTPTimeout,
 	}
 
-	impl := litellm.New(httpClient, logger, litellm.Config{
-		Enabled: raw.Enabled,
-		BaseURL: strings.TrimSpace(raw.BaseURL),
-		APIKey:  strings.TrimSpace(raw.APIKey),
+	impl := New(httpClient, Config{
+		Enabled:     raw.Enabled,
+		BaseURL:     strings.TrimSpace(raw.BaseURL),
+		BearerToken: strings.TrimSpace(raw.BearerToken),
 	})
 
 	plugin.Serve(&plugin.ServeConfig{
