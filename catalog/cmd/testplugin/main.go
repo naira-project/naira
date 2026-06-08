@@ -18,7 +18,8 @@ import (
 type envConfig struct {
 	MLflow        plugins.MLflowEnvConfig        `env:"MLFLOW_"`
 	LiteLLM       plugins.LiteLLMEnvConfig       `env:"LITELLM_"`
-	DeplSvcsCalls plugins.DeplSvcsCallsEnvConfig `env:"DEPL_SVCS_CALLS_"`
+	DeplSvcsCalls  plugins.DeplSvcsCallsEnvConfig  `env:"DEPL_SVCS_CALLS_"`
+	FluxcdDeploys  plugins.FluxcdDeploysEnvConfig  `env:"FLUXCD_DEPLOYS_"`
 }
 
 func main() {
@@ -35,7 +36,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	cfg := plugins.LoadConfig(raw.MLflow, raw.LiteLLM, raw.DeplSvcsCalls)
+	cfg := plugins.LoadConfig(raw.MLflow, raw.LiteLLM, raw.DeplSvcsCalls, raw.FluxcdDeploys)
 	logger := log.New(os.Stderr, "", 0)
 	registered := plugins.Register(cfg, &http.Client{}, logger)
 

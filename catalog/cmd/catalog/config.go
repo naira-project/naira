@@ -20,7 +20,8 @@ type envConfig struct {
 	HTTPTimeout time.Duration            `env:"HTTP_TIMEOUT" default:"5s"`
 	MLflow      plugins.MLflowEnvConfig  `env:"MLFLOW_"`
 	LiteLLM     plugins.LiteLLMEnvConfig `env:"LITELLM_"`
-	DeplSvcsCalls plugins.DeplSvcsCallsEnvConfig `env:"DEPL_SVCS_CALLS_"`
+	DeplSvcsCalls  plugins.DeplSvcsCallsEnvConfig  `env:"DEPL_SVCS_CALLS_"`
+	FluxcdDeploys  plugins.FluxcdDeploysEnvConfig  `env:"FLUXCD_DEPLOYS_"`
 }
 
 func loadConfig() (config, error) {
@@ -32,7 +33,7 @@ func loadConfig() (config, error) {
 	cfg := config{
 		Port:        raw.Port,
 		HTTPTimeout: raw.HTTPTimeout,
-		Plugins:     plugins.LoadConfig(raw.MLflow, raw.LiteLLM, raw.DeplSvcsCalls),
+		Plugins:     plugins.LoadConfig(raw.MLflow, raw.LiteLLM, raw.DeplSvcsCalls, raw.FluxcdDeploys),
 	}
 
 	return cfg, nil

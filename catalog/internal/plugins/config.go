@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	deplsvcscalls "github.com/naira-project/naira/catalog/internal/plugins/depl_svcs_calls"
+	fluxcddeploys "github.com/naira-project/naira/catalog/internal/plugins/fluxcd_deploys"
 	"github.com/naira-project/naira/catalog/internal/plugins/litellm"
 	"github.com/naira-project/naira/catalog/internal/plugins/mlflow"
 )
@@ -12,6 +13,7 @@ type Config struct {
 	MLflow        mlflow.Config
 	LiteLLM       litellm.Config
 	DeplSvcsCalls deplsvcscalls.Config
+	FluxcdDeploys fluxcddeploys.Config
 }
 
 type MLflowEnvConfig struct {
@@ -32,7 +34,13 @@ type DeplSvcsCallsEnvConfig struct {
 	Namespace  string `env:"NAMESPACE"`
 }
 
-func LoadConfig(mlflowConfig MLflowEnvConfig, litellmConfig LiteLLMEnvConfig, deplSvcsCallsConfig DeplSvcsCallsEnvConfig) Config {
+type FluxcdDeploysEnvConfig struct {
+	Enabled    bool   `env:"ENABLED" default:"true"`
+	Kubeconfig string `env:"KUBECONFIG"`
+	Namespace  string `env:"NAMESPACE"`
+}
+
+func LoadConfig(mlflowConfig MLflowEnvConfig, litellmConfig LiteLLMEnvConfig, deplSvcsCallsConfig DeplSvcsCallsEnvConfig, fluxcdDeploysConfig FluxcdDeploysEnvConfig) Config {
 	return Config{
 		MLflow: mlflow.Config{
 			Enabled:     mlflowConfig.Enabled,
@@ -48,6 +56,11 @@ func LoadConfig(mlflowConfig MLflowEnvConfig, litellmConfig LiteLLMEnvConfig, de
 			Enabled:    deplSvcsCallsConfig.Enabled,
 			Kubeconfig: strings.TrimSpace(deplSvcsCallsConfig.Kubeconfig),
 			Namespace:  strings.TrimSpace(deplSvcsCallsConfig.Namespace),
+		},
+		FluxcdDeploys: fluxcddeploys.Config{
+			Enabled:    fluxcdDeploysConfig.Enabled,
+			Kubeconfig: strings.TrimSpace(fluxcdDeploysConfig.Kubeconfig),
+			Namespace:  strings.TrimSpace(fluxcdDeploysConfig.Namespace),
 		},
 	}
 }
