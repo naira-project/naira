@@ -20,6 +20,7 @@ type envConfig struct {
 	HTTPTimeout time.Duration            `env:"HTTP_TIMEOUT" default:"5s"`
 	MLflow      plugins.MLflowEnvConfig  `env:"MLFLOW_"`
 	LiteLLM     plugins.LiteLLMEnvConfig `env:"LITELLM_"`
+	PluginsDir  string                   `env:"PLUGINS_DIR" default:"/var/lib/naira/plugins"`
 }
 
 func loadConfig() (config, error) {
@@ -31,7 +32,7 @@ func loadConfig() (config, error) {
 	cfg := config{
 		Port:        raw.Port,
 		HTTPTimeout: raw.HTTPTimeout,
-		Plugins:     plugins.LoadConfig(raw.MLflow, raw.LiteLLM),
+		Plugins:     plugins.LoadConfig(raw.MLflow, raw.LiteLLM, raw.PluginsDir),
 	}
 
 	return cfg, nil

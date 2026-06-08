@@ -1,0 +1,33 @@
+syntax = "proto3";
+package pluginapi;
+option go_package = "github.com/naira-project/naira/catalog/pluginapi/proto";
+
+message NodeID {
+  string kind = 1;
+  string path = 2;
+}
+
+message NodeClaim {
+  NodeID id = 1;
+  map<string, string> properties = 2;
+}
+
+message RelationClaim {
+  string kind = 1;
+  NodeID from = 2;
+  NodeID to = 3;
+  map<string, string> properties = 4;
+}
+
+message IngestionRequest {
+  repeated NodeClaim nodes = 1;
+  repeated RelationClaim relations = 2;
+}
+
+message Empty {}
+message NameResponse { string name = 1; }
+
+service CatalogPlugin {
+  rpc Name(Empty) returns (NameResponse);
+  rpc Collect(Empty) returns (IngestionRequest);
+}

@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	MLflow  mlflow.Config
-	LiteLLM litellm.Config
+	MLflow     mlflow.Config
+	LiteLLM    litellm.Config
+	PluginsDir string
 }
 
 type MLflowEnvConfig struct {
@@ -24,7 +25,7 @@ type LiteLLMEnvConfig struct {
 	APIKey  string `env:"API_KEY"`
 }
 
-func LoadConfig(mlflowConfig MLflowEnvConfig, litellmConfig LiteLLMEnvConfig) Config {
+func LoadConfig(mlflowConfig MLflowEnvConfig, litellmConfig LiteLLMEnvConfig, pluginsDir string) Config {
 	return Config{
 		MLflow: mlflow.Config{
 			Enabled:     mlflowConfig.Enabled,
@@ -36,5 +37,7 @@ func LoadConfig(mlflowConfig MLflowEnvConfig, litellmConfig LiteLLMEnvConfig) Co
 			BaseURL: strings.TrimSpace(litellmConfig.BaseURL),
 			APIKey:  strings.TrimSpace(litellmConfig.APIKey),
 		},
+		PluginsDir: strings.TrimSpace(pluginsDir),
 	}
 }
+
