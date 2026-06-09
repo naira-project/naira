@@ -26,23 +26,30 @@ import (
 
 const pluginName = "depl-litellm-models"
 
-// LiteLLM API keys: "sk-" followed by exactly 22 characters.
-var litellmKey = regexp.MustCompile(`^sk-.{22}$`)
-
 type Config struct {
-	Enabled    bool     `env:"ENABLED" default:"true"`
-	Kubeconfig string   `env:"KUBECONFIG"`
-	Namespace  string   `env:"NAMESPACE"`
-	Hosts      []string `env:"HOSTS"` // bare hostnames; "https://" is prepended automatically
+	Enabled      bool     `env:"ENABLED" default:"true"`
+	Kubeconfig   string   `env:"KUBECONFIG"`
+	Namespace    string   `env:"NAMESPACE"`
+	Hosts        []string `env:"HOSTS"`                               // bare hostnames; "https://" is prepended automatically
+	APIKeyRegexp string   `env:"API_KEY_REGEXP" default:"^sk-.{22}$"` // optional custom regexp to match API keys; defaults to current (May 2026) LiteLLM format
 }
 
 type Plugin struct {
-	httpClient *http.Client
-	config     Config
+	httpClient   *http.Client
+	config       Config
+	apiKeyRegexp *regexp.Regexp
 }
 
-func New(httpClient *http.Client, config Config) *Plugin {
-	return &Plugin{httpClient: httpClient, config: config}
+func New(httpClient *http.Client, config Config) (*Plugin, error) {
+	re, err := regexp.Compile(config.APIKeyRegexp)
+	if err != nil {
+		return nil, fmt.Errorf("invalid API_KEY_REGEXP: %w", err)
+	}
+	return &Plugin{
+		httpClient:   httpClient,
+		config:       config,
+		apiKeyRegexp: re,
+	}, nil
 }
 
 func (*Plugin) Name() string { return pluginName }
@@ -53,7 +60,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 
-	findings, err := scanDeployments(ctx, dyn, p.config.Namespace)
+	findings, err := scanDeployments(ctx, dyn, p.config.Namespace, p.apiKeyRegexp)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("scanning deployments: %w", err)
 	}
@@ -153,7 +160,7 @@ var (
 	gvrSecrets     = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 )
 
-func scanDeployments(ctx context.Context, dyn dynamic.Interface, namespace string) ([]finding, error) {
+func scanDeployments(ctx context.Context, dyn dynamic.Interface, namespace string, litellmKey *regexp.Regexp) ([]finding, error) {
 	depList, err := dyn.Resource(gvrDeployments).Namespace(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("listing deployments: %w", err)

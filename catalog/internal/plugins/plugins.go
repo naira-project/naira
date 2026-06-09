@@ -32,7 +32,11 @@ func Register(config Config, httpClient *http.Client, logger *log.Logger) []plug
 	}
 
 	if config.DeplLiteLLMModels.Enabled {
-		registered = appendIfNotNil(registered, deplitellmmodels.New(httpClient, config.DeplLiteLLMModels))
+		plugin, err := deplitellmmodels.New(httpClient, config.DeplLiteLLMModels)
+		if err != nil {
+			logger.Printf("error initializing DeplLiteLLMModels plugin: %v", err)
+		}
+		registered = appendIfNotNil(registered, plugin)
 	}
 
 	return registered
