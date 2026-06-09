@@ -259,15 +259,16 @@ type modelsResponse struct {
 // fetchModels calls GET https://<host>/v1/models with the given key.
 // A 401/403 response means the key is not valid for that host; returns nil, nil.
 func fetchModels(client *http.Client, host, apiKey string) ([]string, error) {
-	req, err := http.NewRequest(http.MethodGet, "https://"+host+"/v1/models", nil)
+	addr := "https://" + host + "/v1/models"
+	req, err := http.NewRequest(http.MethodGet, addr, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("preparing HTTPS request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("executing %q request: %w", addr, err)
 	}
 	defer resp.Body.Close()
 
@@ -280,7 +281,7 @@ func fetchModels(client *http.Client, host, apiKey string) ([]string, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading response from %q: %w", addr, err)
 	}
 	var mr modelsResponse
 	if err := json.Unmarshal(body, &mr); err != nil {
