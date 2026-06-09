@@ -9,9 +9,9 @@ import (
 )
 
 type Config struct {
-	MLflow            mlflow.Config            `env:"MLFLOW_"`
-	LiteLLM           litellm.Config           `env:"LITELLM_"`
-	DeplSvcsCalls     deplsvcscalls.Config     `env:"DEPL_SVCS_CALLS_"`
-	FluxcdDeploys     fluxcddeploys.Config     `env:"FLUXCD_DEPLOYS_"`
-	DeplLiteLLMModels deplitellmmodels.Config  `env:"DEPL_LITELLM_MODELS_"`
+	MLflow            mlflow.Config           `env:"MLFLOW_"`
+	LiteLLM           litellm.Config          `env:"LITELLM_"`
+	DeplSvcsCalls     deplsvcscalls.Config    `env:"DEPL_SVCS_CALLS_"`
+	FluxcdDeploys     fluxcddeploys.Config    `env:"FLUXCD_DEPLOYS_"`
+	DeplLiteLLMModels deplitellmmodels.Config `env:"DEPL_LITELLM_MODELS_"`
 }

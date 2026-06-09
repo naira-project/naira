@@ -30,9 +30,9 @@ const pluginName = "depl-litellm-models"
 var litellmKey = regexp.MustCompile(`^sk-.{22}$`)
 
 type Config struct {
-	Enabled    bool   `env:"ENABLED" default:"true"`
-	Kubeconfig string `env:"KUBECONFIG"`
-	Namespace  string `env:"NAMESPACE"`
+	Enabled    bool     `env:"ENABLED" default:"true"`
+	Kubeconfig string   `env:"KUBECONFIG"`
+	Namespace  string   `env:"NAMESPACE"`
 	Hosts      []string `env:"HOSTS"` // bare hostnames; "https://" is prepended automatically
 }
 
@@ -297,4 +297,3 @@ func (p *Plugin) connect() (dynamic.Interface, error) {
 	}
 	return dyn, nil
 }
-
