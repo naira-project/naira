@@ -6,17 +6,14 @@ package deplsvcscalls
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 
+	"github.com/naira-project/naira/catalog/internal/kubeconn"
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
@@ -151,24 +148,13 @@ func findEnvRef(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
 }
 
 func (p *Plugin) connect() (dynamic.Interface, error) {
-	kubeconfig := p.config.Kubeconfig
-	source := "in-cluster settings"
-	if kubeconfig == "" {
-		if env := os.Getenv("KUBECONFIG"); env != "" {
-			kubeconfig = env
-			source = "KUBECONFIG env"
-		} else if home := homedir.HomeDir(); home != "" {
-			candidate := filepath.Join(home, ".kube", "config")
-			if _, err := os.Stat(candidate); err == nil {
-				kubeconfig = candidate
-				source = candidate
-			}
-			// if file absent, kubeconfig stays "" → BuildConfigFromFlags tries in-cluster
-		}
-	}
-	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	cfg, err := kubeconn.RestConfig(p.config.Kubeconfig)
 	if err != nil {
-		return nil, fmt.Errorf("building kubeconfig from %s: %w", source, err)
+		return nil, fmt.Errorf("loading k8s config: %w", err)
 	}
-	return dynamic.NewForConfig(cfg)
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating k8s dynamic client: %w", err)
+	}
+	return dyn, nil
 }

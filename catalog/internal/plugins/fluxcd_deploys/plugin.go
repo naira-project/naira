@@ -5,17 +5,14 @@ package fluxcddeploys
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 
+	"github.com/naira-project/naira/catalog/internal/kubeconn"
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
@@ -274,32 +271,17 @@ func nsOrFallback(ns, fallback string) string {
 }
 
 func (p *Plugin) connect() (*discovery.DiscoveryClient, dynamic.Interface, error) {
-	kubeconfig := p.config.Kubeconfig
-	source := "in-cluster settings"
-	if kubeconfig == "" {
-		if env := os.Getenv("KUBECONFIG"); env != "" {
-			kubeconfig = env
-			source = "KUBECONFIG env"
-		} else if home := homedir.HomeDir(); home != "" {
-			candidate := filepath.Join(home, ".kube", "config")
-			if _, err := os.Stat(candidate); err == nil {
-				kubeconfig = candidate
-				source = candidate
-			}
-			// if file absent, kubeconfig stays "" → BuildConfigFromFlags tries in-cluster
-		}
-	}
-	cfg, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	cfg, err := kubeconn.RestConfig(p.config.Kubeconfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("building kubeconfig from %s: %w", source, err)
+		return nil, nil, fmt.Errorf("loading k8s config: %w", err)
 	}
 	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("discovery client: %w", err)
+		return nil, nil, fmt.Errorf("creating k8s discovery client: %w", err)
 	}
 	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("dynamic client: %w", err)
+		return nil, nil, fmt.Errorf("creating k8s dynamic client: %w", err)
 	}
 	return disc, dyn, nil
 }
