@@ -1,4 +1,4 @@
-package litellm
+package main
 
 import (
 	"log"

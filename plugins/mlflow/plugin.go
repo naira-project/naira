@@ -1,4 +1,4 @@
-package mlflow
+package main
 
 import (
 	"context"
