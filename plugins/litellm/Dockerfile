@@ -24,5 +24,3 @@ COPY --from=build /out/litellm /app/litellm
 
 # Ensure the binary has executable permissions
 RUN chmod +x /app/litellm
-
-CMD ["cp", "/app/litellm", "/plugins/litellm"]

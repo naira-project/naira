@@ -25,6 +25,10 @@ vars:
   POSTGRES_MANIFEST: infra/kubernetes/postgres.yaml
   CATALOG_DIR: ../../catalog
   CATALOG_IMAGE: catalog:local
+  MLFLOW_PLUGIN_DIR: ../../plugins/mlflow
+  MLFLOW_PLUGIN_IMAGE: mlflow:local
+  LITELLM_PLUGIN_DIR: ../../plugins/litellm
+  LITELLM_PLUGIN_IMAGE: litellm:local
   CATALOG_NAMESPACE: idp-system
   CATALOG_MANIFEST: infra/kubernetes/catalog.yaml
   CATALOG_SERVICE: svc/catalog
@@ -156,6 +160,30 @@ tasks:
     cmds:
       - docker build -t {{.CATALOG_IMAGE}} {{.CATALOG_DIR}}
 
+  mlflow:image:build:
+    desc: Build the mlflow Docker image
+    cmds:
+      - docker build -t {{.MLFLOW_PLUGIN_IMAGE}} -f {{.MLFLOW_PLUGIN_DIR}}/Dockerfile ../../
+
+  litellm:image:build:
+    desc: Build the litellm Docker image
+    cmds:
+      - docker build -t {{.LITELLM_PLUGIN_IMAGE}} -f {{.LITELLM_PLUGIN_DIR}}/Dockerfile ../../
+
+  mlflow:image:load:
+    desc: Load the mlflow plugin image into kind
+    deps:
+      - mlflow:image:build
+    cmds:
+      - kind load docker-image {{.MLFLOW_PLUGIN_IMAGE}} --name {{.CLUSTER_NAME}}
+
+  litellm:image:load:
+    desc: Load the litellm plugin image into kind
+    deps:
+      - litellm:image:build
+    cmds:
+      - kind load docker-image {{.LITELLM_PLUGIN_IMAGE}} --name {{.CLUSTER_NAME}}
+
   catalog:image:load:
     desc: Load the catalog image into kind
     deps:
@@ -174,6 +202,8 @@ tasks:
     internal: true
     cmds:
       - task: catalog:image:load
+      - task: mlflow:image:load
+      - task: litellm:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods

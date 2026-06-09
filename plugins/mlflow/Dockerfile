@@ -21,5 +21,3 @@ COPY --from=build /out/mlflow /app/mlflow
 
 # Ensure the binary has executable permissions
 RUN chmod +x /app/mlflow
-
-CMD ["cp", "/app/mlflow", "/plugins/mlflow"]

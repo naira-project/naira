@@ -40,6 +40,18 @@ subjects:
     name: catalog
     namespace: idp-system
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: catalog-plugins-pvc
+  namespace: idp-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -47,6 +59,8 @@ metadata:
   namespace: idp-system
 spec:
   replicas: 1
+  strategy:
+    type: Recreate # to clean volume and processes first before new pod
   selector:
     matchLabels:
       app: catalog
@@ -56,6 +70,19 @@ spec:
         app: catalog
     spec:
       serviceAccountName: catalog
+      initContainers:
+        - name: install-plugin-litellm
+          image: litellm:local
+          command: ["cp", "/app/litellm", "/plugins/litellm"]
+          volumeMounts:
+            - name: plugins-volume
+              mountPath: /plugins
+        - name: install-plugin-mlflow
+          image: mlflow:local
+          command: ["cp", "/app/mlflow", "/plugins/mlflow"]
+          volumeMounts:
+            - name: plugins-volume
+              mountPath: /plugins
       containers:
         - name: catalog
           image: catalog:local
@@ -94,6 +121,13 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+          volumeMounts:
+            - name: plugins-volume
+              mountPath: /var/lib/naira/plugins
+      volumes:
+        - name: plugins-volume
+          persistentVolumeClaim:
+            claimName: catalog-plugins-pvc
 ---
 apiVersion: v1
 kind: Service
