@@ -25,9 +25,9 @@ var (
 )
 
 type Config struct {
-	Enabled    bool
-	Kubeconfig string // explicit path; empty = auto-detect
-	Namespace  string // empty = all namespaces
+	Enabled    bool   `env:"ENABLED" default:"true"`
+	Kubeconfig string `env:"KUBECONFIG"`
+	Namespace  string `env:"NAMESPACE"`
 }
 
 type Plugin struct {

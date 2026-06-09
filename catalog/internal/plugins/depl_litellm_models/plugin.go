@@ -30,10 +30,10 @@ const pluginName = "depl-litellm-models"
 var litellmKey = regexp.MustCompile(`^sk-.{22}$`)
 
 type Config struct {
-	Enabled    bool
-	Kubeconfig string   // explicit path; empty = auto-detect
-	Namespace  string   // empty = all namespaces
-	Hosts      []string // bare hostnames; "https://" is prepended automatically
+	Enabled    bool   `env:"ENABLED" default:"true"`
+	Kubeconfig string `env:"KUBECONFIG"`
+	Namespace  string `env:"NAMESPACE"`
+	Hosts      string `env:"HOSTS"` // comma-separated bare hostnames; "https://" is prepended automatically
 }
 
 type Plugin struct {
@@ -66,7 +66,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 			continue
 		}
 		hostMap := make(map[string][]string)
-		for _, host := range p.config.Hosts {
+		for _, host := range splitHosts(p.config.Hosts) {
 			models, err := fetchModels(p.httpClient, host, f.apiKey)
 			if err != nil {
 				// non-fatal: warn and skip this host
@@ -295,4 +295,14 @@ func (p *Plugin) connect() (dynamic.Interface, error) {
 		return nil, fmt.Errorf("creating k8s dynamic client: %w", err)
 	}
 	return dyn, nil
+}
+
+func splitHosts(s string) []string {
+	var hosts []string
+	for _, h := range strings.Split(s, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			hosts = append(hosts, h)
+		}
+	}
+	return hosts
 }

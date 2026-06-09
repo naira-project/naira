@@ -14,15 +14,6 @@ import (
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
-// FIXME: use the same Config struct as cmd/catalog
-type envConfig struct {
-	MLflow            plugins.MLflowEnvConfig            `env:"MLFLOW_"`
-	LiteLLM           plugins.LiteLLMEnvConfig           `env:"LITELLM_"`
-	DeplSvcsCalls     plugins.DeplSvcsCallsEnvConfig     `env:"DEPL_SVCS_CALLS_"`
-	FluxcdDeploys     plugins.FluxcdDeploysEnvConfig     `env:"FLUXCD_DEPLOYS_"`
-	DeplLiteLLMModels plugins.DeplLiteLLMModelsEnvConfig `env:"DEPL_LITELLM_MODELS_"`
-}
-
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Fprintf(os.Stderr, "usage: %s <plugin-name>\n", os.Args[0])
@@ -31,13 +22,12 @@ func main() {
 	pluginName := os.Args[1]
 	// FIXME: make sure the plugin chosen by user is enabled
 
-	var raw envConfig
-	if err := env.Load(&raw, nil); err != nil {
+	var cfg plugins.Config
+	if err := env.Load(&cfg, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "error: loading config: %v\n", err)
 		os.Exit(1)
 	}
 
-	cfg := plugins.LoadConfig(raw.MLflow, raw.LiteLLM, raw.DeplSvcsCalls, raw.FluxcdDeploys, raw.DeplLiteLLMModels)
 	logger := log.New(os.Stderr, "", 0)
 	logger.Printf("Loaded config: %#v\n", cfg)
 	registered := plugins.Register(cfg, &http.Client{}, logger)
