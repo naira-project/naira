@@ -23,7 +23,7 @@ func main() {
 	// FIXME: make sure the plugin chosen by user is enabled
 
 	var cfg plugins.Config
-	if err := env.Load(&cfg, nil); err != nil {
+	if err := env.Load(&cfg, &env.Options{SliceSep: ","}); err != nil {
 		fmt.Fprintf(os.Stderr, "error: loading config: %v\n", err)
 		os.Exit(1)
 	}

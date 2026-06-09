@@ -23,7 +23,7 @@ type envConfig struct {
 
 func loadConfig() (config, error) {
 	var raw envConfig
-	if err := env.Load(&raw, nil); err != nil {
+	if err := env.Load(&raw, &env.Options{SliceSep: ","}); err != nil {
 		return config{}, fmt.Errorf("load config from environment: %w", err)
 	}
 
