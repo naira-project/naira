@@ -87,7 +87,8 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	deployNodes := make(map[string]pluginapi.NodeClaim)
 	modelNodes := make(map[string]pluginapi.NodeClaim)
 	var relations []pluginapi.RelationClaim
-	seenRelations := make(map[string]struct{})
+	type relKey struct{ from, to pluginapi.NodeID }
+	seenRelations := make(map[relKey]struct{})
 
 	for _, f := range findings {
 		deplPath := f.namespace + "/" + f.deployment
@@ -116,11 +117,11 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 				}
 				modID := modelNodes[modelPath].ID
 
-				relKey := deplID.Kind + ":" + deplID.Path + "|" + modID.Kind + ":" + modID.Path
-				if _, seen := seenRelations[relKey]; seen {
+				rk := relKey{deplID, modID}
+				if _, seen := seenRelations[rk]; seen {
 					continue
 				}
-				seenRelations[relKey] = struct{}{}
+				seenRelations[rk] = struct{}{}
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindUsesModel,
 					From: deplID,

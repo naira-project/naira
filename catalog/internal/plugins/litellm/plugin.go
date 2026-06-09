@@ -61,7 +61,11 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	nodes := make([]pluginapi.NodeClaim, 0, len(models))
 	relations := make([]pluginapi.RelationClaim, 0)
 	modelKeys := make(map[string]pluginapi.NodeClaim, len(models))
-	seenRelations := make(map[string]struct{})
+	type relKey struct {
+		from, to pluginapi.NodeID
+		kind     string
+	}
+	seenRelations := make(map[relKey]struct{})
 	fetchAllowedModelsErrors := make([]error, 0)
 
 	for _, model := range models {
@@ -133,11 +137,11 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 					propertyKeyLiteLLMVirtualKey: app.LiteLLMVirtualKey,
 				},
 			}
-			relationKey := relation.From.Kind + ":" + relation.From.Path + "|" + relation.To.Kind + ":" + relation.To.Path + "|" + relation.Kind
-			if _, seen := seenRelations[relationKey]; seen {
+			rk := relKey{relation.From, relation.To, relation.Kind}
+			if _, seen := seenRelations[rk]; seen {
 				continue
 			}
-			seenRelations[relationKey] = struct{}{}
+			seenRelations[rk] = struct{}{}
 			relations = append(relations, relation)
 		}
 	}
