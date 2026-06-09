@@ -29,7 +29,6 @@ func main() {
 	}
 
 	logger := log.New(os.Stderr, "", 0)
-	logger.Printf("Loaded config: %#v\n", cfg)
 	registered := plugins.Register(cfg, &http.Client{}, logger)
 
 	var plugin pluginapi.Plugin
