@@ -1,6 +1,6 @@
-// Package fluxcddeploys collects FluxCD Kustomization & HelmRelease objects,
+// Package fluxcd collects FluxCD Kustomization & HelmRelease objects,
 // the Deployments they manage, and the GitRepositories they source from.
-package fluxcddeploys
+package fluxcd
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
-const pluginName = "fluxcd_deploys"
+const pluginName = "fluxcd"
 
 var gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 

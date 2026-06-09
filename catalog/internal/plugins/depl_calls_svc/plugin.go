@@ -1,7 +1,7 @@
-// Package deplsvcscalls implements a plugin scanning k8s Deployments and
+// Package depl_calls_svc implements a plugin scanning k8s Deployments and
 // Services, then claiming "calls" relation from each Deployment that mentions
 // a Service's name in any plaintext Env value.
-package deplsvcscalls
+package depl_calls_svc
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
-const pluginName = "depl-svcs-calls"
+const pluginName = "depl_calls_svc"
 
 var (
 	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}

@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/http"
 
-	deplitellmmodels "github.com/naira-project/naira/catalog/internal/plugins/depl_litellm_models"
-	deplsvcscalls "github.com/naira-project/naira/catalog/internal/plugins/depl_svcs_calls"
-	fluxcddeploys "github.com/naira-project/naira/catalog/internal/plugins/fluxcd_deploys"
+	"github.com/naira-project/naira/catalog/internal/plugins/depl_calls_svc"
+	"github.com/naira-project/naira/catalog/internal/plugins/depl_uses_litellm"
+	"github.com/naira-project/naira/catalog/internal/plugins/fluxcd"
 	"github.com/naira-project/naira/catalog/internal/plugins/litellm"
 	"github.com/naira-project/naira/catalog/internal/plugins/mlflow"
 	"github.com/naira-project/naira/catalog/pluginapi"
@@ -23,16 +23,16 @@ func Register(config Config, httpClient *http.Client, logger *log.Logger) []plug
 		registered = appendIfNotNil(registered, litellm.New(httpClient, logger, config.LiteLLM))
 	}
 
-	if config.DeplSvcsCalls.Enabled {
-		registered = appendIfNotNil(registered, deplsvcscalls.New(config.DeplSvcsCalls))
+	if config.DeplCallsSvc.Enabled {
+		registered = appendIfNotNil(registered, depl_calls_svc.New(config.DeplCallsSvc))
 	}
 
-	if config.FluxcdDeploys.Enabled {
-		registered = appendIfNotNil(registered, fluxcddeploys.New(config.FluxcdDeploys))
+	if config.Fluxcd.Enabled {
+		registered = appendIfNotNil(registered, fluxcd.New(config.Fluxcd))
 	}
 
-	if config.DeplLiteLLMModels.Enabled {
-		plugin, err := deplitellmmodels.New(httpClient, config.DeplLiteLLMModels)
+	if config.DeplUsesLiteLLM.Enabled {
+		plugin, err := depl_uses_litellm.New(httpClient, config.DeplUsesLiteLLM)
 		if err != nil {
 			logger.Printf("error initializing DeplLiteLLMModels plugin: %v", err)
 		}

@@ -1,8 +1,8 @@
-// Package depllitellmmodels scans k8s Deployments for LiteLLM API keys stored
+// Package depl_uses_litellm scans k8s Deployments for LiteLLM API keys stored
 // in referenced Secrets, then queries each configured LiteLLM host to discover
 // which models that key can access, and emits deployment→model "uses_model"
 // relations.
-package depllitellmmodels
+package depl_uses_litellm
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
-const pluginName = "depl-litellm-models"
+const pluginName = "depl_uses_litellm"
 
 type Config struct {
 	Enabled      bool     `env:"ENABLED" default:"true"`

@@ -1,17 +1,17 @@
 package plugins
 
 import (
-	deplitellmmodels "github.com/naira-project/naira/catalog/internal/plugins/depl_litellm_models"
-	deplsvcscalls "github.com/naira-project/naira/catalog/internal/plugins/depl_svcs_calls"
-	fluxcddeploys "github.com/naira-project/naira/catalog/internal/plugins/fluxcd_deploys"
+	"github.com/naira-project/naira/catalog/internal/plugins/depl_calls_svc"
+	"github.com/naira-project/naira/catalog/internal/plugins/depl_uses_litellm"
+	"github.com/naira-project/naira/catalog/internal/plugins/fluxcd"
 	"github.com/naira-project/naira/catalog/internal/plugins/litellm"
 	"github.com/naira-project/naira/catalog/internal/plugins/mlflow"
 )
 
 type Config struct {
-	MLflow            mlflow.Config           `env:"MLFLOW_"`
-	LiteLLM           litellm.Config          `env:"LITELLM_"`
-	DeplSvcsCalls     deplsvcscalls.Config    `env:"DEPL_SVCS_CALLS_"`
-	FluxcdDeploys     fluxcddeploys.Config    `env:"FLUXCD_DEPLOYS_"`
-	DeplLiteLLMModels deplitellmmodels.Config `env:"DEPL_LITELLM_MODELS_"`
+	MLflow          mlflow.Config            `env:"MLFLOW_"`
+	LiteLLM         litellm.Config           `env:"LITELLM_"`
+	DeplCallsSvc    depl_calls_svc.Config    `env:"DEPL_CALLS_SVC_"`
+	Fluxcd          fluxcd.Config            `env:"FLUXCD_"`
+	DeplUsesLiteLLM depl_uses_litellm.Config `env:"DEPL_USES_LITELLM_"`
 }
