@@ -46,74 +46,123 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 
-	svcList, err := dyn.Resource(gvrServices).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing services: %w", err)
-	}
-
-	depList, err := dyn.Resource(gvrDeployments).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing deployments: %w", err)
-	}
-
-	var nodes []pluginapi.NodeClaim
-	var relations []pluginapi.RelationClaim
+	var claims pluginapi.IngestionRequest
 
 	// Build per-namespace service index and precompile patterns.
 	//
 	// TODO(akavel-reply): configurable filter (blocklist)
 	// TODO(akavel-reply): configurable list of extra names
 	// TODO(akavel-reply): feature for loading service names from Naira
-	svcsByNs := map[string]map[string]pluginapi.NodeID{} // ns → name → NodeID
-	patterns := map[string]*regexp.Regexp{}              // name → pattern
+	svcsByNs, err := collectServicesByNamespace(ctx, dyn)
+	if err != nil {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("collecting services: %w", err)
+	}
+	for _, svcs := range svcsByNs {
+		for _, svc := range svcs {
+			claims.Nodes = append(claims.Nodes, pluginapi.NodeClaim{
+				ID: svc.nodeID,
+			})
+		}
+	}
 
-	for _, svc := range svcList.Items {
-		svcNs := svc.GetNamespace()
-		svcName := svc.GetName()
-		id := pluginapi.NodeID{Kind: pluginapi.NodeKindService, Path: svcNs + "/" + svcName}
-		nodes = append(nodes, pluginapi.NodeClaim{
-			ID: id,
-		})
-		if svcsByNs[svcNs] == nil {
-			svcsByNs[svcNs] = make(map[string]pluginapi.NodeID)
-		}
-		svcsByNs[svcNs][svcName] = id
-		if _, ok := patterns[svcName]; !ok {
-			patterns[svcName] = regexp.MustCompile(`\b` + regexp.QuoteMeta(svcName) + `\b`)
-		}
+	depls, err := dyn.Resource(gvrDeployments).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("listing deployments: %w", err)
 	}
 
 	// Scan Deployments' Env values, find references to Service names collected
 	// above, interpret them as calls from the Deployment to the Service.
-	for _, dep := range depList.Items {
-		depNs := dep.GetNamespace()
-		depName := dep.GetName()
-		depID := pluginapi.NodeID{Kind: pluginapi.NodeKindDeployment, Path: depNs + "/" + depName}
-		nodes = append(nodes, pluginapi.NodeClaim{
-			ID: depID,
+	for _, depl := range depls.Items {
+		ns, name := depl.GetNamespace(), depl.GetName()
+		nodeID := pluginapi.NodeID{
+			Kind: pluginapi.NodeKindDeployment,
+			Path: ns + "/" + name,
+		}
+		claims.Nodes = append(claims.Nodes, pluginapi.NodeClaim{
+			ID: nodeID,
 		})
 
-		for svcName, svcID := range svcsByNs[depNs] {
-			if envEnv, ok := findEnvRef(dep.Object, patterns[svcName]); ok {
-				relations = append(relations, pluginapi.RelationClaim{
+		// Find references to services in the same namespace
+		for _, svc := range svcsByNs[ns] {
+			env, found := findEnvRef(depl.Object, svc.localPattern)
+			if !found {
+				continue
+			}
+			claims.Relations = append(claims.Relations, pluginapi.RelationClaim{
+				Kind: pluginapi.RelationKindCalls,
+				From: nodeID,
+				To:   svc.nodeID,
+				Properties: pluginapi.PropertyMap{
+					"env": env,
+				},
+			})
+		}
+
+		// Find references to services with explicit namespace
+		for _, svcs := range svcsByNs {
+			for _, svc := range svcs {
+				env, found := findEnvRef(depl.Object, svc.clusterPattern)
+				if !found {
+					continue
+				}
+				claims.Relations = append(claims.Relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindCalls,
-					From: depID,
-					To:   svcID,
+					From: nodeID,
+					To:   svc.nodeID,
 					Properties: pluginapi.PropertyMap{
-						"env": envEnv,
+						"env": env,
 					},
 				})
 			}
 		}
 	}
 
-	return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
+	return claims, nil
+}
+
+type serviceDetails struct {
+	nodeID         pluginapi.NodeID
+	localPattern   *regexp.Regexp // localPattern matches the service name as a whole word
+	clusterPattern *regexp.Regexp // clusterPattern matches the service name in the form "${serviceName}.${namespace}"
+}
+
+func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface) (map[string]map[string]serviceDetails, error) {
+	svcs, err := dyn.Resource(gvrServices).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("listing services: %w", err)
+	}
+
+	svcsByNs := make(map[string]map[string]serviceDetails) // ns → name → details
+	for _, svc := range svcs.Items {
+		ns, name := svc.GetNamespace(), svc.GetName()
+		localPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
+		if err != nil {
+			return nil, fmt.Errorf("compiling local pattern for service %s/%s: %w", ns, name, err)
+		}
+		clusterPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name+`.`+ns) + `\b`)
+		if err != nil {
+			return nil, fmt.Errorf("compiling cluster pattern for service %s/%s: %w", ns, name, err)
+		}
+
+		if svcsByNs[ns] == nil {
+			svcsByNs[ns] = make(map[string]serviceDetails)
+		}
+		svcsByNs[ns][name] = serviceDetails{
+			nodeID: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindService,
+				Path: ns + "/" + name,
+			},
+			localPattern:   localPattern,
+			clusterPattern: clusterPattern,
+		}
+	}
+	return svcsByNs, nil
 }
 
 // findEnvRef returns the first env var name whose value matches pat in any
 // container (or initContainer) of the deployment's pod template, and true if found.
 func findEnvRef(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
-	for env, value := range getEnvsFromDeployment(obj) {
+	for env, value := range iterEnvsFromDeployment(obj) {
 		if pat.MatchString(value) {
 			return env, true
 		}
@@ -121,7 +170,7 @@ func findEnvRef(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
 	return "", false
 }
 
-func getEnvsFromDeployment(obj map[string]interface{}) iter.Seq2[string, string] {
+func iterEnvsFromDeployment(obj map[string]interface{}) iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 
 		for _, section := range []string{"containers", "initContainers"} {
