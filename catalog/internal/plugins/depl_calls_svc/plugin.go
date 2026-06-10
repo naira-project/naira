@@ -58,20 +58,19 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("collecting services: %w", err)
 	}
 	for _, svcs := range svcsByNs {
-		for _, svc := range svcs {
+		for _, s := range svcs {
 			claims.Nodes = append(claims.Nodes, pluginapi.NodeClaim{
-				ID: svc.nodeID,
+				ID: s.nodeID,
 			})
 		}
 	}
 
+	// Scan Deployments' Env values, find references to Service names collected
+	// above, interpret them as calls from the Deployment to the Service.
 	depls, err := dyn.Resource(gvrDeployments).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing deployments: %w", err)
 	}
-
-	// Scan Deployments' Env values, find references to Service names collected
-	// above, interpret them as calls from the Deployment to the Service.
 	for _, depl := range depls.Items {
 		ns, name := depl.GetNamespace(), depl.GetName()
 		nodeID := pluginapi.NodeID{
@@ -99,7 +98,10 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		}
 
 		// Find references to services with explicit namespace
-		for _, svcs := range svcsByNs {
+		for svcNs, svcs := range svcsByNs {
+			if svcNs == ns {
+				continue // already checked above with shorter local pattern
+			}
 			for _, svc := range svcs {
 				env, found := findEnvRef(depl.Object, svc.clusterPattern)
 				if !found {
@@ -126,13 +128,13 @@ type serviceDetails struct {
 	clusterPattern *regexp.Regexp // clusterPattern matches the service name in the form "${serviceName}.${namespace}"
 }
 
-func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface) (map[string]map[string]serviceDetails, error) {
+func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface) (map[string][]serviceDetails, error) {
 	svcs, err := dyn.Resource(gvrServices).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("listing services: %w", err)
 	}
 
-	svcsByNs := make(map[string]map[string]serviceDetails) // ns → name → details
+	svcsByNs := make(map[string][]serviceDetails) // ns -> services
 	for _, svc := range svcs.Items {
 		ns, name := svc.GetNamespace(), svc.GetName()
 		localPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
@@ -144,17 +146,14 @@ func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface) (map
 			return nil, fmt.Errorf("compiling cluster pattern for service %s/%s: %w", ns, name, err)
 		}
 
-		if svcsByNs[ns] == nil {
-			svcsByNs[ns] = make(map[string]serviceDetails)
-		}
-		svcsByNs[ns][name] = serviceDetails{
+		svcsByNs[ns] = append(svcsByNs[ns], serviceDetails{
 			nodeID: pluginapi.NodeID{
 				Kind: pluginapi.NodeKindService,
 				Path: ns + "/" + name,
 			},
 			localPattern:   localPattern,
 			clusterPattern: clusterPattern,
-		}
+		})
 	}
 	return svcsByNs, nil
 }
@@ -162,7 +161,7 @@ func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface) (map
 // findEnvRef returns the first env var name whose value matches pat in any
 // container (or initContainer) of the deployment's pod template, and true if found.
 func findEnvRef(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
-	for env, value := range iterEnvsFromDeployment(obj) {
+	for env, value := range iterDeploymentEnvs(obj) {
 		if pat.MatchString(value) {
 			return env, true
 		}
@@ -170,7 +169,8 @@ func findEnvRef(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
 	return "", false
 }
 
-func iterEnvsFromDeployment(obj map[string]interface{}) iter.Seq2[string, string] {
+// iterDeploymentEnvs iterates all Env vars in a Deployment obj.
+func iterDeploymentEnvs(obj map[string]interface{}) iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 
 		for _, section := range []string{"containers", "initContainers"} {
