@@ -27,7 +27,6 @@ var (
 type Config struct {
 	Enabled    bool   `env:"ENABLED" default:"true"`
 	Kubeconfig string `env:"KUBECONFIG"`
-	Namespace  string `env:"NAMESPACE"`
 }
 
 type Plugin struct {
@@ -46,14 +45,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 
-	ns := p.config.Namespace
-
-	svcList, err := dyn.Resource(gvrServices).Namespace(ns).List(ctx, metav1.ListOptions{})
+	svcList, err := dyn.Resource(gvrServices).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing services: %w", err)
 	}
 
-	depList, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
+	depList, err := dyn.Resource(gvrDeployments).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing deployments: %w", err)
 	}
