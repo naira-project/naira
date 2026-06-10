@@ -67,8 +67,7 @@ func main() {
 // bool field named "Enabled".
 func forceEnablePlugins(cfg *plugins.Config) {
 	v := reflect.ValueOf(cfg).Elem()
-	for i := range v.NumField() {
-		f := v.Field(i)
+	for _, f := range v.Fields() {
 		if f.Kind() != reflect.Struct {
 			continue
 		}
