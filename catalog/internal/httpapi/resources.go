@@ -11,12 +11,14 @@ import (
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
+type PluginProperties map[string]string              // propKey -> propValue
+type PluginContributions map[string]PluginProperties // pluginName -> properties
+
 type Node struct {
-	Name string `json:"name"`
-	Kind string `json:"kind"`
-	Path string `json:"path"`
-	// pluginname -> propKey -> propValue
-	Props map[string]map[string]string `json:"props,omitempty"`
+	Name  string              `json:"name"`
+	Kind  string              `json:"kind"`
+	Path  string              `json:"path"`
+	Props PluginContributions `json:"props,omitempty"`
 }
 
 type ListNodesResponse struct {
@@ -50,21 +52,11 @@ type RunPluginsResponse struct {
 }
 
 func nodeFromCatalogNode(node catalog.Node) Node {
-	var props map[string]map[string]string
-	if len(node.Contributions) > 0 {
-		props = make(map[string]map[string]string, len(node.Contributions))
-		for pluginName, contribution := range node.Contributions {
-			copiedProps := make(map[string]string, len(contribution.Properties))
-			maps.Copy(copiedProps, contribution.Properties)
-			props[pluginName] = copiedProps
-		}
-	}
-
 	return Node{
 		Name:  nodeName(node.ID),
 		Kind:  node.ID.Kind,
 		Path:  node.ID.Path,
-		Props: props,
+		Props: cloneContributions(node.Contributions),
 	}
 }
 
@@ -148,6 +140,23 @@ func nodeName(id pluginapi.NodeID) string {
 
 func relationName(kind string, from pluginapi.NodeID, to pluginapi.NodeID) string {
 	return fmt.Sprintf("relations/%s/%s|%s", kind, url.PathEscape(nodeName(from)), url.PathEscape(nodeName(to)))
+}
+
+func cloneContributions(contributions map[string]catalog.PluginContribution) PluginContributions {
+	if len(contributions) == 0 {
+		return nil
+	}
+
+	cloned := make(PluginContributions, len(contributions))
+	for pluginName, contribution := range contributions {
+		copiedProps := make(PluginProperties, len(contribution.Properties))
+
+		maps.Copy(copiedProps, contribution.Properties)
+
+		cloned[pluginName] = copiedProps
+	}
+
+	return cloned
 }
 
 func int32FromCount(value int, logger *log.Logger) int32 {
