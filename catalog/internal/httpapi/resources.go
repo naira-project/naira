@@ -31,12 +31,11 @@ type ListNodesResponse struct {
 }
 
 type Relation struct {
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
-	FromNode string `json:"fromNode"`
-	ToNode   string `json:"toNode"`
-	//FIXME: change to map[string]map[string]string
-	Props map[string]string `json:"props,omitempty"`
+	Name     string               `json:"name"`
+	Kind     string               `json:"kind"`
+	FromNode string               `json:"fromNode"`
+	ToNode   string               `json:"toNode"`
+	Props    []PluginContribution `json:"props,omitempty"`
 }
 
 type ListRelationsResponse struct {
@@ -69,7 +68,7 @@ func relationFromCatalogRelation(relation catalog.Relation) Relation {
 		Kind:     relation.Kind,
 		FromNode: nodeName(relation.From),
 		ToNode:   nodeName(relation.To),
-		Props:    relation.Properties,
+		Props:    toSortedSlice(relation.Contributions),
 	}
 }
 

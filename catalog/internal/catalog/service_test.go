@@ -128,9 +128,10 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 		},
 		[]RelationClaim{
 			{
-				Kind: "uses_model",
-				From: NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-				To:   NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+				Kind:       "uses_model",
+				From:       NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+				To:         NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+				Properties: PropertyMap{"via": "virtual-key"},
 			},
 			{
 				Kind: "trained_on",
@@ -148,6 +149,9 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 	assert.Equal(t, "uses_model", response[1].Kind)
 	assert.Equal(t, NodeID{Kind: "application", Path: "litellm/fraud-assistant"}, response[1].From)
 	assert.Equal(t, NodeID{Kind: "model", Path: "mlflow/fraud-detector"}, response[1].To)
+	contrib, ok := response[1].Contributions["test-plugin"]
+	require.True(t, ok)
+	assert.Equal(t, map[string]string{"via": "virtual-key"}, contrib.Properties)
 }
 
 func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
@@ -292,4 +296,90 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	// 7. Verify the node is deleted now
 	nodes = store.ListNodes()
 	assert.Empty(t, nodes)
+}
+
+func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
+	store := NewMemoryStore()
+
+	appNode := NodeID{Kind: "application", Path: "shared-app"}
+	modelNode := NodeID{Kind: "model", Path: "shared-model"}
+
+	// 1. Both plugins must also report the nodes they reference
+	_, _, err := store.ApplyPluginSnapshot(
+		"mlflow",
+		uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		[]NodeClaim{
+			{ID: appNode},
+			{ID: modelNode},
+		},
+		[]RelationClaim{{
+			Kind:       "uses_model",
+			From:       appNode,
+			To:         modelNode,
+			Properties: PropertyMap{"weight": "high"},
+		}},
+	)
+	require.NoError(t, err)
+
+	_, _, err = store.ApplyPluginSnapshot(
+		"litellm",
+		uuid.MustParse("00000000-0000-0000-0000-000000000002"),
+		[]NodeClaim{
+			{ID: appNode},
+			{ID: modelNode},
+		},
+		[]RelationClaim{{
+			Kind:       "uses_model",
+			From:       appNode,
+			To:         modelNode,
+			Properties: PropertyMap{"virtual_key": "vk-001"},
+		}},
+	)
+	require.NoError(t, err)
+
+	// 2. Verify both contributions are stored on the same relation
+	relations := store.ListRelations()
+	require.Len(t, relations, 1)
+	rel := relations[0]
+	assert.Equal(t, "uses_model", rel.Kind)
+	require.Len(t, rel.Contributions, 2)
+	assert.Equal(t, map[string]string{"weight": "high"}, rel.Contributions["mlflow"].Properties)
+	assert.Equal(t, map[string]string{"virtual_key": "vk-001"}, rel.Contributions["litellm"].Properties)
+
+	// 3. mlflow stops reporting this relation
+	_, _, err = store.ApplyPluginSnapshot(
+		"mlflow",
+		uuid.MustParse("00000000-0000-0000-0000-000000000003"),
+		[]NodeClaim{
+			{ID: appNode},
+			{ID: modelNode},
+		},
+		nil, // no relations
+	)
+	require.NoError(t, err)
+
+	// 4. Relation survives because litellm still claims it
+	relations = store.ListRelations()
+	require.Len(t, relations, 1)
+	rel = relations[0]
+	require.Len(t, rel.Contributions, 1)
+	assert.Equal(t, map[string]string{"virtual_key": "vk-001"}, rel.Contributions["litellm"].Properties)
+	_, ok := rel.Contributions["mlflow"]
+	assert.False(t, ok)
+
+	// 5. litellm also stops reporting the relation
+	_, _, err = store.ApplyPluginSnapshot(
+		"litellm",
+		uuid.MustParse("00000000-0000-0000-0000-000000000004"),
+		[]NodeClaim{
+			{ID: appNode},
+			{ID: modelNode},
+		},
+		nil, // no relations
+	)
+	require.NoError(t, err)
+
+	// 6. Relation is gone now
+	relations = store.ListRelations()
+	assert.Empty(t, relations)
 }

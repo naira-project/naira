@@ -57,9 +57,10 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			},
 		},
 		[]catalog.RelationClaim{{
-			Kind: "uses_model",
-			From: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-			To:   catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+			Kind:       "uses_model",
+			From:       catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+			To:         catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+			Properties: pluginapi.PropertyMap{"via": "virtual-key"},
 		}},
 	)
 
@@ -136,6 +137,12 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.Len(t, payload.Relations, 1)
 				assert.Equal(t, "relations/uses_model/nodes%2Fapplication%2Flitellm%2Ffraud-assistant|nodes%2Fmodel%2Fmlflow%2Ffraud-detector", payload.Relations[0].Name)
 				assert.Equal(t, "uses_model", payload.Relations[0].Kind)
+				assert.Equal(t, []PluginContribution{
+					{
+						Plugin:  "test-plugin",
+						Entries: map[string]string{"via": "virtual-key"},
+					},
+				}, payload.Relations[0].Props)
 			},
 		},
 		{
