@@ -6,6 +6,7 @@ package depl_calls_svc
 import (
 	"context"
 	"fmt"
+	"iter"
 	"regexp"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -120,28 +121,41 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 // findEnvRef returns the first env var name whose value matches pat in any
 // container (or initContainer) of the deployment's pod template, and true if found.
 func findEnvRef(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
-	for _, section := range []string{"containers", "initContainers"} {
-		containers, _, _ := unstructured.NestedSlice(obj, "spec", "template", "spec", section)
-		for _, c := range containers {
-			container, ok := c.(map[string]interface{})
-			if !ok {
-				continue
-			}
-			envList, _, _ := unstructured.NestedSlice(container, "env")
-			for _, e := range envList {
-				env, ok := e.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				envName, _, _ := unstructured.NestedString(env, "name")
-				envValue, _, _ := unstructured.NestedString(env, "value")
-				if pat.MatchString(envValue) {
-					return envName, true
-				}
-			}
+	for env, value := range getEnvsFromDeployment(obj) {
+		if pat.MatchString(value) {
+			return env, true
 		}
 	}
 	return "", false
+}
+
+func getEnvsFromDeployment(obj map[string]interface{}) iter.Seq2[string, string] {
+	return func(yield func(string, string) bool) {
+
+		for _, section := range []string{"containers", "initContainers"} {
+			containers, _, _ := unstructured.NestedSlice(obj, "spec", "template", "spec", section)
+			for _, c := range containers {
+				container, ok := c.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				envList, _, _ := unstructured.NestedSlice(container, "env")
+				for _, e := range envList {
+					env, ok := e.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					envName, _, _ := unstructured.NestedString(env, "name")
+					envValue, _, _ := unstructured.NestedString(env, "value")
+
+					if !yield(envName, envValue) {
+						return
+					}
+				}
+			}
+		}
+
+	}
 }
 
 func (p *Plugin) connect() (dynamic.Interface, error) {
