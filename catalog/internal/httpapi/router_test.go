@@ -93,7 +93,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &payload))
 				require.Len(t, payload.Nodes, 1)
 				assert.Equal(t, "nodes/model/mlflow/fraud-detector", payload.Nodes[0].Name)
-				assert.Equal(t, map[string]map[string]string{
+				assert.Equal(t, PluginContributions{
 					"test-plugin": {
 						"source":      "mlflow",
 						"description": "registry model",
@@ -111,7 +111,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &payload))
 				assert.Equal(t, "model", payload.Kind)
 				assert.Equal(t, "mlflow/fraud-detector", payload.Path)
-				assert.Equal(t, map[string]map[string]string{
+				assert.Equal(t, PluginContributions{
 					"test-plugin": {
 						"source":      "mlflow",
 						"description": "registry model",
