@@ -73,10 +73,6 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		id := pluginapi.NodeID{Kind: pluginapi.NodeKindService, Path: svcNs + "/" + svcName}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: id,
-			Properties: pluginapi.PropertyMap{
-				"namespace": svcNs,
-				"name":      svcName,
-			},
 		})
 		if svcsByNs[svcNs] == nil {
 			svcsByNs[svcNs] = make(map[string]pluginapi.NodeID)
@@ -95,10 +91,6 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		depID := pluginapi.NodeID{Kind: pluginapi.NodeKindDeployment, Path: depNs + "/" + depName}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: depID,
-			Properties: pluginapi.PropertyMap{
-				"namespace": depNs,
-				"name":      depName,
-			},
 		})
 
 		for svcName, svcID := range svcsByNs[depNs] {
