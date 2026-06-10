@@ -158,27 +158,10 @@ func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUI
 		upsertedRelations++
 	}
 
-	s.pruneRelations(pluginName, snapshotID)
 	s.pruneNodes(pluginName, snapshotID)
+	s.pruneRelations(pluginName, snapshotID)
 
 	return upsertedNodes, upsertedRelations, nil
-}
-
-func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
-	for key, relation := range s.relations {
-		contribution, exists := relation.Contributions[pluginName]
-		if !exists {
-			continue
-		}
-
-		if contribution.SnapshotID != snapshotID {
-			delete(relation.Contributions, pluginName)
-		}
-
-		if len(relation.Contributions) == 0 {
-			delete(s.relations, key)
-		}
-	}
 }
 
 func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
@@ -189,7 +172,7 @@ func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
 		}
 
 		if contribution.SnapshotID != snapshotID {
-			delete(node.Contributions, pluginName)
+			delete(s.nodes[id].Contributions, pluginName)
 		}
 
 		if len(node.Contributions) == 0 {
@@ -198,13 +181,30 @@ func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
 	}
 }
 
+func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
+	for id, relation := range s.relations {
+		contribution, exists := relation.Contributions[pluginName]
+		if !exists {
+			continue
+		}
+
+		if contribution.SnapshotID != snapshotID {
+			delete(s.relations[id].Contributions, pluginName)
+		}
+
+		if len(relation.Contributions) == 0 {
+			delete(s.relations, id)
+		}
+	}
+}
+
 func validateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) error {
 	if pluginName == "" {
-		return fmt.Errorf("validate plugin name: %w: plugin name is empty", ErrInvalidIngestion)
+		return fmt.Errorf("%w: plugin name is empty", ErrInvalidIngestion)
 	}
 
 	if snapshotID == uuid.Nil {
-		return fmt.Errorf("validate snapshot ID: %w: snapshot ID is empty", ErrInvalidIngestion)
+		return fmt.Errorf("%w: snapshot ID is empty", ErrInvalidIngestion)
 	}
 
 	availableNodes := make(map[NodeID]struct{}, len(nodes))

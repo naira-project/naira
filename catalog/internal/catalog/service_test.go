@@ -10,6 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	snapshotV1 = uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	snapshotV2 = uuid.MustParse("00000000-0000-0000-0000-000000000002")
+	snapshotV3 = uuid.MustParse("00000000-0000-0000-0000-000000000003")
+	snapshotV4 = uuid.MustParse("00000000-0000-0000-0000-000000000004")
+)
+
 type stubPlugin struct {
 	name    string
 	request IngestionRequest
@@ -27,7 +34,7 @@ func (p stubPlugin) Collect(context.Context) (IngestionRequest, error) {
 func applyPluginSnapshot(t *testing.T, store *MemoryStore, nodes []NodeClaim, relations []RelationClaim) {
 	t.Helper()
 
-	_, _, err := store.ApplyPluginSnapshot("test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
+	_, _, err := store.ApplyPluginSnapshot("test-plugin", snapshotV1, nodes, relations)
 	require.NoError(t, err)
 }
 
@@ -181,7 +188,7 @@ func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 
 	_, _, err := store.ApplyPluginSnapshot(
 		"mlflow",
-		uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		snapshotV1,
 		[]NodeClaim{
 			{
 				ID:         NodeID{Kind: "application", Path: "mlflow/old-app"},
@@ -202,7 +209,7 @@ func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 
 	_, _, err = store.ApplyPluginSnapshot(
 		"litellm",
-		uuid.MustParse("00000000-0000-0000-0000-000000000010"),
+		snapshotV2,
 		[]NodeClaim{{
 			ID:         NodeID{Kind: "application", Path: "litellm/current-app"},
 			Properties: PropertyMap{"source": "litellm"},
@@ -213,7 +220,7 @@ func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 
 	_, _, err = store.ApplyPluginSnapshot(
 		"mlflow",
-		uuid.MustParse("00000000-0000-0000-0000-000000000002"),
+		snapshotV3,
 		[]NodeClaim{{
 			ID:         NodeID{Kind: "model", Path: "mlflow/new-model"},
 			Properties: PropertyMap{"source": "mlflow"},
@@ -235,7 +242,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	// 1. Ingest from plugin mlflow
 	_, _, err := store.ApplyPluginSnapshot(
 		"mlflow",
-		uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		snapshotV1,
 		[]NodeClaim{{
 			ID:         NodeID{Kind: "model", Path: "shared-model"},
 			Properties: PropertyMap{"release": "2.34", "token_price": "$10"},
@@ -247,7 +254,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	// 2. Ingest from plugin litellm
 	_, _, err = store.ApplyPluginSnapshot(
 		"litellm",
-		uuid.MustParse("00000000-0000-0000-0000-000000000002"),
+		snapshotV2,
 		[]NodeClaim{{
 			ID:         NodeID{Kind: "model", Path: "shared-model"},
 			Properties: PropertyMap{"token_price": "$5"},
@@ -268,7 +275,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	// 4. Update mlflow with a snapshot that doesn't contain the shared-model
 	_, _, err = store.ApplyPluginSnapshot(
 		"mlflow",
-		uuid.MustParse("00000000-0000-0000-0000-000000000003"),
+		snapshotV3,
 		[]NodeClaim{}, // empty
 		nil,
 	)
@@ -287,7 +294,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	// 6. Update litellm with a snapshot that doesn't contain the shared-model
 	_, _, err = store.ApplyPluginSnapshot(
 		"litellm",
-		uuid.MustParse("00000000-0000-0000-0000-000000000004"),
+		snapshotV4,
 		[]NodeClaim{}, // empty
 		nil,
 	)
@@ -307,7 +314,7 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	// 1. Both plugins must also report the nodes they reference
 	_, _, err := store.ApplyPluginSnapshot(
 		"mlflow",
-		uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		snapshotV1,
 		[]NodeClaim{
 			{ID: appNode},
 			{ID: modelNode},
@@ -323,7 +330,7 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 
 	_, _, err = store.ApplyPluginSnapshot(
 		"litellm",
-		uuid.MustParse("00000000-0000-0000-0000-000000000002"),
+		snapshotV2,
 		[]NodeClaim{
 			{ID: appNode},
 			{ID: modelNode},
@@ -349,7 +356,7 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	// 3. mlflow stops reporting this relation
 	_, _, err = store.ApplyPluginSnapshot(
 		"mlflow",
-		uuid.MustParse("00000000-0000-0000-0000-000000000003"),
+		snapshotV3,
 		[]NodeClaim{
 			{ID: appNode},
 			{ID: modelNode},
@@ -370,7 +377,7 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	// 5. litellm also stops reporting the relation
 	_, _, err = store.ApplyPluginSnapshot(
 		"litellm",
-		uuid.MustParse("00000000-0000-0000-0000-000000000004"),
+		snapshotV4,
 		[]NodeClaim{
 			{ID: appNode},
 			{ID: modelNode},
