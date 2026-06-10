@@ -27,11 +27,14 @@ type MemoryStore struct {
 	relations []Relation
 }
 
-type Node struct {
-	ID         NodeID
-	Plugin     string
+type PluginContribution struct {
 	SnapshotID uuid.UUID
 	Properties map[string]string
+}
+
+type Node struct {
+	ID            NodeID
+	Contributions map[string]PluginContribution
 }
 
 type Relation struct {
@@ -99,24 +102,24 @@ func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUI
 	}
 
 	upsertedNodes := 0
-	for _, node := range nodes {
-		id := node.ID
+	for _, nodeClaim := range nodes {
+		id := nodeClaim.ID
 
 		existing, ok := s.nodes[id]
-		if ok {
-			existing.ID = id
-			existing.Plugin = pluginName
-			existing.SnapshotID = snapshotID
-			existing.Properties = node.Properties
-			s.nodes[id] = existing
-		} else {
-			s.nodes[id] = Node{
-				ID:         id,
-				Plugin:     pluginName,
-				SnapshotID: snapshotID,
-				Properties: node.Properties,
+		if !ok {
+			existing = Node{
+				ID:            id,
+				Contributions: make(map[string]PluginContribution),
 			}
+		} else if existing.Contributions == nil {
+			existing.Contributions = make(map[string]PluginContribution)
 		}
+
+		existing.Contributions[pluginName] = PluginContribution{
+			SnapshotID: snapshotID,
+			Properties: nodeClaim.Properties,
+		}
+		s.nodes[id] = existing
 		upsertedNodes++
 	}
 
@@ -172,11 +175,18 @@ func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
 
 func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
 	for id, node := range s.nodes {
-		if node.Plugin != pluginName || node.SnapshotID == snapshotID {
+		contribution, exists := node.Contributions[pluginName]
+		if !exists {
 			continue
 		}
 
-		delete(s.nodes, id)
+		if contribution.SnapshotID != snapshotID {
+			delete(node.Contributions, pluginName)
+		}
+
+		if len(node.Contributions) == 0 {
+			delete(s.nodes, id)
+		}
 	}
 }
 

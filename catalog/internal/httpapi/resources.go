@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"log"
+	"maps"
 	"math"
 	"net/url"
 
@@ -14,8 +15,8 @@ type Node struct {
 	Name string `json:"name"`
 	Kind string `json:"kind"`
 	Path string `json:"path"`
-	//FIXME: change to map[string]map[string]string
-	Props map[string]string `json:"props,omitempty"`
+	// pluginname -> propKey -> propValue
+	Props map[string]map[string]string `json:"props,omitempty"`
 }
 
 type ListNodesResponse struct {
@@ -49,11 +50,21 @@ type RunPluginsResponse struct {
 }
 
 func nodeFromCatalogNode(node catalog.Node) Node {
+	var props map[string]map[string]string
+	if len(node.Contributions) > 0 {
+		props = make(map[string]map[string]string, len(node.Contributions))
+		for pluginName, contribution := range node.Contributions {
+			copiedProps := make(map[string]string, len(contribution.Properties))
+			maps.Copy(copiedProps, contribution.Properties)
+			props[pluginName] = copiedProps
+		}
+	}
+
 	return Node{
 		Name:  nodeName(node.ID),
 		Kind:  node.ID.Kind,
 		Path:  node.ID.Path,
-		Props: node.Properties,
+		Props: props,
 	}
 }
 

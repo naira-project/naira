@@ -48,11 +48,13 @@ func TestListNodesProjectsStoredNode(t *testing.T) {
 	node := response[0]
 	assert.Equal(t, "model", node.ID.Kind)
 	assert.Equal(t, "mlflow/fraud-detector", node.ID.Path)
+	contribution, ok := node.Contributions["test-plugin"]
+	require.True(t, ok)
 	assert.Equal(t, map[string]string{
 		"source":      "mlflow",
 		"description": "registry model",
 		"owner":       "risk-platform",
-	}, node.Properties)
+	}, contribution.Properties)
 }
 
 func TestGetNodeReturnsStoredNode(t *testing.T) {
@@ -221,4 +223,73 @@ func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	assert.Equal(t, NodeID{Kind: "application", Path: "litellm/current-app"}, nodes[0].ID)
 	assert.Equal(t, NodeID{Kind: "model", Path: "mlflow/new-model"}, nodes[1].ID)
 	assert.Empty(t, store.ListRelations())
+}
+
+func TestMultiplePluginsContributingToSameNode(t *testing.T) {
+	store := NewMemoryStore()
+
+	// 1. Ingest from plugin mlflow
+	_, _, err := store.ApplyPluginSnapshot(
+		"mlflow",
+		uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		[]NodeClaim{{
+			ID:         NodeID{Kind: "model", Path: "shared-model"},
+			Properties: PropertyMap{"release": "2.34", "token_price": "$10"},
+		}},
+		nil,
+	)
+	require.NoError(t, err)
+
+	// 2. Ingest from plugin litellm
+	_, _, err = store.ApplyPluginSnapshot(
+		"litellm",
+		uuid.MustParse("00000000-0000-0000-0000-000000000002"),
+		[]NodeClaim{{
+			ID:         NodeID{Kind: "model", Path: "shared-model"},
+			Properties: PropertyMap{"token_price": "$5"},
+		}},
+		nil,
+	)
+	require.NoError(t, err)
+
+	// 3. Verify node has both contributions
+	nodes := store.ListNodes()
+	require.Len(t, nodes, 1)
+	node := nodes[0]
+	assert.Equal(t, NodeID{Kind: "model", Path: "shared-model"}, node.ID)
+	require.Len(t, node.Contributions, 2)
+	assert.Equal(t, map[string]string{"release": "2.34", "token_price": "$10"}, node.Contributions["mlflow"].Properties)
+	assert.Equal(t, map[string]string{"token_price": "$5"}, node.Contributions["litellm"].Properties)
+
+	// 4. Update mlflow with a snapshot that doesn't contain the shared-model
+	_, _, err = store.ApplyPluginSnapshot(
+		"mlflow",
+		uuid.MustParse("00000000-0000-0000-0000-000000000003"),
+		[]NodeClaim{}, // empty
+		nil,
+	)
+	require.NoError(t, err)
+
+	// 5. Verify the node still exists because litellm still contributes to it
+	nodes = store.ListNodes()
+	require.Len(t, nodes, 1)
+	node = nodes[0]
+	assert.Equal(t, NodeID{Kind: "model", Path: "shared-model"}, node.ID)
+	require.Len(t, node.Contributions, 1)
+	assert.Equal(t, map[string]string{"token_price": "$5"}, node.Contributions["litellm"].Properties)
+	_, ok := node.Contributions["mlflow"]
+	assert.False(t, ok)
+
+	// 6. Update litellm with a snapshot that doesn't contain the shared-model
+	_, _, err = store.ApplyPluginSnapshot(
+		"litellm",
+		uuid.MustParse("00000000-0000-0000-0000-000000000004"),
+		[]NodeClaim{}, // empty
+		nil,
+	)
+	require.NoError(t, err)
+
+	// 7. Verify the node is deleted now
+	nodes = store.ListNodes()
+	assert.Empty(t, nodes)
 }
