@@ -29,7 +29,7 @@ func main() {
 	// if no args provided, we'll want to still print the list of available plugins
 
 	var cfg plugins.Config
-	if err := env.Load(&cfg, &env.Options{SliceSep: ","}); err != nil {
+	if err := env.Load(&cfg, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "error: loading config: %v\n", err)
 		os.Exit(1)
 	}
