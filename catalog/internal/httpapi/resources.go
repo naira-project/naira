@@ -6,19 +6,22 @@ import (
 	"maps"
 	"math"
 	"net/url"
+	"slices"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
-type PluginProperties map[string]string              // propKey -> propValue
-type PluginContributions map[string]PluginProperties // pluginName -> properties
+type PluginContribution struct {
+	Plugin  string            `json:"plugin"`
+	Entries map[string]string `json:"entries"`
+}
 
 type Node struct {
-	Name  string              `json:"name"`
-	Kind  string              `json:"kind"`
-	Path  string              `json:"path"`
-	Props PluginContributions `json:"props,omitempty"`
+	Name  string               `json:"name"`
+	Kind  string               `json:"kind"`
+	Path  string               `json:"path"`
+	Props []PluginContribution `json:"props,omitempty"`
 }
 
 type ListNodesResponse struct {
@@ -56,7 +59,7 @@ func nodeFromCatalogNode(node catalog.Node) Node {
 		Name:  nodeName(node.ID),
 		Kind:  node.ID.Kind,
 		Path:  node.ID.Path,
-		Props: cloneContributions(node.Contributions),
+		Props: toSortedSlice(node.Contributions),
 	}
 }
 
@@ -142,21 +145,30 @@ func relationName(kind string, from pluginapi.NodeID, to pluginapi.NodeID) strin
 	return fmt.Sprintf("relations/%s/%s|%s", kind, url.PathEscape(nodeName(from)), url.PathEscape(nodeName(to)))
 }
 
-func cloneContributions(contributions map[string]catalog.PluginContribution) PluginContributions {
+func toSortedSlice(contributions map[string]catalog.PluginContribution) []PluginContribution {
 	if len(contributions) == 0 {
 		return nil
 	}
 
-	cloned := make(PluginContributions, len(contributions))
-	for pluginName, contribution := range contributions {
-		copiedProps := make(PluginProperties, len(contribution.Properties))
+	// Collect plugin names and sort them for a stable, deterministic output order.
+	pluginNames := make([]string, 0, len(contributions))
+	for pluginName := range contributions {
+		pluginNames = append(pluginNames, pluginName)
+	}
+	slices.Sort(pluginNames)
 
+	result := make([]PluginContribution, 0, len(contributions))
+	for _, pluginName := range pluginNames {
+		contribution := contributions[pluginName]
+		copiedProps := make(map[string]string, len(contribution.Properties))
 		maps.Copy(copiedProps, contribution.Properties)
-
-		cloned[pluginName] = copiedProps
+		result = append(result, PluginContribution{
+			Plugin:  pluginName,
+			Entries: copiedProps,
+		})
 	}
 
-	return cloned
+	return result
 }
 
 func int32FromCount(value int, logger *log.Logger) int32 {

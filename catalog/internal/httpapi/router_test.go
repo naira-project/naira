@@ -93,10 +93,13 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &payload))
 				require.Len(t, payload.Nodes, 1)
 				assert.Equal(t, "nodes/model/mlflow/fraud-detector", payload.Nodes[0].Name)
-				assert.Equal(t, PluginContributions{
-					"test-plugin": {
-						"source":      "mlflow",
-						"description": "registry model",
+				assert.Equal(t, []PluginContribution{
+					{
+						Plugin: "test-plugin",
+						Entries: map[string]string{
+							"source":      "mlflow",
+							"description": "registry model",
+						},
 					},
 				}, payload.Nodes[0].Props)
 			},
@@ -111,10 +114,13 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &payload))
 				assert.Equal(t, "model", payload.Kind)
 				assert.Equal(t, "mlflow/fraud-detector", payload.Path)
-				assert.Equal(t, PluginContributions{
-					"test-plugin": {
-						"source":      "mlflow",
-						"description": "registry model",
+				assert.Equal(t, []PluginContribution{
+					{
+						Plugin: "test-plugin",
+						Entries: map[string]string{
+							"source":      "mlflow",
+							"description": "registry model",
+						},
 					},
 				}, payload.Props)
 			},
