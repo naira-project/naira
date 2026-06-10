@@ -21,7 +21,7 @@ type Node struct {
 	Name  string               `json:"name"`
 	Kind  string               `json:"kind"`
 	Path  string               `json:"path"`
-	Props []PluginContribution `json:"props,omitempty"`
+	Props []PluginContribution `json:"props"`
 }
 
 type ListNodesResponse struct {
@@ -35,7 +35,7 @@ type Relation struct {
 	Kind     string               `json:"kind"`
 	FromNode string               `json:"fromNode"`
 	ToNode   string               `json:"toNode"`
-	Props    []PluginContribution `json:"props,omitempty"`
+	Props    []PluginContribution `json:"props"`
 }
 
 type ListRelationsResponse struct {
@@ -146,7 +146,7 @@ func relationName(kind string, from pluginapi.NodeID, to pluginapi.NodeID) strin
 
 func toSortedSlice(contributions map[string]catalog.PluginContribution) []PluginContribution {
 	if len(contributions) == 0 {
-		return nil
+		return []PluginContribution{}
 	}
 
 	// Collect plugin names and sort them for a stable, deterministic output order.
