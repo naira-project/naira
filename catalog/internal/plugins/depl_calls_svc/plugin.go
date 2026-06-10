@@ -1,6 +1,11 @@
 // Package depl_calls_svc implements a plugin scanning k8s Deployments and
 // Services, then claiming "calls" relation from each Deployment that mentions
-// a Service's name in any plaintext Env value.
+// a Service's hostname in any plaintext Env value.
+//
+// TODO: could also scan "calls" to ExternalDNS, Ingress, LoadBalancer, hostAliases, etc.
+// TODO: add a configurable list of hostnames to filter out (blocklist)
+// TODO: add a configurable list of external hostnames to search for
+// TODO: add feature for loading service names from Nodes already known in Naira
 package depl_calls_svc
 
 import (
@@ -49,10 +54,6 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	var claims pluginapi.IngestionRequest
 
 	// Build per-namespace service index and precompile patterns.
-	//
-	// TODO(akavel-reply): configurable filter (blocklist)
-	// TODO(akavel-reply): configurable list of extra names
-	// TODO(akavel-reply): feature for loading service names from Naira
 	svcsByNs, err := collectServicesByNamespace(ctx, dyn)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("collecting services: %w", err)
@@ -83,7 +84,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 
 		// Find references to services in the same namespace
 		for _, svc := range svcsByNs[ns] {
-			env, found := findEnvRef(depl.Object, svc.localPattern)
+			env, found := findEnvValueMatch(depl.Object, svc.localPattern)
 			if !found {
 				continue
 			}
@@ -103,7 +104,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 				continue // already checked above with shorter local pattern
 			}
 			for _, svc := range svcs {
-				env, found := findEnvRef(depl.Object, svc.clusterPattern)
+				env, found := findEnvValueMatch(depl.Object, svc.clusterPattern)
 				if !found {
 					continue
 				}
@@ -158,9 +159,10 @@ func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface) (map
 	return svcsByNs, nil
 }
 
-// findEnvRef returns the first env var name whose value matches pat in any
-// container (or initContainer) of the deployment's pod template, and true if found.
-func findEnvRef(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
+// findEnvValueMatch returns the first Env var name whose value matches pat in
+// any container (or initContainer) of the obj Deployment's Pod template.
+// Returns true if found.
+func findEnvValueMatch(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
 	for env, value := range iterDeploymentEnvs(obj) {
 		if pat.MatchString(value) {
 			return env, true
