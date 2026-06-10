@@ -39,3 +39,23 @@ return pluginapi.IngestionRequest{
 ## Snapshots & Stale Data
 
 Each execution of a plugin is treated as a single, atomic snapshot. New data is ingested, and all previous data from this plugin not present in the current batch is removed.
+
+## Multi-plugin properties
+
+Multiple plugins can independently report the **same node or relation** (identified by identical `NodeID` or relation `kind`/`from`/`to` triple). The catalog merges their data rather than overwriting it.
+
+**How it works:**
+
+- Each plugin's properties are stored under that plugin's name as a namespace — the catalog never mixes or overwrites another plugin's data.
+- The API returns `props` as an ordered list of `{ plugin, entries }` objects, one per contributing plugin:
+
+  ```json
+  {
+    "kind": "model",
+    "path": "clusterA/deepseek",
+    "props": [
+      { "plugin": "mlflow/clusterA", "entries": { "release": "2.34", "token_price": "$10" } },
+      { "plugin": "litellm",         "entries": { "token_price": "$5" } }
+    ]
+  }
+  ```
