@@ -13,7 +13,7 @@ Why: node reads use the route `/v1/nodes/{kind}/*`, so `kind` is one path segmen
 
 - Reuse known kinds from `pluginapi/schema.go` when they fit.
 - Keep `kind` stable. Changing it changes node identity.
-- Use `path` for source-specific hierarchy such as `mlflow/model-a` or `litellm/team/app`.
+- Use `path` for hierarchy.
 
 ## Relations
 
@@ -29,7 +29,7 @@ return pluginapi.IngestionRequest{
 		{
 			ID: pluginapi.NodeID{
 				Kind: pluginapi.NodeKindModel,
-				Path: "mlflow/fraud-detector",
+				Path: "fraud-detector",
 			},
 		},
 	},
