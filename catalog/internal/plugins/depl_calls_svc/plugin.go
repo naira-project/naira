@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"log"
 	"regexp"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +28,7 @@ const pluginName = "depl_calls_svc"
 
 var (
 	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+	gvrNamespaces  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
 	gvrServices    = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}
 )
 
@@ -53,8 +55,17 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 
 	var claims pluginapi.IngestionRequest
 
+	namespaces, err := dyn.Resource(gvrNamespaces).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
+	}
+	var nsNames []string
+	for _, nsObj := range namespaces.Items {
+		nsNames = append(nsNames, nsObj.GetName())
+	}
+
 	// Build per-namespace service index and precompile patterns.
-	svcsByNs, err := collectServicesByNamespace(ctx, dyn)
+	svcsByNs, err := collectServicesByNamespace(ctx, dyn, nsNames)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("collecting services: %w", err)
 	}
@@ -68,11 +79,16 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 
 	// Scan Deployments' Env values, find references to Service names collected
 	// above, interpret them as calls from the Deployment to the Service.
-	depls, err := dyn.Resource(gvrDeployments).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing deployments: %w", err)
+	var depls []unstructured.Unstructured
+	for _, ns := range nsNames {
+		deplsInNs, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.Printf("%s: WARN: listing deployments in namespace %q: %v", pluginName, ns, err)
+			continue
+		}
+		depls = append(depls, deplsInNs.Items...)
 	}
-	for _, depl := range depls.Items {
+	for _, depl := range depls {
 		ns, name := depl.GetNamespace(), depl.GetName()
 		nodeID := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindDeployment,
@@ -129,32 +145,34 @@ type serviceDetails struct {
 	clusterPattern *regexp.Regexp // clusterPattern matches the service name in the form "${serviceName}.${namespace}"
 }
 
-func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface) (map[string][]serviceDetails, error) {
-	svcs, err := dyn.Resource(gvrServices).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("listing services: %w", err)
-	}
-
+func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, namespaces []string) (map[string][]serviceDetails, error) {
 	svcsByNs := make(map[string][]serviceDetails) // ns -> services
-	for _, svc := range svcs.Items {
-		ns, name := svc.GetNamespace(), svc.GetName()
-		localPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
+	for _, ns := range namespaces {
+		svcs, err := dyn.Resource(gvrServices).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("compiling local pattern for service %s/%s: %w", ns, name, err)
+			log.Printf("%s: WARN: listing services in namespace %q: %v", pluginName, ns, err)
+			continue
 		}
-		clusterPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name+`.`+ns) + `\b`)
-		if err != nil {
-			return nil, fmt.Errorf("compiling cluster pattern for service %s/%s: %w", ns, name, err)
-		}
+		for _, svc := range svcs.Items {
+			name := svc.GetName()
+			localPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
+			if err != nil {
+				return nil, fmt.Errorf("compiling local pattern for service %s/%s: %w", ns, name, err)
+			}
+			clusterPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name+`.`+ns) + `\b`)
+			if err != nil {
+				return nil, fmt.Errorf("compiling cluster pattern for service %s/%s: %w", ns, name, err)
+			}
 
-		svcsByNs[ns] = append(svcsByNs[ns], serviceDetails{
-			nodeID: pluginapi.NodeID{
-				Kind: pluginapi.NodeKindService,
-				Path: ns + "/" + name,
-			},
-			localPattern:   localPattern,
-			clusterPattern: clusterPattern,
-		})
+			svcsByNs[ns] = append(svcsByNs[ns], serviceDetails{
+				nodeID: pluginapi.NodeID{
+					Kind: pluginapi.NodeKindService,
+					Path: ns + "/" + name,
+				},
+				localPattern:   localPattern,
+				clusterPattern: clusterPattern,
+			})
+		}
 	}
 	return svcsByNs, nil
 }
