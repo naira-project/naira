@@ -31,22 +31,12 @@
           ]
         },
         {
-          "pathSegment": "dataset-registry",
-          "label": "Dataset Registry",
+          "pathSegment": "catalog-graph",
+          "label": "Catalog Graph",
           "entityType": "example",
           "hideFromNav": false,
-          "url": "http://localhost:3001/index.html/#/dataset-registry",
-          "loadingIndicator": { "enabled": false },
-          "children": [
-            {
-              "pathSegment": ":id",
-              "label": "Dataset Details",
-              "entityType": "example",
-              "hideFromNav": true,
-              "url": "http://localhost:3001/index.html/#/dataset-registry/:id",
-              "loadingIndicator": { "enabled": false }
-            }
-          ]
+          "url": "http://localhost:3001/index.html/#/catalog-graph",
+          "loadingIndicator": { "enabled": false }
         }
       ]
     }
