@@ -2,6 +2,7 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
+  PORTAL_DIR: ../../naira-openmfp-portal
   UI_DIR: ../../ui-poc
   UI_IMAGE: ui:local
   UI_NAMESPACE: idp-system
@@ -256,6 +257,23 @@ tasks:
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
+
+  portal:install:
+    desc: Install all naira-openmfp-portal dependencies
+    cmds:
+      - cd {{.PORTAL_DIR}} && npm install
+      - cd {{.PORTAL_DIR}} && npm run npm:install:ui
+      - cd {{.PORTAL_DIR}} && npm run npm:install:server
+
+  portal:start:
+    desc: Start the portal (frontend on :4300, backend on :3000)
+    cmds:
+      - cd {{.PORTAL_DIR}} && npm start
+
+  portal:build:
+    desc: Build frontend and backend of the portal
+    cmds:
+      - cd {{.PORTAL_DIR}} && npm run build
 
   forward:all:tunnels:
     internal: true
