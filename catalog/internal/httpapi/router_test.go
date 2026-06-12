@@ -94,15 +94,15 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &payload))
 				require.Len(t, payload.Nodes, 1)
 				assert.Equal(t, "nodes/model/mlflow/fraud-detector", payload.Nodes[0].Name)
-				assert.Equal(t, []PluginContribution{
+				assert.Equal(t, []PluginClaim{
 					{
 						Plugin: "test-plugin",
-						Entries: map[string]string{
+						Props: map[string]string{
 							"source":      "mlflow",
 							"description": "registry model",
 						},
 					},
-				}, payload.Nodes[0].Props)
+				}, payload.Nodes[0].PluginClaims)
 			},
 		},
 		{
@@ -115,15 +115,15 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &payload))
 				assert.Equal(t, "model", payload.Kind)
 				assert.Equal(t, "mlflow/fraud-detector", payload.Path)
-				assert.Equal(t, []PluginContribution{
+				assert.Equal(t, []PluginClaim{
 					{
 						Plugin: "test-plugin",
-						Entries: map[string]string{
+						Props: map[string]string{
 							"source":      "mlflow",
 							"description": "registry model",
 						},
 					},
-				}, payload.Props)
+				}, payload.PluginClaims)
 			},
 		},
 		{
@@ -137,12 +137,12 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.Len(t, payload.Relations, 1)
 				assert.Equal(t, "relations/uses_model/nodes%2Fapplication%2Flitellm%2Ffraud-assistant|nodes%2Fmodel%2Fmlflow%2Ffraud-detector", payload.Relations[0].Name)
 				assert.Equal(t, "uses_model", payload.Relations[0].Kind)
-				assert.Equal(t, []PluginContribution{
+				assert.Equal(t, []PluginClaim{
 					{
-						Plugin:  "test-plugin",
-						Entries: map[string]string{"via": "virtual-key"},
+						Plugin: "test-plugin",
+						Props:  map[string]string{"via": "virtual-key"},
 					},
-				}, payload.Relations[0].Props)
+				}, payload.Relations[0].PluginClaims)
 			},
 		},
 		{

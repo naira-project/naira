@@ -27,21 +27,21 @@ type MemoryStore struct {
 	relations map[RelationID]Relation
 }
 
-type PluginContribution struct {
+type PluginClaim struct {
 	SnapshotID uuid.UUID
 	Properties map[string]string
 }
 
 type Node struct {
-	ID            NodeID
-	Contributions map[string]PluginContribution
+	ID           NodeID
+	PluginClaims map[string]PluginClaim
 }
 
 type Relation struct {
-	Kind          string
-	From          NodeID
-	To            NodeID
-	Contributions map[string]PluginContribution
+	Kind         string
+	From         NodeID
+	To           NodeID
+	PluginClaims map[string]PluginClaim
 }
 
 type RelationID struct {
@@ -115,14 +115,14 @@ func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUI
 		existing, ok := s.nodes[id]
 		if !ok {
 			existing = Node{
-				ID:            id,
-				Contributions: make(map[string]PluginContribution),
+				ID:           id,
+				PluginClaims: make(map[string]PluginClaim),
 			}
-		} else if existing.Contributions == nil {
-			existing.Contributions = make(map[string]PluginContribution)
+		} else if existing.PluginClaims == nil {
+			existing.PluginClaims = make(map[string]PluginClaim)
 		}
 
-		existing.Contributions[pluginName] = PluginContribution{
+		existing.PluginClaims[pluginName] = PluginClaim{
 			SnapshotID: snapshotID,
 			Properties: nodeClaim.Properties,
 		}
@@ -141,16 +141,16 @@ func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUI
 		existing, ok := s.relations[key]
 		if !ok {
 			existing = Relation{
-				Kind:          key.Kind,
-				From:          key.From,
-				To:            key.To,
-				Contributions: make(map[string]PluginContribution),
+				Kind:         key.Kind,
+				From:         key.From,
+				To:           key.To,
+				PluginClaims: make(map[string]PluginClaim),
 			}
-		} else if existing.Contributions == nil {
-			existing.Contributions = make(map[string]PluginContribution)
+		} else if existing.PluginClaims == nil {
+			existing.PluginClaims = make(map[string]PluginClaim)
 		}
 
-		existing.Contributions[pluginName] = PluginContribution{
+		existing.PluginClaims[pluginName] = PluginClaim{
 			SnapshotID: snapshotID,
 			Properties: relationClaim.Properties,
 		}
@@ -166,16 +166,16 @@ func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUI
 
 func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
 	for id, node := range s.nodes {
-		contribution, exists := node.Contributions[pluginName]
+		claim, exists := node.PluginClaims[pluginName]
 		if !exists {
 			continue
 		}
 
-		if contribution.SnapshotID != snapshotID {
-			delete(s.nodes[id].Contributions, pluginName)
+		if claim.SnapshotID != snapshotID {
+			delete(s.nodes[id].PluginClaims, pluginName)
 		}
 
-		if len(node.Contributions) == 0 {
+		if len(node.PluginClaims) == 0 {
 			delete(s.nodes, id)
 		}
 	}
@@ -183,16 +183,16 @@ func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
 
 func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
 	for id, relation := range s.relations {
-		contribution, exists := relation.Contributions[pluginName]
+		claim, exists := relation.PluginClaims[pluginName]
 		if !exists {
 			continue
 		}
 
-		if contribution.SnapshotID != snapshotID {
-			delete(s.relations[id].Contributions, pluginName)
+		if claim.SnapshotID != snapshotID {
+			delete(s.relations[id].PluginClaims, pluginName)
 		}
 
-		if len(relation.Contributions) == 0 {
+		if len(relation.PluginClaims) == 0 {
 			delete(s.relations, id)
 		}
 	}
