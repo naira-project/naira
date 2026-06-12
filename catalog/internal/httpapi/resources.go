@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/url"
 	"slices"
+	"strings"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/pluginapi"
@@ -145,20 +146,8 @@ func relationName(kind string, from pluginapi.NodeID, to pluginapi.NodeID) strin
 }
 
 func toSortedSlice(claims map[string]catalog.PluginClaim) []PluginClaim {
-	if len(claims) == 0 {
-		return []PluginClaim{}
-	}
-
-	// Collect plugin names and sort them for a stable, deterministic output order.
-	pluginNames := make([]string, 0, len(claims))
-	for pluginName := range claims {
-		pluginNames = append(pluginNames, pluginName)
-	}
-	slices.Sort(pluginNames)
-
 	result := make([]PluginClaim, 0, len(claims))
-	for _, pluginName := range pluginNames {
-		claim := claims[pluginName]
+	for pluginName, claim := range claims {
 		copiedProps := make(map[string]string, len(claim.Properties))
 		maps.Copy(copiedProps, claim.Properties)
 		result = append(result, PluginClaim{
@@ -166,6 +155,10 @@ func toSortedSlice(claims map[string]catalog.PluginClaim) []PluginClaim {
 			Props:  copiedProps,
 		})
 	}
+
+	slices.SortFunc(result, func(a, b PluginClaim) int {
+		return strings.Compare(a.Plugin, b.Plugin)
+	})
 
 	return result
 }
