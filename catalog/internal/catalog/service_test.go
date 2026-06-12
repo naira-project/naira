@@ -50,18 +50,22 @@ func TestListNodesProjectsStoredNode(t *testing.T) {
 	}}, nil)
 
 	response := NewService(store, nil).ListNodes(t.Context())
-	require.Len(t, response, 1)
 
-	node := response[0]
-	assert.Equal(t, "model", node.ID.Kind)
-	assert.Equal(t, "mlflow/fraud-detector", node.ID.Path)
-	claim, ok := node.PluginClaims["test-plugin"]
-	require.True(t, ok)
-	assert.Equal(t, map[string]string{
-		"source":      "mlflow",
-		"description": "registry model",
-		"owner":       "risk-platform",
-	}, claim.Properties)
+	assert.Equal(t, []Node{
+		{
+			ID: NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+			PluginClaims: map[string]PluginClaim{
+				"test-plugin": {
+					SnapshotID: snapshotV1,
+					Properties: map[string]string{
+						"source":      "mlflow",
+						"description": "registry model",
+						"owner":       "risk-platform",
+					},
+				},
+			},
+		},
+	}, response)
 }
 
 func TestGetNodeReturnsStoredNode(t *testing.T) {
@@ -149,16 +153,31 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 	)
 
 	response := NewService(store, nil).ListRelations(t.Context())
-	assert.Len(t, response, 2)
-	assert.Equal(t, "trained_on", response[0].Kind)
-	assert.Equal(t, NodeID{Kind: "model", Path: "mlflow/fraud-detector"}, response[0].From)
-	assert.Equal(t, NodeID{Kind: "dataset", Path: "mlflow/transactions-v1"}, response[0].To)
-	assert.Equal(t, "uses_model", response[1].Kind)
-	assert.Equal(t, NodeID{Kind: "application", Path: "litellm/fraud-assistant"}, response[1].From)
-	assert.Equal(t, NodeID{Kind: "model", Path: "mlflow/fraud-detector"}, response[1].To)
-	claim, ok := response[1].PluginClaims["test-plugin"]
-	require.True(t, ok)
-	assert.Equal(t, map[string]string{"via": "virtual-key"}, claim.Properties)
+
+	assert.Equal(t, []Relation{
+		{
+			Kind: "trained_on",
+			From: NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+			To:   NodeID{Kind: "dataset", Path: "mlflow/transactions-v1"},
+			PluginClaims: map[string]PluginClaim{
+				"test-plugin": {
+					SnapshotID: snapshotV1,
+					Properties: nil,
+				},
+			},
+		},
+		{
+			Kind: "uses_model",
+			From: NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+			To:   NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+			PluginClaims: map[string]PluginClaim{
+				"test-plugin": {
+					SnapshotID: snapshotV1,
+					Properties: map[string]string{"via": "virtual-key"},
+				},
+			},
+		},
+	}, response)
 }
 
 func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
@@ -264,13 +283,21 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// 3. Verify node has both claims
-	nodes := store.ListNodes()
-	require.Len(t, nodes, 1)
-	node := nodes[0]
-	assert.Equal(t, NodeID{Kind: "model", Path: "shared-model"}, node.ID)
-	require.Len(t, node.PluginClaims, 2)
-	assert.Equal(t, map[string]string{"release": "2.34", "token_price": "$10"}, node.PluginClaims["mlflow"].Properties)
-	assert.Equal(t, map[string]string{"token_price": "$5"}, node.PluginClaims["litellm"].Properties)
+	assert.Equal(t, []Node{
+		{
+			ID: NodeID{Kind: "model", Path: "shared-model"},
+			PluginClaims: map[string]PluginClaim{
+				"mlflow": {
+					SnapshotID: snapshotV1,
+					Properties: map[string]string{"release": "2.34", "token_price": "$10"},
+				},
+				"litellm": {
+					SnapshotID: snapshotV2,
+					Properties: map[string]string{"token_price": "$5"},
+				},
+			},
+		},
+	}, store.ListNodes())
 
 	// 4. Update mlflow with a snapshot that doesn't contain the shared-model
 	_, _, err = store.ApplyPluginSnapshot(
@@ -281,15 +308,19 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// 5. Verify the node still exists because litellm still claims to it
-	nodes = store.ListNodes()
-	require.Len(t, nodes, 1)
-	node = nodes[0]
-	assert.Equal(t, NodeID{Kind: "model", Path: "shared-model"}, node.ID)
-	require.Len(t, node.PluginClaims, 1)
-	assert.Equal(t, map[string]string{"token_price": "$5"}, node.PluginClaims["litellm"].Properties)
-	_, ok := node.PluginClaims["mlflow"]
-	assert.False(t, ok)
+	// 5. Verify the node still exists because litellm still claims it
+	assert.Equal(t, []Node{
+		{
+			ID: NodeID{Kind: "model", Path: "shared-model"},
+			PluginClaims: map[string]PluginClaim{
+				"litellm": { // unchanged
+					SnapshotID: snapshotV2,
+					Properties: map[string]string{"token_price": "$5"},
+				},
+				// mlflow claim pruned
+			},
+		},
+	}, store.ListNodes())
 
 	// 6. Update litellm with a snapshot that doesn't contain the shared-model
 	_, _, err = store.ApplyPluginSnapshot(
@@ -301,8 +332,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// 7. Verify the node is deleted now
-	nodes = store.ListNodes()
-	assert.Empty(t, nodes)
+	assert.Empty(t, store.ListNodes())
 }
 
 func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
@@ -345,13 +375,23 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Verify both claims are stored on the same relation
-	relations := store.ListRelations()
-	require.Len(t, relations, 1)
-	rel := relations[0]
-	assert.Equal(t, "uses_model", rel.Kind)
-	require.Len(t, rel.PluginClaims, 2)
-	assert.Equal(t, map[string]string{"weight": "high"}, rel.PluginClaims["mlflow"].Properties)
-	assert.Equal(t, map[string]string{"virtual_key": "vk-001"}, rel.PluginClaims["litellm"].Properties)
+	assert.Equal(t, []Relation{
+		{
+			Kind: "uses_model",
+			From: appNode,
+			To:   modelNode,
+			PluginClaims: map[string]PluginClaim{
+				"mlflow": {
+					SnapshotID: snapshotV1,
+					Properties: map[string]string{"weight": "high"},
+				},
+				"litellm": {
+					SnapshotID: snapshotV2,
+					Properties: map[string]string{"virtual_key": "vk-001"},
+				},
+			},
+		},
+	}, store.ListRelations())
 
 	// 3. mlflow stops reporting this relation
 	_, _, err = store.ApplyPluginSnapshot(
@@ -366,13 +406,20 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	require.NoError(t, err)
 
 	// 4. Relation survives because litellm still claims it
-	relations = store.ListRelations()
-	require.Len(t, relations, 1)
-	rel = relations[0]
-	require.Len(t, rel.PluginClaims, 1)
-	assert.Equal(t, map[string]string{"virtual_key": "vk-001"}, rel.PluginClaims["litellm"].Properties)
-	_, ok := rel.PluginClaims["mlflow"]
-	assert.False(t, ok)
+	assert.Equal(t, []Relation{
+		{
+			Kind: "uses_model", // unchanged
+			From: appNode,      // unchanged
+			To:   modelNode,    // unchanged
+			PluginClaims: map[string]PluginClaim{
+				"litellm": { // unchanged
+					SnapshotID: snapshotV2,
+					Properties: map[string]string{"virtual_key": "vk-001"},
+				},
+				// mlflow claim pruned
+			},
+		},
+	}, store.ListRelations())
 
 	// 5. litellm also stops reporting the relation
 	_, _, err = store.ApplyPluginSnapshot(
@@ -387,6 +434,5 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	require.NoError(t, err)
 
 	// 6. Relation is gone now
-	relations = store.ListRelations()
-	assert.Empty(t, relations)
+	assert.Empty(t, store.ListRelations())
 }
