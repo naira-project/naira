@@ -31,12 +31,14 @@ tasks:
       - task --taskfile {{.DEV_TASKFILE}} portal:install
 
   portal:start:
-    desc: Start the portal (frontend :4300, backend :3000)
+    deps:
+      - portal:install
+    desc: Start the portal (frontend :4300, backend :3000). 
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} portal:start
 
   portal:build:
-    desc: Build the portal
+    desc: Build the portal, for production
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} portal:build
 
