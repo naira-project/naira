@@ -262,8 +262,8 @@ tasks:
     desc: Install all naira-openmfp-portal dependencies
     cmds:
       - cd {{.PORTAL_DIR}} && npm install
-      - cd {{.PORTAL_DIR}} && npm run npm:install:ui
-      - cd {{.PORTAL_DIR}} && npm run npm:install:server
+      - cd {{.PORTAL_DIR}}/frontend && npm install
+      - cd {{.PORTAL_DIR}}/backend && npm install
 
   portal:start:
     desc: Start the portal (frontend on :4300, backend on :3000)
