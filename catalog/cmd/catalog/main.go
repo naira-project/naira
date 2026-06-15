@@ -38,8 +38,8 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
@@ -52,7 +52,7 @@ func main() {
 		}
 	}()
 
-	<-sigChan
+	<-ctx.Done()
 	logger.Println("shutting down catalog service...")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
