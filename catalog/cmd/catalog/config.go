@@ -8,27 +8,30 @@ import (
 )
 
 type config struct {
-	Port        int
-	HTTPTimeout time.Duration
-	PluginsDir  string
+	Port            int
+	HTTPTimeout     time.Duration
+	PluginAddresses []string
 }
 
 type envConfig struct {
-	Port        int           `env:"PORT" default:"8090"`
-	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
-	PluginsDir  string        `env:"PLUGINS_DIR" default:"/var/lib/naira/plugins"`
+	Port            int           `env:"PORT" default:"8090"`
+	HTTPTimeout     time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
+	PluginAddresses []string      `env:"PLUGIN_ADDRESSES"`
 }
 
 func loadConfig() (config, error) {
 	var raw envConfig
-	if err := env.Load(&raw, nil); err != nil {
+	opts := &env.Options{
+		SliceSep: ",",
+	}
+	if err := env.Load(&raw, opts); err != nil {
 		return config{}, fmt.Errorf("load config from environment: %w", err)
 	}
 
 	cfg := config{
-		Port:        raw.Port,
-		HTTPTimeout: raw.HTTPTimeout,
-		PluginsDir:  raw.PluginsDir,
+		Port:            raw.Port,
+		HTTPTimeout:     raw.HTTPTimeout,
+		PluginAddresses: raw.PluginAddresses,
 	}
 
 	return cfg, nil

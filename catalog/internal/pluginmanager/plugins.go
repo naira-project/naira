@@ -1,62 +1,46 @@
 package pluginmanager
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
+	"time"
 
-	"github.com/hashicorp/go-plugin"
 	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/catalog/pluginapi/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-func Register(pluginsDir string, httpClient *http.Client, logger *log.Logger) ([]pluginapi.Plugin, func(), error) {
+type pluginClient struct {
+	*pluginapi.GRPCClient
+	name string
+}
+
+// todo: think who should define name. configmap which catalog will read?
+func (pc *pluginClient) Name() string {
+	return pc.name
+}
+
+func Register(addresses []string, logger *log.Logger) ([]pluginapi.Plugin, func(), error) {
 	var registered []pluginapi.Plugin
 	var cleanups []func()
 
-	if pluginsDir != "" {
-		entries, err := os.ReadDir(pluginsDir)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				for _, cleanup := range cleanups {
-					cleanup()
-				}
-				return nil, nil, fmt.Errorf("reading plugins directory %q: %w", pluginsDir, err)
-			}
-		} else {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-
-				info, err := entry.Info()
-				if err != nil {
-					continue
-				}
-
-				// Check if the file is executable
-				if info.Mode()&0111 == 0 {
-					continue
-				}
-
-				path := filepath.Join(pluginsDir, entry.Name())
-				extPlugin, cleanup, err := LoadExternalPlugin(path)
-				if err != nil {
-					for _, c := range cleanups {
-						c()
-					}
-					return nil, nil, fmt.Errorf("loading external plugin %q: %w", path, err)
-				}
-
-				if logger != nil {
-					logger.Printf("successfully loaded external plugin %q from %q", extPlugin.Name(), path)
-				}
-				registered = append(registered, extPlugin)
-				cleanups = append(cleanups, cleanup)
-			}
+	for _, addr := range addresses {
+		if addr == "" {
+			continue
 		}
+
+		plugin, cleanup, err := ConnectPlugin(addr, logger)
+		if err != nil {
+			for _, c := range cleanups {
+				c()
+			}
+			return nil, nil, fmt.Errorf("connecting to plugin at %q: %w", addr, err)
+		}
+
+		registered = append(registered, plugin)
+		cleanups = append(cleanups, cleanup)
 	}
 
 	cleanupAll := func() {
@@ -68,40 +52,44 @@ func Register(pluginsDir string, httpClient *http.Client, logger *log.Logger) ([
 	return registered, cleanupAll, nil
 }
 
-func LoadExternalPlugin(pathToBinary string) (pluginapi.Plugin, func(), error) {
-	client := plugin.NewClient(&plugin.ClientConfig{
-		HandshakeConfig: pluginapi.HandshakeConfig,
-		Plugins: map[string]plugin.Plugin{
-			"catalog-plugin": &pluginapi.HashiPlugin{},
-		},
-		Cmd:              exec.Command(pathToBinary),
-		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
-	})
-
-	rpcClient, err := client.Client()
+func ConnectPlugin(address string, logger *log.Logger) (pluginapi.Plugin, func(), error) {
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		client.Kill()
-		return nil, nil, fmt.Errorf("starting plugin client for binary %q: %w", pathToBinary, err)
+		return nil, nil, fmt.Errorf("creating gRPC client: %w", err)
 	}
 
-	raw, err := rpcClient.Dispense("catalog-plugin")
+	client := proto.NewCatalogPluginClient(conn)
+
+	var resp *proto.NameResponse
+	for i := range 5 {
+		nameCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		resp, err = client.Name(nameCtx, &proto.Empty{})
+		cancel()
+		if err == nil {
+			break
+		}
+		if logger != nil {
+			logger.Printf("waiting for plugin at %q to be ready... (%d/5)", address, i+1)
+		}
+		time.Sleep(1 * time.Second)
+	}
 	if err != nil {
-		client.Kill()
-		return nil, nil, fmt.Errorf("dispensing plugin for binary %q: %w", pathToBinary, err)
+		conn.Close()
+		return nil, nil, fmt.Errorf("getting plugin name from %q: %w", address, err)
 	}
 
-	p, ok := raw.(pluginapi.Plugin)
-	if !ok {
-		client.Kill()
-		return nil, nil, fmt.Errorf("dispensed plugin is not a pluginapi.Plugin")
+	if logger != nil {
+		logger.Printf("successfully connected to plugin %q at %q", resp.Name, address)
 	}
 
-	return p, func() { client.Kill() }, nil
-}
-
-func appendIfNotNil(plugins []pluginapi.Plugin, plugin pluginapi.Plugin) []pluginapi.Plugin {
-	if plugin != nil {
-		return append(plugins, plugin)
+	pc := &pluginClient{
+		GRPCClient: pluginapi.NewGRPCClient(client),
+		name:       resp.Name,
 	}
-	return plugins
+
+	cleanup := func() {
+		conn.Close()
+	}
+
+	return pc, cleanup, nil
 }

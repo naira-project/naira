@@ -1,14 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-plugin"
 	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/catalog/pluginapi/proto"
 	"go-simpler.org/env"
+	"google.golang.org/grpc"
 )
 
 type pluginConfig struct {
@@ -16,6 +19,7 @@ type pluginConfig struct {
 	BaseURL     string        `env:"MLFLOW_BASE_URL" default:"http://127.0.0.1:5000"`
 	BearerToken string        `env:"MLFLOW_BEARER_TOKEN"`
 	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
+	Port        int           `env:"PORT" default:"50052"`
 }
 
 func main() {
@@ -34,11 +38,16 @@ func main() {
 		BearerToken: strings.TrimSpace(raw.BearerToken),
 	})
 
-	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: pluginapi.HandshakeConfig,
-		Plugins: map[string]plugin.Plugin{
-			"catalog-plugin": &pluginapi.HashiPlugin{Impl: impl},
-		},
-		GRPCServer: plugin.DefaultGRPCServer,
-	})
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", raw.Port))
+	if err != nil {
+		log.Fatalf("failed to listen on port %d: %v", raw.Port, err)
+	}
+
+	s := grpc.NewServer()
+	proto.RegisterCatalogPluginServer(s, &pluginapi.GRPCServer{Impl: impl})
+
+	log.Printf("mlflow plugin listening on %v", lis.Addr())
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve gRPC: %v", err)
+	}
 }

@@ -22,5 +22,8 @@ WORKDIR /app
 
 COPY --from=build /out/litellm /app/litellm
 
+# todo: simplifiy the dockerfiles
 # Ensure the binary has executable permissions
 RUN chmod +x /app/litellm
+
+ENTRYPOINT ["/app/litellm"]

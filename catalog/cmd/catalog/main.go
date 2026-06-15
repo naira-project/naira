@@ -23,8 +23,7 @@ func main() {
 		logger.Fatalf("invalid configuration: %v", err)
 	}
 
-	httpClient := &http.Client{Timeout: config.HTTPTimeout}
-	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginsDir, httpClient, logger)
+	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, logger)
 	if err != nil {
 		logger.Fatalf("failed to register plugins: %v", err)
 	}
@@ -43,8 +42,8 @@ func main() {
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
-		if config.PluginsDir != "" {
-			logger.Printf("plugins directory: %s", config.PluginsDir)
+		if len(config.PluginAddresses) > 0 {
+			logger.Printf("plugin addresses: %v", config.PluginAddresses)
 		}
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

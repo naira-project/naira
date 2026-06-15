@@ -40,18 +40,6 @@ subjects:
     name: catalog
     namespace: idp-system
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: catalog-plugins-pvc
-  namespace: idp-system
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -60,7 +48,7 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate # to clean volume and processes first before new pod
+    type: Recreate
   selector:
     matchLabels:
       app: catalog
@@ -70,19 +58,6 @@ spec:
         app: catalog
     spec:
       serviceAccountName: catalog
-      initContainers:
-        - name: install-plugin-litellm
-          image: litellm:local
-          command: ["cp", "/app/litellm", "/plugins/litellm"]
-          volumeMounts:
-            - name: plugins-volume
-              mountPath: /plugins
-        - name: install-plugin-mlflow
-          image: mlflow:local
-          command: ["cp", "/app/mlflow", "/plugins/mlflow"]
-          volumeMounts:
-            - name: plugins-volume
-              mountPath: /plugins
       containers:
         - name: catalog
           image: catalog:local
@@ -90,15 +65,8 @@ spec:
           env:
             - name: PORT
               value: "8090"
-            - name: MLFLOW_BASE_URL
-              value: http://mlflow.mlflow.svc.cluster.local:5000
-            - name: LITELLM_BASE_URL
-              value: http://litellm.litellm.svc.cluster.local:4000
-            - name: LITELLM_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: catalog-secrets
-                  key: LITELLM_API_KEY
+            - name: PLUGIN_ADDRESSES
+              value: "localhost:50051,localhost:50052"
           ports:
             - containerPort: 8090
               name: http
@@ -121,13 +89,41 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
-          volumeMounts:
-            - name: plugins-volume
-              mountPath: /var/lib/naira/plugins
-      volumes:
-        - name: plugins-volume
-          persistentVolumeClaim:
-            claimName: catalog-plugins-pvc
+        - name: plugin-litellm
+          image: litellm:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50051"
+            - name: LITELLM_BASE_URL
+              value: http://litellm.litellm.svc.cluster.local:4000
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: LITELLM_API_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-mlflow
+          image: mlflow:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50052"
+            - name: MLFLOW_BASE_URL
+              value: http://mlflow.mlflow.svc.cluster.local:5000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
