@@ -195,7 +195,7 @@ func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, name
 // findEnvValueMatch returns the first Env var name whose value matches pat in
 // any container (or initContainer) of the obj Deployment's Pod template.
 // Returns true if found.
-func findEnvValueMatch(obj map[string]interface{}, pat *regexp.Regexp) (string, bool) {
+func findEnvValueMatch(obj map[string]any, pat *regexp.Regexp) (string, bool) {
 	for env, value := range iterDeploymentEnvs(obj) {
 		if pat.MatchString(value) {
 			return env, true
@@ -205,19 +205,19 @@ func findEnvValueMatch(obj map[string]interface{}, pat *regexp.Regexp) (string, 
 }
 
 // iterDeploymentEnvs iterates all Env vars in a Deployment obj.
-func iterDeploymentEnvs(obj map[string]interface{}) iter.Seq2[string, string] {
+func iterDeploymentEnvs(obj map[string]any) iter.Seq2[string, string] {
 	return func(yield func(string, string) bool) {
 
 		for _, section := range []string{"containers", "initContainers"} {
 			containers, _, _ := unstructured.NestedSlice(obj, "spec", "template", "spec", section)
 			for _, c := range containers {
-				container, ok := c.(map[string]interface{})
+				container, ok := c.(map[string]any)
 				if !ok {
 					continue
 				}
 				envList, _, _ := unstructured.NestedSlice(container, "env")
 				for _, e := range envList {
-					env, ok := e.(map[string]interface{})
+					env, ok := e.(map[string]any)
 					if !ok {
 						continue
 					}
