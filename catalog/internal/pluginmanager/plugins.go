@@ -1,14 +1,15 @@
 package pluginmanager
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"net"
 	"time"
 
 	"github.com/naira-project/naira/catalog/pluginapi"
 	"github.com/naira-project/naira/catalog/pluginapi/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -53,29 +54,35 @@ func Register(plugins map[string]string, logger *log.Logger) (map[string]plugina
 	return registered, cleanupAll, nil
 }
 
-// ConnectPlugin waits for the sidecar to listen (TCP-level readiness) and
-// then creates a gRPC client connection for the given plugin name and address.
+// ConnectPlugin establishes a gRPC connection to the specified address.
+// It includes a retry mechanism that waits up to 10 seconds for the
+// connection to reach the READY state before timing out.
 func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, func(), error) {
-	var dialErr error
-	for i := range 5 {
-		var conn net.Conn
-		conn, dialErr = net.DialTimeout("tcp", address, 2*time.Second)
-		if dialErr == nil {
-			conn.Close()
-			break
-		}
-		if logger != nil {
-			logger.Printf("waiting for plugin %q at %q to listen... (%d/5)", name, address, i+1)
-		}
-		time.Sleep(1 * time.Second)
-	}
-	if dialErr != nil {
-		return nil, nil, fmt.Errorf("plugin %q at %q is not listening: %w", name, address, dialErr)
+	if logger != nil {
+		logger.Printf("connecting to plugin %q at %q...", name, address)
 	}
 
-	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(
+		address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating gRPC client for plugin %q: %w", name, err)
+	}
+
+	for {
+		state := conn.GetState()
+		if state == connectivity.Ready {
+			break
+		}
+
+		if !conn.WaitForStateChange(ctx, state) {
+			conn.Close()
+			return nil, nil, fmt.Errorf("plugin %q at %q failed to become READY within timeout", name, address)
+		}
 	}
 
 	if logger != nil {
