@@ -25,15 +25,20 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} cluster:delete
 
+  portal:deploy:
+    desc: Build and deploy the portal container to kind
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} portal:deploy
+
   portal:install:
-    desc: Install naira-openmfp-portal dependencies
+    desc: Install naira-openmfp-portal dependencies (local development)
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} portal:install
 
   portal:start:
     deps:
       - portal:install
-    desc: Start the portal (frontend :4300, backend :3000). 
+    desc: Start the portal locally (frontend :4300, backend :3000)
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} portal:start
 
