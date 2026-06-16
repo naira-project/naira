@@ -73,6 +73,9 @@ func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, 
 		return nil, nil, fmt.Errorf("creating gRPC client for plugin %q: %w", name, err)
 	}
 
+	// grpc client is lazy by default, needs to be kicked to connect
+	conn.Connect()
+
 	for {
 		state := conn.GetState()
 		if state == connectivity.Ready {

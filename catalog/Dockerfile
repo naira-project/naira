@@ -1,18 +1,25 @@
-FROM golang:1.26 AS build
+# --- Stage 1: Build ---
+FROM golang:1.26-alpine AS builder
 
-WORKDIR /src
+WORKDIR /app
 
 COPY go.mod go.sum ./
-COPY cmd ./cmd
-COPY internal ./internal
-COPY pluginapi ./pluginapi
+RUN go mod download
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/catalog ./cmd/catalog
+COPY catalog/internal/ ./catalog/internal/
+COPY catalog/pluginapi/ ./catalog/pluginapi/
+COPY catalog/cmd/catalog/ ./catalog/cmd/catalog/
 
-FROM gcr.io/distroless/static-debian12
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-w -s" -o /out/catalog ./catalog/cmd/catalog
 
-COPY --from=build /out/catalog /catalog
+# --- Stage 2: Final ---
+FROM gcr.io/distroless/static-debian12:latest
+
+COPY --from=builder /out/catalog /catalog
 
 EXPOSE 8090
+
+USER nonroot:nonroot
 
 ENTRYPOINT ["/catalog"]

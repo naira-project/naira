@@ -159,7 +159,7 @@ tasks:
   catalog:image:build:
     desc: Build the catalog Docker image
     cmds:
-      - docker build -t {{.CATALOG_IMAGE}} {{.CATALOG_DIR}}
+      - docker build -t {{.CATALOG_IMAGE}} -f {{.CATALOG_DIR}}/Dockerfile ../../
 
   mlflow:image:build:
     desc: Build the mlflow Docker image

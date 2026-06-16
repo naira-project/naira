@@ -1,25 +1,24 @@
-FROM golang:1.26 AS build
-
-WORKDIR /workspace
-
-# (fixme: libera13): it should not be coupled with catalog code. Can be done after .proto files are with tag on github
-COPY go.work go.work.sum ./
-COPY catalog/go.mod catalog/go.sum ./catalog/
-COPY plugins/go.mod plugins/go.sum ./plugins/
-
-COPY catalog/ ./catalog/
-COPY plugins/ ./plugins/
-
-RUN CGO_ENABLED=0 go build -o /out/mlflow ./plugins/mlflow
-
-# Use a lightweight base image with cp utility to copy the plugin to the shared volume
-FROM alpine:3.18
+# --- Stage 1: Build ---
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
-COPY --from=build /out/mlflow /app/mlflow
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Ensure the binary has executable permissions
-RUN chmod +x /app/mlflow
+COPY catalog/pluginapi/ ./catalog/pluginapi/
+COPY plugins/mlflow/ ./plugins/mlflow/
 
-ENTRYPOINT ["/app/mlflow"]
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-w -s" -o /out/mlflow ./plugins/mlflow
+
+# --- Stage 2: Final ---
+FROM gcr.io/distroless/static-debian12:latest
+
+COPY --from=builder /out/mlflow /mlflow
+
+EXPOSE 50052
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/mlflow"]
