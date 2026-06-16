@@ -8,6 +8,10 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+  packages: write
+  
 jobs:
   # ── 1. Build & push catalog image ─────────────────────────────────────────
   container-publish-catalog:
