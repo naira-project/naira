@@ -53,7 +53,10 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
+	return p.collect(ctx, dyn)
+}
 
+func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.IngestionRequest, error) {
 	var claims pluginapi.IngestionRequest
 
 	namespaces, err := dyn.Resource(gvrNamespaces).List(ctx, metav1.ListOptions{})
