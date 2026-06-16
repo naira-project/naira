@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+  
+jobs:
+  # ── 1. Build & push catalog image ─────────────────────────────────────────
+  container-publish-catalog:
+    name: Publish · Catalog
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-catalog"
+      dockerfile: "catalog/Dockerfile"
+      context: "catalog"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 2. Build & push UI image ───────────────────────────────────────────────
+  container-publish-ui:
+    name: Publish · UI
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-ui"
+      dockerfile: "ui-poc/Dockerfile"
+      context: "ui-poc"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Gate: surfaces overall release status as a single check ───────────────
+  all-published:
+    name: All Images Published
+    needs: [container-publish-catalog, container-publish-ui]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          RESULTS=(
+            "${{ needs.container-publish-catalog.result }}"
+            "${{ needs.container-publish-ui.result }}"
+          )
+          for r in "${RESULTS[@]}"; do
+            if [[ "$r" != "success" ]]; then
+              echo "::error::One or more publish jobs did not succeed: $r"
+              exit 1
+            fi
+          done
+          echo "All images published successfully."
