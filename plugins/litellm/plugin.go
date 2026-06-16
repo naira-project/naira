@@ -48,9 +48,6 @@ func New(httpClient *http.Client, logger *log.Logger, config Config) *Plugin {
 	}
 }
 
-func (*Plugin) Name() string {
-	return pluginName
-}
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
 	models, err := p.fetchModels(ctx)

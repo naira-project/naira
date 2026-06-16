@@ -21,16 +21,18 @@ func (pc *pluginClient) Name() string {
 	return pc.name
 }
 
-func Register(pluginAddresses map[string]string, logger *log.Logger) ([]pluginapi.Plugin, func(), error) {
-	var registered []pluginapi.Plugin
+// Register connects to each plugin sidecar by its configured name and gRPC
+// address and returns the registered plugins keyed by plugin name.
+func Register(plugins map[string]string, logger *log.Logger) (map[string]pluginapi.Plugin, func(), error) {
+	registered := make(map[string]pluginapi.Plugin, len(plugins))
 	var cleanups []func()
 
-	for name, addr := range pluginAddresses {
+	for name, addr := range plugins {
 		if name == "" || addr == "" {
 			continue
 		}
 
-		plugin, cleanup, err := ConnectPlugin(name, addr, logger)
+		client, cleanup, err := ConnectPlugin(name, addr, logger)
 		if err != nil {
 			for _, c := range cleanups {
 				c()
@@ -38,7 +40,7 @@ func Register(pluginAddresses map[string]string, logger *log.Logger) ([]pluginap
 			return nil, nil, fmt.Errorf("connecting to plugin %q at %q: %w", name, addr, err)
 		}
 
-		registered = append(registered, plugin)
+		registered[name] = client
 		cleanups = append(cleanups, cleanup)
 	}
 
@@ -51,8 +53,9 @@ func Register(pluginAddresses map[string]string, logger *log.Logger) ([]pluginap
 	return registered, cleanupAll, nil
 }
 
+// ConnectPlugin waits for the sidecar to listen (TCP-level readiness) and
+// then creates a gRPC client connection for the given plugin name and address.
 func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, func(), error) {
-	// TCP dial check with retries to handle sidecar startup latency
 	var dialErr error
 	for i := range 5 {
 		var conn net.Conn
@@ -72,22 +75,17 @@ func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, 
 
 	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating gRPC client: %w", err)
+		return nil, nil, fmt.Errorf("creating gRPC client for plugin %q: %w", name, err)
 	}
 
 	if logger != nil {
 		logger.Printf("successfully connected to plugin %q at %q", name, address)
 	}
 
-	client := proto.NewCatalogPluginClient(conn)
 	pc := &pluginClient{
-		GRPCClient: pluginapi.NewGRPCClient(client),
+		GRPCClient: pluginapi.NewGRPCClient(proto.NewCatalogPluginClient(conn)),
 		name:       name,
 	}
 
-	cleanup := func() {
-		conn.Close()
-	}
-
-	return pc, cleanup, nil
+	return pc, func() { conn.Close() }, nil
 }

@@ -14,10 +14,6 @@ import (
 
 type mockPlugin struct{}
 
-func (mockPlugin) Name() string {
-	return "mock-external-plugin"
-}
-
 func (mockPlugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
 	return pluginapi.IngestionRequest{
 		Nodes: []pluginapi.NodeClaim{
@@ -50,15 +46,18 @@ func TestRegisterAndConnectPlugin(t *testing.T) {
 	defer s.Stop()
 
 	addr := lis.Addr().String()
+	const pluginName = "mock-external-plugin"
 
-	registered, cleanup, err := Register(map[string]string{"mock-external-plugin": addr}, nil)
+	registered, cleanup, err := Register(map[string]string{pluginName: addr}, nil)
 	require.NoError(t, err)
 	defer cleanup()
 
 	require.Len(t, registered, 1)
-	assert.Equal(t, "mock-external-plugin", registered[0].Name())
 
-	req, err := registered[0].Collect(t.Context())
+	p, ok := registered[pluginName]
+	require.True(t, ok, "plugin %q must be present in the registered map", pluginName)
+
+	req, err := p.Collect(t.Context())
 	require.NoError(t, err)
 
 	require.Len(t, req.Nodes, 1)

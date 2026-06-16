@@ -39,10 +39,6 @@ func New(httpClient *http.Client, config Config) *Plugin {
 	}
 }
 
-func (*Plugin) Name() string {
-	return pluginName
-}
-
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
 	registeredModels, err := p.fetchRegisteredModels(ctx)
 	if err != nil {

@@ -18,13 +18,8 @@ import (
 )
 
 type stubPlugin struct {
-	name    string
 	request catalog.IngestionRequest
 	err     error
-}
-
-func (p stubPlugin) Name() string {
-	return p.name
 }
 
 func (p stubPlugin) Collect(context.Context) (catalog.IngestionRequest, error) {
@@ -63,7 +58,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 		}},
 	)
 
-	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), stubPlugin{name: "seed"}), log.New(io.Discard, "", 0))
+	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), map[string]catalog.Plugin{"seed": stubPlugin{}}), log.New(io.Discard, "", 0))
 
 	tests := []struct {
 		name               string
@@ -153,7 +148,7 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 	router := NewRouter(catalog.NewService(
 		catalog.NewMemoryStore(),
 		log.New(io.Discard, "", 0),
-		stubPlugin{name: "seed", err: errors.New("seed failed")},
+		map[string]catalog.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}},
 	), log.New(io.Discard, "", 0))
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)

@@ -23,13 +23,13 @@ type Service struct {
 	logger  *log.Logger
 }
 
-func NewService(store Store, logger *log.Logger, plugins ...Plugin) *Service {
+func NewService(store Store, logger *log.Logger, plugins map[string]Plugin) *Service {
 	registeredPlugins := make(map[string]Plugin, len(plugins))
-	for _, plugin := range plugins {
+	for name, plugin := range plugins {
 		if plugin == nil {
 			continue
 		}
-		registeredPlugins[normalizePluginName(plugin.Name())] = plugin
+		registeredPlugins[normalizePluginName(name)] = plugin
 	}
 
 	return &Service{store: store, plugins: registeredPlugins, logger: logger}
@@ -59,7 +59,7 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 	}
 
 	if s.logger != nil {
-		s.logger.Printf("plugin %q upserted %d nodes and %d relations", plugin.Name(), upsertedNodes, upsertedRelations)
+		s.logger.Printf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
 	}
 
 	return nil

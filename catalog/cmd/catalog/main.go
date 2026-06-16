@@ -29,7 +29,7 @@ func main() {
 	}
 	defer cleanup()
 
-	service := catalog.NewService(catalog.NewMemoryStore(), logger, registeredPlugins...)
+	service := catalog.NewService(catalog.NewMemoryStore(), logger, registeredPlugins)
 	router := httpapi.NewRouter(service, logger)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
@@ -42,8 +42,8 @@ func main() {
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
-		if len(config.PluginAddresses) > 0 {
-			logger.Printf("plugin addresses: %v", config.PluginAddresses)
+		for name, addr := range config.PluginAddresses {
+			logger.Printf("plugin %q -> %s", name, addr)
 		}
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

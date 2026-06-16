@@ -11,13 +11,8 @@ import (
 )
 
 type stubPlugin struct {
-	name    string
 	request IngestionRequest
 	err     error
-}
-
-func (p stubPlugin) Name() string {
-	return p.name
 }
 
 func (p stubPlugin) Collect(context.Context) (IngestionRequest, error) {
@@ -42,7 +37,7 @@ func TestListNodesProjectsStoredNode(t *testing.T) {
 		},
 	}}, nil)
 
-	response := NewService(store, nil).ListNodes(t.Context())
+	response := NewService(store, nil, nil).ListNodes(t.Context())
 	require.Len(t, response, 1)
 
 	node := response[0]
@@ -94,12 +89,12 @@ func TestGetNodeReturnsStoredNode(t *testing.T) {
 		},
 	)
 
-	response, err := NewService(store, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
+	response, err := NewService(store, nil, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
 	require.NoError(t, err)
 	assert.Equal(t, "model", response.ID.Kind)
 	assert.Equal(t, "mlflow/fraud-detector", response.ID.Path)
 
-	_, err = NewService(store, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
+	_, err = NewService(store, nil, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
 	assert.True(t, errors.Is(err, ErrNodeNotFound))
 }
 
@@ -138,7 +133,7 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 		},
 	)
 
-	response := NewService(store, nil).ListRelations(t.Context())
+	response := NewService(store, nil, nil).ListRelations(t.Context())
 	assert.Len(t, response, 2)
 	assert.Equal(t, "trained_on", response[0].Kind)
 	assert.Equal(t, NodeID{Kind: "model", Path: "mlflow/fraud-detector"}, response[0].From)
@@ -150,13 +145,14 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 
 func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
 	store := NewMemoryStore()
-	service := NewService(store, nil, stubPlugin{
-		name: "mlflow",
-		request: IngestionRequest{
-			Nodes: []NodeClaim{{
-				ID:         NodeID{Kind: "model", Path: "mlflow/demo-model"},
-				Properties: PropertyMap{"source": "mlflow"},
-			}},
+	service := NewService(store, nil, map[string]Plugin{
+		"mlflow": stubPlugin{
+			request: IngestionRequest{
+				Nodes: []NodeClaim{{
+					ID:         NodeID{Kind: "model", Path: "mlflow/demo-model"},
+					Properties: PropertyMap{"source": "mlflow"},
+				}},
+			},
 		},
 	})
 

@@ -5,7 +5,6 @@ import (
 )
 
 type Plugin interface {
-	Name() string
 	Collect(context.Context) (IngestionRequest, error)
 }
 
