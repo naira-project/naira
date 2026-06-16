@@ -47,15 +47,15 @@ Multiple plugins can independently report the **same node or relation** (identif
 **How it works:**
 
 - Each plugin's properties are stored under that plugin's name as a namespace — the catalog never mixes or overwrites another plugin's data.
-- The API returns `props` as an ordered list of `{ plugin, entries }` objects, one per contributing plugin:
+- The API returns `pluginClaims` as an ordered list of `{ plugin, props }` objects, one per contributing plugin:
 
   ```json
   {
     "kind": "model",
     "path": "clusterA/deepseek",
-    "props": [
-      { "plugin": "mlflow/clusterA", "entries": { "release": "2.34", "token_price": "$10" } },
-      { "plugin": "litellm",         "entries": { "token_price": "$5" } }
+    "pluginClaims": [
+      { "plugin": "mlflow/clusterA", "props": { "release": "2.34", "token_price": "$10" } },
+      { "plugin": "litellm",         "props": { "token_price": "$5" } }
     ]
   }
   ```

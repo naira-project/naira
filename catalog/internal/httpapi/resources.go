@@ -22,7 +22,7 @@ type Node struct {
 	Name         string        `json:"name"`
 	Kind         string        `json:"kind"`
 	Path         string        `json:"path"`
-	PluginClaims []PluginClaim `json:"pluginClaimss"`
+	PluginClaims []PluginClaim `json:"pluginClaims"`
 }
 
 type ListNodesResponse struct {
