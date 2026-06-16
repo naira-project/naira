@@ -1,0 +1,133 @@
+name: Release Components
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  SOURCE_URL: https://github.com/naira-project/naira
+
+jobs:
+  validate:
+    name: Validate components
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: catalog/go.mod
+          cache-dependency-path: catalog/go.sum
+
+      - name: Test catalog
+        working-directory: catalog
+        run: go test ./...
+
+      - name: Build catalog binary
+        working-directory: catalog
+        run: go build ./cmd/catalog
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui-poc/package-lock.json
+
+      - name: Install UI dependencies
+        working-directory: ui-poc
+        run: npm ci
+
+      - name: Build UI
+        working-directory: ui-poc
+        run: npm run build
+
+  publish:
+    name: Publish ${{ matrix.component }} image
+    runs-on: ubuntu-latest
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: catalog
+            image: ghcr.io/naira-project/naira/catalog
+            context: ./catalog
+            dockerfile: ./catalog/Dockerfile
+          - component: ui-poc
+            image: ghcr.io/naira-project/naira/ui-poc
+            context: ./ui-poc
+            dockerfile: ./ui-poc/Dockerfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare image metadata values
+        id: values
+        run: |
+          echo "created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=ref,event=tag
+            type=sha,prefix=,format=long
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          labels: |
+            org.opencontainers.image.source=${{ env.SOURCE_URL }}
+            org.opencontainers.image.version=${{ steps.values.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.values.outputs.created }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: |
+            VERSION=${{ steps.values.outputs.version }}
+            REVISION=${{ github.sha }}
+            CREATED=${{ steps.values.outputs.created }}
+            SOURCE=${{ env.SOURCE_URL }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Add image digest to summary
+        run: |
+          {
+            echo "### ${{ matrix.component }} image"
+            echo ""
+            echo "- Image: \`${{ matrix.image }}\`"
+            echo "- Version: \`${{ steps.values.outputs.version }}\`"
+            echo "- Revision: \`${{ github.sha }}\`"
+            echo "- Digest: \`${{ steps.build.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
