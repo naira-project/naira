@@ -8,6 +8,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+    
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
