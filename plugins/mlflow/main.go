@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/naira-project/naira/catalog/pluginapi"
-	"github.com/naira-project/naira/catalog/pluginapi/proto"
+	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
 	"go-simpler.org/env"
 	"google.golang.org/grpc"
 )
@@ -44,7 +44,7 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	proto.RegisterCatalogPluginServer(s, &pluginapi.GRPCServer{Impl: impl})
+	pluginv1.RegisterCatalogPluginServer(s, &pluginapi.GRPCServer{Impl: impl})
 
 	log.Printf("mlflow plugin listening on %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {

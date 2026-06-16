@@ -56,6 +56,7 @@ tasks:
       - python3 --version
       - go version
       - docker version
+      - buf --version
 
   cluster:create:
     desc: Create the local kind cluster

@@ -1,6 +1,6 @@
 syntax = "proto3";
-package pluginapi;
-option go_package = "github.com/naira-project/naira/catalog/pluginapi/proto";
+package plugin.v1;
+option go_package = "github.com/naira-project/naira/catalog/pluginapi/proto;pluginv1";
 
 message NodeID {
   string kind = 1;

@@ -1,15 +1,15 @@
 package pluginapi
 
-import "github.com/naira-project/naira/catalog/pluginapi/proto"
+import pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
 
-func toProtoNodeID(id NodeID) *proto.NodeID {
-	return &proto.NodeID{
+func toProtoNodeID(id NodeID) *pluginv1.NodeID {
+	return &pluginv1.NodeID{
 		Kind: id.Kind,
 		Path: id.Path,
 	}
 }
 
-func fromProtoNodeID(p *proto.NodeID) NodeID {
+func fromProtoNodeID(p *pluginv1.NodeID) NodeID {
 	if p == nil {
 		return NodeID{}
 	}
@@ -33,14 +33,14 @@ func fromProtoPropertyMap(p map[string]string) PropertyMap {
 	return PropertyMap(p)
 }
 
-func toProtoNodeClaim(claim NodeClaim) *proto.NodeClaim {
-	return &proto.NodeClaim{
+func toProtoNodeClaim(claim NodeClaim) *pluginv1.NodeClaim {
+	return &pluginv1.NodeClaim{
 		Id:         toProtoNodeID(claim.ID),
 		Properties: toProtoPropertyMap(claim.Properties),
 	}
 }
 
-func fromProtoNodeClaim(p *proto.NodeClaim) NodeClaim {
+func fromProtoNodeClaim(p *pluginv1.NodeClaim) NodeClaim {
 	if p == nil {
 		return NodeClaim{}
 	}
@@ -50,8 +50,8 @@ func fromProtoNodeClaim(p *proto.NodeClaim) NodeClaim {
 	}
 }
 
-func toProtoRelationClaim(claim RelationClaim) *proto.RelationClaim {
-	return &proto.RelationClaim{
+func toProtoRelationClaim(claim RelationClaim) *pluginv1.RelationClaim {
+	return &pluginv1.RelationClaim{
 		Kind:       claim.Kind,
 		From:       toProtoNodeID(claim.From),
 		To:         toProtoNodeID(claim.To),
@@ -59,7 +59,7 @@ func toProtoRelationClaim(claim RelationClaim) *proto.RelationClaim {
 	}
 }
 
-func fromProtoRelationClaim(p *proto.RelationClaim) RelationClaim {
+func fromProtoRelationClaim(p *pluginv1.RelationClaim) RelationClaim {
 	if p == nil {
 		return RelationClaim{}
 	}
@@ -71,22 +71,22 @@ func fromProtoRelationClaim(p *proto.RelationClaim) RelationClaim {
 	}
 }
 
-func toProtoIngestionRequest(req IngestionRequest) *proto.IngestionRequest {
-	nodes := make([]*proto.NodeClaim, len(req.Nodes))
+func toProtoIngestionRequest(req IngestionRequest) *pluginv1.IngestionRequest {
+	nodes := make([]*pluginv1.NodeClaim, len(req.Nodes))
 	for i, node := range req.Nodes {
 		nodes[i] = toProtoNodeClaim(node)
 	}
-	relations := make([]*proto.RelationClaim, len(req.Relations))
+	relations := make([]*pluginv1.RelationClaim, len(req.Relations))
 	for i, rel := range req.Relations {
 		relations[i] = toProtoRelationClaim(rel)
 	}
-	return &proto.IngestionRequest{
+	return &pluginv1.IngestionRequest{
 		Nodes:     nodes,
 		Relations: relations,
 	}
 }
 
-func fromProtoIngestionRequest(p *proto.IngestionRequest) IngestionRequest {
+func fromProtoIngestionRequest(p *pluginv1.IngestionRequest) IngestionRequest {
 	if p == nil {
 		return IngestionRequest{}
 	}

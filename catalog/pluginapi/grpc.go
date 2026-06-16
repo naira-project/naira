@@ -4,15 +4,15 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/naira-project/naira/catalog/pluginapi/proto"
+	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
 )
 
 type GRPCServer struct {
-	proto.UnimplementedCatalogPluginServer
+	pluginv1.UnimplementedCatalogPluginServer
 	Impl Plugin
 }
 
-func (s *GRPCServer) Collect(ctx context.Context, _ *proto.Empty) (*proto.IngestionRequest, error) {
+func (s *GRPCServer) Collect(ctx context.Context, _ *pluginv1.Empty) (*pluginv1.IngestionRequest, error) {
 	req, err := s.Impl.Collect(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("collecting from plugin implementation: %w", err)
@@ -21,15 +21,15 @@ func (s *GRPCServer) Collect(ctx context.Context, _ *proto.Empty) (*proto.Ingest
 }
 
 type GRPCClient struct {
-	client proto.CatalogPluginClient
+	client pluginv1.CatalogPluginClient
 }
 
-func NewGRPCClient(client proto.CatalogPluginClient) *GRPCClient {
+func NewGRPCClient(client pluginv1.CatalogPluginClient) *GRPCClient {
 	return &GRPCClient{client: client}
 }
 
 func (c *GRPCClient) Collect(ctx context.Context) (IngestionRequest, error) {
-	resp, err := c.client.Collect(ctx, &proto.Empty{})
+	resp, err := c.client.Collect(ctx, &pluginv1.Empty{})
 	if err != nil {
 		return IngestionRequest{}, fmt.Errorf("calling gRPC Collect: %w", err)
 	}

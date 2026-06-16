@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/naira-project/naira/catalog/pluginapi"
-	"github.com/naira-project/naira/catalog/pluginapi/proto"
+	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -90,7 +90,7 @@ func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, 
 	}
 
 	pc := &pluginClient{
-		GRPCClient: pluginapi.NewGRPCClient(proto.NewCatalogPluginClient(conn)),
+		GRPCClient: pluginapi.NewGRPCClient(pluginv1.NewCatalogPluginClient(conn)),
 		name:       name,
 	}
 

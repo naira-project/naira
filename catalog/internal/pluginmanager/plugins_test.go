@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/naira-project/naira/catalog/pluginapi"
-	"github.com/naira-project/naira/catalog/pluginapi/proto"
+	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -38,7 +38,7 @@ func TestRegisterAndConnectPlugin(t *testing.T) {
 	defer lis.Close()
 
 	s := grpc.NewServer()
-	proto.RegisterCatalogPluginServer(s, &pluginapi.GRPCServer{Impl: mockPlugin{}})
+	pluginv1.RegisterCatalogPluginServer(s, &pluginapi.GRPCServer{Impl: mockPlugin{}})
 
 	go func() {
 		_ = s.Serve(lis)
