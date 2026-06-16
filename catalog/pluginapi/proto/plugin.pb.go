@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v7.35.0
-// source: pluginapi/proto/plugin.proto
+// source: catalog/pluginapi/proto/plugin.proto
 
 package proto
 
@@ -31,7 +31,7 @@ type NodeID struct {
 
 func (x *NodeID) Reset() {
 	*x = NodeID{}
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[0]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +43,7 @@ func (x *NodeID) String() string {
 func (*NodeID) ProtoMessage() {}
 
 func (x *NodeID) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[0]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +56,7 @@ func (x *NodeID) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeID.ProtoReflect.Descriptor instead.
 func (*NodeID) Descriptor() ([]byte, []int) {
-	return file_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{0}
+	return file_catalog_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *NodeID) GetKind() string {
@@ -83,7 +83,7 @@ type NodeClaim struct {
 
 func (x *NodeClaim) Reset() {
 	*x = NodeClaim{}
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[1]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -95,7 +95,7 @@ func (x *NodeClaim) String() string {
 func (*NodeClaim) ProtoMessage() {}
 
 func (x *NodeClaim) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[1]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -108,7 +108,7 @@ func (x *NodeClaim) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeClaim.ProtoReflect.Descriptor instead.
 func (*NodeClaim) Descriptor() ([]byte, []int) {
-	return file_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{1}
+	return file_catalog_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *NodeClaim) GetId() *NodeID {
@@ -137,7 +137,7 @@ type RelationClaim struct {
 
 func (x *RelationClaim) Reset() {
 	*x = RelationClaim{}
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[2]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -149,7 +149,7 @@ func (x *RelationClaim) String() string {
 func (*RelationClaim) ProtoMessage() {}
 
 func (x *RelationClaim) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[2]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -162,7 +162,7 @@ func (x *RelationClaim) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RelationClaim.ProtoReflect.Descriptor instead.
 func (*RelationClaim) Descriptor() ([]byte, []int) {
-	return file_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{2}
+	return file_catalog_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RelationClaim) GetKind() string {
@@ -203,7 +203,7 @@ type IngestionRequest struct {
 
 func (x *IngestionRequest) Reset() {
 	*x = IngestionRequest{}
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[3]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -215,7 +215,7 @@ func (x *IngestionRequest) String() string {
 func (*IngestionRequest) ProtoMessage() {}
 
 func (x *IngestionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[3]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -228,7 +228,7 @@ func (x *IngestionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IngestionRequest.ProtoReflect.Descriptor instead.
 func (*IngestionRequest) Descriptor() ([]byte, []int) {
-	return file_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{3}
+	return file_catalog_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *IngestionRequest) GetNodes() []*NodeClaim {
@@ -253,7 +253,7 @@ type Empty struct {
 
 func (x *Empty) Reset() {
 	*x = Empty{}
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[4]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -265,7 +265,7 @@ func (x *Empty) String() string {
 func (*Empty) ProtoMessage() {}
 
 func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[4]
+	mi := &file_catalog_pluginapi_proto_plugin_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -278,58 +278,14 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Empty.ProtoReflect.Descriptor instead.
 func (*Empty) Descriptor() ([]byte, []int) {
-	return file_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{4}
+	return file_catalog_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{4}
 }
 
-type NameResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
+var File_catalog_pluginapi_proto_plugin_proto protoreflect.FileDescriptor
 
-func (x *NameResponse) Reset() {
-	*x = NameResponse{}
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NameResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NameResponse) ProtoMessage() {}
-
-func (x *NameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginapi_proto_plugin_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NameResponse.ProtoReflect.Descriptor instead.
-func (*NameResponse) Descriptor() ([]byte, []int) {
-	return file_pluginapi_proto_plugin_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *NameResponse) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-var File_pluginapi_proto_plugin_proto protoreflect.FileDescriptor
-
-const file_pluginapi_proto_plugin_proto_rawDesc = "" +
+const file_catalog_pluginapi_proto_plugin_proto_rawDesc = "" +
 	"\n" +
-	"\x1cpluginapi/proto/plugin.proto\x12\tpluginapi\"0\n" +
+	"$catalog/pluginapi/proto/plugin.proto\x12\tpluginapi\"0\n" +
 	"\x06NodeID\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\"\xb3\x01\n" +
@@ -354,75 +310,69 @@ const file_pluginapi_proto_plugin_proto_rawDesc = "" +
 	"\x10IngestionRequest\x12*\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x14.pluginapi.NodeClaimR\x05nodes\x126\n" +
 	"\trelations\x18\x02 \x03(\v2\x18.pluginapi.RelationClaimR\trelations\"\a\n" +
-	"\x05Empty\"\"\n" +
-	"\fNameResponse\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name2|\n" +
-	"\rCatalogPlugin\x121\n" +
-	"\x04Name\x12\x10.pluginapi.Empty\x1a\x17.pluginapi.NameResponse\x128\n" +
+	"\x05Empty2I\n" +
+	"\rCatalogPlugin\x128\n" +
 	"\aCollect\x12\x10.pluginapi.Empty\x1a\x1b.pluginapi.IngestionRequestB8Z6github.com/naira-project/naira/catalog/pluginapi/protob\x06proto3"
 
 var (
-	file_pluginapi_proto_plugin_proto_rawDescOnce sync.Once
-	file_pluginapi_proto_plugin_proto_rawDescData []byte
+	file_catalog_pluginapi_proto_plugin_proto_rawDescOnce sync.Once
+	file_catalog_pluginapi_proto_plugin_proto_rawDescData []byte
 )
 
-func file_pluginapi_proto_plugin_proto_rawDescGZIP() []byte {
-	file_pluginapi_proto_plugin_proto_rawDescOnce.Do(func() {
-		file_pluginapi_proto_plugin_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pluginapi_proto_plugin_proto_rawDesc), len(file_pluginapi_proto_plugin_proto_rawDesc)))
+func file_catalog_pluginapi_proto_plugin_proto_rawDescGZIP() []byte {
+	file_catalog_pluginapi_proto_plugin_proto_rawDescOnce.Do(func() {
+		file_catalog_pluginapi_proto_plugin_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_catalog_pluginapi_proto_plugin_proto_rawDesc), len(file_catalog_pluginapi_proto_plugin_proto_rawDesc)))
 	})
-	return file_pluginapi_proto_plugin_proto_rawDescData
+	return file_catalog_pluginapi_proto_plugin_proto_rawDescData
 }
 
-var file_pluginapi_proto_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
-var file_pluginapi_proto_plugin_proto_goTypes = []any{
+var file_catalog_pluginapi_proto_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_catalog_pluginapi_proto_plugin_proto_goTypes = []any{
 	(*NodeID)(nil),           // 0: pluginapi.NodeID
 	(*NodeClaim)(nil),        // 1: pluginapi.NodeClaim
 	(*RelationClaim)(nil),    // 2: pluginapi.RelationClaim
 	(*IngestionRequest)(nil), // 3: pluginapi.IngestionRequest
 	(*Empty)(nil),            // 4: pluginapi.Empty
-	(*NameResponse)(nil),     // 5: pluginapi.NameResponse
-	nil,                      // 6: pluginapi.NodeClaim.PropertiesEntry
-	nil,                      // 7: pluginapi.RelationClaim.PropertiesEntry
+	nil,                      // 5: pluginapi.NodeClaim.PropertiesEntry
+	nil,                      // 6: pluginapi.RelationClaim.PropertiesEntry
 }
-var file_pluginapi_proto_plugin_proto_depIdxs = []int32{
+var file_catalog_pluginapi_proto_plugin_proto_depIdxs = []int32{
 	0, // 0: pluginapi.NodeClaim.id:type_name -> pluginapi.NodeID
-	6, // 1: pluginapi.NodeClaim.properties:type_name -> pluginapi.NodeClaim.PropertiesEntry
+	5, // 1: pluginapi.NodeClaim.properties:type_name -> pluginapi.NodeClaim.PropertiesEntry
 	0, // 2: pluginapi.RelationClaim.from:type_name -> pluginapi.NodeID
 	0, // 3: pluginapi.RelationClaim.to:type_name -> pluginapi.NodeID
-	7, // 4: pluginapi.RelationClaim.properties:type_name -> pluginapi.RelationClaim.PropertiesEntry
+	6, // 4: pluginapi.RelationClaim.properties:type_name -> pluginapi.RelationClaim.PropertiesEntry
 	1, // 5: pluginapi.IngestionRequest.nodes:type_name -> pluginapi.NodeClaim
 	2, // 6: pluginapi.IngestionRequest.relations:type_name -> pluginapi.RelationClaim
-	4, // 7: pluginapi.CatalogPlugin.Name:input_type -> pluginapi.Empty
-	4, // 8: pluginapi.CatalogPlugin.Collect:input_type -> pluginapi.Empty
-	5, // 9: pluginapi.CatalogPlugin.Name:output_type -> pluginapi.NameResponse
-	3, // 10: pluginapi.CatalogPlugin.Collect:output_type -> pluginapi.IngestionRequest
-	9, // [9:11] is the sub-list for method output_type
-	7, // [7:9] is the sub-list for method input_type
+	4, // 7: pluginapi.CatalogPlugin.Collect:input_type -> pluginapi.Empty
+	3, // 8: pluginapi.CatalogPlugin.Collect:output_type -> pluginapi.IngestionRequest
+	8, // [8:9] is the sub-list for method output_type
+	7, // [7:8] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name
 	7, // [7:7] is the sub-list for extension extendee
 	0, // [0:7] is the sub-list for field type_name
 }
 
-func init() { file_pluginapi_proto_plugin_proto_init() }
-func file_pluginapi_proto_plugin_proto_init() {
-	if File_pluginapi_proto_plugin_proto != nil {
+func init() { file_catalog_pluginapi_proto_plugin_proto_init() }
+func file_catalog_pluginapi_proto_plugin_proto_init() {
+	if File_catalog_pluginapi_proto_plugin_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pluginapi_proto_plugin_proto_rawDesc), len(file_pluginapi_proto_plugin_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_catalog_pluginapi_proto_plugin_proto_rawDesc), len(file_catalog_pluginapi_proto_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_pluginapi_proto_plugin_proto_goTypes,
-		DependencyIndexes: file_pluginapi_proto_plugin_proto_depIdxs,
-		MessageInfos:      file_pluginapi_proto_plugin_proto_msgTypes,
+		GoTypes:           file_catalog_pluginapi_proto_plugin_proto_goTypes,
+		DependencyIndexes: file_catalog_pluginapi_proto_plugin_proto_depIdxs,
+		MessageInfos:      file_catalog_pluginapi_proto_plugin_proto_msgTypes,
 	}.Build()
-	File_pluginapi_proto_plugin_proto = out.File
-	file_pluginapi_proto_plugin_proto_goTypes = nil
-	file_pluginapi_proto_plugin_proto_depIdxs = nil
+	File_catalog_pluginapi_proto_plugin_proto = out.File
+	file_catalog_pluginapi_proto_plugin_proto_goTypes = nil
+	file_catalog_pluginapi_proto_plugin_proto_depIdxs = nil
 }

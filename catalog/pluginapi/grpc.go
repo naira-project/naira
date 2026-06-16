@@ -12,10 +12,6 @@ type GRPCServer struct {
 	Impl Plugin
 }
 
-func (s *GRPCServer) Name(ctx context.Context, _ *proto.Empty) (*proto.NameResponse, error) {
-	return &proto.NameResponse{Name: s.Impl.Name()}, nil
-}
-
 func (s *GRPCServer) Collect(ctx context.Context, _ *proto.Empty) (*proto.IngestionRequest, error) {
 	req, err := s.Impl.Collect(ctx)
 	if err != nil {
@@ -30,14 +26,6 @@ type GRPCClient struct {
 
 func NewGRPCClient(client proto.CatalogPluginClient) *GRPCClient {
 	return &GRPCClient{client: client}
-}
-
-func (c *GRPCClient) Name() string {
-	resp, err := c.client.Name(context.Background(), &proto.Empty{})
-	if err != nil {
-		return ""
-	}
-	return resp.Name
 }
 
 func (c *GRPCClient) Collect(ctx context.Context) (IngestionRequest, error) {

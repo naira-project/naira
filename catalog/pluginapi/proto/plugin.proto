@@ -25,9 +25,7 @@ message IngestionRequest {
 }
 
 message Empty {}
-message NameResponse { string name = 1; }
 
 service CatalogPlugin {
-  rpc Name(Empty) returns (NameResponse);
   rpc Collect(Empty) returns (IngestionRequest);
 }

@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v7.35.0
-// source: pluginapi/proto/plugin.proto
+// source: catalog/pluginapi/proto/plugin.proto
 
 package proto
 
@@ -19,7 +19,6 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CatalogPlugin_Name_FullMethodName    = "/pluginapi.CatalogPlugin/Name"
 	CatalogPlugin_Collect_FullMethodName = "/pluginapi.CatalogPlugin/Collect"
 )
 
@@ -27,7 +26,6 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CatalogPluginClient interface {
-	Name(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*NameResponse, error)
 	Collect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*IngestionRequest, error)
 }
 
@@ -37,16 +35,6 @@ type catalogPluginClient struct {
 
 func NewCatalogPluginClient(cc grpc.ClientConnInterface) CatalogPluginClient {
 	return &catalogPluginClient{cc}
-}
-
-func (c *catalogPluginClient) Name(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*NameResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(NameResponse)
-	err := c.cc.Invoke(ctx, CatalogPlugin_Name_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *catalogPluginClient) Collect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*IngestionRequest, error) {
@@ -63,7 +51,6 @@ func (c *catalogPluginClient) Collect(ctx context.Context, in *Empty, opts ...gr
 // All implementations must embed UnimplementedCatalogPluginServer
 // for forward compatibility.
 type CatalogPluginServer interface {
-	Name(context.Context, *Empty) (*NameResponse, error)
 	Collect(context.Context, *Empty) (*IngestionRequest, error)
 	mustEmbedUnimplementedCatalogPluginServer()
 }
@@ -75,9 +62,6 @@ type CatalogPluginServer interface {
 // pointer dereference when methods are called.
 type UnimplementedCatalogPluginServer struct{}
 
-func (UnimplementedCatalogPluginServer) Name(context.Context, *Empty) (*NameResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Name not implemented")
-}
 func (UnimplementedCatalogPluginServer) Collect(context.Context, *Empty) (*IngestionRequest, error) {
 	return nil, status.Error(codes.Unimplemented, "method Collect not implemented")
 }
@@ -100,24 +84,6 @@ func RegisterCatalogPluginServer(s grpc.ServiceRegistrar, srv CatalogPluginServe
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&CatalogPlugin_ServiceDesc, srv)
-}
-
-func _CatalogPlugin_Name_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CatalogPluginServer).Name(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CatalogPlugin_Name_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CatalogPluginServer).Name(ctx, req.(*Empty))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _CatalogPlugin_Collect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -146,14 +112,10 @@ var CatalogPlugin_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*CatalogPluginServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Name",
-			Handler:    _CatalogPlugin_Name_Handler,
-		},
-		{
 			MethodName: "Collect",
 			Handler:    _CatalogPlugin_Collect_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pluginapi/proto/plugin.proto",
+	Metadata: "catalog/pluginapi/proto/plugin.proto",
 }
