@@ -25,6 +25,7 @@ import (
 )
 
 const pluginName = "depl_calls_svc"
+const systemNamespace = "kube-system"
 
 var (
 	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
@@ -60,12 +61,23 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
 	}
 	var nsNames []string
+	// clusterID will store the UID of the (mandatory) "kube-system" namespace;
+	// this is a common workaround, for lack of a better way go get cluster ID;
+	// see e.g.: https://opentelemetry.io/docs/specs/semconv/resource/k8s/#cluster
+	var clusterID string
 	for _, nsObj := range namespaces.Items {
 		nsNames = append(nsNames, nsObj.GetName())
+		if nsObj.GetName() == systemNamespace {
+			clusterID = string(nsObj.GetUID())
+		}
+	}
+	if clusterID == "" {
+		// should never happen - "kube-system" namespace is expected to always be present
+		return pluginapi.IngestionRequest{}, fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
 	}
 
 	// Build per-namespace service index and precompile patterns.
-	svcsByNs, err := collectServicesByNamespace(ctx, dyn, nsNames)
+	svcsByNs, err := collectServicesByNamespace(ctx, dyn, nsNames, clusterID)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("collecting services: %w", err)
 	}
@@ -92,7 +104,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		ns, name := depl.GetNamespace(), depl.GetName()
 		nodeID := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindDeployment,
-			Path: ns + "/" + name,
+			Path: clusterID + "/" + ns + "/" + name,
 		}
 		claims.Nodes = append(claims.Nodes, pluginapi.NodeClaim{
 			ID: nodeID,
@@ -145,7 +157,7 @@ type serviceDetails struct {
 	clusterPattern *regexp.Regexp // clusterPattern matches the service name in the form "${serviceName}.${namespace}"
 }
 
-func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, namespaces []string) (map[string][]serviceDetails, error) {
+func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, namespaces []string, clusterID string) (map[string][]serviceDetails, error) {
 	svcsByNs := make(map[string][]serviceDetails) // ns -> services
 	for _, ns := range namespaces {
 		svcs, err := dyn.Resource(gvrServices).Namespace(ns).List(ctx, metav1.ListOptions{})
@@ -167,7 +179,7 @@ func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, name
 			svcsByNs[ns] = append(svcsByNs[ns], serviceDetails{
 				nodeID: pluginapi.NodeID{
 					Kind: pluginapi.NodeKindService,
-					Path: ns + "/" + name,
+					Path: clusterID + "/" + ns + "/" + name,
 				},
 				localPattern:   localPattern,
 				clusterPattern: clusterPattern,
