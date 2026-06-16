@@ -34,9 +34,9 @@ type Plugin struct {
 }
 
 type Config struct {
-	Enabled bool
-	BaseURL string
-	APIKey  string
+	Enabled bool   `env:"ENABLED" default:"true"`
+	BaseURL string `env:"BASE_URL" default:"http://127.0.0.1:4000"`
+	APIKey  string `env:"API_KEY"`
 }
 
 func New(httpClient *http.Client, logger *log.Logger, config Config) *Plugin {
