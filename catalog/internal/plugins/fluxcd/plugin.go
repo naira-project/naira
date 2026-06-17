@@ -5,6 +5,7 @@ package fluxcd
 import (
 	"context"
 	"fmt"
+	"log"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -18,7 +19,10 @@ import (
 
 const pluginName = "fluxcd"
 
-var gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+var (
+	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
+	gvrNamespaces  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
+)
 
 const (
 	labelKustName = "kustomize.toolkit.fluxcd.io/name"
@@ -30,7 +34,6 @@ const (
 type Config struct {
 	Enabled    bool   `env:"ENABLED" default:"true"`
 	Kubeconfig string `env:"KUBECONFIG"`
-	Namespace  string `env:"NAMESPACE"`
 }
 
 type Plugin struct {
@@ -49,23 +52,40 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 
-	ns := p.config.Namespace
+	namespaces, err := dyn.Resource(gvrNamespaces).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
+	}
 
-	kusts, err := listGroupKind(ctx, disc, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", ns)
-	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing Kustomizations: %w", err)
-	}
-	helms, err := listGroupKind(ctx, disc, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", ns)
-	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing HelmReleases: %w", err)
-	}
-	gitRepoItems, err := listGroupKind(ctx, disc, dyn, "source.toolkit.fluxcd.io", "GitRepository", ns)
-	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing GitRepositories: %w", err)
-	}
-	depList, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing Deployments: %w", err)
+	var kusts, helms, gitRepoItems []unstructured.Unstructured
+	var depls []unstructured.Unstructured
+	for _, namespace := range namespaces.Items {
+		ns := namespace.GetName()
+
+		nsKusts, err := listGroupKind(ctx, disc, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", ns)
+		if err != nil {
+			log.Printf("%s: WARN: listing Kustomizations in namespace %q: %v", pluginName, ns, err)
+		} else {
+			kusts = append(kusts, nsKusts...)
+		}
+		nsHelms, err := listGroupKind(ctx, disc, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", ns)
+		if err != nil {
+			log.Printf("%s: WARN: listing HelmReleases in namespace %q: %v", pluginName, ns, err)
+		} else {
+			helms = append(helms, nsHelms...)
+		}
+		nsGitRepos, err := listGroupKind(ctx, disc, dyn, "source.toolkit.fluxcd.io", "GitRepository", ns)
+		if err != nil {
+			log.Printf("%s: WARN: listing GitRepositories in namespace %q: %v", pluginName, ns, err)
+		} else {
+			gitRepoItems = append(gitRepoItems, nsGitRepos...)
+		}
+		nsDeplList, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.Printf("%s: WARN: listing Deployments in namespace %q: %v", pluginName, ns, err)
+		} else {
+			depls = append(depls, nsDeplList.Items...)
+		}
 	}
 
 	var nodes []pluginapi.NodeClaim
@@ -147,7 +167,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	}
 
 	// Phase 4: flux-managed Deployment nodes + describes + deployed_from relations.
-	for _, dep := range depList.Items {
+	for _, dep := range depls {
 		labels := dep.GetLabels()
 		kustName := labels[labelKustName]
 		helmName := labels[labelHelmName]
