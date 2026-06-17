@@ -56,6 +56,44 @@ spec:
         app: catalog
     spec:
       serviceAccountName: catalog
+      initContainers:
+        - name: plugin-litellm
+          image: litellm:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50051"
+            - name: LITELLM_BASE_URL
+              value: http://litellm.litellm.svc.cluster.local:4000
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: LITELLM_API_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-mlflow
+          image: mlflow:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50052"
+            - name: MLFLOW_BASE_URL
+              value: http://mlflow.mlflow.svc.cluster.local:5000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
       containers:
         - name: catalog
           image: catalog:local
@@ -87,41 +125,6 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
-        - name: plugin-litellm
-          image: litellm:local
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: PORT
-              value: "50051"
-            - name: LITELLM_BASE_URL
-              value: http://litellm.litellm.svc.cluster.local:4000
-            - name: LITELLM_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: catalog-secrets
-                  key: LITELLM_API_KEY
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
-        - name: plugin-mlflow
-          image: mlflow:local
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: PORT
-              value: "50052"
-            - name: MLFLOW_BASE_URL
-              value: http://mlflow.mlflow.svc.cluster.local:5000
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
 ---
 apiVersion: v1
 kind: Service
