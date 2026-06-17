@@ -1,0 +1,4 @@
+chart-dirs:
+  - deploy/charts
+validate-maintainers: false
+helm-lint-extra-args: --set catalog.url=http://catalog.default.svc.cluster.local:8090
