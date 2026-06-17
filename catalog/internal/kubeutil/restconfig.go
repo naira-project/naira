@@ -1,4 +1,4 @@
-package kubeconn
+package kubeutil
 
 import (
 	"fmt"

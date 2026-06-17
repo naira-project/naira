@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/naira-project/naira/catalog/internal/kubeconn"
 	"github.com/naira-project/naira/catalog/internal/kubeutil"
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
@@ -219,7 +218,7 @@ func iterDeploymentEnvs(obj map[string]any) iter.Seq2[string, string] {
 }
 
 func (p *Plugin) connect() (dynamic.Interface, error) {
-	cfg, err := kubeconn.RestConfig(p.config.Kubeconfig)
+	cfg, err := kubeutil.RestConfig(p.config.Kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("loading k8s config: %w", err)
 	}

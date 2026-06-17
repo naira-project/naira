@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/naira-project/naira/catalog/internal/kubeconn"
 	"github.com/naira-project/naira/catalog/internal/kubeutil"
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
@@ -288,7 +287,7 @@ func nsOrFallback(ns, fallback string) string {
 }
 
 func (p *Plugin) connect() (*discovery.DiscoveryClient, dynamic.Interface, error) {
-	cfg, err := kubeconn.RestConfig(p.config.Kubeconfig)
+	cfg, err := kubeutil.RestConfig(p.config.Kubeconfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading k8s config: %w", err)
 	}
