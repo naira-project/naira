@@ -18,6 +18,7 @@ import (
 )
 
 const pluginName = "fluxcd"
+const systemNamespace = "kube-system"
 
 var (
 	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
@@ -55,6 +56,16 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	namespaces, err := dyn.Resource(gvrNamespaces).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
+	}
+	var clusterID string
+	for _, ns := range namespaces.Items {
+		if ns.GetName() == systemNamespace {
+			clusterID = string(ns.GetUID())
+			break
+		}
+	}
+	if clusterID == "" {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
 	}
 
 	var kusts, helms, gitRepoItems []unstructured.Unstructured
@@ -96,7 +107,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	for _, gr := range gitRepoItems {
 		id := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindGitRepository,
-			Path: gr.GetNamespace() + "/" + gr.GetName(),
+			Path: clusterID + "/" + gr.GetNamespace() + "/" + gr.GetName(),
 		}
 		url, _, _ := unstructured.NestedString(gr.Object, "spec", "url")
 		nodes = append(nodes, pluginapi.NodeClaim{
@@ -116,7 +127,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	for _, kust := range kusts {
 		id := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindFluxKustomization,
-			Path: kust.GetNamespace() + "/" + kust.GetName(),
+			Path: clusterID + "/" + kust.GetNamespace() + "/" + kust.GetName(),
 		}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: id,
@@ -144,7 +155,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	for _, hr := range helms {
 		id := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindFluxHelmChart,
-			Path: hr.GetNamespace() + "/" + hr.GetName(),
+			Path: clusterID + "/" + hr.GetNamespace() + "/" + hr.GetName(),
 		}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: id,
@@ -177,7 +188,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 
 		depID := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindDeployment,
-			Path: dep.GetNamespace() + "/" + dep.GetName(),
+			Path: clusterID + "/" + dep.GetNamespace() + "/" + dep.GetName(),
 		}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: depID,
