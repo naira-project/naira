@@ -54,26 +54,20 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
 	}
 
-	var depls, kusts, helms, gitRepos []unstructured.Unstructured
+	kusts, err := listGroupKind(ctx, disc, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", namespaces)
+	if err != nil {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("listing Kustomizations: %w", err)
+	}
+	helms, err := listGroupKind(ctx, disc, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", namespaces)
+	if err != nil {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("listing HelmReleases: %w", err)
+	}
+	gitRepos, err := listGroupKind(ctx, disc, dyn, "source.toolkit.fluxcd.io", "GitRepository", namespaces)
+	if err != nil {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("listing GitRepositories: %w", err)
+	}
+	var depls []unstructured.Unstructured
 	for _, ns := range namespaces {
-		nsKusts, err := listGroupKind(ctx, disc, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", ns)
-		if err != nil {
-			log.Printf("%s: WARN: listing Kustomizations in namespace %q: %v", pluginName, ns, err)
-		} else {
-			kusts = append(kusts, nsKusts...)
-		}
-		nsHelms, err := listGroupKind(ctx, disc, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", ns)
-		if err != nil {
-			log.Printf("%s: WARN: listing HelmReleases in namespace %q: %v", pluginName, ns, err)
-		} else {
-			helms = append(helms, nsHelms...)
-		}
-		nsGitRepos, err := listGroupKind(ctx, disc, dyn, "source.toolkit.fluxcd.io", "GitRepository", ns)
-		if err != nil {
-			log.Printf("%s: WARN: listing GitRepositories in namespace %q: %v", pluginName, ns, err)
-		} else {
-			gitRepos = append(gitRepos, nsGitRepos...)
-		}
 		nsDeplList, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			log.Printf("%s: WARN: listing Deployments in namespace %q: %v", pluginName, ns, err)
@@ -243,9 +237,10 @@ func helmReleaseGitRepo(hr unstructured.Unstructured, gitRepos map[string]plugin
 	return id, ok
 }
 
-// listGroupKind returns all resources of the given API group + kind using discovery.
+// listGroupKind returns all resources of the given API group + kind across all
+// provided namespaces, using discovery to resolve the GVR.
 // Returns an empty slice (not an error) when the CRD is not installed in the cluster.
-func listGroupKind(ctx context.Context, disc *discovery.DiscoveryClient, dyn dynamic.Interface, group, kind, namespace string) ([]unstructured.Unstructured, error) {
+func listGroupKind(ctx context.Context, disc *discovery.DiscoveryClient, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
 	_, apiLists, _ := disc.ServerGroupsAndResources()
 	for _, apiList := range apiLists {
 		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
@@ -267,11 +262,16 @@ func listGroupKind(ctx context.Context, disc *discovery.DiscoveryClient, dyn dyn
 				continue
 			}
 			gvr := schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: res.Name}
-			list, err := dyn.Resource(gvr).Namespace(namespace).List(ctx, metav1.ListOptions{})
-			if err != nil {
-				return nil, fmt.Errorf("list %s/%s: %w", group, kind, err)
+			var items []unstructured.Unstructured
+			for _, ns := range namespaces {
+				list, err := dyn.Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
+				if err != nil {
+					log.Printf("%s: WARN: listing %s/%s in namespace %q: %v", pluginName, group, kind, ns, err)
+					continue
+				}
+				items = append(items, list.Items...)
 			}
-			return list.Items, nil
+			return items, nil
 		}
 	}
 	return nil, nil // CRD not installed → no data
