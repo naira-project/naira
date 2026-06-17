@@ -60,3 +60,17 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Create the name of the catalog secret.
+*/}}
+{{- define "catalog.secretName" -}}
+{{- default (printf "%s-secrets" (include "catalog.fullname" .)) .Values.secret.name }}
+{{- end }}
+
+{{/*
+Create the name of the appidentities RBAC resources.
+*/}}
+{{- define "catalog.appIdentitiesRoleName" -}}
+{{- default (printf "%s-appidentities" (include "catalog.fullname" .)) .Values.rbac.appIdentities.name }}
+{{- end }}
