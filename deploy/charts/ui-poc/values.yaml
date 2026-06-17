@@ -58,6 +58,11 @@ service:
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
   port: 80
 
+catalog:
+  # -- URL used by nginx to proxy UI API requests to the catalog service.
+  # Example: http://catalog.catalog-namespace.svc.cluster.local:8090
+  url: ""
+
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
   enabled: false

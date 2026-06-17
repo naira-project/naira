@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ui-poc.fullname" . }}-nginx
+  labels:
+    {{- include "ui-poc.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location /v1/ {
+            proxy_pass {{ required "catalog.url is required. Set it to the catalog service URL, for example http://catalog.catalog-namespace.svc.cluster.local:8090" .Values.catalog.url | trimSuffix "/" }};
+        }
+
+        location /content-configuration.json {
+            add_header Access-Control-Allow-Origin *;
+            add_header Access-Control-Allow-Methods "GET, OPTIONS";
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
