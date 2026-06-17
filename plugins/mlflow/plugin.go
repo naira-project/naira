@@ -104,12 +104,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		nodes = append(nodes, dataset)
 	}
 
-	request := pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
+	response := pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
 	if len(fetchRunErrors) > 0 {
-		return request, errors.Join(fetchRunErrors...)
+		return response, errors.Join(fetchRunErrors...)
 	}
 
-	return request, nil
+	return response, nil
 }
 
 func (p *Plugin) fetchRegisteredModels(ctx context.Context) ([]registeredModel, error) {

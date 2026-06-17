@@ -138,12 +138,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 	}
 
-	request := pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}
+	response := pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}
 	if len(fetchAllowedModelsErrors) > 0 {
-		return request, errors.Join(fetchAllowedModelsErrors...)
+		return response, errors.Join(fetchAllowedModelsErrors...)
 	}
 
-	return request, nil
+	return response, nil
 }
 
 func (p *Plugin) fetchModels(ctx context.Context) ([]model, error) {

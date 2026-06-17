@@ -46,14 +46,14 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 		return fmt.Errorf("looking up plugin %q: %w", pluginName, ErrPluginNotFound)
 	}
 
-	request, err := plugin.Collect(ctx)
+	response, err := plugin.Collect(ctx)
 	if err != nil {
 		return fmt.Errorf("collecting response from plugin %q: %w", pluginName, err)
 	}
 
 	snapshotID := uuid.New()
 
-	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, request.Nodes, request.Relations)
+	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, response.Nodes, response.Relations)
 	if err != nil {
 		return fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err)
 	}

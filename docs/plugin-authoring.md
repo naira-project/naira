@@ -19,7 +19,7 @@ Why: node reads use the route `/v1/nodes/{kind}/*`, so `kind` is one path segmen
 
 - `kind` must not contain `/`
 - Relation endpoints currently identify links by `kind`, `from`, and `to`.
-- `from` and `to` nodes must exist in the same ingestion request.
+- `from` and `to` nodes must exist in the same collect response.
 
 ## Minimal example
 

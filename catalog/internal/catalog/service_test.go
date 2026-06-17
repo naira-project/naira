@@ -11,12 +11,12 @@ import (
 )
 
 type stubPlugin struct {
-	request CollectResponse
-	err     error
+	response CollectResponse
+	err      error
 }
 
 func (p stubPlugin) Collect(context.Context) (CollectResponse, error) {
-	return p.request, p.err
+	return p.response, p.err
 }
 
 func applyPluginSnapshot(t *testing.T, store *MemoryStore, nodes []NodeClaim, relations []RelationClaim) {
@@ -147,7 +147,7 @@ func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
 	store := NewMemoryStore()
 	service := NewService(store, nil, map[string]Plugin{
 		"mlflow": stubPlugin{
-			request: CollectResponse{
+			response: CollectResponse{
 				Nodes: []NodeClaim{{
 					ID:         NodeID{Kind: "model", Path: "mlflow/demo-model"},
 					Properties: PropertyMap{"source": "mlflow"},

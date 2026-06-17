@@ -18,12 +18,12 @@ import (
 )
 
 type stubPlugin struct {
-	request catalog.CollectResponse
-	err     error
+	response catalog.CollectResponse
+	err      error
 }
 
 func (p stubPlugin) Collect(context.Context) (catalog.CollectResponse, error) {
-	return p.request, p.err
+	return p.response, p.err
 }
 
 func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
