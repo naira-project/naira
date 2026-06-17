@@ -38,6 +38,9 @@ rbac:
   appIdentities:
     create: true
     name: ""
+  deplCallsSvc:
+    create: true
+    name: ""
 
 # This is for setting Kubernetes Annotations to a Pod.
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
@@ -75,13 +78,13 @@ env:
 secret:
   create: true
   name: ""
-  stringData:
-    LITELLM_API_KEY: sk-local-litellm
+  stringData: {}
+    # LITELLM_API_KEY: ""
 
-secretEnv:
-  - name: LITELLM_API_KEY
-    secretName: ""
-    key: LITELLM_API_KEY
+secretEnv: []
+  # - name: LITELLM_API_KEY
+  #   secretName: ""
+  #   key: LITELLM_API_KEY
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:

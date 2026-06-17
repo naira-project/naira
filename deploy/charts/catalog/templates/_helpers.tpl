@@ -74,3 +74,10 @@ Create the name of the appidentities RBAC resources.
 {{- define "catalog.appIdentitiesRoleName" -}}
 {{- default (printf "%s-appidentities" (include "catalog.fullname" .)) .Values.rbac.appIdentities.name }}
 {{- end }}
+
+{{/*
+Create the name of the depl_calls_svc RBAC resources.
+*/}}
+{{- define "catalog.deplCallsSvcRoleName" -}}
+{{- default (printf "%s-depl-calls-svc" (include "catalog.fullname" .)) .Values.rbac.deplCallsSvc.name }}
+{{- end }}

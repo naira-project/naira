@@ -45,6 +45,8 @@ A Helm chart for the Naira Catalog component
 | rbac.appIdentities.create | bool | `true` |  |
 | rbac.appIdentities.name | string | `""` |  |
 | rbac.create | bool | `true` |  |
+| rbac.deplCallsSvc.create | bool | `true` |  |
+| rbac.deplCallsSvc.name | string | `""` |  |
 | readinessProbe.httpGet.path | string | `"/healthz"` |  |
 | readinessProbe.httpGet.port | string | `"http"` |  |
 | readinessProbe.initialDelaySeconds | int | `5` |  |
@@ -53,10 +55,8 @@ A Helm chart for the Naira Catalog component
 | resources | object | `{}` |  |
 | secret.create | bool | `true` |  |
 | secret.name | string | `""` |  |
-| secret.stringData.LITELLM_API_KEY | string | `"sk-local-litellm"` |  |
-| secretEnv[0].key | string | `"LITELLM_API_KEY"` |  |
-| secretEnv[0].name | string | `"LITELLM_API_KEY"` |  |
-| secretEnv[0].secretName | string | `""` |  |
+| secret.stringData | object | `{}` |  |
+| secretEnv | list | `[]` |  |
 | securityContext | object | `{}` |  |
 | service.port | int | `8090` |  |
 | service.type | string | `"ClusterIP"` |  |

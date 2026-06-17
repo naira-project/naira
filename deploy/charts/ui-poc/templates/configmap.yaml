@@ -14,7 +14,7 @@ data:
         index index.html;
 
         location /v1/ {
-            proxy_pass {{ required "catalog.url is required. Set it to the catalog service URL, for example http://catalog.catalog-namespace.svc.cluster.local:8090" .Values.catalog.url | trimSuffix "/" }};
+            proxy_pass {{ .Values.catalog.url | trimSuffix "/" }};
         }
 
         location /content-configuration.json {
