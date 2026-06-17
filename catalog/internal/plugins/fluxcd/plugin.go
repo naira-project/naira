@@ -54,10 +54,8 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
 	}
 
-	var kusts, helms, gitRepoItems []unstructured.Unstructured
-	var depls []unstructured.Unstructured
+	var depls, kusts, helms, gitRepos []unstructured.Unstructured
 	for _, ns := range namespaces {
-
 		nsKusts, err := listGroupKind(ctx, disc, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", ns)
 		if err != nil {
 			log.Printf("%s: WARN: listing Kustomizations in namespace %q: %v", pluginName, ns, err)
@@ -74,7 +72,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		if err != nil {
 			log.Printf("%s: WARN: listing GitRepositories in namespace %q: %v", pluginName, ns, err)
 		} else {
-			gitRepoItems = append(gitRepoItems, nsGitRepos...)
+			gitRepos = append(gitRepos, nsGitRepos...)
 		}
 		nsDeplList, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
@@ -89,7 +87,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 
 	// Phase 1: GitRepository nodes.
 	gitRepoByNsName := map[string]pluginapi.NodeID{} // "ns/name" → NodeID
-	for _, gr := range gitRepoItems {
+	for _, gr := range gitRepos {
 		id := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindGitRepository,
 			Path: clusterID + "/" + gr.GetNamespace() + "/" + gr.GetName(),
