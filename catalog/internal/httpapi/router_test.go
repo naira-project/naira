@@ -56,12 +56,18 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				},
 			},
 		},
-		[]catalog.RelationClaim{{
-			Kind:       "uses_model",
-			From:       catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-			To:         catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-			Properties: pluginapi.PropertyMap{"via": "virtual-key"},
-		}},
+		[]catalog.RelationClaim{
+			{
+				Kind:       "uses_model",
+				From:       catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+				To:         catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+				Properties: pluginapi.PropertyMap{"via": "virtual-key"},
+			},
+			{
+				Kind: "used_by",
+				From: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+				To:   catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+			}},
 	)
 
 	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), stubPlugin{name: "seed"}), log.New(io.Discard, "", 0))
@@ -142,7 +148,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			},
 		},
 		{
-			name:               "lists relations",
+			name:               "filters relations by toNode",
 			method:             http.MethodGet,
 			path:               "/v1/relations?filter=toNode=%22nodes/model/mlflow/fraud-detector%22",
 			expectedStatusCode: http.StatusOK,
