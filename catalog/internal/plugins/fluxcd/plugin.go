@@ -14,16 +14,13 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/naira-project/naira/catalog/internal/kubeconn"
+	"github.com/naira-project/naira/catalog/internal/kubeutil"
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 const pluginName = "fluxcd"
-const systemNamespace = "kube-system"
 
-var (
-	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
-	gvrNamespaces  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
-)
+var gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 
 const (
 	labelKustName = "kustomize.toolkit.fluxcd.io/name"
@@ -53,25 +50,14 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 
-	namespaces, err := dyn.Resource(gvrNamespaces).List(ctx, metav1.ListOptions{})
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
-	}
-	var clusterID string
-	for _, ns := range namespaces.Items {
-		if ns.GetName() == systemNamespace {
-			clusterID = string(ns.GetUID())
-			break
-		}
-	}
-	if clusterID == "" {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
 	}
 
 	var kusts, helms, gitRepoItems []unstructured.Unstructured
 	var depls []unstructured.Unstructured
-	for _, namespace := range namespaces.Items {
-		ns := namespace.GetName()
+	for _, ns := range namespaces {
 
 		nsKusts, err := listGroupKind(ctx, disc, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", ns)
 		if err != nil {

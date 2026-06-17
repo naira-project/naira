@@ -21,15 +21,14 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/naira-project/naira/catalog/internal/kubeconn"
+	"github.com/naira-project/naira/catalog/internal/kubeutil"
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 const pluginName = "depl_calls_svc"
-const systemNamespace = "kube-system"
 
 var (
 	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
-	gvrNamespaces  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
 	gvrServices    = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}
 )
 
@@ -59,28 +58,13 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.IngestionRequest, error) {
 	var claims pluginapi.IngestionRequest
 
-	namespaces, err := dyn.Resource(gvrNamespaces).List(ctx, metav1.ListOptions{})
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
 	}
-	var nsNames []string
-	// clusterID will store the UID of the (mandatory) "kube-system" namespace;
-	// this is a common workaround, for lack of a better way go get cluster ID;
-	// see e.g.: https://opentelemetry.io/docs/specs/semconv/resource/k8s/#cluster
-	var clusterID string
-	for _, nsObj := range namespaces.Items {
-		nsNames = append(nsNames, nsObj.GetName())
-		if nsObj.GetName() == systemNamespace {
-			clusterID = string(nsObj.GetUID())
-		}
-	}
-	if clusterID == "" {
-		// should never happen - "kube-system" namespace is expected to always be present
-		return pluginapi.IngestionRequest{}, fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
-	}
 
 	// Build per-namespace service index and precompile patterns.
-	svcsByNs, err := collectServicesByNamespace(ctx, dyn, nsNames, clusterID)
+	svcsByNs, err := collectServicesByNamespace(ctx, dyn, namespaces, clusterID)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("collecting services: %w", err)
 	}
@@ -95,7 +79,7 @@ func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.
 	// Scan Deployments' Env values, find references to Service names collected
 	// above, interpret them as calls from the Deployment to the Service.
 	var depls []unstructured.Unstructured
-	for _, ns := range nsNames {
+	for _, ns := range namespaces {
 		deplsInNs, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			log.Printf("%s: WARN: listing deployments in namespace %q: %v", pluginName, ns, err)
