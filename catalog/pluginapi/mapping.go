@@ -71,7 +71,7 @@ func fromProtoRelationClaim(p *pluginv1.RelationClaim) RelationClaim {
 	}
 }
 
-func toProtoIngestionRequest(req IngestionRequest) *pluginv1.CollectResponse {
+func toProtoCollectResponse(req CollectResponse) *pluginv1.CollectResponse {
 	nodes := make([]*pluginv1.NodeClaim, len(req.Nodes))
 	for i, node := range req.Nodes {
 		nodes[i] = toProtoNodeClaim(node)
@@ -86,9 +86,9 @@ func toProtoIngestionRequest(req IngestionRequest) *pluginv1.CollectResponse {
 	}
 }
 
-func fromProtoIngestionRequest(p *pluginv1.CollectResponse) IngestionRequest {
+func fromProtoCollectResponse(p *pluginv1.CollectResponse) CollectResponse {
 	if p == nil {
-		return IngestionRequest{}
+		return CollectResponse{}
 	}
 	nodes := make([]NodeClaim, len(p.Nodes))
 	for i, node := range p.Nodes {
@@ -98,7 +98,7 @@ func fromProtoIngestionRequest(p *pluginv1.CollectResponse) IngestionRequest {
 	for i, rel := range p.Relations {
 		relations[i] = fromProtoRelationClaim(rel)
 	}
-	return IngestionRequest{
+	return CollectResponse{
 		Nodes:     nodes,
 		Relations: relations,
 	}

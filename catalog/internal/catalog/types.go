@@ -8,7 +8,7 @@ type PropertyMap = pluginapi.PropertyMap
 
 type NodeID = pluginapi.NodeID
 
-type IngestionRequest = pluginapi.IngestionRequest
+type CollectResponse = pluginapi.CollectResponse
 
 type NodeClaim = pluginapi.NodeClaim
 

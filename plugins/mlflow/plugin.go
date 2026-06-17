@@ -39,10 +39,10 @@ func New(httpClient *http.Client, config Config) *Plugin {
 	}
 }
 
-func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
+func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	registeredModels, err := p.fetchRegisteredModels(ctx)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("fetching MLflow registered models: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("fetching MLflow registered models: %w", err)
 	}
 
 	nodes := make([]pluginapi.NodeClaim, 0, len(registeredModels))
@@ -104,7 +104,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		nodes = append(nodes, dataset)
 	}
 
-	request := pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}
+	request := pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
 	if len(fetchRunErrors) > 0 {
 		return request, errors.Join(fetchRunErrors...)
 	}

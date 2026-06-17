@@ -48,11 +48,10 @@ func New(httpClient *http.Client, logger *log.Logger, config Config) *Plugin {
 	}
 }
 
-
-func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
+func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	models, err := p.fetchModels(ctx)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("fetching LiteLLM models: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("fetching LiteLLM models: %w", err)
 	}
 
 	nodes := make([]pluginapi.NodeClaim, 0, len(models))
@@ -73,7 +72,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	}
 
 	if p.appIdentityProvider == nil {
-		return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
+		return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
 	}
 
 	apps, err := p.appIdentityProvider.ListAppIdentities(ctx)
@@ -81,7 +80,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		if p.logger != nil {
 			p.logger.Printf("listing LiteLLM app identities failed, continuing without app identities: %v", err)
 		}
-		return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
+		return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
 	}
 
 	for _, app := range apps {
@@ -139,7 +138,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		}
 	}
 
-	request := pluginapi.IngestionRequest{Nodes: dedupeNodes(nodes), Relations: relations}
+	request := pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}
 	if len(fetchAllowedModelsErrors) > 0 {
 		return request, errors.Join(fetchAllowedModelsErrors...)
 	}

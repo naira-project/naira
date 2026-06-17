@@ -18,11 +18,11 @@ import (
 )
 
 type stubPlugin struct {
-	request catalog.IngestionRequest
+	request catalog.CollectResponse
 	err     error
 }
 
-func (p stubPlugin) Collect(context.Context) (catalog.IngestionRequest, error) {
+func (p stubPlugin) Collect(context.Context) (catalog.CollectResponse, error) {
 	return p.request, p.err
 }
 

@@ -14,8 +14,8 @@ import (
 
 type mockPlugin struct{}
 
-func (mockPlugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
-	return pluginapi.IngestionRequest{
+func (mockPlugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
+	return pluginapi.CollectResponse{
 		Nodes: []pluginapi.NodeClaim{
 			{
 				ID:         pluginapi.NodeID{Kind: "model", Path: "mock/model"},

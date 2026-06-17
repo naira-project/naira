@@ -5,7 +5,7 @@ import (
 )
 
 type Plugin interface {
-	Collect(context.Context) (IngestionRequest, error)
+	Collect(context.Context) (CollectResponse, error)
 }
 
 type PropertyMap map[string]string
@@ -18,7 +18,7 @@ type NodeID struct {
 	Path string `json:"path"`
 }
 
-type IngestionRequest struct {
+type CollectResponse struct {
 	Nodes     []NodeClaim     `json:"nodes"`
 	Relations []RelationClaim `json:"relations"`
 }
