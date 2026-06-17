@@ -38,7 +38,7 @@ func TestRegisterAndConnectPlugin(t *testing.T) {
 	defer lis.Close()
 
 	s := grpc.NewServer()
-	pluginv1.RegisterCatalogPluginServer(s, &pluginapi.GRPCServer{Impl: mockPlugin{}})
+	pluginv1.RegisterCatalogPluginServiceServer(s, &pluginapi.GRPCServer{Impl: mockPlugin{}})
 
 	go func() {
 		_ = s.Serve(lis)

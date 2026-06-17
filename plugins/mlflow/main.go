@@ -44,7 +44,7 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	pluginv1.RegisterCatalogPluginServer(s, &pluginapi.GRPCServer{Impl: impl})
+	pluginv1.RegisterCatalogPluginServiceServer(s, &pluginapi.GRPCServer{Impl: impl})
 
 	log.Printf("mlflow plugin listening on %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {

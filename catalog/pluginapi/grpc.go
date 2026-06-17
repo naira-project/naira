@@ -8,11 +8,11 @@ import (
 )
 
 type GRPCServer struct {
-	pluginv1.UnimplementedCatalogPluginServer
+	pluginv1.UnimplementedCatalogPluginServiceServer
 	Impl Plugin
 }
 
-func (s *GRPCServer) Collect(ctx context.Context, _ *pluginv1.Empty) (*pluginv1.IngestionRequest, error) {
+func (s *GRPCServer) Collect(ctx context.Context, _ *pluginv1.CollectRequest) (*pluginv1.CollectResponse, error) {
 	req, err := s.Impl.Collect(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("collecting from plugin implementation: %w", err)
@@ -21,15 +21,15 @@ func (s *GRPCServer) Collect(ctx context.Context, _ *pluginv1.Empty) (*pluginv1.
 }
 
 type GRPCClient struct {
-	client pluginv1.CatalogPluginClient
+	client pluginv1.CatalogPluginServiceClient
 }
 
-func NewGRPCClient(client pluginv1.CatalogPluginClient) *GRPCClient {
+func NewGRPCClient(client pluginv1.CatalogPluginServiceClient) *GRPCClient {
 	return &GRPCClient{client: client}
 }
 
 func (c *GRPCClient) Collect(ctx context.Context) (IngestionRequest, error) {
-	resp, err := c.client.Collect(ctx, &pluginv1.Empty{})
+	resp, err := c.client.Collect(ctx, &pluginv1.CollectRequest{})
 	if err != nil {
 		return IngestionRequest{}, fmt.Errorf("calling gRPC Collect: %w", err)
 	}

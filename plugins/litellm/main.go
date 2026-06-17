@@ -47,7 +47,7 @@ func main() {
 	}
 
 	s := grpc.NewServer()
-	pluginv1.RegisterCatalogPluginServer(s, &pluginapi.GRPCServer{Impl: impl})
+	pluginv1.RegisterCatalogPluginServiceServer(s, &pluginapi.GRPCServer{Impl: impl})
 
 	logger.Printf("litellm plugin listening on %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {

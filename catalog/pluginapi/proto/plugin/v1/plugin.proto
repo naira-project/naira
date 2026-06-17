@@ -19,13 +19,13 @@ message RelationClaim {
   map<string, string> properties = 4;
 }
 
-message IngestionRequest {
+message CollectResponse {
   repeated NodeClaim nodes = 1;
   repeated RelationClaim relations = 2;
 }
 
-message Empty {}
+message CollectRequest {}
 
-service CatalogPlugin {
-  rpc Collect(Empty) returns (IngestionRequest);
+service CatalogPluginService {
+  rpc Collect(CollectRequest) returns (CollectResponse);
 }

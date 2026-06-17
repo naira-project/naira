@@ -19,101 +19,101 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	CatalogPlugin_Collect_FullMethodName = "/plugin.v1.CatalogPlugin/Collect"
+	CatalogPluginService_Collect_FullMethodName = "/plugin.v1.CatalogPluginService/Collect"
 )
 
-// CatalogPluginClient is the client API for CatalogPlugin service.
+// CatalogPluginServiceClient is the client API for CatalogPluginService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type CatalogPluginClient interface {
-	Collect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*IngestionRequest, error)
+type CatalogPluginServiceClient interface {
+	Collect(ctx context.Context, in *CollectRequest, opts ...grpc.CallOption) (*CollectResponse, error)
 }
 
-type catalogPluginClient struct {
+type catalogPluginServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewCatalogPluginClient(cc grpc.ClientConnInterface) CatalogPluginClient {
-	return &catalogPluginClient{cc}
+func NewCatalogPluginServiceClient(cc grpc.ClientConnInterface) CatalogPluginServiceClient {
+	return &catalogPluginServiceClient{cc}
 }
 
-func (c *catalogPluginClient) Collect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*IngestionRequest, error) {
+func (c *catalogPluginServiceClient) Collect(ctx context.Context, in *CollectRequest, opts ...grpc.CallOption) (*CollectResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(IngestionRequest)
-	err := c.cc.Invoke(ctx, CatalogPlugin_Collect_FullMethodName, in, out, cOpts...)
+	out := new(CollectResponse)
+	err := c.cc.Invoke(ctx, CatalogPluginService_Collect_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// CatalogPluginServer is the server API for CatalogPlugin service.
-// All implementations must embed UnimplementedCatalogPluginServer
+// CatalogPluginServiceServer is the server API for CatalogPluginService service.
+// All implementations must embed UnimplementedCatalogPluginServiceServer
 // for forward compatibility.
-type CatalogPluginServer interface {
-	Collect(context.Context, *Empty) (*IngestionRequest, error)
-	mustEmbedUnimplementedCatalogPluginServer()
+type CatalogPluginServiceServer interface {
+	Collect(context.Context, *CollectRequest) (*CollectResponse, error)
+	mustEmbedUnimplementedCatalogPluginServiceServer()
 }
 
-// UnimplementedCatalogPluginServer must be embedded to have
+// UnimplementedCatalogPluginServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedCatalogPluginServer struct{}
+type UnimplementedCatalogPluginServiceServer struct{}
 
-func (UnimplementedCatalogPluginServer) Collect(context.Context, *Empty) (*IngestionRequest, error) {
+func (UnimplementedCatalogPluginServiceServer) Collect(context.Context, *CollectRequest) (*CollectResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Collect not implemented")
 }
-func (UnimplementedCatalogPluginServer) mustEmbedUnimplementedCatalogPluginServer() {}
-func (UnimplementedCatalogPluginServer) testEmbeddedByValue()                       {}
+func (UnimplementedCatalogPluginServiceServer) mustEmbedUnimplementedCatalogPluginServiceServer() {}
+func (UnimplementedCatalogPluginServiceServer) testEmbeddedByValue()                              {}
 
-// UnsafeCatalogPluginServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to CatalogPluginServer will
+// UnsafeCatalogPluginServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to CatalogPluginServiceServer will
 // result in compilation errors.
-type UnsafeCatalogPluginServer interface {
-	mustEmbedUnimplementedCatalogPluginServer()
+type UnsafeCatalogPluginServiceServer interface {
+	mustEmbedUnimplementedCatalogPluginServiceServer()
 }
 
-func RegisterCatalogPluginServer(s grpc.ServiceRegistrar, srv CatalogPluginServer) {
-	// If the following call panics, it indicates UnimplementedCatalogPluginServer was
+func RegisterCatalogPluginServiceServer(s grpc.ServiceRegistrar, srv CatalogPluginServiceServer) {
+	// If the following call panics, it indicates UnimplementedCatalogPluginServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&CatalogPlugin_ServiceDesc, srv)
+	s.RegisterService(&CatalogPluginService_ServiceDesc, srv)
 }
 
-func _CatalogPlugin_Collect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
+func _CatalogPluginService_Collect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CollectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CatalogPluginServer).Collect(ctx, in)
+		return srv.(CatalogPluginServiceServer).Collect(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: CatalogPlugin_Collect_FullMethodName,
+		FullMethod: CatalogPluginService_Collect_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CatalogPluginServer).Collect(ctx, req.(*Empty))
+		return srv.(CatalogPluginServiceServer).Collect(ctx, req.(*CollectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// CatalogPlugin_ServiceDesc is the grpc.ServiceDesc for CatalogPlugin service.
+// CatalogPluginService_ServiceDesc is the grpc.ServiceDesc for CatalogPluginService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var CatalogPlugin_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "plugin.v1.CatalogPlugin",
-	HandlerType: (*CatalogPluginServer)(nil),
+var CatalogPluginService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "plugin.v1.CatalogPluginService",
+	HandlerType: (*CatalogPluginServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "Collect",
-			Handler:    _CatalogPlugin_Collect_Handler,
+			Handler:    _CatalogPluginService_Collect_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

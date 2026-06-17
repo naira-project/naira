@@ -193,7 +193,7 @@ func (x *RelationClaim) GetProperties() map[string]string {
 	return nil
 }
 
-type IngestionRequest struct {
+type CollectResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nodes         []*NodeClaim           `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
 	Relations     []*RelationClaim       `protobuf:"bytes,2,rep,name=relations,proto3" json:"relations,omitempty"`
@@ -201,20 +201,20 @@ type IngestionRequest struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *IngestionRequest) Reset() {
-	*x = IngestionRequest{}
+func (x *CollectResponse) Reset() {
+	*x = CollectResponse{}
 	mi := &file_plugin_v1_plugin_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *IngestionRequest) String() string {
+func (x *CollectResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*IngestionRequest) ProtoMessage() {}
+func (*CollectResponse) ProtoMessage() {}
 
-func (x *IngestionRequest) ProtoReflect() protoreflect.Message {
+func (x *CollectResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_plugin_v1_plugin_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -226,45 +226,45 @@ func (x *IngestionRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use IngestionRequest.ProtoReflect.Descriptor instead.
-func (*IngestionRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CollectResponse.ProtoReflect.Descriptor instead.
+func (*CollectResponse) Descriptor() ([]byte, []int) {
 	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *IngestionRequest) GetNodes() []*NodeClaim {
+func (x *CollectResponse) GetNodes() []*NodeClaim {
 	if x != nil {
 		return x.Nodes
 	}
 	return nil
 }
 
-func (x *IngestionRequest) GetRelations() []*RelationClaim {
+func (x *CollectResponse) GetRelations() []*RelationClaim {
 	if x != nil {
 		return x.Relations
 	}
 	return nil
 }
 
-type Empty struct {
+type CollectRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Empty) Reset() {
-	*x = Empty{}
+func (x *CollectRequest) Reset() {
+	*x = CollectRequest{}
 	mi := &file_plugin_v1_plugin_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Empty) String() string {
+func (x *CollectRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Empty) ProtoMessage() {}
+func (*CollectRequest) ProtoMessage() {}
 
-func (x *Empty) ProtoReflect() protoreflect.Message {
+func (x *CollectRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_plugin_v1_plugin_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -276,8 +276,8 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Empty.ProtoReflect.Descriptor instead.
-func (*Empty) Descriptor() ([]byte, []int) {
+// Deprecated: Use CollectRequest.ProtoReflect.Descriptor instead.
+func (*CollectRequest) Descriptor() ([]byte, []int) {
 	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{4}
 }
 
@@ -306,13 +306,13 @@ const file_plugin_v1_plugin_proto_rawDesc = "" +
 	"properties\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"v\n" +
-	"\x10IngestionRequest\x12*\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"u\n" +
+	"\x0fCollectResponse\x12*\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x14.plugin.v1.NodeClaimR\x05nodes\x126\n" +
-	"\trelations\x18\x02 \x03(\v2\x18.plugin.v1.RelationClaimR\trelations\"\a\n" +
-	"\x05Empty2I\n" +
-	"\rCatalogPlugin\x128\n" +
-	"\aCollect\x12\x10.plugin.v1.Empty\x1a\x1b.plugin.v1.IngestionRequestBAZ?github.com/naira-project/naira/catalog/pluginapi/proto;pluginv1b\x06proto3"
+	"\trelations\x18\x02 \x03(\v2\x18.plugin.v1.RelationClaimR\trelations\"\x10\n" +
+	"\x0eCollectRequest2X\n" +
+	"\x14CatalogPluginService\x12@\n" +
+	"\aCollect\x12\x19.plugin.v1.CollectRequest\x1a\x1a.plugin.v1.CollectResponseBAZ?github.com/naira-project/naira/catalog/pluginapi/proto;pluginv1b\x06proto3"
 
 var (
 	file_plugin_v1_plugin_proto_rawDescOnce sync.Once
@@ -328,13 +328,13 @@ func file_plugin_v1_plugin_proto_rawDescGZIP() []byte {
 
 var file_plugin_v1_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_plugin_v1_plugin_proto_goTypes = []any{
-	(*NodeID)(nil),           // 0: plugin.v1.NodeID
-	(*NodeClaim)(nil),        // 1: plugin.v1.NodeClaim
-	(*RelationClaim)(nil),    // 2: plugin.v1.RelationClaim
-	(*IngestionRequest)(nil), // 3: plugin.v1.IngestionRequest
-	(*Empty)(nil),            // 4: plugin.v1.Empty
-	nil,                      // 5: plugin.v1.NodeClaim.PropertiesEntry
-	nil,                      // 6: plugin.v1.RelationClaim.PropertiesEntry
+	(*NodeID)(nil),          // 0: plugin.v1.NodeID
+	(*NodeClaim)(nil),       // 1: plugin.v1.NodeClaim
+	(*RelationClaim)(nil),   // 2: plugin.v1.RelationClaim
+	(*CollectResponse)(nil), // 3: plugin.v1.CollectResponse
+	(*CollectRequest)(nil),  // 4: plugin.v1.CollectRequest
+	nil,                     // 5: plugin.v1.NodeClaim.PropertiesEntry
+	nil,                     // 6: plugin.v1.RelationClaim.PropertiesEntry
 }
 var file_plugin_v1_plugin_proto_depIdxs = []int32{
 	0, // 0: plugin.v1.NodeClaim.id:type_name -> plugin.v1.NodeID
@@ -342,10 +342,10 @@ var file_plugin_v1_plugin_proto_depIdxs = []int32{
 	0, // 2: plugin.v1.RelationClaim.from:type_name -> plugin.v1.NodeID
 	0, // 3: plugin.v1.RelationClaim.to:type_name -> plugin.v1.NodeID
 	6, // 4: plugin.v1.RelationClaim.properties:type_name -> plugin.v1.RelationClaim.PropertiesEntry
-	1, // 5: plugin.v1.IngestionRequest.nodes:type_name -> plugin.v1.NodeClaim
-	2, // 6: plugin.v1.IngestionRequest.relations:type_name -> plugin.v1.RelationClaim
-	4, // 7: plugin.v1.CatalogPlugin.Collect:input_type -> plugin.v1.Empty
-	3, // 8: plugin.v1.CatalogPlugin.Collect:output_type -> plugin.v1.IngestionRequest
+	1, // 5: plugin.v1.CollectResponse.nodes:type_name -> plugin.v1.NodeClaim
+	2, // 6: plugin.v1.CollectResponse.relations:type_name -> plugin.v1.RelationClaim
+	4, // 7: plugin.v1.CatalogPluginService.Collect:input_type -> plugin.v1.CollectRequest
+	3, // 8: plugin.v1.CatalogPluginService.Collect:output_type -> plugin.v1.CollectResponse
 	8, // [8:9] is the sub-list for method output_type
 	7, // [7:8] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name

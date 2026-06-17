@@ -93,7 +93,7 @@ func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, 
 	}
 
 	pc := &pluginClient{
-		GRPCClient: pluginapi.NewGRPCClient(pluginv1.NewCatalogPluginClient(conn)),
+		GRPCClient: pluginapi.NewGRPCClient(pluginv1.NewCatalogPluginServiceClient(conn)),
 		name:       name,
 	}
 
