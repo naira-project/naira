@@ -9,13 +9,20 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
-  
+  attestations: write
+  id-token: write
+
 jobs:
   # ── 1. Build & push catalog image ─────────────────────────────────────────
   container-publish-catalog:
     name: Publish · Catalog
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
     with:
       image-name: "naira-catalog"
@@ -23,12 +30,23 @@ jobs:
       context: "catalog"
       platforms: "linux/amd64,linux/arm64"
       push: true
+      build-args: |
+        VERSION=${{ github.ref_name }}
+        COMMIT=${{ github.sha }}
+      image-labels: |
+        org.opencontainers.image.version=${{ github.ref_name }}
+        org.opencontainers.image.revision=${{ github.sha }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   # ── 2. Build & push UI image ───────────────────────────────────────────────
   container-publish-ui:
     name: Publish · UI
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
     with:
       image-name: "naira-ui"
@@ -36,6 +54,12 @@ jobs:
       context: "ui-poc"
       platforms: "linux/amd64,linux/arm64"
       push: true
+      build-args: |
+        VERSION=${{ github.ref_name }}
+        COMMIT=${{ github.sha }}
+      image-labels: |
+        org.opencontainers.image.version=${{ github.ref_name }}
+        org.opencontainers.image.revision=${{ github.sha }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -59,3 +83,79 @@ jobs:
             fi
           done
           echo "All images published successfully."
+
+  publish-release-manifest:
+    name: Publish Release Manifest
+    needs: [container-publish-catalog, container-publish-ui, all-published]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write release manifest
+        env:
+          CATALOG_DIGEST: ${{ needs.container-publish-catalog.outputs.image-digest }}
+          CATALOG_TAGS: ${{ needs.container-publish-catalog.outputs.image-tags }}
+          UI_DIGEST: ${{ needs.container-publish-ui.outputs.image-digest }}
+          UI_TAGS: ${{ needs.container-publish-ui.outputs.image-tags }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          CATALOG_TAGS_JSON=$(printf '%s\n' "$CATALOG_TAGS" | tr ',' '\n' | sed '/^$/d' | jq -R . | jq -s .)
+          UI_TAGS_JSON=$(printf '%s\n' "$UI_TAGS" | tr ',' '\n' | sed '/^$/d' | jq -R . | jq -s .)
+          OWNER_LOWER=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')
+
+          jq -n \
+            --arg schemaVersion "1" \
+            --arg platform "naira" \
+            --arg version "${GITHUB_REF_NAME}" \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg source "https://github.com/${GITHUB_REPOSITORY}" \
+            --arg commit "${GITHUB_SHA}" \
+            --arg ref "${GITHUB_REF_NAME}" \
+            --arg runId "${GITHUB_RUN_ID}" \
+            --arg catalogImage "ghcr.io/${OWNER_LOWER}/naira-catalog" \
+            --arg catalogDigest "${CATALOG_DIGEST}" \
+            --argjson catalogTags "${CATALOG_TAGS_JSON}" \
+            --arg uiImage "ghcr.io/${OWNER_LOWER}/naira-ui" \
+            --arg uiDigest "${UI_DIGEST}" \
+            --argjson uiTags "${UI_TAGS_JSON}" \
+            '{
+              schemaVersion: $schemaVersion,
+              platform: {
+                name: $platform,
+                version: $version,
+                repository: $repository,
+                source: $source,
+                commit: $commit,
+                ref: $ref,
+                runId: $runId
+              },
+              components: [
+                {
+                  name: "catalog",
+                  type: "container-image",
+                  version: $version,
+                  image: $catalogImage,
+                  digest: $catalogDigest,
+                  tags: $catalogTags
+                },
+                {
+                  name: "ui",
+                  type: "container-image",
+                  version: $version,
+                  image: $uiImage,
+                  digest: $uiDigest,
+                  tags: $uiTags
+                }
+              ]
+            }' > release-manifest.json
+
+      - name: Publish manifest to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" release-manifest.json --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" release-manifest.json \
+              --target "${GITHUB_SHA}" \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi
