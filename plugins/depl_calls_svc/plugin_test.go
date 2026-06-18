@@ -7,6 +7,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/naira-project/naira/catalog/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,8 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic/fake"
 	k8stesting "k8s.io/client-go/testing"
-
-	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 const testClusterID = "test-cluster-uid-1234"
@@ -27,7 +26,7 @@ func TestCollect(t *testing.T) {
 		name    string
 		objs    []runtime.Object
 		reactor func(*fake.FakeDynamicClient)
-		want    pluginapi.IngestionRequest
+		want    pluginapi.CollectResponse
 	}{
 		{
 			name: `"simple happy path": Deployment referencing same-namespace Service by name produces a "calls" Relation`,
@@ -37,7 +36,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "checkout",
 					env("PAYMENTS_URL", "http://payments/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-a/checkout")},
 					{ID: nodeID("service", "team-a/payments")},
@@ -61,7 +60,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "worker",
 					env("CACHE_URL", "redis.infra:6379")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-a/worker")},
 					{ID: nodeID("service", "infra/redis")},
@@ -84,7 +83,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "checkout",
 					env("SOME_URL", "http://external.example.com/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-a/checkout")},
 					{ID: nodeID("service", "team-a/payments")},
@@ -104,7 +103,7 @@ func TestCollect(t *testing.T) {
 					env("SVC2_URL", "http://svc2.team-b/api"),
 					env("SVC3_URL", "http://svc3/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-b/depl")},
 					{ID: nodeID("service", "team-a/svc1")},
@@ -142,7 +141,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-b", "depl",
 					env("SVC_URL", "http://svc/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-b/depl")},
 					{ID: nodeID("service", "team-a/svc")},
@@ -160,7 +159,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-b", "depl2",
 					env("SVC_URL", "http://svc.team-a/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-a/depl1")},
 					{ID: nodeID("deployment", "team-b/depl2")},
@@ -201,7 +200,7 @@ func TestCollect(t *testing.T) {
 					return false, nil, nil
 				})
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-b/checkout")},
 					{ID: nodeID("service", "team-b/payments")},
@@ -234,7 +233,7 @@ func TestCollect(t *testing.T) {
 					return false, nil, nil
 				})
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-b/checkout")},
 					{ID: nodeID("service", "team-b/payments")},
@@ -263,7 +262,7 @@ func TestCollect(t *testing.T) {
 	}
 }
 
-func sortedByIDs(r pluginapi.IngestionRequest) pluginapi.IngestionRequest {
+func sortedByIDs(r pluginapi.CollectResponse) pluginapi.CollectResponse {
 	lessID := func(a, b pluginapi.NodeID) bool {
 		if a.Kind != b.Kind {
 			return a.Kind < b.Kind

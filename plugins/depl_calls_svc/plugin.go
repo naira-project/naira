@@ -20,8 +20,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/naira-project/naira/catalog/internal/kubeconn"
 	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/plugins/kubeconn"
 )
 
 const pluginName = "depl_calls_svc"
@@ -48,20 +48,20 @@ func New(config Config) *Plugin {
 
 func (*Plugin) Name() string { return pluginName }
 
-func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
+func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	dyn, err := p.connect()
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 	return p.collect(ctx, dyn)
 }
 
-func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.IngestionRequest, error) {
-	var claims pluginapi.IngestionRequest
+func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.CollectResponse, error) {
+	var claims pluginapi.CollectResponse
 
 	namespaces, err := dyn.Resource(gvrNamespaces).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces: %w", err)
 	}
 	var nsNames []string
 	// clusterID will store the UID of the (mandatory) "kube-system" namespace;
@@ -76,13 +76,13 @@ func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.
 	}
 	if clusterID == "" {
 		// should never happen - "kube-system" namespace is expected to always be present
-		return pluginapi.IngestionRequest{}, fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
+		return pluginapi.CollectResponse{}, fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
 	}
 
 	// Build per-namespace service index and precompile patterns.
 	svcsByNs, err := collectServicesByNamespace(ctx, dyn, nsNames, clusterID)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("collecting services: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("collecting services: %w", err)
 	}
 	for _, svcs := range svcsByNs {
 		for _, s := range svcs {

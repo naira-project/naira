@@ -15,9 +15,9 @@ type config struct {
 }
 
 type envConfig struct {
-	Port        int           `env:"PORT" default:"8090"`
-	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
-	Plugins     plugins.Config
+	Port            int           `env:"PORT" default:"8090"`
+	HTTPTimeout     time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
+	PluginAddresses []string      `env:"PLUGIN_ADDRESSES"`
 }
 
 func loadConfig() (config, error) {
