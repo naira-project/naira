@@ -29,17 +29,16 @@ const (
 type Plugin struct {
 	httpClient          *http.Client
 	logger              *log.Logger
-	config              Config
+	config              config
 	appIdentityProvider AppIdentityProvider
 }
 
-type Config struct {
-	Enabled bool   `env:"ENABLED" default:"true"`
-	BaseURL string `env:"BASE_URL" default:"http://127.0.0.1:4000"`
-	APIKey  string `env:"API_KEY"`
+type config struct {
+	baseURL string
+	apiKey  string
 }
 
-func New(httpClient *http.Client, logger *log.Logger, config Config) *Plugin {
+func New(httpClient *http.Client, logger *log.Logger, config config) *Plugin {
 	return &Plugin{
 		httpClient:          httpClient,
 		logger:              logger,
@@ -147,7 +146,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) fetchModels(ctx context.Context) ([]model, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/v1/models", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.baseURL+"/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("building LiteLLM models request: %w", err)
 	}
@@ -172,7 +171,7 @@ func (p *Plugin) fetchModels(ctx context.Context) ([]model, error) {
 }
 
 func (p *Plugin) fetchAllowedModels(ctx context.Context, key string) ([]string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/key/info", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.baseURL+"/key/info", nil)
 	if err != nil {
 		return nil, fmt.Errorf("building LiteLLM key info request: %w", err)
 	}
@@ -201,8 +200,8 @@ func (p *Plugin) fetchAllowedModels(ctx context.Context, key string) ([]string, 
 }
 
 func (p *Plugin) addAuthorization(req *http.Request) {
-	if strings.TrimSpace(p.config.APIKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
+	if strings.TrimSpace(p.config.apiKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+p.config.apiKey)
 	}
 }
 

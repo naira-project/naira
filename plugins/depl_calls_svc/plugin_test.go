@@ -1,4 +1,4 @@
-package depl_calls_svc
+package main
 
 import (
 	"context"
@@ -34,7 +34,7 @@ func TestCollect(t *testing.T) {
 				namespace("team-a"),
 				service("team-a", "payments"),
 				deployment("team-a", "checkout",
-					env("PAYMENTS_URL", "http://payments/api")),
+					envVar("PAYMENTS_URL", "http://payments/api")),
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
@@ -58,7 +58,7 @@ func TestCollect(t *testing.T) {
 				service("infra", "redis"),
 				namespace("team-a"),
 				deployment("team-a", "worker",
-					env("CACHE_URL", "redis.infra:6379")),
+					envVar("CACHE_URL", "redis.infra:6379")),
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
@@ -81,7 +81,7 @@ func TestCollect(t *testing.T) {
 				namespace("team-a"),
 				service("team-a", "payments"),
 				deployment("team-a", "checkout",
-					env("SOME_URL", "http://external.example.com/api")),
+					envVar("SOME_URL", "http://external.example.com/api")),
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
@@ -99,9 +99,9 @@ func TestCollect(t *testing.T) {
 				service("team-b", "svc2"),
 				service("team-b", "svc3"),
 				deployment("team-b", "depl",
-					env("SVC1_URL", "http://svc1.team-a/api"),
-					env("SVC2_URL", "http://svc2.team-b/api"),
-					env("SVC3_URL", "http://svc3/api")),
+					envVar("SVC1_URL", "http://svc1.team-a/api"),
+					envVar("SVC2_URL", "http://svc2.team-b/api"),
+					envVar("SVC3_URL", "http://svc3/api")),
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
@@ -139,7 +139,7 @@ func TestCollect(t *testing.T) {
 				service("team-a", "svc"),
 				namespace("team-b"),
 				deployment("team-b", "depl",
-					env("SVC_URL", "http://svc/api")),
+					envVar("SVC_URL", "http://svc/api")),
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
@@ -154,10 +154,10 @@ func TestCollect(t *testing.T) {
 				namespace("team-a"),
 				service("team-a", "svc"),
 				deployment("team-a", "depl1",
-					env("SVC_URL", "http://svc/api")),
+					envVar("SVC_URL", "http://svc/api")),
 				namespace("team-b"),
 				deployment("team-b", "depl2",
-					env("SVC_URL", "http://svc.team-a/api")),
+					envVar("SVC_URL", "http://svc.team-a/api")),
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
@@ -189,8 +189,8 @@ func TestCollect(t *testing.T) {
 				namespace("team-b"),
 				service("team-b", "payments"),
 				deployment("team-b", "checkout",
-					env("PAYMENTS_URL", "http://payments/api"),
-					env("SECRET_SERVICE_URL", "http://secret-service.secret-namespace/api")),
+					envVar("PAYMENTS_URL", "http://payments/api"),
+					envVar("SECRET_SERVICE_URL", "http://secret-service.secret-namespace/api")),
 			},
 			reactor: func(client *fake.FakeDynamicClient) {
 				client.PrependReactor("list", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -223,7 +223,7 @@ func TestCollect(t *testing.T) {
 				namespace("team-b"),
 				service("team-b", "payments"),
 				deployment("team-b", "checkout",
-					env("PAYMENTS_URL", "http://payments/api")),
+					envVar("PAYMENTS_URL", "http://payments/api")),
 			},
 			reactor: func(client *fake.FakeDynamicClient) {
 				client.PrependReactor("list", "deployments", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -255,7 +255,7 @@ func TestCollect(t *testing.T) {
 			if tt.reactor != nil {
 				tt.reactor(client)
 			}
-			result, err := New(Config{}).collect(context.Background(), client)
+			result, err := New(config{}).collect(context.Background(), client)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, sortedByIDs(result))
 		})
@@ -329,7 +329,7 @@ func deployment(ns, name string, envVars ...corev1.EnvVar) *appsv1.Deployment {
 	}
 }
 
-func env(name, value string) corev1.EnvVar {
+func envVar(name, value string) corev1.EnvVar {
 	return corev1.EnvVar{Name: name, Value: value}
 }
 

@@ -23,16 +23,15 @@ const (
 
 type Plugin struct {
 	httpClient *http.Client
-	config     Config
+	config     config
 }
 
-type Config struct {
-	Enabled     bool   `env:"ENABLED" default:"true"`
-	BaseURL     string `env:"BASE_URL" default:"http://127.0.0.1:5000"`
-	BearerToken string `env:"BEARER_TOKEN"`
+type config struct {
+	baseURL     string
+	bearerToken string
 }
 
-func New(httpClient *http.Client, config Config) *Plugin {
+func New(httpClient *http.Client, config config) *Plugin {
 	return &Plugin{
 		httpClient: httpClient,
 		config:     config,
@@ -113,7 +112,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) fetchRegisteredModels(ctx context.Context) ([]registeredModel, error) {
-	endpoint, err := url.Parse(p.config.BaseURL + "/api/2.0/mlflow/registered-models/search")
+	endpoint, err := url.Parse(p.config.baseURL + "/api/2.0/mlflow/registered-models/search")
 	if err != nil {
 		return nil, fmt.Errorf("building MLflow registered models URL: %w", err)
 	}
@@ -148,7 +147,7 @@ func (p *Plugin) fetchRegisteredModels(ctx context.Context) ([]registeredModel, 
 }
 
 func (p *Plugin) fetchRun(ctx context.Context, runID string) (run, error) {
-	endpoint, err := url.Parse(p.config.BaseURL + "/api/2.0/mlflow/runs/get")
+	endpoint, err := url.Parse(p.config.baseURL + "/api/2.0/mlflow/runs/get")
 	if err != nil {
 		return run{}, fmt.Errorf("building MLflow run URL for %q: %w", runID, err)
 	}
@@ -182,8 +181,8 @@ func (p *Plugin) fetchRun(ctx context.Context, runID string) (run, error) {
 }
 
 func (p *Plugin) addAuthorization(req *http.Request) {
-	if strings.TrimSpace(p.config.BearerToken) != "" {
-		req.Header.Set("Authorization", "Bearer "+p.config.BearerToken)
+	if strings.TrimSpace(p.config.bearerToken) != "" {
+		req.Header.Set("Authorization", "Bearer "+p.config.bearerToken)
 	}
 }
 

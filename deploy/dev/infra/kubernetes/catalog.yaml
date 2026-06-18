@@ -62,7 +62,7 @@ spec:
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
           env:
-            - name: PORT
+            - name: LITELLM_PORT
               value: "50051"
             - name: LITELLM_BASE_URL
               value: http://litellm.litellm.svc.cluster.local:4000
@@ -83,7 +83,7 @@ spec:
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
           env:
-            - name: PORT
+            - name: MLFLOW_PORT
               value: "50052"
             - name: MLFLOW_BASE_URL
               value: http://mlflow.mlflow.svc.cluster.local:5000

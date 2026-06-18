@@ -1,12 +1,12 @@
-// Package depl_calls_svc implements a plugin scanning k8s Deployments and
-// Services, then claiming "calls" relation from each Deployment that mentions
-// a Service's hostname in any plaintext Env value.
+// depl_calls_svc implements a plugin scanning k8s Deployments and Services, then
+// claiming "calls" relation from each Deployment that mentions a Service's
+// hostname in any plaintext Env value.
 //
 // TODO: could also scan "calls" to ExternalDNS, Ingress, LoadBalancer, hostAliases, etc.
 // TODO: add a configurable list of hostnames to filter out (blocklist)
 // TODO: add a configurable list of external hostnames to search for
 // TODO: add feature for loading service names from Nodes already known in Naira
-package depl_calls_svc
+package main
 
 import (
 	"context"
@@ -33,16 +33,15 @@ var (
 	gvrServices    = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}
 )
 
-type Config struct {
-	Enabled    bool   `env:"ENABLED" default:"true"`
-	Kubeconfig string `env:"KUBECONFIG"`
+type config struct {
+	kubeconfig string `env:"KUBECONFIG"`
 }
 
 type Plugin struct {
-	config Config
+	config config
 }
 
-func New(config Config) *Plugin {
+func New(config config) *Plugin {
 	return &Plugin{config: config}
 }
 
@@ -235,7 +234,7 @@ func iterDeploymentEnvs(obj map[string]any) iter.Seq2[string, string] {
 }
 
 func (p *Plugin) connect() (dynamic.Interface, error) {
-	cfg, err := kubeconn.RestConfig(p.config.Kubeconfig)
+	cfg, err := kubeconn.RestConfig(p.config.kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("loading k8s config: %w", err)
 	}

@@ -15,11 +15,10 @@ import (
 )
 
 type pluginConfig struct {
-	Enabled     bool          `env:"MLFLOW_ENABLED" default:"true"`
 	BaseURL     string        `env:"MLFLOW_BASE_URL" default:"http://127.0.0.1:5000"`
 	BearerToken string        `env:"MLFLOW_BEARER_TOKEN"`
-	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
-	Port        int           `env:"PORT" default:"50052"`
+	HTTPTimeout time.Duration `env:"MLFLOW_HTTP_TIMEOUT" default:"5s"`
+	Port        int           `env:"MLFLOW_PORT" default:"50052"`
 }
 
 func main() {
@@ -32,10 +31,9 @@ func main() {
 		Timeout: raw.HTTPTimeout,
 	}
 
-	impl := New(httpClient, Config{
-		Enabled:     raw.Enabled,
-		BaseURL:     strings.TrimSpace(raw.BaseURL),
-		BearerToken: strings.TrimSpace(raw.BearerToken),
+	impl := New(httpClient, config{
+		baseURL:     strings.TrimSpace(raw.BaseURL),
+		bearerToken: strings.TrimSpace(raw.BearerToken),
 	})
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", raw.Port))

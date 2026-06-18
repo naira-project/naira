@@ -19,8 +19,8 @@ type pluginConfig struct {
 	Enabled     bool          `env:"LITELLM_ENABLED" default:"true"`
 	BaseURL     string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
 	APIKey      string        `env:"LITELLM_API_KEY"`
-	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
-	Port        int           `env:"PORT" default:"50051"`
+	HTTPTimeout time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`
+	Port        int           `env:"LITELLM_PORT" default:"50051"`
 }
 
 func main() {
@@ -35,10 +35,9 @@ func main() {
 		Timeout: raw.HTTPTimeout,
 	}
 
-	impl := New(httpClient, logger, Config{
-		Enabled: raw.Enabled,
-		BaseURL: strings.TrimSpace(raw.BaseURL),
-		APIKey:  strings.TrimSpace(raw.APIKey),
+	impl := New(httpClient, logger, config{
+		baseURL: strings.TrimSpace(raw.BaseURL),
+		apiKey:  strings.TrimSpace(raw.APIKey),
 	})
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", raw.Port))
