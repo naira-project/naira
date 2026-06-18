@@ -13,15 +13,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-type pluginClient struct {
-	*pluginapi.GRPCClient
-	name string
-}
-
-func (pc *pluginClient) Name() string {
-	return pc.name
-}
-
 // Register connects to each plugin sidecar by its configured name and gRPC
 // address and returns the registered plugins keyed by plugin name.
 func Register(plugins map[string]string, logger *log.Logger) (map[string]pluginapi.Plugin, func(), error) {
@@ -92,10 +83,7 @@ func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, 
 		logger.Printf("successfully connected to plugin %q at %q", name, address)
 	}
 
-	pc := &pluginClient{
-		GRPCClient: pluginapi.NewGRPCClient(pluginv1.NewCatalogPluginServiceClient(conn)),
-		name:       name,
-	}
+	grpcClient := pluginapi.NewGRPCClient(pluginv1.NewCatalogPluginServiceClient(conn))
 
-	return pc, func() { conn.Close() }, nil
+	return grpcClient, func() { conn.Close() }, nil
 }

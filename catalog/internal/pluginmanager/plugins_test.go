@@ -14,22 +14,24 @@ import (
 
 type mockPlugin struct{}
 
+var stubResponse = pluginapi.CollectResponse{
+	Nodes: []pluginapi.NodeClaim{
+		{
+			ID:         pluginapi.NodeID{Kind: "model", Path: "mock/model"},
+			Properties: pluginapi.PropertyMap{"test": "val"},
+		},
+	},
+	Relations: []pluginapi.RelationClaim{
+		{
+			Kind: "uses_model",
+			From: pluginapi.NodeID{Kind: "application", Path: "mock/app"},
+			To:   pluginapi.NodeID{Kind: "model", Path: "mock/model"},
+		},
+	},
+}
+
 func (mockPlugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	return pluginapi.CollectResponse{
-		Nodes: []pluginapi.NodeClaim{
-			{
-				ID:         pluginapi.NodeID{Kind: "model", Path: "mock/model"},
-				Properties: pluginapi.PropertyMap{"test": "val"},
-			},
-		},
-		Relations: []pluginapi.RelationClaim{
-			{
-				Kind: "uses_model",
-				From: pluginapi.NodeID{Kind: "application", Path: "mock/app"},
-				To:   pluginapi.NodeID{Kind: "model", Path: "mock/model"},
-			},
-		},
-	}, nil
+	return stubResponse, nil
 }
 
 func TestRegisterAndConnectPlugin(t *testing.T) {
@@ -60,13 +62,5 @@ func TestRegisterAndConnectPlugin(t *testing.T) {
 	req, err := p.Collect(t.Context())
 	require.NoError(t, err)
 
-	require.Len(t, req.Nodes, 1)
-	assert.Equal(t, "model", req.Nodes[0].ID.Kind)
-	assert.Equal(t, "mock/model", req.Nodes[0].ID.Path)
-	assert.Equal(t, "val", req.Nodes[0].Properties["test"])
-
-	require.Len(t, req.Relations, 1)
-	assert.Equal(t, "uses_model", req.Relations[0].Kind)
-	assert.Equal(t, "mock/app", req.Relations[0].From.Path)
-	assert.Equal(t, "mock/model", req.Relations[0].To.Path)
+	assert.Equal(t, stubResponse, req)
 }
