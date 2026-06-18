@@ -25,8 +25,8 @@ Start both frontend and backend in development mode:
 npm start
 ```
 
-- Frontend will be available at: http://localhost:4300
-- Backend will be available at: http://localhost:3000
+- After port-forwarding through `task forward:all`, frontend will be available at `http://localhost:3000`.
+- Click on the button at the upper right part of the OpenMFP portal and go to `Settings`. There, toggle `**Is Development Mode active?**` and click on `Save`.
 
 ## Build
 
