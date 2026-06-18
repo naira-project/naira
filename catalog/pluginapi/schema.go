@@ -9,7 +9,8 @@ const (
 )
 
 const (
-	RelationKindTrainedOn = "trained_on"
-	RelationKindUsesModel = "uses_model"
-	RelationKindCalls     = "calls"
+	RelationKindTrainedOn   = "trained_on"
+	RelationKindUsesModel   = "uses_model"
+	RelationKindCalls       = "calls"
+	RelationKindDerivedFrom = "derived_from"
 )
