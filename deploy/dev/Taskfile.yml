@@ -304,23 +304,6 @@ tasks:
     cmds:
       - kubectl -n {{.PORTAL_NAMESPACE}} port-forward {{.PORTAL_SERVICE}} {{.PORTAL_LOCAL_PORT}}:{{.PORTAL_REMOTE_PORT}}
 
-  portal:install:
-    desc: Install all naira-openmfp-portal dependencies (for local development)
-    cmds:
-      - cd {{.PORTAL_DIR}} && npm install
-      - cd {{.PORTAL_DIR}}/frontend && npm install
-      - cd {{.PORTAL_DIR}}/backend && npm install
-
-  portal:start:
-    desc: Start the portal locally (frontend on :4300, backend on :3000)
-    cmds:
-      - cd {{.PORTAL_DIR}} && npm start
-
-  portal:build:
-    desc: Build frontend and backend of the portal
-    cmds:
-      - cd {{.PORTAL_DIR}} && npm run build
-
   forward:all:tunnels:
     internal: true
     deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
