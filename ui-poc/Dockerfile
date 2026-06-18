@@ -6,6 +6,16 @@ COPY . .
 RUN npm run build
 
 FROM nginx:1.30-alpine
+
+ARG VERSION=dev
+ARG COMMIT=unknown
+
+LABEL org.opencontainers.image.title="Naira UI" \
+      org.opencontainers.image.description="Naira user interface" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.source="https://github.com/naira-project/naira"
+
 COPY --from=builder /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

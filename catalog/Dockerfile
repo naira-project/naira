@@ -1,13 +1,22 @@
-FROM golang:1.26 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26 AS build
 
 WORKDIR /src
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+ARG REVISION=unknown
 
 COPY go.mod go.sum ./
 COPY cmd ./cmd
 COPY internal ./internal
 COPY pluginapi ./pluginapi
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/catalog ./cmd/catalog
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build \
+    -trimpath \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${REVISION}" \
+    -o /out/catalog ./cmd/catalog
 
 FROM gcr.io/distroless/static-debian12
 
