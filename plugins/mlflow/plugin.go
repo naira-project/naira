@@ -27,9 +27,9 @@ type Plugin struct {
 }
 
 type Config struct {
-	Enabled     bool
-	BaseURL     string
-	BearerToken string
+	Enabled     bool   `env:"ENABLED" default:"true"`
+	BaseURL     string `env:"BASE_URL" default:"http://127.0.0.1:5000"`
+	BearerToken string `env:"BEARER_TOKEN"`
 }
 
 func New(httpClient *http.Client, config Config) *Plugin {

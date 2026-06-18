@@ -51,11 +51,18 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				},
 			},
 		},
-		[]catalog.RelationClaim{{
-			Kind: "uses_model",
-			From: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-			To:   catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-		}},
+		[]catalog.RelationClaim{
+			{
+				Kind:       "uses_model",
+				From:       catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+				To:         catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+				Properties: pluginapi.PropertyMap{"via": "virtual-key"},
+			},
+			{
+				Kind: "used_by",
+				From: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+				To:   catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+			}},
 	)
 
 	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), map[string]catalog.Plugin{"seed": stubPlugin{}}), log.New(io.Discard, "", 0))
@@ -75,7 +82,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			validatePayload: func(t *testing.T, body []byte) {
 				var payload map[string]string
 				require.NoError(t, json.Unmarshal(body, &payload))
-				assert.Equal(t, "ok", payload["status"])
+				assert.Equal(t, map[string]string{"status": "ok"}, payload)
 			},
 		},
 		{
@@ -86,8 +93,27 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			validatePayload: func(t *testing.T, body []byte) {
 				var payload ListNodesResponse
 				require.NoError(t, json.Unmarshal(body, &payload))
-				require.Len(t, payload.Nodes, 1)
-				assert.Equal(t, "nodes/model/mlflow/fraud-detector", payload.Nodes[0].Name)
+
+				expected := ListNodesResponse{
+					Nodes: []Node{
+						{
+							Name: "nodes/model/mlflow/fraud-detector",
+							Kind: "model",
+							Path: "mlflow/fraud-detector",
+							PluginClaims: []PluginClaim{
+								{
+									Plugin: "test-plugin",
+									Props: map[string]string{
+										"source":      "mlflow",
+										"description": "registry model",
+									},
+								},
+							},
+						},
+					},
+					TotalSize: 1,
+				}
+				assert.Equal(t, expected, payload)
 			},
 		},
 		{
@@ -98,21 +124,51 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			validatePayload: func(t *testing.T, body []byte) {
 				var payload Node
 				require.NoError(t, json.Unmarshal(body, &payload))
-				assert.Equal(t, "model", payload.Kind)
-				assert.Equal(t, "mlflow/fraud-detector", payload.Path)
+
+				expected := Node{
+					Kind: "model",
+					Path: "mlflow/fraud-detector",
+					Name: "nodes/model/mlflow/fraud-detector",
+					PluginClaims: []PluginClaim{
+						{
+							Plugin: "test-plugin",
+							Props: map[string]string{
+								"source":      "mlflow",
+								"description": "registry model",
+							},
+						},
+					},
+				}
+				assert.Equal(t, expected, payload)
 			},
 		},
 		{
-			name:               "lists relations",
+			name:               "filters relations by toNode",
 			method:             http.MethodGet,
 			path:               "/v1/relations?filter=toNode=%22nodes/model/mlflow/fraud-detector%22",
 			expectedStatusCode: http.StatusOK,
 			validatePayload: func(t *testing.T, body []byte) {
 				var payload ListRelationsResponse
 				require.NoError(t, json.Unmarshal(body, &payload))
-				require.Len(t, payload.Relations, 1)
-				assert.Equal(t, "relations/uses_model/nodes%2Fapplication%2Flitellm%2Ffraud-assistant|nodes%2Fmodel%2Fmlflow%2Ffraud-detector", payload.Relations[0].Name)
-				assert.Equal(t, "uses_model", payload.Relations[0].Kind)
+
+				expected := ListRelationsResponse{
+					Relations: []Relation{
+						{
+							Name:     "relations/uses_model/nodes%2Fapplication%2Flitellm%2Ffraud-assistant|nodes%2Fmodel%2Fmlflow%2Ffraud-detector",
+							Kind:     "uses_model",
+							FromNode: "nodes/application/litellm/fraud-assistant",
+							ToNode:   "nodes/model/mlflow/fraud-detector",
+							PluginClaims: []PluginClaim{
+								{
+									Plugin: "test-plugin",
+									Props:  map[string]string{"via": "virtual-key"},
+								},
+							},
+						},
+					},
+					TotalSize: 1,
+				}
+				assert.Equal(t, expected, payload)
 			},
 		},
 		{
@@ -123,8 +179,13 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			validatePayload: func(t *testing.T, body []byte) {
 				var payload RunPluginsResponse
 				require.NoError(t, json.Unmarshal(body, &payload))
-				require.Len(t, payload.Results, 1)
-				assert.Equal(t, "seed", payload.Results[0].Plugin)
+
+				expected := RunPluginsResponse{
+					Results: []RunPluginResult{
+						{Plugin: "seed", Error: ""},
+					},
+				}
+				assert.Equal(t, expected, payload)
 			},
 		},
 	}
@@ -160,7 +221,14 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 
 	var payload RunPluginsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	require.Len(t, payload.Results, 1)
-	assert.Equal(t, "seed", payload.Results[0].Plugin)
-	assert.Equal(t, "collecting response from plugin \"seed\": seed failed", payload.Results[0].Error)
+
+	expected := RunPluginsResponse{
+		Results: []RunPluginResult{
+			{
+				Plugin: "seed",
+				Error:  `collecting response from plugin "seed": seed failed`,
+			},
+		},
+	}
+	assert.Equal(t, expected, payload)
 }

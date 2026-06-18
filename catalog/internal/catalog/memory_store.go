@@ -24,29 +24,36 @@ type Store interface {
 type MemoryStore struct {
 	mu        sync.RWMutex
 	nodes     map[NodeID]Node
-	relations []Relation
+	relations map[RelationID]Relation
+}
+
+type PluginClaim struct {
+	SnapshotID uuid.UUID
+	Properties map[string]string
 }
 
 type Node struct {
-	ID         NodeID
-	Plugin     string
-	SnapshotID uuid.UUID
-	Properties map[string]string
+	ID           NodeID
+	PluginClaims map[string]PluginClaim
 }
 
 type Relation struct {
-	Kind       string
-	From       NodeID
-	To         NodeID
-	Plugin     string
-	SnapshotID uuid.UUID
-	Properties map[string]string
+	Kind         string
+	From         NodeID
+	To           NodeID
+	PluginClaims map[string]PluginClaim
+}
+
+type RelationID struct {
+	Kind string
+	From NodeID
+	To   NodeID
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		nodes:     make(map[NodeID]Node),
-		relations: make([]Relation, 0),
+		relations: make(map[RelationID]Relation),
 	}
 }
 
@@ -82,7 +89,10 @@ func (s *MemoryStore) ListRelations() []Relation {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := append([]Relation(nil), s.relations...)
+	result := make([]Relation, 0, len(s.relations))
+	for _, relation := range s.relations {
+		result = append(result, relation)
+	}
 	sort.Slice(result, func(i, j int) bool {
 		return lessRelation(result[i], result[j])
 	})
@@ -99,94 +109,102 @@ func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUI
 	}
 
 	upsertedNodes := 0
-	for _, node := range nodes {
-		id := node.ID
+	for _, nodeClaim := range nodes {
+		id := nodeClaim.ID
 
 		existing, ok := s.nodes[id]
-		if ok {
-			existing.ID = id
-			existing.Plugin = pluginName
-			existing.SnapshotID = snapshotID
-			existing.Properties = node.Properties
-			s.nodes[id] = existing
-		} else {
-			s.nodes[id] = Node{
-				ID:         id,
-				Plugin:     pluginName,
-				SnapshotID: snapshotID,
-				Properties: node.Properties,
+		if !ok {
+			existing = Node{
+				ID:           id,
+				PluginClaims: make(map[string]PluginClaim),
 			}
+		} else if existing.PluginClaims == nil {
+			existing.PluginClaims = make(map[string]PluginClaim)
 		}
+
+		existing.PluginClaims[pluginName] = PluginClaim{
+			SnapshotID: snapshotID,
+			Properties: nodeClaim.Properties,
+		}
+		s.nodes[id] = existing
 		upsertedNodes++
 	}
 
 	upsertedRelations := 0
-	for _, relation := range relations {
-		relationKind := relation.Kind
-		fromID := relation.From
-		toID := relation.To
+	for _, relationClaim := range relations {
+		key := RelationID{
+			Kind: relationClaim.Kind,
+			From: relationClaim.From,
+			To:   relationClaim.To,
+		}
 
-		updated := false
-		for idx := range s.relations {
-			if s.relations[idx].Kind == relationKind && s.relations[idx].From == fromID && s.relations[idx].To == toID {
-				s.relations[idx].Plugin = pluginName
-				s.relations[idx].SnapshotID = snapshotID
-				s.relations[idx].Properties = relation.Properties
-				updated = true
-				break
+		existing, ok := s.relations[key]
+		if !ok {
+			existing = Relation{
+				Kind:         key.Kind,
+				From:         key.From,
+				To:           key.To,
+				PluginClaims: make(map[string]PluginClaim),
 			}
+		} else if existing.PluginClaims == nil {
+			existing.PluginClaims = make(map[string]PluginClaim)
 		}
 
-		if !updated {
-			s.relations = append(s.relations, Relation{
-				Kind:       relationKind,
-				From:       fromID,
-				To:         toID,
-				Plugin:     pluginName,
-				SnapshotID: snapshotID,
-				Properties: relation.Properties,
-			})
+		existing.PluginClaims[pluginName] = PluginClaim{
+			SnapshotID: snapshotID,
+			Properties: relationClaim.Properties,
 		}
-
+		s.relations[key] = existing
 		upsertedRelations++
 	}
 
-	s.pruneRelations(pluginName, snapshotID)
 	s.pruneNodes(pluginName, snapshotID)
+	s.pruneRelations(pluginName, snapshotID)
 
 	return upsertedNodes, upsertedRelations, nil
 }
 
-func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
-	n := 0
-	for _, relation := range s.relations {
-		if relation.Plugin == pluginName && relation.SnapshotID != snapshotID {
-			continue
-		}
-		s.relations[n] = relation
-		n++
-	}
-	clear(s.relations[n:])
-	s.relations = s.relations[:n]
-}
-
 func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
 	for id, node := range s.nodes {
-		if node.Plugin != pluginName || node.SnapshotID == snapshotID {
+		claim, exists := node.PluginClaims[pluginName]
+		if !exists {
 			continue
 		}
 
-		delete(s.nodes, id)
+		if claim.SnapshotID != snapshotID {
+			delete(s.nodes[id].PluginClaims, pluginName)
+		}
+
+		if len(node.PluginClaims) == 0 {
+			delete(s.nodes, id)
+		}
+	}
+}
+
+func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
+	for id, relation := range s.relations {
+		claim, exists := relation.PluginClaims[pluginName]
+		if !exists {
+			continue
+		}
+
+		if claim.SnapshotID != snapshotID {
+			delete(s.relations[id].PluginClaims, pluginName)
+		}
+
+		if len(relation.PluginClaims) == 0 {
+			delete(s.relations, id)
+		}
 	}
 }
 
 func validateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) error {
 	if pluginName == "" {
-		return fmt.Errorf("validate plugin name: %w: plugin name is empty", ErrInvalidIngestion)
+		return fmt.Errorf("%w: plugin name is empty", ErrInvalidIngestion)
 	}
 
 	if snapshotID == uuid.Nil {
-		return fmt.Errorf("validate snapshot ID: %w: snapshot ID is empty", ErrInvalidIngestion)
+		return fmt.Errorf("%w: snapshot ID is empty", ErrInvalidIngestion)
 	}
 
 	availableNodes := make(map[NodeID]struct{}, len(nodes))

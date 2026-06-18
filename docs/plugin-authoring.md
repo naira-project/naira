@@ -13,7 +13,7 @@ Why: node reads use the route `/v1/nodes/{kind}/*`, so `kind` is one path segmen
 
 - Reuse known kinds from `pluginapi/schema.go` when they fit.
 - Keep `kind` stable. Changing it changes node identity.
-- Use `path` for source-specific hierarchy such as `mlflow/model-a` or `litellm/team/app`.
+- Use `path` for hierarchy.
 
 ## Relations
 
@@ -29,7 +29,7 @@ return pluginapi.CollectResponse{
 		{
 			ID: pluginapi.NodeID{
 				Kind: pluginapi.NodeKindModel,
-				Path: "mlflow/fraud-detector",
+				Path: "fraud-detector",
 			},
 		},
 	},
@@ -39,3 +39,23 @@ return pluginapi.CollectResponse{
 ## Snapshots & Stale Data
 
 Each execution of a plugin is treated as a single, atomic snapshot. New data is ingested, and all previous data from this plugin not present in the current batch is removed.
+
+## Multi-plugin properties
+
+Multiple plugins can independently report the **same node or relation** (identified by identical `NodeID` or relation `kind`/`from`/`to` triple). The catalog merges their data rather than overwriting it.
+
+**How it works:**
+
+- Each plugin's properties are stored under that plugin's name as a namespace — the catalog never mixes or overwrites another plugin's data.
+- The API returns `pluginClaims` as an ordered list of `{ plugin, props }` objects, one per contributing plugin:
+
+  ```json
+  {
+    "kind": "model",
+    "path": "clusterA/deepseek",
+    "pluginClaims": [
+      { "plugin": "mlflow/clusterA", "props": { "release": "2.34", "token_price": "$10" } },
+      { "plugin": "litellm",         "props": { "token_price": "$5" } }
+    ]
+  }
+  ```
