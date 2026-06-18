@@ -1,84 +1,63 @@
-// Plugintest runs a selected plugin standalone, printing its results to stdout
-// in Mermaid graph format.
+// Plugintest connects to a running plugin over gRPC, calls Collect, and prints
+// the result as a Mermaid graph to stdout.
 package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"reflect"
 	"strings"
 
-	"go-simpler.org/env"
-
-	"github.com/naira-project/naira/catalog/internal/plugins"
 	"github.com/naira-project/naira/catalog/pluginapi"
+	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
-	selectedName := ""
-	if len(os.Args) > 2 {
-		fmt.Fprintf(os.Stderr, "usage: %s <plugin-name>\n", os.Args[0])
-		os.Exit(1)
-	}
-	if len(os.Args) == 2 {
-		selectedName = os.Args[1]
-	}
-	// if no args provided, we'll want to still print the list of available plugins
+	logger := log.New(os.Stderr, "", 0)
 
-	var cfg plugins.Config
-	if err := env.Load(&cfg, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "error: loading config: %v\n", err)
-		os.Exit(1)
-	}
-	forceEnablePlugins(&cfg)
-	registered := plugins.Register(cfg, &http.Client{}, log.New(os.Stderr, "", 0))
+	var addrFlag string
+	flag.StringVar(&addrFlag, "addr", "50051", "gRPC server address (e.g., 'localhost:50051' or just port '50051')")
 
-	pluginsByName := make(map[string]pluginapi.Plugin, len(registered))
-	pluginNames := make([]string, 0, len(registered))
-	for _, p := range registered {
-		pluginsByName[p.Name()] = p
-		pluginNames = append(pluginNames, p.Name())
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
+		flag.PrintDefaults()
 	}
+	flag.Parse()
 
-	if selectedName == "" {
-		fmt.Fprintf(os.Stderr, "usage: %s <plugin-name>\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "no plugin specified; enabled plugins: %s\n", strings.Join(pluginNames, ", "))
-		os.Exit(1)
-	}
-	plugin := pluginsByName[selectedName]
-	if plugin == nil {
-		fmt.Fprintf(os.Stderr, "error: plugin %q not found; enabled plugins: %s\n", selectedName, strings.Join(pluginNames, ", "))
-		os.Exit(1)
-	}
+	addr := normalizeAddress(addrFlag)
 
-	result, err := plugin.Collect(context.Background())
+	// Connect to gRPC server
+	conn, err := grpc.NewClient(
+		addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error running plugin: %v\n", err)
-		os.Exit(1)
+		logger.Fatalf("Error: creating gRPC client to %q: %v", addr, err)
+	}
+	defer conn.Close()
+
+	grpcClient := pluginapi.NewGRPCClient(pluginv1.NewCatalogPluginServiceClient(conn))
+
+	resp, err := grpcClient.Collect(context.Background())
+	if err != nil {
+		logger.Fatalf("Error: Collect call to %q failed: %v", addr, err)
 	}
 
-	printMermaid(result)
+	printMermaid(resp, logger)
 }
 
-// forceEnablePlugins sets Enabled=true on every sub-struct in cfg that has a
-// bool field named "Enabled".
-func forceEnablePlugins(cfg *plugins.Config) {
-	v := reflect.ValueOf(cfg).Elem()
-	for _, f := range v.Fields() {
-		if f.Kind() != reflect.Struct {
-			continue
-		}
-		enabled := f.FieldByName("Enabled")
-		if enabled.IsValid() && enabled.Kind() == reflect.Bool {
-			enabled.SetBool(true)
-		}
+func normalizeAddress(addr string) string {
+	if !strings.Contains(addr, ":") {
+		return "localhost:" + addr
 	}
+	return addr
 }
 
-func printMermaid(req pluginapi.IngestionRequest) {
+func printMermaid(req pluginapi.CollectResponse, logger *log.Logger) {
 	fmt.Println("graph TD")
 
 	ids := make(map[pluginapi.NodeID]string, len(req.Nodes))
@@ -93,7 +72,7 @@ func printMermaid(req pluginapi.IngestionRequest) {
 		from, fromOK := ids[rel.From]
 		to, toOK := ids[rel.To]
 		if !fromOK || !toOK {
-			fmt.Fprintf(os.Stderr, "WARN: relation's node(s) not predeclared: %v\n", rel)
+			logger.Printf("WARN: relation's node(s) not predeclared: %v", rel)
 			continue
 		}
 		fmt.Printf("    %s -->|\"%s\"| %s\n", from, rel.Kind, to)
