@@ -3,19 +3,26 @@ package httpapi
 import (
 	"fmt"
 	"log"
+	"maps"
 	"math"
 	"net/url"
+	"slices"
+	"strings"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
+type PluginClaim struct {
+	Plugin string            `json:"plugin"`
+	Props  map[string]string `json:"props"`
+}
+
 type Node struct {
-	Name string `json:"name"`
-	Kind string `json:"kind"`
-	Path string `json:"path"`
-	//FIXME: change to map[string]map[string]string
-	Props map[string]string `json:"props,omitempty"`
+	Name         string        `json:"name"`
+	Kind         string        `json:"kind"`
+	Path         string        `json:"path"`
+	PluginClaims []PluginClaim `json:"pluginClaims"`
 }
 
 type ListNodesResponse struct {
@@ -25,12 +32,11 @@ type ListNodesResponse struct {
 }
 
 type Relation struct {
-	Name     string `json:"name"`
-	Kind     string `json:"kind"`
-	FromNode string `json:"fromNode"`
-	ToNode   string `json:"toNode"`
-	//FIXME: change to map[string]map[string]string
-	Props map[string]string `json:"props,omitempty"`
+	Name         string        `json:"name"`
+	Kind         string        `json:"kind"`
+	FromNode     string        `json:"fromNode"`
+	ToNode       string        `json:"toNode"`
+	PluginClaims []PluginClaim `json:"pluginClaims"`
 }
 
 type ListRelationsResponse struct {
@@ -50,20 +56,20 @@ type RunPluginsResponse struct {
 
 func nodeFromCatalogNode(node catalog.Node) Node {
 	return Node{
-		Name:  nodeName(node.ID),
-		Kind:  node.ID.Kind,
-		Path:  node.ID.Path,
-		Props: node.Properties,
+		Name:         nodeName(node.ID),
+		Kind:         node.ID.Kind,
+		Path:         node.ID.Path,
+		PluginClaims: toSortedSlice(node.PluginClaims),
 	}
 }
 
 func relationFromCatalogRelation(relation catalog.Relation) Relation {
 	return Relation{
-		Name:     relationName(relation.Kind, relation.From, relation.To),
-		Kind:     relation.Kind,
-		FromNode: nodeName(relation.From),
-		ToNode:   nodeName(relation.To),
-		Props:    relation.Properties,
+		Name:         relationName(relation.Kind, relation.From, relation.To),
+		Kind:         relation.Kind,
+		FromNode:     nodeName(relation.From),
+		ToNode:       nodeName(relation.To),
+		PluginClaims: toSortedSlice(relation.PluginClaims),
 	}
 }
 
@@ -137,6 +143,24 @@ func nodeName(id pluginapi.NodeID) string {
 
 func relationName(kind string, from pluginapi.NodeID, to pluginapi.NodeID) string {
 	return fmt.Sprintf("relations/%s/%s|%s", kind, url.PathEscape(nodeName(from)), url.PathEscape(nodeName(to)))
+}
+
+func toSortedSlice(claims map[string]catalog.PluginClaim) []PluginClaim {
+	result := make([]PluginClaim, 0, len(claims))
+	for pluginName, claim := range claims {
+		copiedProps := make(map[string]string, len(claim.Properties))
+		maps.Copy(copiedProps, claim.Properties)
+		result = append(result, PluginClaim{
+			Plugin: pluginName,
+			Props:  copiedProps,
+		})
+	}
+
+	slices.SortFunc(result, func(a, b PluginClaim) int {
+		return strings.Compare(a.Plugin, b.Plugin)
+	})
+
+	return result
 }
 
 func int32FromCount(value int, logger *log.Logger) int32 {

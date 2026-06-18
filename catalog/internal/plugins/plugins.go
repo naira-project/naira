@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/naira-project/naira/catalog/internal/plugins/depl_calls_svc"
 	"github.com/naira-project/naira/catalog/internal/plugins/litellm"
 	"github.com/naira-project/naira/catalog/internal/plugins/mlflow"
 	"github.com/naira-project/naira/catalog/pluginapi"
@@ -18,6 +19,10 @@ func Register(config Config, httpClient *http.Client, logger *log.Logger) []plug
 
 	if config.LiteLLM.Enabled {
 		registered = appendIfNotNil(registered, litellm.New(httpClient, logger, config.LiteLLM))
+	}
+
+	if config.DeplCallsSvc.Enabled {
+		registered = appendIfNotNil(registered, depl_calls_svc.New(config.DeplCallsSvc))
 	}
 
 	return registered
