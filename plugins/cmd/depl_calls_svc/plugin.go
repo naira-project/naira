@@ -21,7 +21,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/naira-project/naira/catalog/pluginapi"
-	"github.com/naira-project/naira/plugins/kubeconn"
+	"github.com/naira-project/naira/plugins/internal/kubeconn"
 )
 
 const pluginName = "depl_calls_svc"
