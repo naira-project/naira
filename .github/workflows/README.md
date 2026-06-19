@@ -29,10 +29,3 @@ Triggered by `v*` tags. Builds and pushes multi-arch images to `ghcr.io`.
 
 * **`container-publish-catalog` / `ui**`: Builds and pushes images with standard tags.
 * **`all-published`**: Aggregate status check for the release process.
-
----
-
-## Reusable Components
-
-* `reusable-go-test.yml`: Standardized testing logic.
-* `reusable-container-build.yml`: Unified multi-arch build/push logic.
