@@ -58,6 +58,9 @@ func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, 
 
 	conn, err := grpc.NewClient(
 		address,
+		// Insecure is safe for now, plugins run as sidecars within the same pod
+		// and share the localhost network namespace. Upgrade to mTLS/Service Mesh
+		// if plugins are moved to separate pods.
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
