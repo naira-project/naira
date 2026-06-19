@@ -1,17 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
-	"github.com/naira-project/naira/catalog/pluginapi"
-	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
+	"github.com/naira-project/naira/plugins/internal/pluginmain"
 	"go-simpler.org/env"
-	"google.golang.org/grpc"
 )
 
 type pluginConfig struct {
@@ -31,21 +28,12 @@ func main() {
 		Timeout: raw.HTTPTimeout,
 	}
 
+	logger := log.New(os.Stdout, "", log.LstdFlags)
+
 	impl := New(httpClient, config{
 		baseURL:     strings.TrimSpace(raw.BaseURL),
 		bearerToken: strings.TrimSpace(raw.BearerToken),
 	})
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", raw.Port))
-	if err != nil {
-		log.Fatalf("failed to listen on port %d: %v", raw.Port, err)
-	}
-
-	s := grpc.NewServer()
-	pluginv1.RegisterCatalogPluginServiceServer(s, &pluginapi.GRPCServer{Impl: impl})
-
-	log.Printf("mlflow plugin listening on %v", lis.Addr())
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve gRPC: %v", err)
-	}
+	pluginmain.Run(impl, raw.Port, logger)
 }

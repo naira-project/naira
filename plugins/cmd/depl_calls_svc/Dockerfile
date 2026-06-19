@@ -7,8 +7,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY catalog/pluginapi/ ./catalog/pluginapi/
-COPY plugins/depl_calls_svc/ ./plugins/depl_calls_svc/
-COPY plugins/kubeconn/ ./plugins/kubeconn/
+COPY plugins/internal/ ./plugins/internal/
+COPY plugins/cmd/depl_calls_svc/ ./plugins/depl_calls_svc/
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-w -s" -o /out/depl_calls_svc ./plugins/depl_calls_svc

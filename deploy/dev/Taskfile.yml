@@ -25,9 +25,9 @@ vars:
   POSTGRES_MANIFEST: infra/kubernetes/postgres.yaml
   CATALOG_DIR: ../../catalog
   CATALOG_IMAGE: catalog:local
-  MLFLOW_PLUGIN_DIR: ../../plugins/mlflow
+  MLFLOW_PLUGIN_DIR: ../../plugins/cmd/mlflow
   MLFLOW_PLUGIN_IMAGE: mlflow:local
-  LITELLM_PLUGIN_DIR: ../../plugins/litellm
+  LITELLM_PLUGIN_DIR: ../../plugins/cmd/litellm
   LITELLM_PLUGIN_IMAGE: litellm:local
   CATALOG_NAMESPACE: idp-system
   CATALOG_MANIFEST: infra/kubernetes/catalog.yaml
