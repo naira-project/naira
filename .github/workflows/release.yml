@@ -39,23 +39,37 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── 3. Verify signatures ───────────────────────────────────────────────────
+  verify-catalog:
+    name: Verify · Catalog Signature
+    needs: [container-publish-catalog]
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-verify.yml@254b226c9bda693b536c026f9f49ab907a260b24
+    with:
+      image-ref: "ghcr.io/naira-project/naira-catalog@${{ needs.container-publish-catalog.outputs.image-digest }}"
+
+  verify-ui:
+    name: Verify · UI Signature
+    needs: [container-publish-ui]
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-verify.yml@254b226c9bda693b536c026f9f49ab907a260b24
+    with:
+      image-ref: "ghcr.io/naira-project/naira-ui@${{ needs.container-publish-ui.outputs.image-digest }}"
+
   # ── Gate: surfaces overall release status as a single check ───────────────
-  all-published:
-    name: All Images Published
-    needs: [container-publish-catalog, container-publish-ui]
+  release-complete:
+    name: Release Complete
+    needs: [container-publish-catalog, container-publish-ui, verify-catalog, verify-ui]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Check results
+      - name: Check all results
         run: |
-          RESULTS=(
-            "${{ needs.container-publish-catalog.result }}"
-            "${{ needs.container-publish-ui.result }}"
-          )
-          for r in "${RESULTS[@]}"; do
+          for r in \
+            "${{ needs.container-publish-catalog.result }}" \
+            "${{ needs.container-publish-ui.result }}" \
+            "${{ needs.verify-catalog.result }}" \
+            "${{ needs.verify-ui.result }}"; do
             if [[ "$r" != "success" ]]; then
-              echo "::error::One or more publish jobs did not succeed: $r"
+              echo "::error::Step failed: $r"
               exit 1
             fi
           done
-          echo "All images published successfully."
