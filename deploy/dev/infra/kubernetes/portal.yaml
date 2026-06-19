@@ -20,6 +20,8 @@ spec:
           env:
             - name: PORT
               value: "3000"
+            - name: NAIRA_UI_BASE_URL
+              value: "http://localhost:3001"
           ports:
             - containerPort: 3000
               name: http
