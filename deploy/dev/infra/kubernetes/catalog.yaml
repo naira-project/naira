@@ -28,6 +28,31 @@ rules:
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: catalog-depl-calls
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: catalog-depl-calls
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: catalog-depl-calls
+subjects:
+  - kind: ServiceAccount
+    name: catalog
+    namespace: idp-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: catalog-appidentities
@@ -94,6 +119,22 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+        - name: plugin-depl-calls-svc
+          image: depl-calls-svc:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DEPL_CALLS_SVC_PORT
+              value: "50053"
+            - name: DEPL_CALLS_SVC_KUBECONFIG
+              value: ""
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
       containers:
         - name: catalog
           image: catalog:local
@@ -102,7 +143,7 @@ spec:
             - name: PORT
               value: "8090"
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053"
           ports:
             - containerPort: 8090
               name: http

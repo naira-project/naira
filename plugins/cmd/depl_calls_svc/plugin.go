@@ -45,8 +45,6 @@ func New(config config) *Plugin {
 	return &Plugin{config: config}
 }
 
-func (*Plugin) Name() string { return pluginName }
-
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	dyn, err := p.connect()
 	if err != nil {
