@@ -8,9 +8,10 @@ import (
 	"go-simpler.org/env"
 )
 
+const defaultPort = 50053
+
 type pluginConfig struct {
 	Kubeconfig string `env:"DEPL_CALLS_SVC_KUBECONFIG"`
-	Port       int    `env:"DEPL_CALLS_SVC_PORT" default:"50053"`
 }
 
 func main() {
@@ -25,5 +26,5 @@ func main() {
 		kubeconfig: raw.Kubeconfig,
 	})
 
-	pluginmain.Run(impl, raw.Port, logger)
+	pluginmain.Run(impl, defaultPort, logger)
 }

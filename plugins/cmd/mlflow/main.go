@@ -11,11 +11,12 @@ import (
 	"go-simpler.org/env"
 )
 
+const defaultPort = 50052
+
 type pluginConfig struct {
 	BaseURL     string        `env:"MLFLOW_BASE_URL" default:"http://127.0.0.1:5000"`
 	BearerToken string        `env:"MLFLOW_BEARER_TOKEN"`
 	HTTPTimeout time.Duration `env:"MLFLOW_HTTP_TIMEOUT" default:"5s"`
-	Port        int           `env:"MLFLOW_PORT" default:"50052"`
 }
 
 func main() {
@@ -35,5 +36,5 @@ func main() {
 		bearerToken: strings.TrimSpace(raw.BearerToken),
 	})
 
-	pluginmain.Run(impl, raw.Port, logger)
+	pluginmain.Run(impl, defaultPort, logger)
 }

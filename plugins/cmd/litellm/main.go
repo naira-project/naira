@@ -11,12 +11,13 @@ import (
 	"go-simpler.org/env"
 )
 
+const defaultPort = 50051
+
 type pluginConfig struct {
 	Enabled     bool          `env:"LITELLM_ENABLED" default:"true"`
 	BaseURL     string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
 	APIKey      string        `env:"LITELLM_API_KEY"`
 	HTTPTimeout time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`
-	Port        int           `env:"LITELLM_PORT" default:"50051"`
 }
 
 func main() {
@@ -36,5 +37,5 @@ func main() {
 		apiKey:  strings.TrimSpace(raw.APIKey),
 	})
 
-	pluginmain.Run(impl, raw.Port, logger)
+	pluginmain.Run(impl, defaultPort, logger)
 }
