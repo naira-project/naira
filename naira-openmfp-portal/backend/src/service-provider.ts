@@ -20,34 +20,6 @@ export class ServiceProviderServiceImpl implements ServiceProviderService {
 
 export const SERVICE_PROVIDERS: RawServiceProvider[] = [
   {
-    name: 'getting-started',
-    displayName: 'Getting Started',
-    creationTimestamp: '',
-    contentConfiguration: [
-      {
-        name: 'getting-started',
-        creationTimestamp: '',
-        luigiConfigFragment: {
-          data: {
-            nodes: [
-              {
-                entityType: 'global',
-                pathSegment: 'home',
-                label: 'Home',
-                icon: 'home',
-                hideFromNav: true,
-                defineEntity: {
-                  id: 'example',
-                },
-                viewUrl: '/home',
-              },
-            ],
-          },
-        },
-      },
-    ],
-  },
-  {
     name: 'naira-catalog',
     displayName: 'Naira Catalog',
     creationTimestamp: new Date().toISOString(),
@@ -59,9 +31,18 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
           data: {
             nodes: [
               {
+                entityType: 'global',
+                pathSegment: 'naira',
+                hideFromNav: true,
+                defineEntity: {
+                  id: 'naira',
+                },
+                children: [],
+              },
+              {
                 pathSegment: 'dashboard',
                 label: 'Dashboard',
-                entityType: 'example',
+                entityType: 'naira',
                 hideFromNav: false,
                 url: `${UI_BASE_URL}/index.html/#/`,
                 loadingIndicator: { enabled: false },
@@ -69,7 +50,7 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
               {
                 pathSegment: 'model-registry',
                 label: 'Model Registry',
-                entityType: 'example',
+                entityType: 'naira',
                 hideFromNav: false,
                 keepSelectedForChildren: true,
                 url: `${UI_BASE_URL}/index.html/#/model-registry`,
@@ -78,7 +59,7 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
                   {
                     pathSegment: ':id',
                     label: 'Model Details',
-                    entityType: 'example',
+                    entityType: 'naira',
                     hideFromNav: true,
                     url: `${UI_BASE_URL}/index.html/#/model-registry/:id`,
                     loadingIndicator: { enabled: false },
