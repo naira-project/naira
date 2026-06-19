@@ -15,6 +15,11 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:deploy
 
+  platform:undeploy:
+    desc: Remove the platform from kind
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} platform:undeploy
+
   forward:all:
     desc: Port-forward the main developer-facing services
     cmds:
