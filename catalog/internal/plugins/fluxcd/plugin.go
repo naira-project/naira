@@ -48,7 +48,10 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
+	return p.collect(ctx, disc, dyn)
+}
 
+func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface) (pluginapi.IngestionRequest, error) {
 	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
@@ -230,7 +233,7 @@ func repoFromHelm(helm unstructured.Unstructured, gitRepos map[string]pluginapi.
 // listGroupKind returns all resources of the given API group + kind across all
 // provided namespaces, using discovery to resolve the GVR.
 // Returns an empty slice (not an error) when the CRD is not installed in the cluster.
-func listGroupKind(ctx context.Context, disc *discovery.DiscoveryClient, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
+func listGroupKind(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
 	_, apiLists, _ := disc.ServerGroupsAndResources()
 	for _, apiList := range apiLists {
 		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
@@ -274,7 +277,7 @@ func nsOrFallback(ns, fallback string) string {
 	return fallback
 }
 
-func (p *Plugin) connect() (*discovery.DiscoveryClient, dynamic.Interface, error) {
+func (p *Plugin) connect() (discovery.DiscoveryInterface, dynamic.Interface, error) {
 	cfg, err := kubeutil.RestConfig(p.config.Kubeconfig)
 	if err != nil {
 		return nil, nil, fmt.Errorf("loading k8s config: %w", err)
