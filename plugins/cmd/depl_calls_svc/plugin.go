@@ -33,15 +33,11 @@ var (
 	gvrServices    = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}
 )
 
-type config struct {
-	kubeconfig string `env:"KUBECONFIG"`
-}
-
 type Plugin struct {
-	config config
+	config pluginConfig
 }
 
-func New(config config) *Plugin {
+func New(config pluginConfig) *Plugin {
 	return &Plugin{config: config}
 }
 
@@ -232,7 +228,7 @@ func iterDeploymentEnvs(obj map[string]any) iter.Seq2[string, string] {
 }
 
 func (p *Plugin) connect() (dynamic.Interface, error) {
-	cfg, err := kubeconn.RestConfig(p.config.kubeconfig)
+	cfg, err := kubeconn.RestConfig(p.config.Kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("loading k8s config: %w", err)
 	}

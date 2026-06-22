@@ -22,9 +22,7 @@ func main() {
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 
-	impl := New(config{
-		kubeconfig: raw.Kubeconfig,
-	})
+	impl := New(raw)
 
 	pluginmain.Run(impl, defaultPort, logger)
 }

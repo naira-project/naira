@@ -31,9 +31,9 @@ func main() {
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 
-	impl := New(httpClient, config{
-		baseURL:     strings.TrimSpace(raw.BaseURL),
-		bearerToken: strings.TrimSpace(raw.BearerToken),
+	impl := New(httpClient, pluginConfig{
+		BaseURL:     strings.TrimSpace(raw.BaseURL),
+		BearerToken: strings.TrimSpace(raw.BearerToken),
 	})
 
 	pluginmain.Run(impl, defaultPort, logger)
