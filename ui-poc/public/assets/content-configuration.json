@@ -8,7 +8,7 @@
           "label": "Dashboard",
           "entityType": "example",
           "hideFromNav": false,
-          "url": "http://localhost:4200/index.html/#/",
+          "url": "http://localhost:3001/index.html/#/",
           "loadingIndicator": { "enabled": false }
         },
         {
@@ -17,7 +17,7 @@
           "entityType": "example",
           "hideFromNav": false,
           "keepSelectedForChildren": true,
-          "url": "http://localhost:4200/index.html/#/model-registry",
+          "url": "http://localhost:3001/index.html/#/model-registry",
           "loadingIndicator": { "enabled": false },
           "children": [
             {
@@ -25,7 +25,7 @@
               "label": "Model Details",
               "entityType": "example",
               "hideFromNav": true,
-              "url": "http://localhost:4200/index.html/#/model-registry/:id",
+              "url": "http://localhost:3001/index.html/#/model-registry/:id",
               "loadingIndicator": { "enabled": false }
             }
           ]
