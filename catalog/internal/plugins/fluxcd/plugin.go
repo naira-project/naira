@@ -112,6 +112,8 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		node pluginapi.NodeID
 		repo pluginapi.NodeID
 	}
+	zeroNodeID := pluginapi.NodeID{}
+
 	// Phase 2: Kustomization nodes + "sourced_from" relations.
 	kustByPath := map[string]nodeAndRepoIDs{}
 	for _, k := range kusts {
@@ -121,13 +123,12 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				Kind: pluginapi.NodeKindFluxKustomization,
 				Path: clusterID + "/" + shortPath,
 			},
+			repo: repoFromKustomization(k, repoByPath),
 		}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: ids.node,
 		})
-
-		if repoID, ok := repoFromKustomization(k, repoByPath); ok {
-			ids.repo = repoID
+		if ids.repo != zeroNodeID {
 			relations = append(relations, pluginapi.RelationClaim{
 				Kind: pluginapi.RelationKindSourcedFrom,
 				From: ids.node,
@@ -146,17 +147,16 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				Kind: pluginapi.NodeKindFluxHelmChart,
 				Path: clusterID + "/" + shortPath,
 			},
+			repo: repoFromHelm(h, repoByPath),
 		}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: ids.node,
 		})
-
-		if gitID, ok := repoFromHelm(h, repoByPath); ok {
-			ids.repo = gitID
+		if ids.repo != zeroNodeID {
 			relations = append(relations, pluginapi.RelationClaim{
 				Kind: pluginapi.RelationKindSourcedFrom,
 				From: ids.node,
-				To:   gitID,
+				To:   ids.repo,
 			})
 		}
 		helmByPath[shortPath] = ids
@@ -182,19 +182,17 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			ID: depID,
 		})
 
-		emptyNodeID := pluginapi.NodeID{}
-
 		if kustName != "" {
 			path := nsOrFallback(labels[labelKustNs], ns) + "/" + kustName
 			ids := kustByPath[path]
-			if ids.node != emptyNodeID {
+			if ids.node != zeroNodeID {
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDescribes,
 					From: ids.node,
 					To:   depID,
 				})
 			}
-			if ids.repo != emptyNodeID {
+			if ids.repo != zeroNodeID {
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDeployedFrom,
 					From: depID,
@@ -206,14 +204,14 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		if helmName != "" {
 			path := nsOrFallback(labels[labelHelmNs], ns) + "/" + helmName
 			ids := helmByPath[path]
-			if ids.node != emptyNodeID {
+			if ids.node != zeroNodeID {
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDescribes,
 					From: ids.node,
 					To:   depID,
 				})
 			}
-			if ids.repo != emptyNodeID {
+			if ids.repo != zeroNodeID {
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDeployedFrom,
 					From: depID,
@@ -226,26 +224,24 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
 }
 
-func repoFromKustomization(kust unstructured.Unstructured, repos map[string]pluginapi.NodeID) (pluginapi.NodeID, bool) {
+func repoFromKustomization(kust unstructured.Unstructured, repos map[string]pluginapi.NodeID) pluginapi.NodeID {
 	srcKind, _, _ := unstructured.NestedString(kust.Object, "spec", "sourceRef", "kind")
 	if srcKind != "GitRepository" {
-		return pluginapi.NodeID{}, false
+		return pluginapi.NodeID{}
 	}
 	srcName, _, _ := unstructured.NestedString(kust.Object, "spec", "sourceRef", "name")
 	srcNs, _, _ := unstructured.NestedString(kust.Object, "spec", "sourceRef", "namespace")
-	id, ok := repos[nsOrFallback(srcNs, kust.GetNamespace())+"/"+srcName]
-	return id, ok
+	return repos[nsOrFallback(srcNs, kust.GetNamespace())+"/"+srcName]
 }
 
-func repoFromHelm(helm unstructured.Unstructured, gitRepos map[string]pluginapi.NodeID) (pluginapi.NodeID, bool) {
+func repoFromHelm(helm unstructured.Unstructured, gitRepos map[string]pluginapi.NodeID) pluginapi.NodeID {
 	srcKind, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "kind")
 	if srcKind != "GitRepository" {
-		return pluginapi.NodeID{}, false
+		return pluginapi.NodeID{}
 	}
 	srcName, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "name")
 	srcNs, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "namespace")
-	id, ok := gitRepos[nsOrFallback(srcNs, helm.GetNamespace())+"/"+srcName]
-	return id, ok
+	return gitRepos[nsOrFallback(srcNs, helm.GetNamespace())+"/"+srcName]
 }
 
 // listGroupKind returns all resources of the given API group + kind across all
