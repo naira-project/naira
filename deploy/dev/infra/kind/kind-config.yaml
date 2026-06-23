@@ -4,3 +4,4 @@ name: naira-idp
 
 nodes:
   - role: control-plane
+    image: kindest/node:v1.36.1 # update kubectl in mise.toml if changing version 
