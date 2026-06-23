@@ -1,5 +1,9 @@
 // Package fluxcd collects FluxCD Kustomization & HelmRelease objects,
 // the Deployments they manage, and the GitRepositories they source from.
+//
+// TODO: add support for Bucket and other FluxCD sources kinds.
+// TODO: add support for any other resources managed by FluxCD (Services, Ingresses, thirdparty CRDs, ...)
+// TODO: also emit git repository URLs as Nodes (tricky because hostnames & IPs can be local)
 package fluxcd
 
 import (
