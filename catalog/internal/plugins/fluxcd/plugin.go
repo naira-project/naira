@@ -234,14 +234,14 @@ func repoFromKustomization(kust unstructured.Unstructured, repos map[string]plug
 	return repos[nsOrFallback(srcNs, kust.GetNamespace())+"/"+srcName]
 }
 
-func repoFromHelm(helm unstructured.Unstructured, gitRepos map[string]pluginapi.NodeID) pluginapi.NodeID {
+func repoFromHelm(helm unstructured.Unstructured, repos map[string]pluginapi.NodeID) pluginapi.NodeID {
 	srcKind, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "kind")
 	if srcKind != "GitRepository" {
 		return pluginapi.NodeID{}
 	}
 	srcName, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "name")
 	srcNs, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "namespace")
-	return gitRepos[nsOrFallback(srcNs, helm.GetNamespace())+"/"+srcName]
+	return repos[nsOrFallback(srcNs, helm.GetNamespace())+"/"+srcName]
 }
 
 // listGroupKind returns all resources of the given API group + kind across all
