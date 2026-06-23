@@ -5,6 +5,8 @@ vars:
   CATALOG_DIR: ./catalog
 
 tasks:
+  # Tool versions are managed via mise (https://mise.jdx.dev).
+  # See mise.toml in the repo root.
   check:
     desc: Verify required local tools exist
     cmds:
