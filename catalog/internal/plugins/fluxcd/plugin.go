@@ -182,14 +182,20 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			ID: depID,
 		})
 
+		emptyNodeID := pluginapi.NodeID{}
+
 		if kustName != "" {
 			path := nsOrFallback(labels[labelKustNs], ns) + "/" + kustName
-			if ids, ok := kustByPath[path]; ok {
+			ids := kustByPath[path]
+			if ids.node != emptyNodeID {
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDescribes,
 					From: ids.node,
 					To:   depID,
-				}, pluginapi.RelationClaim{
+				})
+			}
+			if ids.repo != emptyNodeID {
+				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDeployedFrom,
 					From: depID,
 					To:   ids.repo,
@@ -199,12 +205,16 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 
 		if helmName != "" {
 			path := nsOrFallback(labels[labelHelmNs], ns) + "/" + helmName
-			if ids, ok := helmByPath[path]; ok {
+			ids := helmByPath[path]
+			if ids.node != emptyNodeID {
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDescribes,
 					From: ids.node,
 					To:   depID,
-				}, pluginapi.RelationClaim{
+				})
+			}
+			if ids.repo != emptyNodeID {
+				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDeployedFrom,
 					From: depID,
 					To:   ids.repo,
