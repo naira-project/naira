@@ -56,16 +56,24 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
 	}
+	_, resourceAPIs, err := disc.ServerGroupsAndResources()
+	if err != nil {
+		log.Printf("%s: WARN: listing resource APIs: %v", pluginName, err)
+		// NOTE: ServerGroupsAndResources godoc says:
+		// "The returned group and resource lists might be non-nil with partial results even in the
+		// case of non-nil error."
+		// Thus, we don't return an error, but continue trying to scan what we can.
+	}
 
-	kusts, err := listGroupKind(ctx, disc, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", namespaces)
+	kusts, err := listGroupKind(ctx, resourceAPIs, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", namespaces)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing Kustomizations: %w", err)
 	}
-	helms, err := listGroupKind(ctx, disc, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", namespaces)
+	helms, err := listGroupKind(ctx, resourceAPIs, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", namespaces)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing HelmReleases: %w", err)
 	}
-	repos, err := listGroupKind(ctx, disc, dyn, "source.toolkit.fluxcd.io", "GitRepository", namespaces)
+	repos, err := listGroupKind(ctx, resourceAPIs, dyn, "source.toolkit.fluxcd.io", "GitRepository", namespaces)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing GitRepositories: %w", err)
 	}
@@ -231,10 +239,9 @@ func repoFromHelm(helm unstructured.Unstructured, gitRepos map[string]pluginapi.
 }
 
 // listGroupKind returns all resources of the given API group + kind across all
-// provided namespaces, using discovery to resolve the GVR.
+// provided namespaces.
 // Returns an empty slice (not an error) when the CRD is not installed in the cluster.
-func listGroupKind(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
-	_, apiLists, _ := disc.ServerGroupsAndResources()
+func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
 	for _, apiList := range apiLists {
 		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
 		if err != nil || gv.Group != group {
