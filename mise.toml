@@ -1,0 +1,8 @@
+[tools]
+go = "1.26"
+python = "3.11"
+kind = "0.32"
+kubectl = "1.36"
+helm = "4.2"
+buf = "1.71"
+task = "3.51"
