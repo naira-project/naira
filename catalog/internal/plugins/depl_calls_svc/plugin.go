@@ -153,6 +153,8 @@ func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, name
 		}
 		for _, svc := range svcs.Items {
 			name := svc.GetName()
+			// FIXME: `\b` will lead to false positives on `-` (and possibly others) in service names (e.g. `\bpayments\b` will match `payments-api`).
+			// FIXME: domain names are technically case-insensitive
 			localPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
 			if err != nil {
 				return nil, fmt.Errorf("compiling local pattern for service %s/%s: %w", ns, name, err)
