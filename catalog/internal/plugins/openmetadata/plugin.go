@@ -184,7 +184,7 @@ func (p *Plugin) fetchTables(ctx context.Context, token string) ([]table, error)
 
 	query := endpoint.Query()
 	query.Set("limit", "100")
-	query.Set("fields", "columns,tags,owners,service")
+	query.Set("fields", "columns,tags,owners")
 	query.Set("include", "non-deleted")
 	endpoint.RawQuery = query.Encode()
 
@@ -207,7 +207,7 @@ func (p *Plugin) fetchTables(ctx context.Context, token string) ([]table, error)
 			FQN:         strings.TrimSpace(item.FullyQualifiedName),
 			Description: strings.TrimSpace(item.Description),
 			TableType:   strings.TrimSpace(item.TableType),
-			Platform:    strings.TrimSpace(item.Service.Type),
+			Platform:    strings.TrimSpace(item.ServiceType),
 			Columns:     item.Columns,
 			Tags:        collectTagFQNs(item.Tags),
 			Owners:      collectOwnerNames(item.Owners),
@@ -366,14 +366,10 @@ type tableItem struct {
 	FullyQualifiedName string    `json:"fullyQualifiedName"`
 	Description        string    `json:"description"`
 	TableType          string    `json:"tableType"`
-	Service            service   `json:"service"`
+	ServiceType        string    `json:"serviceType"`
 	Columns            []column  `json:"columns"`
 	Tags               []tagItem `json:"tags"`
 	Owners             []owner   `json:"owners"`
-}
-
-type service struct {
-	Type string `json:"type"`
 }
 
 type column struct {

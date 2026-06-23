@@ -11,6 +11,7 @@ metadata:
 type: Opaque
 stringData:
   LITELLM_API_KEY: sk-local-litellm
+  OPENMETADATA_ADMIN_PASSWORD: admin
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -72,6 +73,15 @@ spec:
                 secretKeyRef:
                   name: catalog-secrets
                   key: LITELLM_API_KEY
+            - name: OPENMETADATA_BASE_URL
+              value: http://openmetadata.openmetadata.svc.cluster.local:8585
+            - name: OPENMETADATA_ADMIN_EMAIL
+              value: admin@open-metadata.org
+            - name: OPENMETADATA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: OPENMETADATA_ADMIN_PASSWORD
           ports:
             - containerPort: 8090
               name: http

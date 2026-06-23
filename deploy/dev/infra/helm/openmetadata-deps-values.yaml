@@ -1,0 +1,12 @@
+# Helm values override for the openmetadata-dependencies chart in the local kind cluster.
+#
+# Airflow is OpenMetadata's ingestion-pipeline orchestrator. The Naira catalog plugin
+# only reads OpenMetadata's REST API, so Airflow is not needed at runtime. Disabling it:
+#   - removes the shared ReadWriteMany logs PVC that kind's local-path provisioner
+#     rejects ("NodePath only supports ReadWriteOnce"), and
+#   - frees the memory its components consumed, relieving node pressure that was
+#     OOMKilling OpenSearch.
+#
+# This leaves MySQL + OpenSearch, the minimum the OpenMetadata server requires.
+airflow:
+  enabled: false
