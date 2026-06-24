@@ -20,16 +20,10 @@ func fromProtoNodeID(p *pluginv1.NodeID) NodeID {
 }
 
 func toProtoPropertyMap(properties PropertyMap) map[string]string {
-	if properties == nil {
-		return nil
-	}
 	return map[string]string(properties)
 }
 
 func fromProtoPropertyMap(p map[string]string) PropertyMap {
-	if p == nil {
-		return nil
-	}
 	return PropertyMap(p)
 }
 
