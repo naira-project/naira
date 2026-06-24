@@ -255,6 +255,7 @@ func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn 
 	for _, apiList := range apiLists {
 		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
 		if err != nil || gv.Group != group {
+			log.Printf("%s: WARN: skipping API group %q due to parsing error: %v", pluginName, apiList.GroupVersion, err)
 			continue
 		}
 		for _, res := range apiList.APIResources {
