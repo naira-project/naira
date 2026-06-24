@@ -84,6 +84,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	}
 	var depls []unstructured.Unstructured
 	for _, ns := range namespaces {
+		// TODO[PERF]: try scanning `.Namespace(metav1.NamespaceAll)` first, only fall back to per-namespace if that fails due to RBAC.
 		nsDeplList, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			log.Printf("%s: WARN: listing Deployments in namespace %q: %v", pluginName, ns, err)
@@ -272,6 +273,7 @@ func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn 
 			gvr := schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: res.Name}
 			var items []unstructured.Unstructured
 			for _, ns := range namespaces {
+				// TODO[PERF]: try scanning `.Namespace(metav1.NamespaceAll)` first, only fall back to per-namespace if that fails due to RBAC.
 				list, err := dyn.Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
 				if err != nil {
 					log.Printf("%s: WARN: listing %s/%s in namespace %q: %v", pluginName, group, kind, ns, err)
