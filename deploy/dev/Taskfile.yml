@@ -25,11 +25,12 @@ vars:
   POSTGRES_MANIFEST: infra/kubernetes/postgres.yaml
   CATALOG_DIR: ../../catalog
   CATALOG_IMAGE: catalog:local
-  MLFLOW_PLUGIN_DIR: ../../plugins/cmd/mlflow
+  PLUGINS_BASE: ../../plugins/cmd
+  MLFLOW_PLUGIN_DIR: '{{.PLUGINS_BASE}}/mlflow'
   MLFLOW_PLUGIN_IMAGE: mlflow:local
-  LITELLM_PLUGIN_DIR: ../../plugins/cmd/litellm
+  LITELLM_PLUGIN_DIR: '{{.PLUGINS_BASE}}/litellm'
   LITELLM_PLUGIN_IMAGE: litellm:local
-  DEPL_CALLS_SVC_PLUGIN_DIR: ../../plugins/cmd/depl_calls_svc
+  DEPL_CALLS_SVC_PLUGIN_DIR: '{{.PLUGINS_BASE}}/depl_calls_svc'
   DEPL_CALLS_SVC_PLUGIN_IMAGE: depl-calls-svc:local
   CATALOG_NAMESPACE: idp-system
   CATALOG_MANIFEST: infra/kubernetes/catalog.yaml
