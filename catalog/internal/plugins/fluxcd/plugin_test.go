@@ -246,6 +246,29 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
+			// TODO: could be improved in the future to also handle Buckets etc.
+			name: `Deployment from Kustomization with non-GitRepository source produces Nodes, but no "sourced_from" relation`,
+			objs: []runtime.Object{
+				namespace("flux-system"),
+				kustomization("flux-system", "my-app",
+					sourceRef("Bucket", "", "my-bucket")),
+				namespace("team-a"),
+				deployment("team-a", "app",
+					kustLabel("flux-system", "my-app")),
+			},
+			want: pluginapi.IngestionRequest{
+				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
+					{ID: nodeID("deployment", "team-a/app")},
+				},
+				Relations: []pluginapi.RelationClaim{
+					{Kind: "describes",
+						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+						To:   nodeID("deployment", "team-a/app")},
+				},
+			},
+		},
+		{
 			name: "in case of error listing Deployments in one namespace, other namespaces are still processed",
 			objs: []runtime.Object{
 				namespace("flux-system"),
