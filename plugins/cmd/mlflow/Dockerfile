@@ -10,8 +10,7 @@ COPY catalog/pluginapi/ ./catalog/pluginapi/
 COPY plugins/internal/ ./plugins/internal/
 COPY plugins/cmd/mlflow/ ./plugins/mlflow/
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-w -s" -o /out/mlflow ./plugins/mlflow
+RUN CGO_ENABLED=0 go build -o /out/mlflow ./plugins/mlflow
 
 # --- Stage 2: Final ---
 FROM gcr.io/distroless/static-debian12:latest
