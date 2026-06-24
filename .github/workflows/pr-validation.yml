@@ -33,28 +33,22 @@ jobs:
   # ── 2. Container build — catalog (build-only, no push on PRs) ─────────────
   container-build-catalog:
     name: Container Build · Catalog
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@9d11293b6fdfb550b5b8d43ae551639591bcf468
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
       context: "catalog"
       platforms: "linux/amd64,linux/arm64"
-      push: false
-    secrets:
-      registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   # ── 3. Container build — ui (build-only, no push on PRs) ──────────────────
   container-build-ui:
     name: Container Build · UI
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@9d11293b6fdfb550b5b8d43ae551639591bcf468
     with:
       image-name: "naira-ui"
       dockerfile: "ui-poc/Dockerfile"
       context: "ui-poc"
       platforms: "linux/amd64,linux/arm64"
-      push: false
-    secrets:
-      registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   # ── Gate: single required status check for branch protection ──────────────
   all-checks:
