@@ -193,6 +193,42 @@ func (x *RelationClaim) GetProperties() map[string]string {
 	return nil
 }
 
+type CollectRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CollectRequest) Reset() {
+	*x = CollectRequest{}
+	mi := &file_plugin_v1_plugin_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CollectRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CollectRequest) ProtoMessage() {}
+
+func (x *CollectRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_v1_plugin_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CollectRequest.ProtoReflect.Descriptor instead.
+func (*CollectRequest) Descriptor() ([]byte, []int) {
+	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{3}
+}
+
 type CollectResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Nodes         []*NodeClaim           `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
@@ -203,7 +239,7 @@ type CollectResponse struct {
 
 func (x *CollectResponse) Reset() {
 	*x = CollectResponse{}
-	mi := &file_plugin_v1_plugin_proto_msgTypes[3]
+	mi := &file_plugin_v1_plugin_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -215,7 +251,7 @@ func (x *CollectResponse) String() string {
 func (*CollectResponse) ProtoMessage() {}
 
 func (x *CollectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_v1_plugin_proto_msgTypes[3]
+	mi := &file_plugin_v1_plugin_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -228,7 +264,7 @@ func (x *CollectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CollectResponse.ProtoReflect.Descriptor instead.
 func (*CollectResponse) Descriptor() ([]byte, []int) {
-	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{3}
+	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *CollectResponse) GetNodes() []*NodeClaim {
@@ -243,42 +279,6 @@ func (x *CollectResponse) GetRelations() []*RelationClaim {
 		return x.Relations
 	}
 	return nil
-}
-
-type CollectRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CollectRequest) Reset() {
-	*x = CollectRequest{}
-	mi := &file_plugin_v1_plugin_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CollectRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CollectRequest) ProtoMessage() {}
-
-func (x *CollectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_v1_plugin_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CollectRequest.ProtoReflect.Descriptor instead.
-func (*CollectRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_v1_plugin_proto_rawDescGZIP(), []int{4}
 }
 
 var File_plugin_v1_plugin_proto protoreflect.FileDescriptor
@@ -306,11 +306,11 @@ const file_plugin_v1_plugin_proto_rawDesc = "" +
 	"properties\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"u\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x10\n" +
+	"\x0eCollectRequest\"u\n" +
 	"\x0fCollectResponse\x12*\n" +
 	"\x05nodes\x18\x01 \x03(\v2\x14.plugin.v1.NodeClaimR\x05nodes\x126\n" +
-	"\trelations\x18\x02 \x03(\v2\x18.plugin.v1.RelationClaimR\trelations\"\x10\n" +
-	"\x0eCollectRequest2X\n" +
+	"\trelations\x18\x02 \x03(\v2\x18.plugin.v1.RelationClaimR\trelations2X\n" +
 	"\x14CatalogPluginService\x12@\n" +
 	"\aCollect\x12\x19.plugin.v1.CollectRequest\x1a\x1a.plugin.v1.CollectResponseBAZ?github.com/naira-project/naira/catalog/pluginapi/proto;pluginv1b\x06proto3"
 
@@ -331,8 +331,8 @@ var file_plugin_v1_plugin_proto_goTypes = []any{
 	(*NodeID)(nil),          // 0: plugin.v1.NodeID
 	(*NodeClaim)(nil),       // 1: plugin.v1.NodeClaim
 	(*RelationClaim)(nil),   // 2: plugin.v1.RelationClaim
-	(*CollectResponse)(nil), // 3: plugin.v1.CollectResponse
-	(*CollectRequest)(nil),  // 4: plugin.v1.CollectRequest
+	(*CollectRequest)(nil),  // 3: plugin.v1.CollectRequest
+	(*CollectResponse)(nil), // 4: plugin.v1.CollectResponse
 	nil,                     // 5: plugin.v1.NodeClaim.PropertiesEntry
 	nil,                     // 6: plugin.v1.RelationClaim.PropertiesEntry
 }
@@ -344,8 +344,8 @@ var file_plugin_v1_plugin_proto_depIdxs = []int32{
 	6, // 4: plugin.v1.RelationClaim.properties:type_name -> plugin.v1.RelationClaim.PropertiesEntry
 	1, // 5: plugin.v1.CollectResponse.nodes:type_name -> plugin.v1.NodeClaim
 	2, // 6: plugin.v1.CollectResponse.relations:type_name -> plugin.v1.RelationClaim
-	4, // 7: plugin.v1.CatalogPluginService.Collect:input_type -> plugin.v1.CollectRequest
-	3, // 8: plugin.v1.CatalogPluginService.Collect:output_type -> plugin.v1.CollectResponse
+	3, // 7: plugin.v1.CatalogPluginService.Collect:input_type -> plugin.v1.CollectRequest
+	4, // 8: plugin.v1.CatalogPluginService.Collect:output_type -> plugin.v1.CollectResponse
 	8, // [8:9] is the sub-list for method output_type
 	7, // [7:8] is the sub-list for method input_type
 	7, // [7:7] is the sub-list for extension type_name
