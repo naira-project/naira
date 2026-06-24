@@ -254,8 +254,11 @@ func repoFromHelm(helm unstructured.Unstructured, repos map[string]pluginapi.Nod
 func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
 	for _, apiList := range apiLists {
 		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
-		if err != nil || gv.Group != group {
+		if err != nil {
 			log.Printf("%s: WARN: skipping API group %q due to parsing error: %v", pluginName, apiList.GroupVersion, err)
+			continue
+		}
+		if gv.Group != group {
 			continue
 		}
 		for _, res := range apiList.APIResources {
