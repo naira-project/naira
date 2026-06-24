@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"slices"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -265,14 +266,7 @@ func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn 
 			if res.Kind != kind {
 				continue
 			}
-			var hasListVerb bool
-			for _, v := range res.Verbs {
-				if v == "list" {
-					hasListVerb = true
-					break
-				}
-			}
-			if !hasListVerb {
+			if !slices.Contains(res.Verbs, "list") {
 				continue
 			}
 			gvr := schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: res.Name}
