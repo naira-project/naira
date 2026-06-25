@@ -6,34 +6,45 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
-	"strconv"
 
 	"github.com/naira-project/naira/catalog/pluginapi"
 	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
+	"go-simpler.org/env"
 	"google.golang.org/grpc"
 )
 
-const (
-	portEnv     = "PORT"
-	defaultPort = 50051
-)
+type serverConfig struct {
+	Port int `env:"PORT" default:"50051"`
+}
 
-func Run(p pluginapi.Plugin, logger *log.Logger) {
+func LoadConfig[C any](logger *log.Logger) (C, serverConfig) {
+	var cfg C
+	if err := env.Load(&cfg, nil); err != nil {
+		logger.Fatalf("failed to load config: %v", err)
+	}
+
+	var srv serverConfig
+	if err := env.Load(&srv, nil); err != nil {
+		logger.Fatalf("failed to load server config: %v", err)
+	}
+
+	return cfg, srv
+}
+
+func Serve(p pluginapi.Plugin, serverConfig serverConfig, logger *log.Logger) {
 	mermaidFlag := flag.Bool("mermaid", false, "Return the collect result in Mermaid format and terminate")
 	flag.Parse()
 
 	if *mermaidFlag {
 		res, err := p.Collect(context.Background())
 		if err != nil {
-			log.Fatalf("failed to collect: %v", err)
+			logger.Fatalf("failed to collect: %v", err)
 		}
-		printMermaid(res, nil)
+		printMermaid(res, logger)
 		return
 	}
 
-	addr := fmt.Sprintf(":%d", getPort(logger))
-	lis, err := net.Listen("tcp", addr)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", serverConfig.Port))
 	if err != nil {
 		logger.Fatalf("failed to listen: %v", err)
 	}
@@ -45,19 +56,6 @@ func Run(p pluginapi.Plugin, logger *log.Logger) {
 	if err := s.Serve(lis); err != nil {
 		logger.Fatalf("failed to serve gRPC: %v", err)
 	}
-}
-
-func getPort(logger *log.Logger) int {
-	envPort := os.Getenv(portEnv)
-	if envPort == "" {
-		return defaultPort
-	}
-
-	port, err := strconv.Atoi(envPort)
-	if err != nil {
-		logger.Fatalf("invalid PORT value %q: %v", envPort, err)
-	}
-	return port
 }
 
 func printMermaid(req pluginapi.CollectResponse, logger *log.Logger) {

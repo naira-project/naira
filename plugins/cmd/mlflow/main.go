@@ -4,11 +4,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/naira-project/naira/plugins/internal/pluginmain"
-	"go-simpler.org/env"
 )
 
 type config struct {
@@ -18,21 +16,10 @@ type config struct {
 }
 
 func main() {
-	var raw config
-	if err := env.Load(&raw, nil); err != nil {
-		log.Fatalf("failed to load mlflow config: %v", err)
-	}
-
-	httpClient := &http.Client{
-		Timeout: raw.HTTPTimeout,
-	}
-
 	logger := log.New(os.Stdout, "", log.LstdFlags)
+	cfg, srvCfg := pluginmain.LoadConfig[config](logger)
+	httpClient := &http.Client{Timeout: cfg.HTTPTimeout}
+	p := New(httpClient, cfg)
 
-	impl := New(httpClient, config{
-		BaseURL:     strings.TrimSpace(raw.BaseURL),
-		BearerToken: strings.TrimSpace(raw.BearerToken),
-	})
-
-	pluginmain.Run(impl, logger)
+	pluginmain.Serve(p, srvCfg, logger)
 }
