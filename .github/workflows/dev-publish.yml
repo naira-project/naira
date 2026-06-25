@@ -1,18 +1,20 @@
 # SPDX-FileCopyrightText: 2026 Naira Project Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-name: Release
+name: Dev Publish
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
   id-token: write
-  
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # ── 1. Build & push catalog image ─────────────────────────────────────────
   container-publish-catalog:
@@ -40,7 +42,7 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── Gate: surfaces overall release status as a single check ───────────────
+  # ── Gate: surfaces overall publish status as a single check ───────────────
   all-published:
     name: All Images Published
     needs: [container-publish-catalog, container-publish-ui]
