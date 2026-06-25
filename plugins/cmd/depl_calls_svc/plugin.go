@@ -22,6 +22,7 @@ import (
 
 	"github.com/naira-project/naira/catalog/pluginapi"
 	"github.com/naira-project/naira/plugins/internal/kubeconn"
+	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
 )
 
 const pluginName = "depl_calls_svc"

@@ -1,6 +1,6 @@
 package pluginapi
 
-import pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
+import pluginv1 "github.com/naira-project/naira/plugins/pkg/api/proto/plugin/v1"
 
 func toProtoNodeID(id NodeID) *pluginv1.NodeID {
 	return &pluginv1.NodeID{

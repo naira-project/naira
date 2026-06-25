@@ -7,8 +7,8 @@ import (
 	"log"
 	"net"
 
-	"github.com/naira-project/naira/catalog/pluginapi"
-	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
+	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
+	pluginv1 "github.com/naira-project/naira/plugins/pkg/api/proto/plugin/v1"
 	"go-simpler.org/env"
 	"google.golang.org/grpc"
 )

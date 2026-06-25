@@ -6,8 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/naira-project/naira/catalog/pluginapi"
-	pluginv1 "github.com/naira-project/naira/catalog/pluginapi/proto/plugin/v1"
+	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
+	pluginv1 "github.com/naira-project/naira/plugins/pkg/api/proto/plugin/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"

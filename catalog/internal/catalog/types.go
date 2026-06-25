@@ -1,6 +1,6 @@
 package catalog
 
-import "github.com/naira-project/naira/catalog/pluginapi"
+import pluginapi "github.com/naira-project/naira/plugins/pkg/api"
 
 type Plugin = pluginapi.Plugin
 
