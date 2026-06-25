@@ -159,53 +159,61 @@ tasks:
     cmds:
       - kubectl -n {{.LITELLM_NAMESPACE}} port-forward {{.LITELLM_SERVICE}} {{.LITELLM_LOCAL_PORT}}:{{.LITELLM_REMOTE_PORT}}
 
-  catalog:image:build:
-    desc: Build the catalog Docker image
-    cmds:
-      - docker build -t {{.CATALOG_IMAGE}} -f {{.CATALOG_DIR}}/Dockerfile ../../
-
   mlflow:image:build:
     desc: Build the mlflow Docker image
     cmds:
-      - docker build -t {{.MLFLOW_PLUGIN_IMAGE}} -f {{.MLFLOW_PLUGIN_DIR}}/Dockerfile ../../
-
-  litellm:image:build:
-    desc: Build the litellm Docker image
-    cmds:
-      - docker build -t {{.LITELLM_PLUGIN_IMAGE}} -f {{.LITELLM_PLUGIN_DIR}}/Dockerfile ../../
+      - task: _docker:build
+        vars: { IMAGE: '{{.MLFLOW_PLUGIN_IMAGE}}', DIR: '{{.MLFLOW_PLUGIN_DIR}}' }
 
   mlflow:image:load:
     desc: Load the mlflow plugin image into kind
     deps:
       - mlflow:image:build
     cmds:
-      - kind load docker-image {{.MLFLOW_PLUGIN_IMAGE}} --name {{.CLUSTER_NAME}}
+      - task: _docker:load
+        vars: { IMAGE: '{{.MLFLOW_PLUGIN_IMAGE}}' }
+
+  litellm:image:build:
+    desc: Build the litellm Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.LITELLM_PLUGIN_IMAGE}}', DIR: '{{.LITELLM_PLUGIN_DIR}}' }
 
   litellm:image:load:
     desc: Load the litellm plugin image into kind
     deps:
       - litellm:image:build
     cmds:
-      - kind load docker-image {{.LITELLM_PLUGIN_IMAGE}} --name {{.CLUSTER_NAME}}
+      - task: _docker:load
+        vars: { IMAGE: '{{.LITELLM_PLUGIN_IMAGE}}' }
 
   depl-calls-svc:image:build:
     desc: Build the depl-calls-svc plugin Docker image
     cmds:
-      - docker build -t {{.DEPL_CALLS_SVC_PLUGIN_IMAGE}} -f {{.DEPL_CALLS_SVC_PLUGIN_DIR}}/Dockerfile ../../
+      - task: _docker:build
+        vars: { IMAGE: '{{.DEPL_CALLS_SVC_PLUGIN_IMAGE}}', DIR: '{{.DEPL_CALLS_SVC_PLUGIN_DIR}}' }
 
   depl-calls-svc:image:load:
     desc: Load the depl-calls-svc plugin image into kind
     deps:
       - depl-calls-svc:image:build
     cmds:
-      - kind load docker-image {{.DEPL_CALLS_SVC_PLUGIN_IMAGE}} --name {{.CLUSTER_NAME}}
+      - task: _docker:load
+        vars: { IMAGE: '{{.DEPL_CALLS_SVC_PLUGIN_IMAGE}}' }
+
+  catalog:image:build:
+    desc: Build the catalog Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.CATALOG_IMAGE}}', DIR: '{{.CATALOG_DIR}}' }
 
   catalog:image:load:
     desc: Load the catalog image into kind
     deps:
       - catalog:image:build
     cmds:
-      - kind load docker-image {{.CATALOG_IMAGE}} --name {{.CLUSTER_NAME}}
+      - task: _docker:load
+        vars: { IMAGE: '{{.CATALOG_IMAGE}}' }
 
   catalog:deploy:
     desc: Deploy the catalog to kind
@@ -245,7 +253,8 @@ tasks:
     deps:
       - ui:image:build
     cmds:
-      - kind load docker-image {{.UI_IMAGE}} --name {{.CLUSTER_NAME}}
+      - task: _docker:load
+        vars: { IMAGE: '{{.UI_IMAGE}}' }
 
   ui:deploy:
     desc: Deploy the UI to kind
@@ -307,3 +316,14 @@ tasks:
   forward:all:tunnels:
     internal: true
     deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward]
+  
+   # Reusable "Macro" Tasks
+  _docker:build:
+    internal: true
+    cmds:
+      - docker build -t {{.IMAGE}} -f {{.DIR}}/Dockerfile ../../
+
+  _docker:load:
+    internal: true
+    cmds:
+      - kind load docker-image {{.IMAGE}} --name {{.CLUSTER_NAME}}
