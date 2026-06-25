@@ -12,7 +12,8 @@ permissions:
   contents: read
   packages: write
   id-token: write
-  
+  attestations: write
+
 jobs:
   # ── 1. Build & push catalog image ─────────────────────────────────────────
   container-publish-catalog:
@@ -23,7 +24,6 @@ jobs:
       dockerfile: "catalog/Dockerfile"
       context: "catalog"
       platforms: "linux/amd64,linux/arm64"
-      push: true
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -36,7 +36,6 @@ jobs:
       dockerfile: "ui-poc/Dockerfile"
       context: "ui-poc"
       platforms: "linux/amd64,linux/arm64"
-      push: true
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 

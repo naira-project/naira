@@ -10,6 +10,7 @@ permissions:
   contents: read
   packages: write
   id-token: write
+  attestations: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -25,7 +26,6 @@ jobs:
       dockerfile: "catalog/Dockerfile"
       context: "catalog"
       platforms: "linux/amd64,linux/arm64"
-      push: true
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -38,7 +38,6 @@ jobs:
       dockerfile: "ui-poc/Dockerfile"
       context: "ui-poc"
       platforms: "linux/amd64,linux/arm64"
-      push: true
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
