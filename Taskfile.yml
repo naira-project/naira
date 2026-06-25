@@ -3,7 +3,7 @@ version: '3'
 vars:
   DEV_TASKFILE: ./deploy/dev/Taskfile.yml
   CATALOG_DIR: ./catalog
-  PROTO_DIR: ./catalog/pluginapi/proto
+  PROTO_DIR: ./plugins/pkg/api/proto
 
 tasks:
   check:
@@ -29,7 +29,7 @@ tasks:
   proto:generate:
     desc: Generate protobuf stubs of pluginapi
     cmds:
-      - cd {{.PROTO_DIR}} && buf generate
+      - cd {{.PROTO_DIR}} && go generate
 
   proto:lint:
     desc: Lint proto of pluginapi

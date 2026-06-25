@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/naira-project/naira/catalog/pluginapi"
 	"github.com/naira-project/naira/plugins/internal/kubeconn"
 	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
 )
