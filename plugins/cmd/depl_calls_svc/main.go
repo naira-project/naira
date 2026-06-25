@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/naira-project/naira/plugins/internal/pluginmain"
+	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
 type config struct {
