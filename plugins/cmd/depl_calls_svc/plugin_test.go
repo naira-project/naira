@@ -255,7 +255,7 @@ func TestCollect(t *testing.T) {
 			if tt.reactor != nil {
 				tt.reactor(client)
 			}
-			result, err := New(pluginConfig{}).collect(context.Background(), client)
+			result, err := New(config{}).collect(context.Background(), client)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, sortedByIDs(result))
 		})

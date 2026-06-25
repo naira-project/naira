@@ -23,10 +23,10 @@ const (
 
 type Plugin struct {
 	httpClient *http.Client
-	config     pluginConfig
+	config     config
 }
 
-func New(httpClient *http.Client, config pluginConfig) *Plugin {
+func New(httpClient *http.Client, config config) *Plugin {
 	return &Plugin{
 		httpClient: httpClient,
 		config:     config,

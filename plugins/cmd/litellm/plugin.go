@@ -29,11 +29,11 @@ const (
 type Plugin struct {
 	httpClient          *http.Client
 	logger              *log.Logger
-	config              pluginConfig
+	config              config
 	appIdentityProvider AppIdentityProvider
 }
 
-func New(httpClient *http.Client, logger *log.Logger, config pluginConfig) *Plugin {
+func New(httpClient *http.Client, logger *log.Logger, config config) *Plugin {
 	return &Plugin{
 		httpClient:          httpClient,
 		logger:              logger,

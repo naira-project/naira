@@ -8,14 +8,12 @@ import (
 	"go-simpler.org/env"
 )
 
-const defaultPort = 50053
-
-type pluginConfig struct {
+type config struct {
 	Kubeconfig string `env:"DEPL_CALLS_SVC_KUBECONFIG"`
 }
 
 func main() {
-	var raw pluginConfig
+	var raw config
 	if err := env.Load(&raw, nil); err != nil {
 		log.Fatalf("failed to load depl_calls_svc config: %v", err)
 	}
@@ -24,5 +22,5 @@ func main() {
 
 	impl := New(raw)
 
-	pluginmain.Run(impl, defaultPort, logger)
+	pluginmain.Run(impl, logger)
 }

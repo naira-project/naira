@@ -14,9 +14,12 @@ import (
 	"google.golang.org/grpc"
 )
 
-const portEnv = "PORT"
+const (
+	portEnv     = "PORT"
+	defaultPort = 50051
+)
 
-func Run(p pluginapi.Plugin, defaultPort int, logger *log.Logger) {
+func Run(p pluginapi.Plugin, logger *log.Logger) {
 	mermaidFlag := flag.Bool("mermaid", false, "Return the collect result in Mermaid format and terminate")
 	flag.Parse()
 
@@ -29,7 +32,7 @@ func Run(p pluginapi.Plugin, defaultPort int, logger *log.Logger) {
 		return
 	}
 
-	addr := fmt.Sprintf(":%d", getPort(defaultPort, logger))
+	addr := fmt.Sprintf(":%d", getPort(logger))
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		logger.Fatalf("failed to listen: %v", err)
@@ -44,7 +47,7 @@ func Run(p pluginapi.Plugin, defaultPort int, logger *log.Logger) {
 	}
 }
 
-func getPort(defaultPort int, logger *log.Logger) int {
+func getPort(logger *log.Logger) int {
 	envPort := os.Getenv(portEnv)
 	if envPort == "" {
 		return defaultPort

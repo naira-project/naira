@@ -34,10 +34,10 @@ var (
 )
 
 type Plugin struct {
-	config pluginConfig
+	config config
 }
 
-func New(config pluginConfig) *Plugin {
+func New(config config) *Plugin {
 	return &Plugin{config: config}
 }
 
