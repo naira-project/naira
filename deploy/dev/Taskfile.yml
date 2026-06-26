@@ -2,6 +2,7 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
+  PORTAL_DIR: ../../naira-openmfp-portal
   UI_DIR: ../../ui-poc
   UI_IMAGE: ui:local
   UI_NAMESPACE: idp-system
@@ -37,6 +38,12 @@ vars:
   CATALOG_SERVICE: svc/catalog
   CATALOG_LOCAL_PORT: '8090'
   CATALOG_REMOTE_PORT: '8090'
+  PORTAL_IMAGE: portal:local
+  PORTAL_NAMESPACE: idp-system
+  PORTAL_MANIFEST: infra/kubernetes/portal.yaml
+  PORTAL_SERVICE: svc/portal
+  PORTAL_LOCAL_PORT: '3000'
+  PORTAL_REMOTE_PORT: '3000'
   LOCAL_WORK_DIR: ../../.local
   MLFLOW_TOOL_DIR: tools/mlflow
   MLFLOW_REGISTER_SCRIPT: '{{.MLFLOW_TOOL_DIR}}/register_dummy_model.py'
@@ -282,7 +289,7 @@ tasks:
       - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}
 
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, Catalog, and UI to kind
+    desc: Deploy MLflow, LiteLLM, Catalog, UI, and Portal to kind
     cmds:
       - task: cluster:create
       - task: mlflow:apply
@@ -290,10 +297,12 @@ tasks:
       - task: litellm:apply
       - task: catalog:apply
       - task: ui:apply
+      - task: portal:apply
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, Catalog, and UI from kind
+    desc: Remove MLflow, LiteLLM, Catalog, UI, and Portal from kind
     cmds:
+      - task: portal:undeploy
       - task: catalog:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
@@ -301,21 +310,59 @@ tasks:
       - task: ui:undeploy
 
   forward:all:
-    desc: Port-forward all services (MLflow, LiteLLM, Catalog, UI)
+    desc: Port-forward all services (MLflow, LiteLLM, Catalog, UI, Portal)
     silent: true
     cmds:
       - |
         echo "Port-forwarding all services..."
         echo "----------------------------------------------------------------"
+        echo "Portal:         http://localhost:{{.PORTAL_LOCAL_PORT}}"
         echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
         echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
 
+  portal:image:build:
+    desc: Build the portal Docker image
+    cmds:
+      - docker build -t {{.PORTAL_IMAGE}} {{.PORTAL_DIR}}
+
+  portal:image:load:
+    desc: Load the portal image into kind
+    deps:
+      - portal:image:build
+    cmds:
+      - kind load docker-image {{.PORTAL_IMAGE}} --name {{.CLUSTER_NAME}}
+
+  portal:deploy:
+    desc: Deploy the portal to kind
+    deps:
+      - cluster:create
+    cmds:
+      - task: portal:apply
+
+  portal:apply:
+    internal: true
+    cmds:
+      - task: portal:image:load
+      - kubectl apply -f {{.PORTAL_MANIFEST}}
+      - kubectl -n {{.PORTAL_NAMESPACE}} rollout status deploy/portal --timeout=180s
+      - kubectl -n {{.PORTAL_NAMESPACE}} get pods
+
+  portal:undeploy:
+    desc: Remove the portal from kind
+    cmds:
+      - kubectl delete -f {{.PORTAL_MANIFEST}} --ignore-not-found
+
+  portal:port-forward:
+    desc: Expose the portal on localhost:3000
+    cmds:
+      - kubectl -n {{.PORTAL_NAMESPACE}} port-forward {{.PORTAL_SERVICE}} {{.PORTAL_LOCAL_PORT}}:{{.PORTAL_REMOTE_PORT}}
+
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward]
+    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
   
    # Reusable "Macro" Tasks
   _docker:build:

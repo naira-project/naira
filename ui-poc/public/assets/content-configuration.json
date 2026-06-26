@@ -29,24 +29,6 @@
               "loadingIndicator": { "enabled": false }
             }
           ]
-        },
-        {
-          "pathSegment": "dataset-registry",
-          "label": "Dataset Registry",
-          "entityType": "example",
-          "hideFromNav": false,
-          "url": "http://localhost:3001/index.html/#/dataset-registry",
-          "loadingIndicator": { "enabled": false },
-          "children": [
-            {
-              "pathSegment": ":id",
-              "label": "Dataset Details",
-              "entityType": "example",
-              "hideFromNav": true,
-              "url": "http://localhost:3001/index.html/#/dataset-registry/:id",
-              "loadingIndicator": { "enabled": false }
-            }
-          ]
         }
       ]
     }
