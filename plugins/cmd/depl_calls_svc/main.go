@@ -1,9 +1,6 @@
 package main
 
 import (
-	"log"
-	"os"
-
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
@@ -12,8 +9,7 @@ type config struct {
 }
 
 func main() {
-	logger := log.New(os.Stdout, "", log.LstdFlags)
-	cfg, srvCfg := pluginmain.LoadConfig[config](logger)
+	app := pluginmain.New[config]()
 
-	pluginmain.Serve(New(cfg), srvCfg, logger)
+	app.Serve(New(app.Config()))
 }

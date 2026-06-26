@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 
 	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
 	pluginv1 "github.com/naira-project/naira/plugins/pkg/api/proto/plugin/v1"
@@ -17,10 +18,20 @@ type serverConfig struct {
 	Port int `env:"PORT" default:"50051"`
 }
 
-func LoadConfig[C any](logger *log.Logger) (C, serverConfig) {
+type App[C any] struct {
+	pluginConfig C
+	serverConfig serverConfig
+	logger       *log.Logger
+}
+
+// New initializes the runtime environment, loads environment variables,
+// and sets up a default logger.
+func New[C any]() *App[C] {
+	logger := log.New(os.Stdout, "", log.LstdFlags)
+
 	var cfg C
 	if err := env.Load(&cfg, nil); err != nil {
-		logger.Fatalf("failed to load config: %v", err)
+		logger.Fatalf("failed to load plugin config: %v", err)
 	}
 
 	var srv serverConfig
@@ -28,33 +39,45 @@ func LoadConfig[C any](logger *log.Logger) (C, serverConfig) {
 		logger.Fatalf("failed to load server config: %v", err)
 	}
 
-	return cfg, srv
+	return &App[C]{
+		pluginConfig: cfg,
+		serverConfig: srv,
+		logger:       logger,
+	}
 }
 
-func Serve(p pluginapi.Plugin, serverConfig serverConfig, logger *log.Logger) {
+func (a *App[C]) Config() C {
+	return a.pluginConfig
+}
+
+func (a *App[C]) Logger() *log.Logger {
+	return a.logger
+}
+
+func (a *App[C]) Serve(p pluginapi.Plugin) {
 	mermaidFlag := flag.Bool("mermaid", false, "Return the collect result in Mermaid format and terminate")
 	flag.Parse()
 
 	if *mermaidFlag {
 		res, err := p.Collect(context.Background())
 		if err != nil {
-			logger.Fatalf("failed to collect: %v", err)
+			a.logger.Fatalf("failed to collect: %v", err)
 		}
-		printMermaid(res, logger)
+		printMermaid(res, a.logger)
 		return
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", serverConfig.Port))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", a.serverConfig.Port))
 	if err != nil {
-		logger.Fatalf("failed to listen: %v", err)
+		a.logger.Fatalf("failed to listen on port %d: %v", a.serverConfig.Port, err)
 	}
 
 	s := grpc.NewServer()
 	pluginv1.RegisterCatalogPluginServiceServer(s, &pluginapi.GRPCServer{Impl: p})
 
-	logger.Printf("Plugin listening via gRPC on %v", lis.Addr())
+	a.logger.Printf("Plugin listening via gRPC on %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
-		logger.Fatalf("failed to serve gRPC: %v", err)
+		a.logger.Fatalf("failed to serve gRPC: %v", err)
 	}
 }
 

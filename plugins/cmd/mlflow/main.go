@@ -1,9 +1,7 @@
 package main
 
 import (
-	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
@@ -16,10 +14,11 @@ type config struct {
 }
 
 func main() {
-	logger := log.New(os.Stdout, "", log.LstdFlags)
-	cfg, srvCfg := pluginmain.LoadConfig[config](logger)
+	app := pluginmain.New[config]()
+	cfg := app.Config()
+
 	httpClient := &http.Client{Timeout: cfg.HTTPTimeout}
 	p := New(httpClient, cfg)
 
-	pluginmain.Serve(p, srvCfg, logger)
+	app.Serve(p)
 }
