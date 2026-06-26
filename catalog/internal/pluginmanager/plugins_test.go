@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"testing"
+	"time"
 
 	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
 	pluginv1 "github.com/naira-project/naira/plugins/pkg/api/proto/plugin/v1"
@@ -50,7 +51,7 @@ func TestRegisterAndConnectPlugin(t *testing.T) {
 	addr := lis.Addr().String()
 	const pluginName = "mock-external-plugin"
 
-	registered, cleanup, err := Register(map[string]string{pluginName: addr}, nil)
+	registered, cleanup, err := Register(map[string]string{pluginName: addr}, nil, 10*time.Second)
 	require.NoError(t, err)
 	defer cleanup()
 

@@ -15,7 +15,7 @@ import (
 
 // Register connects to each plugin sidecar by its configured name and gRPC
 // address and returns the registered plugins keyed by plugin name.
-func Register(plugins map[string]string, logger *log.Logger) (map[string]pluginapi.Plugin, func(), error) {
+func Register(plugins map[string]string, logger *log.Logger, timeout time.Duration) (map[string]pluginapi.Plugin, func(), error) {
 	registered := make(map[string]pluginapi.Plugin, len(plugins))
 	var cleanups []func()
 
@@ -24,7 +24,7 @@ func Register(plugins map[string]string, logger *log.Logger) (map[string]plugina
 			continue
 		}
 
-		client, cleanup, err := ConnectPlugin(name, addr, logger)
+		client, cleanup, err := ConnectPlugin(name, addr, logger, timeout)
 		if err != nil {
 			for _, c := range cleanups {
 				c()
@@ -46,14 +46,14 @@ func Register(plugins map[string]string, logger *log.Logger) (map[string]plugina
 }
 
 // ConnectPlugin establishes a gRPC connection to the specified address.
-// It includes a retry mechanism that waits up to 10 seconds for the
+// It includes a retry mechanism that waits up to the given timeout for the
 // connection to reach the READY state before timing out.
-func ConnectPlugin(name, address string, logger *log.Logger) (pluginapi.Plugin, func(), error) {
+func ConnectPlugin(name, address string, logger *log.Logger, timeout time.Duration) (pluginapi.Plugin, func(), error) {
 	if logger != nil {
 		logger.Printf("connecting to plugin %q at %q...", name, address)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	conn, err := grpc.NewClient(

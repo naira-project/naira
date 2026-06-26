@@ -23,7 +23,7 @@ func main() {
 		logger.Fatalf("invalid configuration: %v", err)
 	}
 
-	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, logger)
+	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, logger, config.PluginConnectionTimeout)
 	if err != nil {
 		logger.Fatalf("failed to register plugins: %v", err)
 	}

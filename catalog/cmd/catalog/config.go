@@ -9,15 +9,17 @@ import (
 )
 
 type config struct {
-	Port               int
-	ReadHeadersTimeout time.Duration
-	PluginAddresses    map[string]string
+	Port                    int
+	ReadHeadersTimeout      time.Duration
+	PluginAddresses         map[string]string
+	PluginConnectionTimeout time.Duration
 }
 
 type envConfig struct {
-	Port               int           `env:"PORT" default:"8090"`
-	ReadHeadersTimeout time.Duration `env:"READ_HEADERS_TIMEOUT" default:"5s"`
-	PluginAddresses    []string      `env:"PLUGIN_ADDRESSES"`
+	Port                    int           `env:"PORT" default:"8090"`
+	ReadHeadersTimeout      time.Duration `env:"READ_HEADERS_TIMEOUT" default:"5s"`
+	PluginAddresses         []string      `env:"PLUGIN_ADDRESSES"`
+	PluginConnectionTimeout time.Duration `env:"PLUGIN_CONNECTION_TIMEOUT" default:"10s"`
 }
 
 func loadConfig() (config, error) {
@@ -35,9 +37,10 @@ func loadConfig() (config, error) {
 	}
 
 	cfg := config{
-		Port:               raw.Port,
-		ReadHeadersTimeout: raw.ReadHeadersTimeout,
-		PluginAddresses:    pluginAddresses,
+		Port:                    raw.Port,
+		ReadHeadersTimeout:      raw.ReadHeadersTimeout,
+		PluginAddresses:         pluginAddresses,
+		PluginConnectionTimeout: raw.PluginConnectionTimeout,
 	}
 
 	return cfg, nil
