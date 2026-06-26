@@ -6,7 +6,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY catalog/pluginapi/ ./catalog/pluginapi/
+COPY plugins/pkg/ ./plugins/pkg/
 COPY plugins/internal/ ./plugins/internal/
 COPY plugins/cmd/litellm/ ./plugins/litellm/
 
