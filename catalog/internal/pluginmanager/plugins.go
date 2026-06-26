@@ -58,9 +58,14 @@ func ConnectPlugin(name, address string, logger *log.Logger, timeout time.Durati
 
 	conn, err := grpc.NewClient(
 		address,
-		// Insecure is safe for now, plugins run as sidecars within the same pod
-		// and share the localhost network namespace. Upgrade to mTLS/Service Mesh
-		// if plugins are moved to separate pods.
+		// Insecure is acceptable here because plugins run as sidecars within the
+		// same pod and share its network namespace. Traffic over localhost never
+		// crosses the pod boundary and cannot be intercepted by other pods or nodes.
+		// See: https://kubernetes.io/docs/concepts/workloads/pods/#pod-networking
+		//
+		// TODO(security): Add mTLS for defense in depth — even on localhost an
+		// attacker who has compromised the pod could intercept plaintext traffic.
+		// This also becomes required if plugins are ever moved to separate pods.
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
