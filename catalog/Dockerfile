@@ -7,7 +7,7 @@ COPY cmd ./cmd
 COPY internal ./internal
 COPY pluginapi ./pluginapi
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/catalog ./cmd/catalog
+RUN CGO_ENABLED=0 go build -o /out/catalog ./cmd/catalog
 
 FROM gcr.io/distroless/static-debian12
 
