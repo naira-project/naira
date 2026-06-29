@@ -29,7 +29,6 @@ const pluginName = "depl_uses_litellm"
 type Config struct {
 	Enabled      bool     `env:"ENABLED" default:"true"`
 	Kubeconfig   string   `env:"KUBECONFIG"`
-	Namespace    string   `env:"NAMESPACE"`
 	Hosts        []string `env:"HOSTS"`                               // bare hostnames; "https://" is prepended automatically
 	APIKeyRegexp string   `env:"API_KEY_REGEXP" default:"^sk-.{22}$"` // optional custom regexp to match API keys; defaults to current (May 2026) LiteLLM format
 }
@@ -60,7 +59,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 
-	findings, err := scanDeployments(ctx, dyn, p.config.Namespace, p.apiKeyRegexp)
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
+	if err != nil {
+		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces and cluster ID: %w", err)
+	}
+
+	findings, err := scanDeployments(ctx, dyn, namespaces, p.apiKeyRegexp)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("scanning deployments: %w", err)
 	}
@@ -98,7 +102,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	seenRelations := make(map[relKey]struct{})
 
 	for _, f := range findings {
-		deplPath := f.namespace + "/" + f.deployment
+		deplPath := clusterID + "/" + f.namespace + "/" + f.deployment
 		if _, ok := deployNodes[deplPath]; !ok {
 			deployNodes[deplPath] = pluginapi.NodeClaim{
 				ID: pluginapi.NodeID{Kind: pluginapi.NodeKindDeployment, Path: deplPath},
@@ -160,41 +164,43 @@ var (
 	gvrSecrets     = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 )
 
-func scanDeployments(ctx context.Context, dyn dynamic.Interface, namespace string, litellmKey *regexp.Regexp) ([]finding, error) {
-	depList, err := dyn.Resource(gvrDeployments).Namespace(namespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("listing deployments: %w", err)
-	}
-
+func scanDeployments(ctx context.Context, dyn dynamic.Interface, namespaces []string, litellmKey *regexp.Regexp) ([]finding, error) {
 	var findings []finding
-	for _, dep := range depList.Items {
-		depNs := dep.GetNamespace()
-		depName := dep.GetName()
-		seenKeys := make(map[string]struct{})
+	for _, namespace := range namespaces {
+		depList, err := dyn.Resource(gvrDeployments).Namespace(namespace).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: %s: listing deployments in namespace %q: %v\n", pluginName, namespace, err)
+			continue
+		}
+		for _, dep := range depList.Items {
+			depNs := dep.GetNamespace()
+			depName := dep.GetName()
+			seenKeys := make(map[string]struct{})
 
-		for secretName := range referencedSecrets(dep.Object) {
-			secret, err := dyn.Resource(gvrSecrets).Namespace(depNs).Get(ctx, secretName, metav1.GetOptions{})
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "warning: depl-litellm-models: %s/%s: cannot read secret %q: %v\n",
-					depNs, depName, secretName, err)
-				continue
-			}
-
-			dataMap, _, _ := unstructured.NestedStringMap(secret.Object, "data")
-			for _, encoded := range dataMap {
-				decoded, err := base64.StdEncoding.DecodeString(encoded)
+			for secretName := range referencedSecrets(dep.Object) {
+				secret, err := dyn.Resource(gvrSecrets).Namespace(depNs).Get(ctx, secretName, metav1.GetOptions{})
 				if err != nil {
+					fmt.Fprintf(os.Stderr, "warning: %s: %s/%s: cannot read secret %q: %v\n",
+						pluginName, depNs, depName, secretName, err)
 					continue
 				}
-				val := strings.TrimSpace(string(decoded))
-				if litellmKey.MatchString(val) {
-					if _, seen := seenKeys[val]; !seen {
-						seenKeys[val] = struct{}{}
-						findings = append(findings, finding{
-							namespace:  depNs,
-							deployment: depName,
-							apiKey:     val,
-						})
+
+				dataMap, _, _ := unstructured.NestedStringMap(secret.Object, "data")
+				for _, encoded := range dataMap {
+					decoded, err := base64.StdEncoding.DecodeString(encoded)
+					if err != nil {
+						continue
+					}
+					val := strings.TrimSpace(string(decoded))
+					if litellmKey.MatchString(val) {
+						if _, seen := seenKeys[val]; !seen {
+							seenKeys[val] = struct{}{}
+							findings = append(findings, finding{
+								namespace:  depNs,
+								deployment: depName,
+								apiKey:     val,
+							})
+						}
 					}
 				}
 			}
