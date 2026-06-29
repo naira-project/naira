@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"regexp"
@@ -287,12 +286,8 @@ func fetchModels(client *http.Client, host, apiKey string) ([]string, error) {
 		return nil, fmt.Errorf("unexpected HTTP %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response from %q: %w", addr, err)
-	}
 	var mr modelsResponse
-	if err := json.Unmarshal(body, &mr); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&mr); err != nil {
 		return nil, fmt.Errorf("parsing response: %w", err)
 	}
 	models := make([]string, 0, len(mr.Data))
