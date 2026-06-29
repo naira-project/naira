@@ -278,10 +278,12 @@ func fetchModels(client *http.Client, host, apiKey string) ([]string, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		break // continue to read the body
+	case http.StatusUnauthorized, http.StatusForbidden:
 		return nil, nil
-	}
-	if resp.StatusCode != http.StatusOK {
+	default:
 		return nil, fmt.Errorf("unexpected HTTP %d", resp.StatusCode)
 	}
 
