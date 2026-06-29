@@ -33,6 +33,8 @@ vars:
   LITELLM_PLUGIN_IMAGE: litellm:local
   DEPL_CALLS_SVC_PLUGIN_DIR: '{{.PLUGINS_BASE}}/depl_calls_svc'
   DEPL_CALLS_SVC_PLUGIN_IMAGE: depl-calls-svc:local
+  FLUXCD_PLUGIN_DIR: '{{.PLUGINS_BASE}}/fluxcd'
+  FLUXCD_PLUGIN_IMAGE: fluxcd:local
   CATALOG_NAMESPACE: idp-system
   CATALOG_MANIFEST: infra/kubernetes/catalog.yaml
   CATALOG_SERVICE: svc/catalog
@@ -208,6 +210,20 @@ tasks:
       - task: _docker:load
         vars: { IMAGE: '{{.DEPL_CALLS_SVC_PLUGIN_IMAGE}}' }
 
+  fluxcd:image:build:
+    desc: Build the fluxcd plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.FLUXCD_PLUGIN_IMAGE}}', DIR: '{{.FLUXCD_PLUGIN_DIR}}' }
+
+  fluxcd:image:load:
+    desc: Load the fluxcd plugin image into kind
+    deps:
+      - fluxcd:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.FLUXCD_PLUGIN_IMAGE}}' }
+
   catalog:image:build:
     desc: Build the catalog Docker image
     cmds:
@@ -236,6 +252,7 @@ tasks:
       - task: mlflow:image:load
       - task: litellm:image:load
       - task: depl-calls-svc:image:load
+      - task: fluxcd:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods

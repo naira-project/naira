@@ -40,6 +40,24 @@ rules:
     verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: plugin-fluxcd
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+    resources: ["kustomizations"]
+    verbs: ["get", "list"]
+  - apiGroups: ["helm.toolkit.fluxcd.io"]
+    resources: ["helmreleases"]
+    verbs: ["get", "list"]
+  - apiGroups: ["source.toolkit.fluxcd.io"]
+    resources: ["gitrepositories"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: plugin-depl-calls-svc
@@ -60,6 +78,19 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: catalog-appidentities
+subjects:
+  - kind: ServiceAccount
+    name: catalog
+    namespace: idp-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: plugin-fluxcd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: plugin-fluxcd
 subjects:
   - kind: ServiceAccount
     name: catalog
@@ -135,6 +166,20 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+        - name: plugin-fluxcd
+          image: fluxcd:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50054"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
       containers:
         - name: catalog
           image: catalog:local
@@ -143,7 +188,7 @@ spec:
             - name: PORT
               value: "8090"
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,fluxcd=localhost:50054"
           ports:
             - containerPort: 8090
               name: http
