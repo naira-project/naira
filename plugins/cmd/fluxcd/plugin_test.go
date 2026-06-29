@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	k8stesting "k8s.io/client-go/testing"
 
-	"github.com/naira-project/naira/catalog/pluginapi"
+	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
 )
 
 const testClusterID = "test-cluster-uid-1234"
@@ -57,7 +57,7 @@ func TestCollect(t *testing.T) {
 		name    string
 		objs    []runtime.Object
 		reactor func(*fake.FakeDynamicClient)
-		want    pluginapi.IngestionRequest
+		want    pluginapi.CollectResponse
 	}{
 		{
 			name: "Deployment not managed by FluxCD produces no nodes or relations",
@@ -65,7 +65,7 @@ func TestCollect(t *testing.T) {
 				namespace("team-a"),
 				deployment("team-a", "app"),
 			},
-			want: pluginapi.IngestionRequest{},
+			want: pluginapi.CollectResponse{},
 		},
 		{
 			name: `Kustomization with GitRepository source produces Nodes and "sourced_from" Relation`,
@@ -75,7 +75,7 @@ func TestCollect(t *testing.T) {
 				kustomization("flux-system", "my-app",
 					sourceRef("GitRepository", "", "my-repo")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 					{ID: nodeID("git_repository", "flux-system/my-repo"),
@@ -96,7 +96,7 @@ func TestCollect(t *testing.T) {
 				helmRelease("flux-system", "my-chart",
 					helmSourceRef("GitRepository", "", "my-repo")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
 					{ID: nodeID("git_repository", "flux-system/my-repo"),
@@ -120,7 +120,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "app",
 					kustLabel("flux-system", "my-app")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 					{ID: nodeID("deployment", "team-a/app")},
@@ -151,7 +151,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "app",
 					helmLabel("flux-system", "my-chart")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
 					{ID: nodeID("deployment", "team-a/app")},
@@ -180,7 +180,7 @@ func TestCollect(t *testing.T) {
 				kustomization("team-a", "my-app",
 					sourceRef("GitRepository", "flux-system", "my-repo")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Kustomization.fluxcd", "team-a/my-app")},
 					{ID: nodeID("git_repository", "flux-system/my-repo"),
@@ -204,7 +204,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "depl1", kustLabel("flux-system", "my-app")),
 				deployment("team-a", "depl2", kustLabel("flux-system", "my-app")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 					{ID: nodeID("deployment", "team-a/depl1")},
@@ -239,7 +239,7 @@ func TestCollect(t *testing.T) {
 				kustomization("flux-system", "my-app",
 					sourceRef("Bucket", "", "my-bucket")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 				},
@@ -256,7 +256,7 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "app",
 					kustLabel("flux-system", "my-app")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 					{ID: nodeID("deployment", "team-a/app")},
@@ -290,7 +290,7 @@ func TestCollect(t *testing.T) {
 					return false, nil, nil
 				})
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 					{ID: nodeID("deployment", "team-a/app")},
@@ -359,7 +359,7 @@ func fakeClients(objs ...runtime.Object) (*fake.FakeDynamicClient, *discfake.Fak
 	return dynClient, disc
 }
 
-func sortedByIDs(r pluginapi.IngestionRequest) pluginapi.IngestionRequest {
+func sortedByIDs(r pluginapi.CollectResponse) pluginapi.CollectResponse {
 	lessID := func(a, b pluginapi.NodeID) bool {
 		if a.Kind != b.Kind {
 			return a.Kind < b.Kind
