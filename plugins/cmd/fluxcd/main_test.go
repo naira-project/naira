@@ -1,4 +1,4 @@
-package fluxcd
+package main
 
 import (
 	"context"
@@ -317,7 +317,7 @@ func TestCollect(t *testing.T) {
 			if tt.reactor != nil {
 				tt.reactor(dynClient)
 			}
-			result, err := New(Config{}).collect(context.Background(), disc, dynClient)
+			result, err := New(config{}).collect(context.Background(), disc, dynClient)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, sortedByIDs(result))
 		})

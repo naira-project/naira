@@ -1,10 +1,10 @@
-// Package fluxcd collects FluxCD Kustomization & HelmRelease objects,
+// Plugin fluxcd collects FluxCD Kustomization & HelmRelease objects,
 // the Deployments they manage, and the GitRepositories they source from.
 //
 // TODO: add support for Bucket and other FluxCD sources kinds.
 // TODO: add support for any other resources managed by FluxCD (Services, Ingresses, thirdparty CRDs, ...)
 // TODO: also emit git repository URLs as Nodes (tricky because hostnames & IPs can be local)
-package fluxcd
+package main
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
 	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
+	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
 const pluginName = "fluxcd"
@@ -33,17 +34,22 @@ const (
 	labelHelmNs   = "helm.toolkit.fluxcd.io/namespace"
 )
 
-type Config struct {
-	Enabled    bool   `env:"ENABLED" default:"true"`
+type config struct {
 	Kubeconfig string `env:"KUBECONFIG"`
 }
 
 type Plugin struct {
-	config Config
+	config config
 }
 
-func New(config Config) *Plugin {
+func New(config config) *Plugin {
 	return &Plugin{config: config}
+}
+
+func main() {
+	app := pluginmain.New[config]()
+
+	app.Serve(New(app.Config()))
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
