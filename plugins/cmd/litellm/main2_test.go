@@ -1,3 +1,5 @@
+// Similar test to one in litellm/main_test.go.
+// One difference it do not uses real k8s, but still uses real postgres and litellm
 package main
 
 import (
