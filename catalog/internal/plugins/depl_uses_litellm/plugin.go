@@ -93,8 +93,8 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	// Build Node & Relation claims.
 	type fromTo struct{ from, to pluginapi.NodeID }
 	var (
-		deployNodes   = make(map[string]pluginapi.NodeClaim) // key: "clusterID/namespace/name"
-		modelNodes    = make(map[string]pluginapi.NodeClaim) // key: "host/modelID"
+		deplsByPath   = make(map[string]pluginapi.NodeClaim) // key: "clusterID/namespace/name"
+		modelsByPath  = make(map[string]pluginapi.NodeClaim) // key: "host/modelID"
 		relations     []pluginapi.RelationClaim
 		seenRelations = make(map[fromTo]struct{})
 	)
@@ -104,17 +104,17 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 			Kind: pluginapi.NodeKindDeployment,
 			Path: clusterID + "/" + d.namespace + "/" + d.deployment,
 		}
-		deployNodes[deplID.Path] = pluginapi.NodeClaim{ID: deplID}
+		deplsByPath[deplID.Path] = pluginapi.NodeClaim{ID: deplID}
 
 		for host, models := range keyToHostsToModels[d.secret] {
 			for _, m := range models {
-				// TODO: somehow resolve the hostname, it could be local
 				modelID := pluginapi.NodeID{
 					Kind: pluginapi.NodeKindModel,
+					// TODO: somehow resolve the hostname, it could be local
 					Path: "litellm/" + host + "/" + m,
 				}
 				// TODO: deterministic behavior in case of multiple matches (e.g. when same instance of litellm has multiple hostnames)
-				modelNodes[modelID.Path] = pluginapi.NodeClaim{
+				modelsByPath[modelID.Path] = pluginapi.NodeClaim{
 					ID: modelID,
 					Properties: pluginapi.PropertyMap{
 						"host": host,
@@ -136,11 +136,11 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		}
 	}
 
-	nodes := make([]pluginapi.NodeClaim, 0, len(deployNodes)+len(modelNodes))
-	for _, n := range deployNodes {
+	nodes := make([]pluginapi.NodeClaim, 0, len(deplsByPath)+len(modelsByPath))
+	for _, n := range deplsByPath {
 		nodes = append(nodes, n)
 	}
-	for _, n := range modelNodes {
+	for _, n := range modelsByPath {
 		nodes = append(nodes, n)
 	}
 
