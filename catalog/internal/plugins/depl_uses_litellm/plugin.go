@@ -9,8 +9,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 
@@ -63,7 +63,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces and cluster ID: %w", err)
 	}
 
-	findings, err := scanDeployments(ctx, dyn, namespaces, p.apiKeyRegexp)
+	findings, err := scanDeploymentsWithMatchingSecrets(ctx, dyn, namespaces, p.apiKeyRegexp)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("scanning deployments: %w", err)
 	}
@@ -72,23 +72,23 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	// map[apiKey]map[host][]modelID
 	keyModels := make(map[string]map[string][]string)
 	for _, f := range findings {
-		if _, seen := keyModels[f.apiKey]; seen {
+		if _, seen := keyModels[f.secret]; seen {
 			continue
 		}
 		hostMap := make(map[string][]string)
 		for _, host := range p.config.Hosts {
-			models, err := fetchModels(p.httpClient, host, f.apiKey)
+			models, err := fetchModels(p.httpClient, host, f.secret)
 			if err != nil {
 				// non-fatal: warn and skip this host
-				fmt.Fprintf(os.Stderr, "warning: depl-litellm-models: %s (key ...%s): %v\n",
-					host, f.apiKey[len(f.apiKey)-4:], err)
+				log.Printf("%s: WARN: %s (key ...%s): %v",
+					pluginName, host, f.secret[len(f.secret)-4:], err)
 				continue
 			}
 			if len(models) > 0 {
 				hostMap[host] = models
 			}
 		}
-		keyModels[f.apiKey] = hostMap
+		keyModels[f.secret] = hostMap
 	}
 
 	// Build node+relation claims.
@@ -113,7 +113,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		}
 		deplID := deployNodes[deplPath].ID
 
-		for host, models := range keyModels[f.apiKey] {
+		for host, models := range keyModels[f.secret] {
 			for _, modelID := range models {
 				modelPath := pluginName + "/" + host + "/" + modelID
 				if _, ok := modelNodes[modelPath]; !ok {
@@ -152,10 +152,10 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
 }
 
-type finding struct {
+type deploymentWithSecret struct {
 	namespace  string
 	deployment string
-	apiKey     string
+	secret     string
 }
 
 var (
@@ -163,24 +163,25 @@ var (
 	gvrSecrets     = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 )
 
-func scanDeployments(ctx context.Context, dyn dynamic.Interface, namespaces []string, litellmKey *regexp.Regexp) ([]finding, error) {
-	var findings []finding
-	for _, namespace := range namespaces {
-		depList, err := dyn.Resource(gvrDeployments).Namespace(namespace).List(ctx, metav1.ListOptions{})
+// scanDeploymentsWithMatchingSecrets scans all Deployments in the given namespaces, returning a list of those that
+// use Secrets with values matching given pattern.
+func scanDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interface, namespaces []string, pattern *regexp.Regexp) ([]deploymentWithSecret, error) {
+	var result []deploymentWithSecret
+	for _, ns := range namespaces {
+		depls, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: %s: listing deployments in namespace %q: %v\n", pluginName, namespace, err)
+			log.Printf("%s: WARN: listing deployments in namespace %q: %v", pluginName, ns, err)
 			continue
 		}
-		for _, dep := range depList.Items {
-			depNs := dep.GetNamespace()
-			depName := dep.GetName()
+		for _, dep := range depls.Items {
+			ns, name := dep.GetNamespace(), dep.GetName()
 			seenKeys := make(map[string]struct{})
 
 			for secretName := range referencedSecrets(dep.Object) {
-				secret, err := dyn.Resource(gvrSecrets).Namespace(depNs).Get(ctx, secretName, metav1.GetOptions{})
+				secret, err := dyn.Resource(gvrSecrets).Namespace(ns).Get(ctx, secretName, metav1.GetOptions{})
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "warning: %s: %s/%s: cannot read secret %q: %v\n",
-						pluginName, depNs, depName, secretName, err)
+					log.Printf("%s: WARN: %s/%s: cannot read secret %q: %v",
+						pluginName, ns, name, secretName, err)
 					continue
 				}
 
@@ -188,16 +189,17 @@ func scanDeployments(ctx context.Context, dyn dynamic.Interface, namespaces []st
 				for _, encoded := range dataMap {
 					decoded, err := base64.StdEncoding.DecodeString(encoded)
 					if err != nil {
+						log.Printf("%s: WARN: %s/%s: secret %q: cannot base64-decode", pluginName, ns, name, secretName)
 						continue
 					}
 					val := strings.TrimSpace(string(decoded))
-					if litellmKey.MatchString(val) {
+					if pattern.MatchString(val) {
 						if _, seen := seenKeys[val]; !seen {
 							seenKeys[val] = struct{}{}
-							findings = append(findings, finding{
-								namespace:  depNs,
-								deployment: depName,
-								apiKey:     val,
+							result = append(result, deploymentWithSecret{
+								namespace:  ns,
+								deployment: name,
+								secret:     val,
 							})
 						}
 					}
@@ -205,7 +207,7 @@ func scanDeployments(ctx context.Context, dyn dynamic.Interface, namespaces []st
 			}
 		}
 	}
-	return findings, nil
+	return result, nil
 }
 
 // referencedSecrets returns names of every Secret referenced by the Deployment's pod spec.
