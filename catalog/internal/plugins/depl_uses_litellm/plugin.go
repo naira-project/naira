@@ -63,79 +63,74 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces and cluster ID: %w", err)
 	}
 
-	findings, err := scanDeploymentsWithMatchingSecrets(ctx, dyn, namespaces, p.apiKeyRegexp)
+	deplsWithSecrets, err := scanDeploymentsWithMatchingSecrets(ctx, dyn, namespaces, p.apiKeyRegexp)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("scanning deployments: %w", err)
 	}
 
 	// Query each unique API key against every host once, cache results.
-	// map[apiKey]map[host][]modelID
-	keyModels := make(map[string]map[string][]string)
-	for _, f := range findings {
-		if _, seen := keyModels[f.secret]; seen {
+	keyToHostsToModels := make(map[string]map[string][]string) // apiKey -> host -> []modelID
+	for _, d := range deplsWithSecrets {
+		if _, seen := keyToHostsToModels[d.secret]; seen {
 			continue
 		}
-		hostMap := make(map[string][]string)
+		hostToModels := make(map[string][]string)
 		for _, host := range p.config.Hosts {
-			models, err := fetchModels(p.httpClient, host, f.secret)
+			models, err := fetchModels(p.httpClient, host, d.secret)
 			if err != nil {
 				// non-fatal: warn and skip this host
 				log.Printf("%s: WARN: %s (key ...%s): %v",
-					pluginName, host, f.secret[len(f.secret)-4:], err)
+					pluginName, host, d.secret[len(d.secret)-4:], err)
 				continue
 			}
 			if len(models) > 0 {
-				hostMap[host] = models
+				hostToModels[host] = models
 			}
 		}
-		keyModels[f.secret] = hostMap
+		keyToHostsToModels[d.secret] = hostToModels
 	}
 
-	// Build node+relation claims.
-	// Deployment nodes are keyed by "namespace/name".
-	// Model nodes are keyed by "host/modelID".
-	deployNodes := make(map[string]pluginapi.NodeClaim)
-	modelNodes := make(map[string]pluginapi.NodeClaim)
-	var relations []pluginapi.RelationClaim
-	type relKey struct{ from, to pluginapi.NodeID }
-	seenRelations := make(map[relKey]struct{})
+	// Build Node & Relation claims.
+	type fromTo struct{ from, to pluginapi.NodeID }
+	var (
+		deployNodes   = make(map[string]pluginapi.NodeClaim) // key: "clusterID/namespace/name"
+		modelNodes    = make(map[string]pluginapi.NodeClaim) // key: "host/modelID"
+		relations     []pluginapi.RelationClaim
+		seenRelations = make(map[fromTo]struct{})
+	)
 
-	for _, f := range findings {
-		deplPath := clusterID + "/" + f.namespace + "/" + f.deployment
-		if _, ok := deployNodes[deplPath]; !ok {
-			deployNodes[deplPath] = pluginapi.NodeClaim{
-				ID: pluginapi.NodeID{Kind: pluginapi.NodeKindDeployment, Path: deplPath},
-				Properties: pluginapi.PropertyMap{
-					"namespace": f.namespace,
-					"name":      f.deployment,
-				},
-			}
+	for _, d := range deplsWithSecrets {
+		deplID := pluginapi.NodeID{
+			Kind: pluginapi.NodeKindDeployment,
+			Path: clusterID + "/" + d.namespace + "/" + d.deployment,
 		}
-		deplID := deployNodes[deplPath].ID
+		deployNodes[deplID.Path] = pluginapi.NodeClaim{ID: deplID}
 
-		for host, models := range keyModels[f.secret] {
-			for _, modelID := range models {
-				modelPath := pluginName + "/" + host + "/" + modelID
-				if _, ok := modelNodes[modelPath]; !ok {
-					modelNodes[modelPath] = pluginapi.NodeClaim{
-						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: modelPath},
-						Properties: pluginapi.PropertyMap{
-							"host": host,
-							"id":   modelID,
-						},
-					}
+		for host, models := range keyToHostsToModels[d.secret] {
+			for _, m := range models {
+				// TODO: somehow resolve the hostname, it could be local
+				modelID := pluginapi.NodeID{
+					Kind: pluginapi.NodeKindModel,
+					Path: "litellm/" + host + "/" + m,
 				}
-				modID := modelNodes[modelPath].ID
+				// TODO: deterministic behavior in case of multiple matches (e.g. when same instance of litellm has multiple hostnames)
+				modelNodes[modelID.Path] = pluginapi.NodeClaim{
+					ID: modelID,
+					Properties: pluginapi.PropertyMap{
+						"host": host,
+						"id":   m,
+					},
+				}
 
-				rk := relKey{deplID, modID}
-				if _, seen := seenRelations[rk]; seen {
+				ft := fromTo{from: deplID, to: modelID}
+				if _, seen := seenRelations[ft]; seen {
 					continue
 				}
-				seenRelations[rk] = struct{}{}
+				seenRelations[ft] = struct{}{}
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindUsesModel,
-					From: deplID,
-					To:   modID,
+					From: ft.from,
+					To:   ft.to,
 				})
 			}
 		}
@@ -173,11 +168,11 @@ func scanDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interfa
 			log.Printf("%s: WARN: listing deployments in namespace %q: %v", pluginName, ns, err)
 			continue
 		}
-		for _, dep := range depls.Items {
-			ns, name := dep.GetNamespace(), dep.GetName()
-			seenKeys := make(map[string]struct{})
+		for _, depl := range depls.Items {
+			ns, name := depl.GetNamespace(), depl.GetName()
+			seenValues := make(map[string]struct{})
 
-			for secretName := range referencedSecrets(dep.Object) {
+			for secretName := range referencedSecretsNames(depl.Object) {
 				secret, err := dyn.Resource(gvrSecrets).Namespace(ns).Get(ctx, secretName, metav1.GetOptions{})
 				if err != nil {
 					log.Printf("%s: WARN: %s/%s: cannot read secret %q: %v",
@@ -194,14 +189,15 @@ func scanDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interfa
 					}
 					val := strings.TrimSpace(string(decoded))
 					if pattern.MatchString(val) {
-						if _, seen := seenKeys[val]; !seen {
-							seenKeys[val] = struct{}{}
-							result = append(result, deploymentWithSecret{
-								namespace:  ns,
-								deployment: name,
-								secret:     val,
-							})
+						if _, seen := seenValues[val]; seen {
+							continue
 						}
+						seenValues[val] = struct{}{}
+						result = append(result, deploymentWithSecret{
+							namespace:  ns,
+							deployment: name,
+							secret:     val,
+						})
 					}
 				}
 			}
@@ -210,61 +206,55 @@ func scanDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interfa
 	return result, nil
 }
 
-// referencedSecrets returns names of every Secret referenced by the Deployment's pod spec.
-func referencedSecrets(obj map[string]interface{}) map[string]struct{} {
-	refs := make(map[string]struct{})
+// referencedSecretsNames returns names of every Secret referenced by the Deployment's pod spec.
+func referencedSecretsNames(obj map[string]any) map[string]struct{} {
+	names := make(map[string]struct{})
 
 	volumes, _, _ := unstructured.NestedSlice(obj, "spec", "template", "spec", "volumes")
 	for _, v := range volumes {
-		vol, ok := v.(map[string]interface{})
+		v, ok := v.(map[string]any)
 		if !ok {
 			continue
 		}
-		if name, ok, _ := unstructured.NestedString(vol, "secret", "secretName"); ok && name != "" {
-			refs[name] = struct{}{}
+		if name, ok, _ := unstructured.NestedString(v, "secret", "secretName"); ok && name != "" {
+			names[name] = struct{}{}
 		}
 	}
 
 	for _, section := range []string{"containers", "initContainers"} {
 		containers, _, _ := unstructured.NestedSlice(obj, "spec", "template", "spec", section)
 		for _, c := range containers {
-			container, ok := c.(map[string]interface{})
+			container, ok := c.(map[string]any)
 			if !ok {
 				continue
 			}
-			envList, _, _ := unstructured.NestedSlice(container, "env")
-			for _, e := range envList {
-				env, ok := e.(map[string]interface{})
+			envs, _, _ := unstructured.NestedSlice(container, "env")
+			for _, e := range envs {
+				env, ok := e.(map[string]any)
 				if !ok {
 					continue
 				}
 				if name, ok, _ := unstructured.NestedString(env, "valueFrom", "secretKeyRef", "name"); ok && name != "" {
-					refs[name] = struct{}{}
+					names[name] = struct{}{}
 				}
 			}
-			envFromList, _, _ := unstructured.NestedSlice(container, "envFrom")
-			for _, ef := range envFromList {
-				envFrom, ok := ef.(map[string]interface{})
+			envFroms, _, _ := unstructured.NestedSlice(container, "envFrom")
+			for _, ef := range envFroms {
+				envFrom, ok := ef.(map[string]any)
 				if !ok {
 					continue
 				}
 				if name, ok, _ := unstructured.NestedString(envFrom, "secretRef", "name"); ok && name != "" {
-					refs[name] = struct{}{}
+					names[name] = struct{}{}
 				}
 			}
 		}
 	}
-	return refs
+	return names
 }
 
-type modelsResponse struct {
-	Data []struct {
-		ID string `json:"id"`
-	} `json:"data"`
-}
-
-// fetchModels calls GET https://<host>/v1/models with the given key.
-// A 401/403 response means the key is not valid for that host; returns nil, nil.
+// fetchModels calls GET https://<host>/v1/models with the given key and returns a list of model IDs.
+// A 401/403 response means the key is not valid for that host and empty results are returned.
 func fetchModels(client *http.Client, host, apiKey string) ([]string, error) {
 	addr := "https://" + host + "/v1/models"
 	req, err := http.NewRequest(http.MethodGet, addr, nil)
@@ -285,15 +275,19 @@ func fetchModels(client *http.Client, host, apiKey string) ([]string, error) {
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("unexpected HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("%q: unexpected HTTP status %d", addr, resp.StatusCode)
 	}
 
-	var mr modelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&mr); err != nil {
-		return nil, fmt.Errorf("parsing response: %w", err)
+	var payload struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
-	models := make([]string, 0, len(mr.Data))
-	for _, m := range mr.Data {
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("parsing %q response: %w", addr, err)
+	}
+	models := make([]string, 0, len(payload.Data))
+	for _, m := range payload.Data {
 		models = append(models, m.ID)
 	}
 	return models, nil
