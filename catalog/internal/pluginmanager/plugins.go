@@ -91,7 +91,7 @@ func ConnectPlugin(name, address string, logger *log.Logger, timeout time.Durati
 		logger.Printf("successfully connected to plugin %q at %q", name, address)
 	}
 
-	grpcClient := pluginapi.NewGRPCClient(pluginv1.NewCatalogPluginServiceClient(conn))
+	grpcClient := &pluginapi.GRPCClient{Client: pluginv1.NewCatalogPluginServiceClient(conn)}
 
 	return grpcClient, func() { conn.Close() }, nil
 }
