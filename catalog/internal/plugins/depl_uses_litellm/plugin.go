@@ -81,8 +81,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		for _, host := range p.config.Hosts {
 			models, err := fetchModels(p.httpClient, host, d.secret)
 			if err != nil {
-				// non-fatal: warn and skip this host
-				log.Printf("%s: WARN: %s (key ...%s): %v",
+				log.Printf("%s: WARN: fetching models from %s (key ...%s): %v",
 					pluginName, host, d.secret[len(d.secret)-4:], err)
 				continue
 			}
