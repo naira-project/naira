@@ -59,7 +59,8 @@ func (a *App[C]) Serve(p pluginapi.Plugin) {
 		return
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", a.serverConfig.Port))
+	// Using 127.0.0.1 limits traffic to the local pod. Disallows cross-pod communication
+	lis, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", a.serverConfig.Port))
 	if err != nil {
 		a.Logger.Fatalf("failed to listen on port %d: %v", a.serverConfig.Port, err)
 	}
