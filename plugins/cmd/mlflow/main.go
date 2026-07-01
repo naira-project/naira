@@ -34,9 +34,9 @@ type Plugin struct {
 	config     config
 }
 
-func New(httpClient *http.Client, config config) *Plugin {
+func New(config config) *Plugin {
 	return &Plugin{
-		httpClient: httpClient,
+		httpClient: &http.Client{Timeout: config.HTTPTimeout},
 		config:     config,
 	}
 }
@@ -45,8 +45,7 @@ func main() {
 	app := pluginmain.New[config]()
 	cfg := app.Config()
 
-	httpClient := &http.Client{Timeout: cfg.HTTPTimeout}
-	p := New(httpClient, cfg)
+	p := New(cfg)
 
 	app.Serve(p)
 }

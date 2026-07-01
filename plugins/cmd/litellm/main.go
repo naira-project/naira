@@ -41,9 +41,9 @@ type Plugin struct {
 	appIdentityProvider AppIdentityProvider
 }
 
-func New(httpClient *http.Client, logger *log.Logger, config config) *Plugin {
+func New(config config, logger *log.Logger) *Plugin {
 	return &Plugin{
-		httpClient:          httpClient,
+		httpClient:          &http.Client{Timeout: config.HTTPTimeout},
 		logger:              logger,
 		config:              config,
 		appIdentityProvider: newAppIdentityProvider(logger),
@@ -54,8 +54,7 @@ func main() {
 	app := pluginmain.New[config]()
 	cfg := app.Config()
 
-	httpClient := &http.Client{Timeout: cfg.HTTPTimeout}
-	p := New(httpClient, app.Logger(), cfg)
+	p := New(cfg, app.Logger())
 
 	app.Serve(p)
 }
