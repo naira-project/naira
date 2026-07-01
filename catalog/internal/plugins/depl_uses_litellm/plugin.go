@@ -63,14 +63,14 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces and cluster ID: %w", err)
 	}
 
-	deplsWithSecrets, err := scanDeploymentsWithMatchingSecrets(ctx, dyn, namespaces, p.apiKeyRegexp)
+	deplsWithAPIKeys, err := findDeploymentsWithMatchingSecrets(ctx, dyn, namespaces, p.apiKeyRegexp)
 	if err != nil {
 		return pluginapi.IngestionRequest{}, fmt.Errorf("scanning deployments: %w", err)
 	}
 
 	// Query each unique API key against every host once, cache results.
 	keyToHostsToModels := make(map[string]map[string][]string) // apiKey -> host -> []modelID
-	for _, d := range deplsWithSecrets {
+	for _, d := range deplsWithAPIKeys {
 		if _, seen := keyToHostsToModels[d.secret]; seen {
 			continue
 		}
@@ -99,7 +99,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		seenRelations = make(map[fromTo]struct{})
 	)
 
-	for _, d := range deplsWithSecrets {
+	for _, d := range deplsWithAPIKeys {
 		deplID := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindDeployment,
 			Path: clusterID + "/" + d.namespace + "/" + d.deployment,
@@ -158,9 +158,9 @@ var (
 	gvrSecrets     = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "secrets"}
 )
 
-// scanDeploymentsWithMatchingSecrets scans all Deployments in the given namespaces, returning a list of those that
+// findDeploymentsWithMatchingSecrets scans all Deployments in the given namespaces, returning a list of those that
 // use Secrets with values matching given pattern.
-func scanDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interface, namespaces []string, pattern *regexp.Regexp) ([]deploymentWithSecret, error) {
+func findDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interface, namespaces []string, pattern *regexp.Regexp) ([]deploymentWithSecret, error) {
 	var result []deploymentWithSecret
 	type nameWithNs struct{ name, ns string }
 	seenSecrets := make(map[nameWithNs]struct{})
@@ -172,7 +172,7 @@ func scanDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interfa
 		}
 		for _, depl := range depls.Items {
 			ns, name := depl.GetNamespace(), depl.GetName()
-			seenValues := make(map[string]struct{})
+			seenSecretValues := make(map[string]struct{})
 
 			for secretName := range referencedSecretsNames(depl.Object) {
 				nameWithNs := nameWithNs{name: secretName, ns: ns}
@@ -197,10 +197,10 @@ func scanDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interfa
 					}
 					val := strings.TrimSpace(string(decoded))
 					if pattern.MatchString(val) {
-						if _, seen := seenValues[val]; seen {
+						if _, seen := seenSecretValues[val]; seen {
 							continue
 						}
-						seenValues[val] = struct{}{}
+						seenSecretValues[val] = struct{}{}
 						result = append(result, deploymentWithSecret{
 							namespace:  ns,
 							deployment: name,
