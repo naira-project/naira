@@ -43,6 +43,9 @@ func New(httpClient *http.Client, config Config) (*Plugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid API_KEY_REGEXP: %w", err)
 	}
+	if len(config.Hosts) == 0 {
+		return nil, fmt.Errorf("no LiteLLM HOSTS configured")
+	}
 	return &Plugin{
 		httpClient:   httpClient,
 		config:       config,
