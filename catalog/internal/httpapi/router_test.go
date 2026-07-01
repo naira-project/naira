@@ -65,7 +65,11 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			}},
 	)
 
-	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), map[string]catalog.Plugin{"seed": stubPlugin{}}), log.New(io.Discard, "", 0))
+	router := NewRouter(catalog.NewService(
+		store,
+		map[string]catalog.Plugin{"seed": stubPlugin{}},
+		log.New(io.Discard, "", 0),
+	), log.New(io.Discard, "", 0))
 
 	tests := []struct {
 		name               string
@@ -208,8 +212,8 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 	router := NewRouter(catalog.NewService(
 		catalog.NewMemoryStore(),
-		log.New(io.Discard, "", 0),
 		map[string]catalog.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}},
+		log.New(io.Discard, "", 0),
 	), log.New(io.Discard, "", 0))
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)

@@ -22,13 +22,13 @@ func main() {
 		logger.Fatalf("invalid configuration: %v", err)
 	}
 
-	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, logger, config.PluginConnectionTimeout)
+	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, config.PluginConnectionTimeout, logger)
 	if err != nil {
 		logger.Fatalf("failed to register plugins: %v", err)
 	}
 	defer cleanup()
 
-	service := catalog.NewService(catalog.NewMemoryStore(), logger, registeredPlugins)
+	service := catalog.NewService(catalog.NewMemoryStore(), registeredPlugins, logger)
 	router := httpapi.NewRouter(service, logger)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),

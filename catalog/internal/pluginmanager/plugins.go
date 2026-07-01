@@ -15,13 +15,13 @@ import (
 
 // Register connects to each plugin sidecar by its configured name and gRPC
 // address and returns the registered plugins keyed by plugin name.
-func Register(plugins map[string]string, logger *log.Logger, timeout time.Duration) (map[string]pluginapi.Plugin, func(), error) {
+func Register(plugins map[string]string, timeout time.Duration, logger *log.Logger) (map[string]pluginapi.Plugin, func(), error) {
 	registered := make(map[string]pluginapi.Plugin, len(plugins))
 	var cleanups []func()
 
 	for name, addr := range plugins {
 		if name == "" || addr == "" {
-			continue
+			return nil, nil, fmt.Errorf("invalid plugin configuration: name=%q, addr=%q", name, addr)
 		}
 
 		client, cleanup, err := ConnectPlugin(name, addr, logger, timeout)

@@ -177,7 +177,7 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 
 func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
 	store := NewMemoryStore()
-	service := NewService(store, nil, map[string]Plugin{
+	service := NewService(store, map[string]Plugin{
 		"mlflow": stubPlugin{
 			response: CollectResponse{
 				Nodes: []NodeClaim{{
@@ -186,7 +186,7 @@ func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
 				}},
 			},
 		},
-	})
+	}, nil)
 
 	response := service.RunAllPlugins(t.Context())
 	require.Len(t, response.Results, 1)

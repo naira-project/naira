@@ -23,7 +23,7 @@ type Service struct {
 	logger  *log.Logger
 }
 
-func NewService(store Store, logger *log.Logger, plugins map[string]Plugin) *Service {
+func NewService(store Store, plugins map[string]Plugin, logger *log.Logger) *Service {
 	registeredPlugins := make(map[string]Plugin, len(plugins))
 	for name, plugin := range plugins {
 		if plugin == nil {
