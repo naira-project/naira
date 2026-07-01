@@ -49,7 +49,7 @@ func New(config config) *Plugin {
 func main() {
 	app := pluginmain.New[config]()
 
-	app.Serve(New(app.Config()))
+	app.Serve(New(app.PluginConfig))
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {

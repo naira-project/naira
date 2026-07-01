@@ -52,9 +52,8 @@ func New(config config, logger *log.Logger) *Plugin {
 
 func main() {
 	app := pluginmain.New[config]()
-	cfg := app.Config()
 
-	p := New(cfg, app.Logger())
+	p := New(app.PluginConfig, app.Logger)
 
 	app.Serve(p)
 }

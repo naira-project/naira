@@ -43,9 +43,8 @@ func New(config config) *Plugin {
 
 func main() {
 	app := pluginmain.New[config]()
-	cfg := app.Config()
 
-	p := New(cfg)
+	p := New(app.PluginConfig)
 
 	app.Serve(p)
 }

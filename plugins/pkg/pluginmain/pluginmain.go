@@ -19,9 +19,9 @@ type serverConfig struct {
 }
 
 type App[C any] struct {
-	pluginConfig C
+	PluginConfig C
 	serverConfig serverConfig
-	logger       *log.Logger
+	Logger       *log.Logger
 }
 
 // New initializes the runtime environment, loads environment variables,
@@ -40,18 +40,10 @@ func New[C any]() *App[C] {
 	}
 
 	return &App[C]{
-		pluginConfig: cfg,
+		PluginConfig: cfg,
+		Logger:       logger,
 		serverConfig: srv,
-		logger:       logger,
 	}
-}
-
-func (a *App[C]) Config() C {
-	return a.pluginConfig
-}
-
-func (a *App[C]) Logger() *log.Logger {
-	return a.logger
 }
 
 func (a *App[C]) Serve(p pluginapi.Plugin) {
@@ -61,23 +53,23 @@ func (a *App[C]) Serve(p pluginapi.Plugin) {
 	if *mermaidFlag {
 		res, err := p.Collect(context.Background())
 		if err != nil {
-			a.logger.Fatalf("failed to collect: %v", err)
+			a.Logger.Fatalf("failed to collect: %v", err)
 		}
-		printMermaid(res, a.logger)
+		printMermaid(res, a.Logger)
 		return
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", a.serverConfig.Port))
 	if err != nil {
-		a.logger.Fatalf("failed to listen on port %d: %v", a.serverConfig.Port, err)
+		a.Logger.Fatalf("failed to listen on port %d: %v", a.serverConfig.Port, err)
 	}
 
 	s := grpc.NewServer()
 	pluginv1.RegisterCatalogPluginServiceServer(s, &pluginapi.GRPCServer{Impl: p})
 
-	a.logger.Printf("Plugin listening via gRPC on %v", lis.Addr())
+	a.Logger.Printf("Plugin listening via gRPC on %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
-		a.logger.Fatalf("failed to serve gRPC: %v", err)
+		a.Logger.Fatalf("failed to serve gRPC: %v", err)
 	}
 }
 
