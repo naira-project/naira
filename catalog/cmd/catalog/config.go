@@ -11,6 +11,7 @@ import (
 type config struct {
 	Port                    int
 	ReadHeadersTimeout      time.Duration
+	ShutdownTimeout         time.Duration
 	PluginAddresses         map[string]string
 	PluginConnectionTimeout time.Duration
 }
@@ -18,6 +19,7 @@ type config struct {
 type envConfig struct {
 	Port                    int           `env:"PORT" default:"8090"`
 	ReadHeadersTimeout      time.Duration `env:"READ_HEADERS_TIMEOUT" default:"5s"`
+	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" default:"5s"`
 	PluginAddresses         []string      `env:"PLUGIN_ADDRESSES"`
 	PluginConnectionTimeout time.Duration `env:"PLUGIN_CONNECTION_TIMEOUT" default:"10s"`
 }
@@ -39,6 +41,7 @@ func loadConfig() (config, error) {
 	cfg := config{
 		Port:                    raw.Port,
 		ReadHeadersTimeout:      raw.ReadHeadersTimeout,
+		ShutdownTimeout:         raw.ShutdownTimeout,
 		PluginAddresses:         pluginAddresses,
 		PluginConnectionTimeout: raw.PluginConnectionTimeout,
 	}
