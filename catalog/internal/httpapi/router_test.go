@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/naira-project/naira/catalog/internal/catalog"
-	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

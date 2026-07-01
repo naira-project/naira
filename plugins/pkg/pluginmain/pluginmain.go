@@ -8,8 +8,8 @@ import (
 	"net"
 	"os"
 
-	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
-	pluginv1 "github.com/naira-project/naira/plugins/pkg/api/proto/plugin/v1"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	pluginv1 "github.com/naira-project/naira/plugins/pkg/pluginapi/proto/plugin/v1"
 	"go-simpler.org/env"
 	"google.golang.org/grpc"
 )

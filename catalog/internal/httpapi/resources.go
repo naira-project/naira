@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
-	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
 type PluginClaim struct {

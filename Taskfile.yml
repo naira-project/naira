@@ -3,7 +3,7 @@ version: '3'
 vars:
   DEV_TASKFILE: ./deploy/dev/Taskfile.yml
   CATALOG_DIR: ./catalog
-  PROTO_DIR: ./plugins/pkg/api/proto
+  PROTO_DIR: ./plugins/pkg/pluginapi/proto
 
 tasks:
   check:

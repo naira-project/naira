@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"

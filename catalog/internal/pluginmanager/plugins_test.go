@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
-	pluginv1 "github.com/naira-project/naira/plugins/pkg/api/proto/plugin/v1"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	pluginv1 "github.com/naira-project/naira/plugins/pkg/pluginapi/proto/plugin/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"

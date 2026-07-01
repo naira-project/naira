@@ -7,7 +7,7 @@ import (
 	"sort"
 	"testing"
 
-	pluginapi "github.com/naira-project/naira/plugins/pkg/api"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
