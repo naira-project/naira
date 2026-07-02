@@ -1,4 +1,4 @@
-package litellm
+package main
 
 import (
 	"context"
@@ -8,8 +8,10 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 )
@@ -26,36 +28,40 @@ const (
 	propertyValueKeyInfo = "key_info"
 )
 
+type config struct {
+	BaseURL     string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
+	APIKey      string        `env:"LITELLM_API_KEY"`
+	HTTPTimeout time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`
+}
+
 type Plugin struct {
 	httpClient          *http.Client
 	logger              *log.Logger
-	config              Config
+	config              config
 	appIdentityProvider AppIdentityProvider
 }
 
-type Config struct {
-	Enabled bool   `env:"ENABLED" default:"true"`
-	BaseURL string `env:"BASE_URL" default:"http://127.0.0.1:4000"`
-	APIKey  string `env:"API_KEY"`
-}
-
-func New(httpClient *http.Client, logger *log.Logger, config Config) *Plugin {
+func New(config config, logger *log.Logger) *Plugin {
 	return &Plugin{
-		httpClient:          httpClient,
+		httpClient:          &http.Client{Timeout: config.HTTPTimeout},
 		logger:              logger,
 		config:              config,
 		appIdentityProvider: newAppIdentityProvider(logger),
 	}
 }
 
-func (*Plugin) Name() string {
-	return pluginName
+func main() {
+	app := pluginmain.New[config]()
+
+	p := New(app.PluginConfig, app.Logger)
+
+	app.Serve(p)
 }
 
-func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
+func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	models, err := p.fetchModels(ctx)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("fetching LiteLLM models: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("fetching LiteLLM models: %w", err)
 	}
 
 	nodes := make([]pluginapi.NodeClaim, 0, len(models))
@@ -76,7 +82,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	}
 
 	if p.appIdentityProvider == nil {
-		return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
+		return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
 	}
 
 	apps, err := p.appIdentityProvider.ListAppIdentities(ctx)
@@ -84,7 +90,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		if p.logger != nil {
 			p.logger.Printf("listing LiteLLM app identities failed, continuing without app identities: %v", err)
 		}
-		return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
+		return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
 	}
 
 	for _, app := range apps {
@@ -142,12 +148,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		}
 	}
 
-	request := pluginapi.IngestionRequest{Nodes: dedupeNodes(nodes), Relations: relations}
+	response := pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}
 	if len(fetchAllowedModelsErrors) > 0 {
-		return request, errors.Join(fetchAllowedModelsErrors...)
+		return response, errors.Join(fetchAllowedModelsErrors...)
 	}
 
-	return request, nil
+	return response, nil
 }
 
 func (p *Plugin) fetchModels(ctx context.Context) ([]model, error) {

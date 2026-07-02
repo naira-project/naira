@@ -1,15 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"time"
+	"os/signal"
+	"syscall"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
-	"github.com/naira-project/naira/catalog/internal/plugins"
+	"github.com/naira-project/naira/catalog/internal/pluginmanager"
 )
 
 func main() {
@@ -20,21 +22,41 @@ func main() {
 		logger.Fatalf("invalid configuration: %v", err)
 	}
 
-	httpClient := &http.Client{Timeout: config.HTTPTimeout}
-	registeredPlugins := plugins.Register(config.Plugins, httpClient, logger)
-	service := catalog.NewService(catalog.NewMemoryStore(), logger, registeredPlugins...)
+	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, config.PluginConnectionTimeout, logger)
+	if err != nil {
+		logger.Fatalf("failed to register plugins: %v", err)
+	}
+	defer cleanup()
+
+	service := catalog.NewService(catalog.NewMemoryStore(), registeredPlugins, logger)
 	router := httpapi.NewRouter(service, logger)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           router,
-		ReadHeaderTimeout: 5 * time.Second,
+		ReadHeaderTimeout: config.ReadHeadersTimeout,
 	}
 
-	logger.Printf("starting catalog on :%d", config.Port)
-	logger.Printf("mlflow plugin source: %s", config.Plugins.MLflow.BaseURL)
-	logger.Printf("litellm plugin source: %s", config.Plugins.LiteLLM.BaseURL)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Fatalf("server failed: %v", err)
+	go func() {
+		logger.Printf("starting catalog on :%d", config.Port)
+		for name, addr := range config.PluginAddresses {
+			logger.Printf("plugin %q -> %s", name, addr)
+		}
+
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Fatalf("server failed: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	logger.Println("shutting down catalog service...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), config.ShutdownTimeout)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Printf("error during server shutdown: %v", err)
 	}
 }

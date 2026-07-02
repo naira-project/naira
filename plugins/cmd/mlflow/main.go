@@ -1,4 +1,4 @@
-package mlflow
+package main
 
 import (
 	"context"
@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
-	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
 const (
@@ -21,32 +23,36 @@ const (
 	propertyKeyDescription = "description"
 )
 
+type config struct {
+	BaseURL     string        `env:"MLFLOW_BASE_URL" default:"http://127.0.0.1:5000"`
+	BearerToken string        `env:"MLFLOW_BEARER_TOKEN"`
+	HTTPTimeout time.Duration `env:"MLFLOW_HTTP_TIMEOUT" default:"5s"`
+}
+
 type Plugin struct {
 	httpClient *http.Client
-	config     Config
+	config     config
 }
 
-type Config struct {
-	Enabled     bool   `env:"ENABLED" default:"true"`
-	BaseURL     string `env:"BASE_URL" default:"http://127.0.0.1:5000"`
-	BearerToken string `env:"BEARER_TOKEN"`
-}
-
-func New(httpClient *http.Client, config Config) *Plugin {
+func New(config config) *Plugin {
 	return &Plugin{
-		httpClient: httpClient,
+		httpClient: &http.Client{Timeout: config.HTTPTimeout},
 		config:     config,
 	}
 }
 
-func (*Plugin) Name() string {
-	return pluginName
+func main() {
+	app := pluginmain.New[config]()
+
+	p := New(app.PluginConfig)
+
+	app.Serve(p)
 }
 
-func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
+func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	registeredModels, err := p.fetchRegisteredModels(ctx)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("fetching MLflow registered models: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("fetching MLflow registered models: %w", err)
 	}
 
 	nodes := make([]pluginapi.NodeClaim, 0, len(registeredModels))
@@ -108,12 +114,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		nodes = append(nodes, dataset)
 	}
 
-	request := pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}
+	response := pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
 	if len(fetchRunErrors) > 0 {
-		return request, errors.Join(fetchRunErrors...)
+		return response, errors.Join(fetchRunErrors...)
 	}
 
-	return request, nil
+	return response, nil
 }
 
 func (p *Plugin) fetchRegisteredModels(ctx context.Context) ([]registeredModel, error) {

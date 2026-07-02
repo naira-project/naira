@@ -1,10 +1,10 @@
-// Package fluxcd collects FluxCD Kustomization & HelmRelease objects,
+// Plugin fluxcd collects FluxCD Kustomization & HelmRelease objects,
 // the Deployments they manage, and the GitRepositories they source from.
 //
 // TODO: add support for Bucket and other FluxCD sources kinds.
 // TODO: add support for any other resources managed by FluxCD (Services, Ingresses, thirdparty CRDs, ...)
 // TODO: also emit git repository URLs as Nodes (tricky because hostnames & IPs can be local)
-package fluxcd
+package main
 
 import (
 	"context"
@@ -18,8 +18,9 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/naira-project/naira/catalog/internal/kubeutil"
-	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/plugins/internal/kubeutil"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
 const pluginName = "fluxcd"
@@ -33,33 +34,36 @@ const (
 	labelHelmNs   = "helm.toolkit.fluxcd.io/namespace"
 )
 
-type Config struct {
-	Enabled    bool   `env:"ENABLED" default:"true"`
+type config struct {
 	Kubeconfig string `env:"KUBECONFIG"`
 }
 
 type Plugin struct {
-	config Config
+	config config
 }
 
-func New(config Config) *Plugin {
+func New(config config) *Plugin {
 	return &Plugin{config: config}
 }
 
-func (*Plugin) Name() string { return pluginName }
+func main() {
+	app := pluginmain.New[config]()
 
-func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
+	app.Serve(New(app.PluginConfig))
+}
+
+func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	disc, dyn, err := p.connect()
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 	return p.collect(ctx, disc, dyn)
 }
 
-func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface) (pluginapi.IngestionRequest, error) {
+func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface) (pluginapi.CollectResponse, error) {
 	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces: %w", err)
 	}
 	_, resourceAPIs, err := disc.ServerGroupsAndResources()
 	if err != nil {
@@ -72,15 +76,15 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 
 	kusts, err := listGroupKind(ctx, resourceAPIs, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", namespaces)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing Kustomizations: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("listing Kustomizations: %w", err)
 	}
 	helms, err := listGroupKind(ctx, resourceAPIs, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", namespaces)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing HelmReleases: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("listing HelmReleases: %w", err)
 	}
 	repos, err := listGroupKind(ctx, resourceAPIs, dyn, "source.toolkit.fluxcd.io", "GitRepository", namespaces)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing GitRepositories: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("listing GitRepositories: %w", err)
 	}
 	var depls []unstructured.Unstructured
 	for _, ns := range namespaces {
@@ -227,7 +231,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		}
 	}
 
-	return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
+	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
 }
 
 func repoFromKustomization(kust unstructured.Unstructured, repos map[string]pluginapi.NodeID) pluginapi.NodeID {
