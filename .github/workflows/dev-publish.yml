@@ -42,7 +42,20 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── 3. Plugins ─────────────────────────────────────────────────────────────
+  # ── 3. Build & push Portal image ───────────────────────────────────────────
+  container-publish-portal:
+    name: Publish · Portal
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-portal"
+      dockerfile: "naira-openmfp-portal/Dockerfile"
+      context: "naira-openmfp-portal"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 4. Plugins ─────────────────────────────────────────────────────────────
   container-publish-plugin-mlflow:
     name: Publish · Plugin MLflow
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
@@ -97,6 +110,7 @@ jobs:
     needs:
       - container-publish-catalog
       - container-publish-ui
+      - container-publish-portal
       - container-publish-plugin-mlflow
       - container-publish-plugin-litellm
       - container-publish-plugin-depl-calls-svc
@@ -109,6 +123,7 @@ jobs:
           RESULTS=(
             "${{ needs.container-publish-catalog.result }}"
             "${{ needs.container-publish-ui.result }}"
+            "${{ needs.container-publish-portal.result }}"
             "${{ needs.container-publish-plugin-mlflow.result }}"
             "${{ needs.container-publish-plugin-litellm.result }}"
             "${{ needs.container-publish-plugin-depl-calls-svc.result }}"
