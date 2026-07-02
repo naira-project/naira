@@ -7,7 +7,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY catalog/internal/ ./catalog/internal/
-COPY plugins/pkg/api/ ./plugins/pkg/api/
+COPY plugins/pkg/pluginapi/ ./plugins/pkg/pluginapi/
 COPY catalog/cmd/catalog/ ./catalog/cmd/catalog/
 
 RUN CGO_ENABLED=0 go build -o /out/catalog ./catalog/cmd/catalog
