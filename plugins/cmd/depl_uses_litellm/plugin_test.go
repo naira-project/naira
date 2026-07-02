@@ -1,4 +1,4 @@
-package depl_uses_litellm
+package main
 
 import (
 	"context"
@@ -25,7 +25,7 @@ import (
 
 const (
 	testClusterID = "test-cluster-uid-1234"
-	testAPIKey    = "sk-123456789_123456789_12" // should match default Config.APIKeyRegexp
+	testAPIKey    = "sk-123456789_123456789_12" // should match default config.APIKeyRegexp
 )
 
 var defaultKeyRegexp = compileDefaultAPIKeyRegexp()
@@ -351,6 +351,28 @@ func TestReferencedSecretsNames(t *testing.T) {
 	}
 }
 
+func TestDefaultRegexpMatchesLiteLLMAPIKeys(t *testing.T) {
+	tests := []struct {
+		apiKey    string
+		wantMatch bool
+	}{
+		{apiKey: "sk-Jlt68_Dy_l1Y7pZldiL8Xg", wantMatch: true}, // real key generated in LiteLLM 1.87.0 GUI
+		{apiKey: "DUMMY", wantMatch: false},                    // not a LiteLLM API key
+	}
+
+	var cfg config
+	require.NoError(t, env.Load(&cfg, &env.Options{Source: env.Map{}}), "setting config defaults")
+	re, err := regexp.Compile(cfg.APIKeyRegexp)
+	require.NoError(t, err, "compiling default APIKeyRegexp")
+
+	for _, tt := range tests {
+		t.Run(tt.apiKey, func(t *testing.T) {
+			match := re.MatchString(tt.apiKey)
+			assert.Equal(t, tt.wantMatch, match, "API key match")
+		})
+	}
+}
+
 func fakeDynamicClient(objs ...runtime.Object) *fake.FakeDynamicClient {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
@@ -456,7 +478,7 @@ func sortedDeplsWithSecrets(depls []deploymentWithSecret) []deploymentWithSecret
 }
 
 func compileDefaultAPIKeyRegexp() *regexp.Regexp {
-	var cfg Config
+	var cfg config
 	err := env.Load(&cfg, &env.Options{Source: env.Map{}})
 	if err != nil {
 		panic(fmt.Sprintf("failed to load default config: %v", err))

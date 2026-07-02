@@ -1,8 +1,8 @@
-// Package depl_uses_litellm scans k8s Deployments for LiteLLM API keys stored
-// in referenced Secrets, then queries each configured LiteLLM host to discover
+// depl_uses_litellm scans k8s Deployments for LiteLLM API keys stored in
+// referenced Secrets, then queries each configured LiteLLM host to discover
 // which models that key can access, and emits deployment→model "uses_model"
 // relations.
-package depl_uses_litellm
+package main
 
 import (
 	"context"
@@ -13,62 +13,70 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/naira-project/naira/plugins/internal/kubeutil"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-
-	"github.com/naira-project/naira/catalog/internal/kubeutil"
-	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 const pluginName = "depl_uses_litellm"
 
-type Config struct {
-	Enabled      bool     `env:"ENABLED" default:"true"`
-	Kubeconfig   string   `env:"KUBECONFIG"`
-	Hosts        []string `env:"HOSTS"`                               // bare hostnames; "https://" is prepended automatically
-	APIKeyRegexp string   `env:"API_KEY_REGEXP" default:"^sk-.{22}$"` // optional custom regexp to match API keys; defaults to current (May 2026) LiteLLM format
+type config struct {
+	Kubeconfig   string        `env:"DEPL_USES_LITELLM_KUBECONFIG"`
+	Hosts        []string      `env:"DEPL_USES_LITELLM_HOSTS"`                              // bare hostnames; "https://" is prepended automatically
+	APIKeyRegexp string        `env:"DEPL_USES_LITELLM_APIKEY_REGEXP" default:"^sk-.{22}$"` // optional custom regexp to match API keys; defaults to current (May 2026) LiteLLM format
+	HTTPTimeout  time.Duration `env:"DEPL_USES_LITELLM_HTTP_TIMEOUT" default:"5s"`
+}
+
+func main() {
+	app := pluginmain.New[config]()
+	p, err := New(app.PluginConfig)
+	if err != nil {
+		log.Fatalf("failed to initialize plugin: %v", err)
+	}
+	app.Serve(p)
 }
 
 type Plugin struct {
 	httpClient   *http.Client
-	config       Config
+	config       config
 	apiKeyRegexp *regexp.Regexp
 }
 
-func New(httpClient *http.Client, config Config) (*Plugin, error) {
+func New(config config) (*Plugin, error) {
 	re, err := regexp.Compile(config.APIKeyRegexp)
 	if err != nil {
-		return nil, fmt.Errorf("invalid API_KEY_REGEXP: %w", err)
+		return nil, fmt.Errorf("invalid DEPL_USES_LITELLM_APIKEY_REGEXP: %w", err)
 	}
 	if len(config.Hosts) == 0 {
-		return nil, fmt.Errorf("no LiteLLM HOSTS configured")
+		return nil, fmt.Errorf("no LiteLLM hosts configured: DEPL_USES_LITELLM_HOSTS is empty")
 	}
 	return &Plugin{
-		httpClient:   httpClient,
+		httpClient:   &http.Client{Timeout: config.HTTPTimeout},
 		config:       config,
 		apiKeyRegexp: re,
 	}, nil
 }
 
-func (*Plugin) Name() string { return pluginName }
-
-func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
+func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	dyn, err := p.connect()
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 
 	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces and cluster ID: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces and cluster ID: %w", err)
 	}
 
 	deplsWithAPIKeys, err := findDeploymentsWithMatchingSecrets(ctx, dyn, namespaces, p.apiKeyRegexp)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("scanning deployments: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("scanning deployments: %w", err)
 	}
 
 	// Query each unique API key against every host once, cache results.
@@ -146,7 +154,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 		nodes = append(nodes, n)
 	}
 
-	return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
+	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
 }
 
 type deploymentWithSecret struct {
