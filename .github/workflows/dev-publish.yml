@@ -23,7 +23,7 @@ jobs:
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
-      context: "catalog"
+      context: "."
       platforms: "linux/amd64,linux/arm64"
       push: true
     secrets:
@@ -42,10 +42,65 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── 3. Plugins ─────────────────────────────────────────────────────────────
+  container-publish-plugin-mlflow:
+    name: Publish · Plugin MLflow
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-mlflow"
+      dockerfile: "plugins/cmd/mlflow/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-litellm:
+    name: Publish · Plugin LiteLLM
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-litellm"
+      dockerfile: "plugins/cmd/litellm/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-depl-calls-svc:
+    name: Publish · Plugin Depl Calls Svc
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-depl-calls-svc"
+      dockerfile: "plugins/cmd/depl_calls_svc/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-fluxcd:
+    name: Publish · Plugin FluxCD
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-fluxcd"
+      dockerfile: "plugins/cmd/fluxcd/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Gate: surfaces overall publish status as a single check ───────────────
   all-published:
     name: All Images Published
-    needs: [container-publish-catalog, container-publish-ui]
+    needs:
+      - container-publish-catalog
+      - container-publish-ui
+      - container-publish-plugin-mlflow
+      - container-publish-plugin-litellm
+      - container-publish-plugin-depl-calls-svc
+      - container-publish-plugin-fluxcd
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -54,6 +109,10 @@ jobs:
           RESULTS=(
             "${{ needs.container-publish-catalog.result }}"
             "${{ needs.container-publish-ui.result }}"
+            "${{ needs.container-publish-plugin-mlflow.result }}"
+            "${{ needs.container-publish-plugin-litellm.result }}"
+            "${{ needs.container-publish-plugin-depl-calls-svc.result }}"
+            "${{ needs.container-publish-plugin-fluxcd.result }}"
           )
           for r in "${RESULTS[@]}"; do
             if [[ "$r" != "success" ]]; then
