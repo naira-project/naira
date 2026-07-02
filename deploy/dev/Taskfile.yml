@@ -26,6 +26,15 @@ vars:
   POSTGRES_MANIFEST: infra/kubernetes/postgres.yaml
   CATALOG_DIR: ../../catalog
   CATALOG_IMAGE: catalog:local
+  PLUGINS_BASE: ../../plugins/cmd
+  MLFLOW_PLUGIN_DIR: '{{.PLUGINS_BASE}}/mlflow'
+  MLFLOW_PLUGIN_IMAGE: mlflow:local
+  LITELLM_PLUGIN_DIR: '{{.PLUGINS_BASE}}/litellm'
+  LITELLM_PLUGIN_IMAGE: litellm:local
+  DEPL_CALLS_SVC_PLUGIN_DIR: '{{.PLUGINS_BASE}}/depl_calls_svc'
+  DEPL_CALLS_SVC_PLUGIN_IMAGE: depl-calls-svc:local
+  FLUXCD_PLUGIN_DIR: '{{.PLUGINS_BASE}}/fluxcd'
+  FLUXCD_PLUGIN_IMAGE: fluxcd:local
   CATALOG_NAMESPACE: idp-system
   CATALOG_MANIFEST: infra/kubernetes/catalog.yaml
   CATALOG_SERVICE: svc/catalog
@@ -59,6 +68,7 @@ tasks:
       - python3 --version
       - go version
       - docker version
+      - buf --version
 
   cluster:create:
     desc: Create the local kind cluster
@@ -158,17 +168,75 @@ tasks:
     cmds:
       - kubectl -n {{.LITELLM_NAMESPACE}} port-forward {{.LITELLM_SERVICE}} {{.LITELLM_LOCAL_PORT}}:{{.LITELLM_REMOTE_PORT}}
 
+  mlflow:image:build:
+    desc: Build the mlflow Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.MLFLOW_PLUGIN_IMAGE}}', DIR: '{{.MLFLOW_PLUGIN_DIR}}' }
+
+  mlflow:image:load:
+    desc: Load the mlflow plugin image into kind
+    deps:
+      - mlflow:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.MLFLOW_PLUGIN_IMAGE}}' }
+
+  litellm:image:build:
+    desc: Build the litellm Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.LITELLM_PLUGIN_IMAGE}}', DIR: '{{.LITELLM_PLUGIN_DIR}}' }
+
+  litellm:image:load:
+    desc: Load the litellm plugin image into kind
+    deps:
+      - litellm:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.LITELLM_PLUGIN_IMAGE}}' }
+
+  depl-calls-svc:image:build:
+    desc: Build the depl-calls-svc plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.DEPL_CALLS_SVC_PLUGIN_IMAGE}}', DIR: '{{.DEPL_CALLS_SVC_PLUGIN_DIR}}' }
+
+  depl-calls-svc:image:load:
+    desc: Load the depl-calls-svc plugin image into kind
+    deps:
+      - depl-calls-svc:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.DEPL_CALLS_SVC_PLUGIN_IMAGE}}' }
+
+  fluxcd:image:build:
+    desc: Build the fluxcd plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.FLUXCD_PLUGIN_IMAGE}}', DIR: '{{.FLUXCD_PLUGIN_DIR}}' }
+
+  fluxcd:image:load:
+    desc: Load the fluxcd plugin image into kind
+    deps:
+      - fluxcd:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.FLUXCD_PLUGIN_IMAGE}}' }
+
   catalog:image:build:
     desc: Build the catalog Docker image
     cmds:
-      - docker build -t {{.CATALOG_IMAGE}} {{.CATALOG_DIR}}
+      - task: _docker:build
+        vars: { IMAGE: '{{.CATALOG_IMAGE}}', DIR: '{{.CATALOG_DIR}}' }
 
   catalog:image:load:
     desc: Load the catalog image into kind
     deps:
       - catalog:image:build
     cmds:
-      - kind load docker-image {{.CATALOG_IMAGE}} --name {{.CLUSTER_NAME}}
+      - task: _docker:load
+        vars: { IMAGE: '{{.CATALOG_IMAGE}}' }
 
   catalog:deploy:
     desc: Deploy the catalog to kind
@@ -181,6 +249,10 @@ tasks:
     internal: true
     cmds:
       - task: catalog:image:load
+      - task: mlflow:image:load
+      - task: litellm:image:load
+      - task: depl-calls-svc:image:load
+      - task: fluxcd:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods
@@ -205,7 +277,8 @@ tasks:
     deps:
       - ui:image:build
     cmds:
-      - kind load docker-image {{.UI_IMAGE}} --name {{.CLUSTER_NAME}}
+      - task: _docker:load
+        vars: { IMAGE: '{{.UI_IMAGE}}' }
 
   ui:deploy:
     desc: Deploy the UI to kind
@@ -307,3 +380,14 @@ tasks:
   forward:all:tunnels:
     internal: true
     deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+  
+   # Reusable "Macro" Tasks
+  _docker:build:
+    internal: true
+    cmds:
+      - docker build -t {{.IMAGE}} -f {{.DIR}}/Dockerfile ../../
+
+  _docker:load:
+    internal: true
+    cmds:
+      - kind load docker-image {{.IMAGE}} --name {{.CLUSTER_NAME}}

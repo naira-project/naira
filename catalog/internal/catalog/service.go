@@ -23,13 +23,13 @@ type Service struct {
 	logger  *log.Logger
 }
 
-func NewService(store Store, logger *log.Logger, plugins ...Plugin) *Service {
+func NewService(store Store, plugins map[string]Plugin, logger *log.Logger) *Service {
 	registeredPlugins := make(map[string]Plugin, len(plugins))
-	for _, plugin := range plugins {
+	for name, plugin := range plugins {
 		if plugin == nil {
 			continue
 		}
-		registeredPlugins[normalizePluginName(plugin.Name())] = plugin
+		registeredPlugins[normalizePluginName(name)] = plugin
 	}
 
 	return &Service{store: store, plugins: registeredPlugins, logger: logger}
@@ -46,20 +46,20 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 		return fmt.Errorf("looking up plugin %q: %w", pluginName, ErrPluginNotFound)
 	}
 
-	request, err := plugin.Collect(ctx)
+	response, err := plugin.Collect(ctx)
 	if err != nil {
 		return fmt.Errorf("collecting response from plugin %q: %w", pluginName, err)
 	}
 
 	snapshotID := uuid.New()
 
-	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, request.Nodes, request.Relations)
+	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, response.Nodes, response.Relations)
 	if err != nil {
 		return fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err)
 	}
 
 	if s.logger != nil {
-		s.logger.Printf("plugin %q upserted %d nodes and %d relations", plugin.Name(), upsertedNodes, upsertedRelations)
+		s.logger.Printf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
 	}
 
 	return nil

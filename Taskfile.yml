@@ -3,6 +3,7 @@ version: '3'
 vars:
   DEV_TASKFILE: ./deploy/dev/Taskfile.yml
   CATALOG_DIR: ./catalog
+  PROTO_DIR: ./plugins/pkg/pluginapi/proto
 
 tasks:
   check:
@@ -24,6 +25,16 @@ tasks:
     desc: Remove the cluster
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} cluster:delete
+
+  proto:generate:
+    desc: Generate protobuf stubs of pluginapi
+    cmds:
+      - cd {{.PROTO_DIR}} && go generate
+
+  proto:lint:
+    desc: Lint proto of pluginapi
+    cmds:
+      - cd {{.PROTO_DIR}} && buf lint
 
   catalog:test:
     desc: Run catalog unit tests

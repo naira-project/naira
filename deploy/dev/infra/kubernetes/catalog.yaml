@@ -25,7 +25,50 @@ metadata:
 rules:
   - apiGroups: ["naira.io"]
     resources: ["appidentities"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: plugin-depl-calls-svc
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "services"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: plugin-fluxcd
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+    resources: ["kustomizations"]
+    verbs: ["get", "list"]
+  - apiGroups: ["helm.toolkit.fluxcd.io"]
+    resources: ["helmreleases"]
+    verbs: ["get", "list"]
+  - apiGroups: ["source.toolkit.fluxcd.io"]
+    resources: ["gitrepositories"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: plugin-depl-calls-svc
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: plugin-depl-calls-svc
+subjects:
+  - kind: ServiceAccount
+    name: catalog
+    namespace: idp-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -35,6 +78,19 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: catalog-appidentities
+subjects:
+  - kind: ServiceAccount
+    name: catalog
+    namespace: idp-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: plugin-fluxcd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: plugin-fluxcd
 subjects:
   - kind: ServiceAccount
     name: catalog
@@ -56,15 +112,14 @@ spec:
         app: catalog
     spec:
       serviceAccountName: catalog
-      containers:
-        - name: catalog
-          image: catalog:local
+      initContainers:
+        - name: plugin-litellm
+          image: litellm:local
+          restartPolicy: Always
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "8090"
-            - name: MLFLOW_BASE_URL
-              value: http://mlflow.mlflow.svc.cluster.local:5000
+              value: "50051"
             - name: LITELLM_BASE_URL
               value: http://litellm.litellm.svc.cluster.local:4000
             - name: LITELLM_API_KEY
@@ -72,6 +127,68 @@ spec:
                 secretKeyRef:
                   name: catalog-secrets
                   key: LITELLM_API_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-mlflow
+          image: mlflow:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50052"
+            - name: MLFLOW_BASE_URL
+              value: http://mlflow.mlflow.svc.cluster.local:5000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-depl-calls-svc
+          image: depl-calls-svc:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50053"
+            - name: DEPL_CALLS_SVC_KUBECONFIG
+              value: ""
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-fluxcd
+          image: fluxcd:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50054"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      containers:
+        - name: catalog
+          image: catalog:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "8090"
+            - name: PLUGIN_ADDRESSES
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,fluxcd=localhost:50054"
           ports:
             - containerPort: 8090
               name: http

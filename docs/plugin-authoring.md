@@ -1,6 +1,6 @@
 # Plugin authoring
 
-Plugins return graph data through `pluginapi.IngestionRequest`.
+Plugins return graph data through `pluginapi.CollectResponse`.
 
 ## Node IDs
 
@@ -19,12 +19,12 @@ Why: node reads use the route `/v1/nodes/{kind}/*`, so `kind` is one path segmen
 
 - `kind` must not contain `/`
 - Relation endpoints currently identify links by `kind`, `from`, and `to`.
-- `from` and `to` nodes must exist in the same ingestion request.
+- `from` and `to` nodes must exist in the same collect response.
 
 ## Minimal example
 
 ```go
-return pluginapi.IngestionRequest{
+return pluginapi.CollectResponse{
 	Nodes: []pluginapi.NodeClaim{
 		{
 			ID: pluginapi.NodeID{
