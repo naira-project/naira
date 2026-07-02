@@ -5,6 +5,7 @@ resources:
   - litellm.yaml
   - mlflow.yaml
   - postgres.yaml
+  - portal.yaml
   - ui.yaml
 images:
   - name: ui
@@ -25,3 +26,6 @@ images:
   - name: fluxcd
     newName: ghcr.io/naira-project/naira-plugin-fluxcd
     newTag: sha-9f5ef2b
+  - name: portal
+    newName: ghcr.io/naira-project/naira-portal
+    newTag: sha-4821f65
