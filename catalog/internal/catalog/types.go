@@ -1,6 +1,6 @@
 package catalog
 
-import "github.com/naira-project/naira/catalog/pluginapi"
+import "github.com/naira-project/naira/plugins/pkg/pluginapi"
 
 type Plugin = pluginapi.Plugin
 
@@ -8,7 +8,7 @@ type PropertyMap = pluginapi.PropertyMap
 
 type NodeID = pluginapi.NodeID
 
-type IngestionRequest = pluginapi.IngestionRequest
+type CollectResponse = pluginapi.CollectResponse
 
 type NodeClaim = pluginapi.NodeClaim
 
