@@ -1,0 +1,69 @@
+name: Build and Push Docker Images manually
+
+on:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        include:
+          # --- Core Services ---
+          - name: ui
+            context: ui-poc
+            dockerfile: ui-poc/Dockerfile
+          - name: catalog
+            context: .
+            dockerfile: catalog/Dockerfile
+
+          # --- Plugins ---
+          - name: plugin-mlflow
+            context: .
+            dockerfile: plugins/cmd/mlflow/Dockerfile
+          - name: plugin-litellm
+            context: .
+            dockerfile: plugins/cmd/litellm/Dockerfile
+          - name: plugin-depl-calls-svc
+            context: .
+            dockerfile: plugins/cmd/depl_calls_svc/Dockerfile
+          - name: plugin-fluxcd
+            context: .
+            dockerfile: plugins/cmd/fluxcd/Dockerfile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+
+      - name: Build and push ${{ matrix.name }} image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
