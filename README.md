@@ -18,6 +18,25 @@ Naira helps teams:
 
 Built with and for the cloud-native ecosystem, Naira is designed to integrate closely with technologies such as **PlatformMesh**, **OpenMFP/Luigi**, **KCP**, and other components of the NeoNephos stack.
 
+## Getting Started
+
+### Prerequisites
+
+This project requires several local tools (such as `kind`, `task`,`go`). 
+
+**The Recommended Way (Using mise):**
+We use [mise](https://mise.jdx.dev/) to manage tools automatically. If you have `mise` installed, simply run:
+```bash
+mise install
+```
+Alternative Way (Manual Installation):
+If you prefer not to use mise, you can find the exact versions of all tools in the mise.toml file.
+
+### Local Development
+To spin up the environment and access the services locally, follow these steps:
+- `task platform:deploy` - deploys the platform to kind
+- `task forward:all` - port-forward the main developer-facing services
+
 ## Support, Feedback, Contributing
 
 This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/naira-project/<your-project>/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).

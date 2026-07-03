@@ -6,6 +6,8 @@ vars:
   PROTO_DIR: ./plugins/pkg/pluginapi/proto
 
 tasks:
+  # Tool versions are managed via mise (https://mise.jdx.dev).
+  # See mise.toml in the repo root.
   check:
     desc: Verify required local tools exist
     cmds:
