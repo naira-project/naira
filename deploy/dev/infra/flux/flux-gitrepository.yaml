@@ -7,4 +7,4 @@ spec:
   interval: 1m
   url: https://github.com/naira-project/naira
   ref:
-    branch: feat/flux
+    branch: main
