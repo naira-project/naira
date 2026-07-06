@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -99,16 +100,19 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error
 	}
 
 	relations, err := p.collectLineage(ctx, tables, nodeByEntityID, token)
+	request := pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("fetching OpenMetadata lineage: %w", err)
+		return request, err
 	}
 
-	return pluginapi.IngestionRequest{Nodes: nodes, Relations: relations}, nil
+	return request, nil
 }
 
+// collectLineage fetches lineage for each table;
 func (p *Plugin) collectLineage(ctx context.Context, tables []table, nodeByEntityID map[string]pluginapi.NodeID, token string) ([]pluginapi.RelationClaim, error) {
 	relations := make([]pluginapi.RelationClaim, 0)
 	seen := make(map[[2]pluginapi.NodeID]struct{})
+	fetchLineageErrors := make([]error, 0)
 
 	for _, table := range tables {
 		if table.ID == "" {
@@ -117,7 +121,8 @@ func (p *Plugin) collectLineage(ctx context.Context, tables []table, nodeByEntit
 
 		edges, err := p.fetchTableLineage(ctx, table.ID, token)
 		if err != nil {
-			return nil, err
+			fetchLineageErrors = append(fetchLineageErrors, fmt.Errorf("fetching OpenMetadata lineage for table %s: %w", datasetPath(table), err))
+			continue
 		}
 
 		for _, edge := range edges {
@@ -142,6 +147,10 @@ func (p *Plugin) collectLineage(ctx context.Context, tables []table, nodeByEntit
 				To:   upstream,
 			})
 		}
+	}
+
+	if len(fetchLineageErrors) > 0 {
+		return relations, errors.Join(fetchLineageErrors...)
 	}
 
 	return relations, nil
@@ -176,6 +185,7 @@ func (p *Plugin) fetchTableLineage(ctx context.Context, tableID string, token st
 	return edges, nil
 }
 
+// TO DO: add pagination
 func (p *Plugin) fetchTables(ctx context.Context, token string) ([]table, error) {
 	endpoint, err := url.Parse(p.config.BaseURL + "/api/v1/tables")
 	if err != nil {
@@ -218,9 +228,7 @@ func (p *Plugin) fetchTables(ctx context.Context, token string) ([]table, error)
 }
 
 // login exchanges the configured admin credentials for a short-lived JWT via
-// OpenMetadata's basic-auth login endpoint, mirroring the dev seed script. When
-// no credentials are configured it returns an empty token, leaving requests
-// unauthenticated (for OpenMetadata instances that don't require auth).
+// OpenMetadata's basic-auth login endpoint
 func (p *Plugin) login(ctx context.Context) (string, error) {
 	if strings.TrimSpace(p.config.Email) == "" && strings.TrimSpace(p.config.Password) == "" {
 		return "", nil
