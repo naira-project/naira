@@ -2,18 +2,17 @@ import { useNavigate, useLocation } from 'react-router';
 import {
   LayoutDashboard,
   Layers,
-  Plus,
+  Compass,
   Settings,
   HelpCircle,
 } from 'lucide-react';
 import { Separator } from './ui/separator';
-import { NAV_CATALOG } from '../constants/Constants';
 import { cn } from '../lib/utils';
 
 const NAV_PRIMARY = [
   { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Model Registries', icon: Layers },
-  { label: 'MCP Catalog', icon: Plus },
+  { label: 'Catalog Explorer', icon: Compass },
 ];
 
 const NAV_BOTTOM = [
@@ -24,7 +23,7 @@ const NAV_BOTTOM = [
 const routeMap: Record<string, string> = {
   Dashboard: '/',
   'Model Registries': '/model-registry',
-  'MCP Catalog': '/',
+  'Catalog Explorer': '/catalog',
 };
 
 export default function NavigationBar() {
@@ -34,10 +33,10 @@ export default function NavigationBar() {
   const activeNav =
     location.pathname === '/'
       ? 'Dashboard'
-      : location.pathname === '/model-registry'
+      : location.pathname.startsWith('/model-registry')
       ? 'Model Registries'
-      : location.pathname === '/catalog-graph'
-      ? 'Catalog Graph'
+      : location.pathname.startsWith('/catalog')
+      ? 'Catalog Explorer'
       : 'Dashboard';
 
   return (
@@ -75,13 +74,6 @@ export default function NavigationBar() {
               </li>
             );
           })}
-          {NAV_CATALOG.map((label) => (
-            <li key={label}>
-              <button className="flex w-full items-center rounded-lg px-3 py-2 pl-10 text-sm text-white hover:bg-white/10 hover:text-white">
-                {label}
-              </button>
-            </li>
-          ))}
         </ul>
       </div>
 
