@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Search, ChevronDown, ChevronRight, ExternalLink, Database, GitBranch } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { cn } from '../lib/utils';
+import ColumnTable from '../components/ColumnTable';
 import { useDatasets, type Dataset } from '../hooks/useDatasets';
 
 const COL_WIDTHS = '24% 14% 18% 14% 9% 11% 10%';
@@ -31,37 +33,8 @@ function TableHeader() {
   );
 }
 
-function ColumnTable({ dataset }: { dataset: Dataset }) {
-  return (
-    <div className="overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
-      <div
-        className="grid border-b border-gray-200 bg-gray-100 px-3 py-1.5 dark:border-gray-700 dark:bg-white/10"
-        style={{ gridTemplateColumns: '30% 25% 45%' }}
-      >
-        {['Column', 'Type', 'Description'].map((header) => (
-          <span key={header} className="text-[0.6rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary">
-            {header}
-          </span>
-        ))}
-      </div>
-      {dataset.columns.map((column) => (
-        <div
-          key={column.name}
-          className="grid border-b border-gray-100 px-3 py-1.5 last:border-0 dark:border-gray-700/60"
-          style={{ gridTemplateColumns: '30% 25% 45%' }}
-        >
-          <span className="truncate text-xs font-medium text-foreground dark:text-foreground-dark-default">{column.name}</span>
-          <span className="truncate text-xs text-foreground-secondary dark:text-foreground-dark-secondary" title={column.nativeType || column.type}>
-            {column.type || '—'}
-          </span>
-          <span className="truncate text-xs text-foreground-secondary dark:text-foreground-dark-secondary">{column.description || '—'}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function DatasetRow({ dataset }: { dataset: Dataset }) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const hasColumns = dataset.columns.length > 0;
   const hasLineage = dataset.derivedFrom > 0 || dataset.feeds > 0;
@@ -80,7 +53,16 @@ function DatasetRow({ dataset }: { dataset: Dataset }) {
           {hasColumns
             ? (open ? <ChevronDown size={14} className="shrink-0" /> : <ChevronRight size={14} className="shrink-0" />)
             : <span className="w-[14px] shrink-0" />}
-          {dataset.name}
+          <button
+            onClick={(event) => {
+              event.stopPropagation();
+              navigate(`/dataset-registry/${encodeURIComponent(encodeURIComponent(dataset.id))}`);
+            }}
+            className="truncate text-left hover:text-primary hover:underline"
+            title="View details"
+          >
+            {dataset.name}
+          </button>
         </span>
         <span className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary">{dataset.platform || '—'}</span>
         <span className="flex flex-wrap gap-1">
@@ -178,7 +160,7 @@ export default function Datasets() {
             placeholder="Search datasets by name, FQN, platform or tag..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="ml-4 max-w-[480px]"
+            className="max-w-[480px]"
           />
         </header>
 

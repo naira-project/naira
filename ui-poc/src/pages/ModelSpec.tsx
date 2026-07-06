@@ -23,7 +23,7 @@ export default function ModelSpec() {
         {!loading && !error && (
           <div className="flex flex-col gap-2 px-3 py-2 border-b shrink-0">
             <button
-                onClick={() => navigate(-1)}
+                onClick={() => navigate('/model-registry')}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors self-start"
             >
                 ← Model Registries

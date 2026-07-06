@@ -1,13 +1,16 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { ArrowRight, GitBranch, Network, RefreshCw, Share2 } from 'lucide-react';
 import {
   Background,
   Controls,
   MarkerType,
-  MiniMap,
   ReactFlow,
+  useEdgesState,
+  useNodesState,
   type Edge,
   type Node,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -27,6 +30,19 @@ function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
+// Detail pages exist for models and datasets; their route id is the node path
+// (double-encoded to survive the slashes, matching the registry list pages).
+function detailRouteForNode(node: CatalogGraphNode): string | null {
+  const encoded = encodeURIComponent(encodeURIComponent(node.path));
+  if (node.kind === 'model') {
+    return `/model-registry/${encoded}`;
+  }
+  if (node.kind === 'dataset') {
+    return `/dataset-registry/${encoded}`;
+  }
+  return null;
+}
+
 function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }): Node {
   const palette = typePalette[node.kind] ?? { fill: '#eceff3', stroke: '#516170' };
 
@@ -40,7 +56,7 @@ function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }):
       depth: node.depth,
       isRoot: node.isRoot,
     },
-    draggable: false,
+    draggable: true,
     selectable: true,
     style: {
       width: 220,
@@ -142,12 +158,41 @@ type CatalogGraphProps = {
 };
 
 export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
+  const navigate = useNavigate();
   const [depth, setDepth] = useState(1);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { graph, loading, error, reload } = useCatalogGraph(rootNode, depth);
 
-  const flowNodes = useMemo(() => layoutNodes(graph.nodes), [graph.nodes]);
-  const flowEdges = useMemo(() => graph.edges.map(toFlowEdge), [graph.edges]);
+  // Controlled node/edge state lets React Flow persist drag positions; we reseed
+  // it from the freshly laid-out graph whenever the slice (depth/reload) changes.
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const instanceRef = useRef<ReactFlowInstance | null>(null);
+
+  useEffect(() => {
+    setNodes(layoutNodes(graph.nodes));
+    setEdges(graph.edges.map(toFlowEdge));
+    // Refit once the new layout has been committed to the store.
+    window.requestAnimationFrame(() => instanceRef.current?.fitView());
+  }, [graph, setNodes, setEdges]);
+
+  const handleNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      const typed = graph.nodes.find((item) => graphNodeId(item) === node.id);
+      if (!typed) {
+        return;
+      }
+      // The root is the entity whose page we're already on, so just select it.
+      const route = typed.isRoot ? null : detailRouteForNode(typed);
+      if (route) {
+        navigate(route);
+        return;
+      }
+      setSelectedNodeId(node.id);
+    },
+    [graph.nodes, navigate]
+  );
+
   const selectedNode = graph.nodes.find((node) => graphNodeId(node) === selectedNodeId) ?? graph.nodes[0] ?? null;
   const incomingCount = graph.edges.filter((edge) => edge.direction === 'incoming').length;
   const outgoingCount = graph.edges.filter((edge) => edge.direction === 'outgoing').length;
@@ -217,25 +262,19 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
             )}
 
             <ReactFlow
-              nodes={flowNodes}
-              edges={flowEdges}
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onInit={(instance) => { instanceRef.current = instance; }}
               fitView
-              onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-              nodesDraggable={false}
+              onNodeClick={handleNodeClick}
+              nodesDraggable
               nodesConnectable={false}
               elementsSelectable
               proOptions={{ hideAttribution: true }}
               defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed } }}
             >
-              <MiniMap
-                pannable
-                zoomable
-                nodeColor={(node) => {
-                  const typedNode = graph.nodes.find((item) => graphNodeId(item) === node.id);
-                  const palette = typePalette[typedNode?.kind ?? ''] ?? { fill: '#ced6de', stroke: '#516170' };
-                  return typedNode?.isRoot ? '#0f5c61' : palette.stroke;
-                }}
-              />
               <Controls showInteractive={false} />
               <Background color="#d7e2ec" gap={20} size={1.2} />
             </ReactFlow>
@@ -250,6 +289,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
               </h2>
               <p className="mt-2 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
                 This view combines incoming and outgoing relations around the current root node.
+                Drag nodes to rearrange them, and click any model or dataset to open its detail page.
               </p>
               <div className="mt-4 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-3 dark:bg-white/5">
                 <span className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">Incoming</span>

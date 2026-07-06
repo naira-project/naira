@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { buildEqualityFilter, fetchNodes, fetchRelations, NodeResource } from '../lib/catalogApi';
+import { buildEqualityFilter, fetchNode, fetchNodes, fetchRelations, NodeResource } from '../lib/catalogApi';
 
 export interface DatasetColumn {
   name: string;
@@ -131,4 +131,51 @@ export function useDatasets() {
   }, []);
 
   return { datasets, loading, error };
+}
+
+export function useDatasetWithId(id: string) {
+  const [dataset, setDataset] = useState<Dataset | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    const load = async () => {
+      const node = await fetchNode('dataset', id);
+      const next = mapNodeToDataset(node);
+      const relations = await fetchRelations({
+        filter: buildEqualityFilter('kind', 'derived_from'),
+        pageSize: 1000,
+      });
+      for (const relation of relations) {
+        if (relation.fromNode === next.resourceName) {
+          next.derivedFrom += 1;
+        }
+        if (relation.toNode === next.resourceName) {
+          next.feeds += 1;
+        }
+      }
+
+      if (!cancelled) {
+        setDataset(next);
+        setLoading(false);
+      }
+    };
+
+    load().catch(() => {
+      if (!cancelled) {
+        setError('Failed to load dataset');
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  return { dataset, loading, error };
 }
