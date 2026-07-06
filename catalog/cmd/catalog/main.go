@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Nerzal/gocloak/v13"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
 	"github.com/naira-project/naira/catalog/internal/plugins"
@@ -23,7 +24,13 @@ func main() {
 	httpClient := &http.Client{Timeout: config.HTTPTimeout}
 	registeredPlugins := plugins.Register(config.Plugins, httpClient, logger)
 	service := catalog.NewService(catalog.NewMemoryStore(), logger, registeredPlugins...)
-	router := httpapi.NewRouter(service, logger)
+
+	keycloak := gocloak.NewClient(config.KeycloakBaseURL)
+	router := httpapi.NewRouter(service, logger, httpapi.KeycloakConfig{
+		Client: keycloak,
+		Realm:  config.KeycloakRealm,
+		ClientID: config.KeycloakClient,
+	})
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           router,

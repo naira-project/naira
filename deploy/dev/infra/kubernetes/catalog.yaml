@@ -72,6 +72,12 @@ spec:
                 secretKeyRef:
                   name: catalog-secrets
                   key: LITELLM_API_KEY
+            - name: KEYCLOAK_BASE_URL
+              value: http://keycloak.platform-mesh-system.svc.cluster.local:80/keycloak
+            - name: KEYCLOAK_REALM
+              value: newone
+            - name: KEYCLOAK_CLIENT
+              value: admin-cli
           ports:
             - containerPort: 8090
               name: http

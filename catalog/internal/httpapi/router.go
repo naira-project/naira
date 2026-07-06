@@ -2,22 +2,130 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/Nerzal/gocloak/v13"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
 type routeHandler func(http.ResponseWriter, *http.Request) error
 type listOptionsHandler func(http.ResponseWriter, *http.Request, listOptions) error
 
-func NewRouter(service *catalog.Service, logger *log.Logger) http.Handler {
+type contextKey string
+
+const claimsKey contextKey = "claims"
+
+// KeycloakConfig holds the gocloak client and realm needed for token verification.
+type KeycloakConfig struct {
+	Client *gocloak.GoCloak
+	Realm  string
+	ClientID string
+}
+
+// TokenClaims holds the user identity extracted from a verified Keycloak JWT.
+type TokenClaims struct {
+	Sub      string
+	Email    string
+	Username string
+	RealmRoles  []string
+	ClientRoles []string
+}
+
+type keycloakClaims struct {
+	jwt.RegisteredClaims
+	Email             string         `json:"email"`
+	PreferredUsername string         `json:"preferred_username"`
+	RealmAccess       struct {
+		Roles []string `json:"roles"`
+	} `json:"realm_access"`
+	ResourceAccess map[string]struct {
+		Roles []string `json:"roles"`
+	} `json:"resource_access"`
+}
+
+
+func newAuthMiddleware(kc KeycloakConfig) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				http.Error(w, "missing authorization header", http.StatusUnauthorized)
+				return
+			}
+
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+				http.Error(w, "authorization header must be Bearer {token}", http.StatusUnauthorized)
+				return
+			}
+			tokenString := parts[1]
+
+			_, rawClaims, err := kc.Client.DecodeAccessToken(r.Context(), tokenString, kc.Realm)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("invalid token: %v", err), http.StatusUnauthorized)
+				return
+			}
+
+			tc := parseTokenClaims(rawClaims, kc.ClientID)
+			ctx := context.WithValue(r.Context(), claimsKey, tc)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func parseTokenClaims(rawClaims *jwt.MapClaims, clientID string) TokenClaims {
+	claims := *rawClaims
+	tc := TokenClaims{
+		Sub:      stringClaim(claims, "sub"),
+		Email:    stringClaim(claims, "email"),
+		Username: stringClaim(claims, "preferred_username"),
+	}
+
+	if ra, ok := claims["realm_access"].(map[string]interface{}); ok {
+		if roles, ok := ra["roles"].([]interface{}); ok {
+			for _, r := range roles {
+				if s, ok := r.(string); ok {
+					tc.RealmRoles = append(tc.RealmRoles, s)
+				}
+			}
+		}
+	}
+
+	if ra, ok := claims["resource_access"].(map[string]interface{}); ok {
+		if client, ok := ra[clientID].(map[string]interface{}); ok {
+			if roles, ok := client["roles"].([]interface{}); ok {
+				for _, r := range roles {
+					if s, ok := r.(string); ok {
+						tc.ClientRoles = append(tc.ClientRoles, s)
+					}
+				}
+			}
+		}
+	}
+
+	return tc
+}
+
+func stringClaim(claims map[string]interface{}, key string) string {
+	if v, ok := claims[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func NewRouter(service *catalog.Service, logger *log.Logger, kc KeycloakConfig) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
@@ -30,83 +138,85 @@ func NewRouter(service *catalog.Service, logger *log.Logger) http.Handler {
 	})
 
 	router.Route("/v1", func(r chi.Router) {
-		r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
-			response := service.RunAllPlugins(r.Context())
+			r.Use(newAuthMiddleware(kc))
 
-			writeJSON(w, http.StatusAccepted, runPluginsResponseFromResult(response))
-			return nil
-		}))
+			r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
+				response := service.RunAllPlugins(r.Context())
+				writeJSON(w, http.StatusAccepted, runPluginsResponseFromResult(response))
+				return nil
+			}))
 
-		// GET /v1/nodes lists catalog nodes.
-		// Supported query params:
-		// - pageSize
-		// - pageToken
-		// - filter: only field="value" equality filters
-		// Supported node filter fields: name, kind, path.
-		r.Get("/nodes", handleWithListOptions(nodeListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-			nodes := make([]Node, 0)
-			for _, node := range service.ListNodes(r.Context()) {
-				node := nodeFromCatalogNode(node)
-				matches, err := matchNodeFilter(node, options.filter)
+			// GET /v1/nodes lists catalog nodes.
+			// Supported query params:
+			// - pageSize
+			// - pageToken
+			// - filter: only field="value" equality filters
+			// Supported node filter fields: name, kind, path.
+			r.Get("/nodes", handleWithListOptions(nodeListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
+
+				nodes := make([]Node, 0)
+				for _, node := range service.ListNodes(r.Context()) {
+					node := nodeFromCatalogNode(node)
+					matches, err := matchNodeFilter(node, options.filter)
+					if err != nil {
+						return fmt.Errorf("matching node filter: %w", err)
+					}
+					if matches {
+						nodes = append(nodes, node)
+					}
+				}
+
+				sortNodes(nodes)
+
+				page, nextPageToken, totalSize, err := paginate(nodes, options.pageSize, options.offset, "nodes", logger)
 				if err != nil {
-					return fmt.Errorf("matching node filter: %w", err)
+					return fmt.Errorf("paginating nodes: %w", err)
 				}
-				if matches {
-					nodes = append(nodes, node)
-				}
-			}
 
-			sortNodes(nodes)
+				writeJSON(w, http.StatusOK, ListNodesResponse{Nodes: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
+				return nil
+			}))
 
-			page, nextPageToken, totalSize, err := paginate(nodes, options.pageSize, options.offset, "nodes", logger)
-			if err != nil {
-				return fmt.Errorf("paginating nodes: %w", err)
-			}
-
-			writeJSON(w, http.StatusOK, ListNodesResponse{Nodes: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
-			return nil
-		}))
-
-		r.Get("/nodes/{kind}/*", handle(func(w http.ResponseWriter, r *http.Request) error {
-			node, err := service.GetNode(r.Context(), catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")})
-			if err != nil {
-				return fmt.Errorf("getting node: %w", err)
-			}
-
-			writeJSON(w, http.StatusOK, nodeFromCatalogNode(node))
-			return nil
-		}))
-
-		// GET /v1/relations lists catalog relations.
-		// Supported query params:
-		// - pageSize
-		// - pageToken
-		// - filter: only field="value" equality filters
-		// Supported relation filter fields: name, kind, fromNode, toNode.
-		r.Get("/relations", handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-			relations := make([]Relation, 0)
-			for _, relation := range service.ListRelations(r.Context()) {
-				resource := relationFromCatalogRelation(relation)
-				matches, err := matchRelationFilter(resource, options.filter)
+			r.Get("/nodes/{kind}/*", handle(func(w http.ResponseWriter, r *http.Request) error {
+				node, err := service.GetNode(r.Context(), catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")})
 				if err != nil {
-					return fmt.Errorf("matching relation filter: %w", err)
+					return fmt.Errorf("getting node: %w", err)
 				}
-				if matches {
-					relations = append(relations, resource)
+
+				writeJSON(w, http.StatusOK, nodeFromCatalogNode(node))
+				return nil
+			}))
+
+			// GET /v1/relations lists catalog relations.
+			// Supported query params:
+			// - pageSize
+			// - pageToken
+			// - filter: only field="value" equality filters
+			// Supported relation filter fields: name, kind, fromNode, toNode.
+			r.Get("/relations", handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
+				relations := make([]Relation, 0)
+				for _, relation := range service.ListRelations(r.Context()) {
+					resource := relationFromCatalogRelation(relation)
+					matches, err := matchRelationFilter(resource, options.filter)
+					if err != nil {
+						return fmt.Errorf("matching relation filter: %w", err)
+					}
+					if matches {
+						relations = append(relations, resource)
+					}
 				}
-			}
 
-			sortRelations(relations)
+				sortRelations(relations)
 
-			page, nextPageToken, totalSize, err := paginate(relations, options.pageSize, options.offset, "relations", logger)
-			if err != nil {
-				return fmt.Errorf("paginating relations: %w", err)
-			}
+				page, nextPageToken, totalSize, err := paginate(relations, options.pageSize, options.offset, "relations", logger)
+				if err != nil {
+					return fmt.Errorf("paginating relations: %w", err)
+				}
 
-			writeJSON(w, http.StatusOK, ListRelationsResponse{Relations: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
-			return nil
-		}))
-	})
+				writeJSON(w, http.StatusOK, ListRelationsResponse{Relations: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
+				return nil
+			}))
+		})
 
 	return router
 }
