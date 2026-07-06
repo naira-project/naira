@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { buildEqualityFilter, fetchNode, fetchNodeByName, fetchNodes, fetchRelations, NodeResource } from '../lib/catalogApi';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 interface Model {
   id: string;
@@ -76,14 +77,19 @@ function mapApplicationNodeToAdopter(node: NodeResource): AdoptersType {
 }
 
 export function useModels(source: 'all' | 'mlflow' | 'litellm') {
+  const { token, isReady } = useOpenMFPContext();
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    fetchNodes({
+    fetchNodes(token, {
       filter: buildEqualityFilter('kind', 'model'),
       pageSize: 1000,
     })
@@ -93,24 +99,29 @@ export function useModels(source: 'all' | 'mlflow' | 'litellm') {
         setLoading(false);
       })
       .catch(() => { setError('Failed to load models'); setLoading(false); });
-  }, [source]);
+  }, [source, token, isReady]);
 
   return { models, loading, error };
 }
 
 export function useModelWithId(id: string) {
+  const { token, isReady } = useOpenMFPContext();
   const [model, setModel] = useState<Model | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
     const loadModel = async () => {
-      const node = await fetchNode('model', id);
+      const node = await fetchNode(token, 'model', id);
       const nextModel = mapNodeToModel(node);
 
-      const relations = await fetchRelations({
+      const relations = await fetchRelations(token, {
         filter: buildEqualityFilter('toNode', nextModel.resourceName),
         pageSize: 1000,
       });
@@ -124,7 +135,7 @@ export function useModelWithId(id: string) {
         const adopterNodes = await Promise.all(
           adopterNames.map(async (name) => {
             try {
-              return await fetchNodeByName(name);
+              return await fetchNodeByName(token, name);
             } catch {
               return null;
             }
@@ -142,7 +153,7 @@ export function useModelWithId(id: string) {
 
     loadModel()
       .catch(() => { setError('Failed to load models'); setLoading(false); });
-  }, [id]);
+  }, [id, token, isReady]);
 
   return {model, loading, error};
 }

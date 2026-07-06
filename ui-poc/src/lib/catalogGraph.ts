@@ -53,15 +53,15 @@ function toGraphNode(node: NodeResource, depth: number, isRoot = false): Catalog
 	};
 }
 
-async function fetchNeighborRelations(node: FrontierNode) {
+async function fetchNeighborRelations(token: string | null, node: FrontierNode) {
 	if (node.direction === 'outgoing') {
-		return fetchRelations({
+		return fetchRelations(token, {
 			filter: buildEqualityFilter('fromNode', node.name),
 			pageSize: 1000,
 		});
 	}
 
-	return fetchRelations({
+	return fetchRelations(token, {
 		filter: buildEqualityFilter('toNode', node.name),
 		pageSize: 1000,
 	});
@@ -101,8 +101,8 @@ function buildNextFrontierNode(relation: RelationResource, direction: 'incoming'
 	};
 }
 
-export async function buildCatalogGraphSlice(root: CatalogGraphRoot, maxDepth: number): Promise<CatalogGraphResponse> {
-	const rootResource = await fetchNodeByName(root.name);
+export async function buildCatalogGraphSlice(token: string | null, root: CatalogGraphRoot, maxDepth: number): Promise<CatalogGraphResponse> {
+	const rootResource = await fetchNodeByName(token, root.name);
 	const nodes = new Map<string, CatalogGraphNode>();
 	const edges = new Map<string, CatalogGraphEdge>();
 	const expanded = new Set<string>();
@@ -129,7 +129,7 @@ export async function buildCatalogGraphSlice(root: CatalogGraphRoot, maxDepth: n
 				}
 
 				expanded.add(expansionKey);
-				const relations = await fetchNeighborRelations(currentNode);
+				const relations = await fetchNeighborRelations(token, currentNode);
 				return { currentNode, relations };
 			})
 		);
@@ -163,7 +163,7 @@ export async function buildCatalogGraphSlice(root: CatalogGraphRoot, maxDepth: n
 
 		const fetchedTargets = await Promise.all(
 			Array.from(nextTargets.values()).map(async (target) => {
-				const node = await fetchNodeByName(target.name);
+				const node = await fetchNodeByName(token, target.name);
 				return { node, target };
 			})
 		);

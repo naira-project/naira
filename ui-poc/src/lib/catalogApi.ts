@@ -86,8 +86,10 @@ export function buildListRelationsUrl(options: ListRequest = {}) {
 	return buildListUrl('/v1/relations', options);
 }
 
-async function fetchJson<T>(url: string) {
-	const response = await fetch(url);
+async function fetchJson<T>(url: string, token: string | null) {
+	const response = await fetch(url, {
+		headers: token ? { Authorization: `Bearer ${token}` } : {},
+	});
 	if (!response.ok) {
 		throw new Error(`Request failed for ${url}`);
 	}
@@ -95,25 +97,25 @@ async function fetchJson<T>(url: string) {
 	return response.json() as Promise<T>;
 }
 
-export async function fetchNodes(options: ListRequest = {}) {
-	const data = await fetchJson<ListNodesResponse>(buildListNodesUrl(options));
+export async function fetchNodes(token: string | null, options: ListRequest = {}) {
+	const data = await fetchJson<ListNodesResponse>(buildListNodesUrl(options), token);
 	return data.nodes ?? [];
 }
 
-export async function fetchNode(kind: string, path: string) {
-	return fetchJson<NodeResource>(buildNodeUrl(kind, path));
+export async function fetchNode(token: string | null, kind: string, path: string) {
+	return fetchJson<NodeResource>(buildNodeUrl(kind, path), token);
 }
 
-export async function fetchNodeByName(name: string) {
+export async function fetchNodeByName(token: string | null, name: string) {
 	const node = parseNodeName(name);
 	if (!node) {
 		throw new Error(`Invalid node name: ${name}`);
 	}
 
-	return fetchNode(node.kind, node.path);
+	return fetchNode(token, node.kind, node.path);
 }
 
-export async function fetchRelations(options: ListRequest = {}) {
-	const data = await fetchJson<ListRelationsResponse>(buildListRelationsUrl(options));
+export async function fetchRelations(token: string | null, options: ListRequest = {}) {
+	const data = await fetchJson<ListRelationsResponse>(buildListRelationsUrl(options), token);
 	return data.relations ?? [];
 }
