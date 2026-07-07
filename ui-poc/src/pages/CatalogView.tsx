@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, RefreshCw, Layers } from 'lucide-react';
 import { Input } from '../components/ui/input';
-import { discoverKinds } from '../lib/kindUtils';
+import { discoverKinds, computeRelationSummaries, RelationSummary } from '../lib/kindUtils';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { NodeResource } from '../lib/catalogApi';
 import KindSelector from '../components/KindSelector';
@@ -23,6 +23,28 @@ export default function CatalogView() {
 
   // Fetch nodes for the active kind
   const { nodes, loading: nodesLoading, error: nodesError } = useCatalogNodes(activeKind ?? '');
+
+  // Relation summaries — fetched when nodes change
+  const [relationSummaries, setRelationSummaries] = useState<Map<string, RelationSummary>>(new Map());
+  const [relationsLoading, setRelationsLoading] = useState(false);
+
+  useEffect(() => {
+    if (nodes.length === 0) {
+      setRelationSummaries(new Map());
+      return;
+    }
+
+    setRelationsLoading(true);
+    computeRelationSummaries(nodes)
+      .then((summaries) => {
+        setRelationSummaries(summaries);
+        setRelationsLoading(false);
+      })
+      .catch(() => {
+        setRelationSummaries(new Map());
+        setRelationsLoading(false);
+      });
+  }, [nodes]);
 
   // Discover kinds on mount
   const loadKinds = () => {
@@ -144,6 +166,7 @@ export default function CatalogView() {
                   nodes={nodes}
                   kind={activeKind}
                   onSelect={handleSelect}
+                  relationSummaries={relationSummaries}
                 />
               )}
             </div>

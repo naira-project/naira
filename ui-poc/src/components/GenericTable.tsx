@@ -1,30 +1,36 @@
 import { useMemo } from 'react';
-import { Info } from 'lucide-react';
+import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { NodeResource } from '../lib/catalogApi';
-import { inferColumns, formatPropValue } from '../lib/kindUtils';
+import { inferColumns, formatPropValue, RelationSummary } from '../lib/kindUtils';
 
 interface GenericTableProps {
   nodes: NodeResource[];
   kind: string;
   onSelect: (node: NodeResource) => void;
+  relationSummaries?: Map<string, RelationSummary>;
 }
 
 /**
  * A generic, kind-agnostic table that:
  * 1. Infers columns from the union of all node props.
  * 2. Always shows `name` as the first column.
- * 3. Renders a clickable "Details" action column last.
+ * 3. When `relationSummaries` is provided, shows a "Relations" column
+ *    with badges per relation kind (inbound/outbound counts).
+ * 4. Renders a clickable "Details" action column last.
  */
-export default function GenericTable({ nodes, kind, onSelect }: GenericTableProps) {
+export default function GenericTable({ nodes, kind, onSelect, relationSummaries }: GenericTableProps) {
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
-  
-  // Fix: Safe guard against repeat(0, ...) which breaks CSS grid rendering
+  const hasRelations = relationSummaries !== undefined;
+
+  // Grid: prop columns + (optional relations) + actions
   const gridTemplateColumns = useMemo(() => {
-    if (columns.length <= 1) {
-      return 'minmax(140px, 1fr) 80px';
-    }
-    return `minmax(140px, 1fr) repeat(${columns.length - 1}, minmax(100px, 1fr)) 80px`;
-  }, [columns]);
+    const propPart = columns.length <= 1
+      ? 'minmax(140px, 1fr)'
+      : `minmax(140px, 1fr) repeat(${columns.length - 1}, minmax(100px, 1fr))`;
+
+    const relationsPart = hasRelations ? ' minmax(180px, 2fr)' : '';
+    return `${propPart}${relationsPart} 80px`;
+  }, [columns, hasRelations]);
 
   if (nodes.length === 0) {
     return (
@@ -49,6 +55,11 @@ export default function GenericTable({ nodes, kind, onSelect }: GenericTableProp
             {col}
           </span>
         ))}
+        {hasRelations && (
+          <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary">
+            Relations
+          </span>
+        )}
         <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary">
           Actions
         </span>
@@ -87,6 +98,11 @@ export default function GenericTable({ nodes, kind, onSelect }: GenericTableProp
             );
           })}
 
+          {/* Relations badges */}
+          {hasRelations && (
+            <RelationCell nodeName={node.name} summaries={relationSummaries!} />
+          )}
+
           {/* Actions */}
           <button
             onClick={() => onSelect(node)}
@@ -98,6 +114,52 @@ export default function GenericTable({ nodes, kind, onSelect }: GenericTableProp
           </button>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Renders relation badges for a single node. */
+function RelationCell({
+  nodeName,
+  summaries,
+}: {
+  nodeName: string;
+  summaries: Map<string, RelationSummary>;
+}) {
+  const summary = summaries.get(nodeName);
+
+  if (!summary) {
+    return <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">—</span>;
+  }
+
+  const relationKinds = Object.keys(summary).sort();
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {relationKinds.map((relKind) => {
+        const { inbound, outbound } = summary[relKind];
+        return (
+          <span
+            key={relKind}
+            className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[0.65rem] font-medium text-foreground-secondary dark:bg-white/10 dark:text-foreground-dark-secondary"
+            title={`${relKind}: ${inbound} inbound, ${outbound} outbound`}
+          >
+            {outbound > 0 && (
+              <>
+                <ArrowUpRight size={10} className="shrink-0 text-blue-500" />
+                <span>{outbound}</span>
+              </>
+            )}
+            {inbound > 0 && (
+              <>
+                <ArrowDownRight size={10} className="shrink-0 text-green-500" />
+                <span>{inbound}</span>
+              </>
+            )}
+            <span className="truncate max-w-[80px]">{relKind}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }
