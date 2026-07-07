@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { buildEqualityFilter, fetchNode, fetchNodeByName, fetchNodes, fetchRelations, NodeResource } from '../lib/catalogApi';
+import { buildEqualityFilter, fetchNode, fetchNodeByName, fetchNodes, fetchRelations, mergedProps, NodeResource } from '../lib/catalogApi';
 
 interface Model {
   id: string;
@@ -41,7 +41,7 @@ function nameFromPath(path: string) {
 }
 
 function mapNodeToModel(node: NodeResource): Model {
-  const props = node.props ?? {};
+  const props = mergedProps(node);
   const source = props.source || sourceFromPath(node.path);
 
   return {
@@ -65,7 +65,7 @@ function mapNodeToModel(node: NodeResource): Model {
 }
 
 function mapApplicationNodeToAdopter(node: NodeResource): AdoptersType {
-  const props = node.props ?? {};
+  const props = mergedProps(node);
 
   return {
     name: nameFromPath(node.path),

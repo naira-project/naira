@@ -25,6 +25,7 @@ const routeMap: Record<string, string> = {
   Dashboard: '/',
   'Model Registries': '/model-registry',
   'MCP Catalog': '/',
+  Datasets: '/dataset-registry',
 };
 
 export default function NavigationBar() {
@@ -36,6 +37,8 @@ export default function NavigationBar() {
       ? 'Dashboard'
       : location.pathname === '/model-registry'
       ? 'Model Registries'
+      : location.pathname === '/dataset-registry'
+      ? 'Datasets'
       : location.pathname === '/catalog-graph'
       ? 'Catalog Graph'
       : 'Dashboard';
@@ -75,13 +78,24 @@ export default function NavigationBar() {
               </li>
             );
           })}
-          {NAV_CATALOG.map((label) => (
-            <li key={label}>
-              <button className="flex w-full items-center rounded-lg px-3 py-2 pl-10 text-sm text-white hover:bg-white/10 hover:text-white">
-                {label}
-              </button>
-            </li>
-          ))}
+          {NAV_CATALOG.map((label) => {
+            const active = activeNav === label;
+            return (
+              <li key={label}>
+                <button
+                  onClick={() => navigate(routeMap[label] ?? '/')}
+                  className={cn(
+                    'flex w-full items-center rounded-lg px-3 py-2 pl-10 text-sm transition-colors',
+                    active
+                      ? 'bg-white/15 font-semibold text-white'
+                      : 'text-white hover:bg-white/10 hover:text-white'
+                  )}
+                >
+                  {label}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </div>
 

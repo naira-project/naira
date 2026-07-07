@@ -1,8 +1,24 @@
+export interface PluginClaim {
+	plugin: string;
+	props?: Record<string, string>;
+}
+
 export interface NodeResource {
 	name: string;
 	kind: string;
 	path: string;
-	props?: Record<string, any>;
+	pluginClaims?: PluginClaim[];
+}
+
+// Nodes carry one claim per plugin; merge them into a single property map for
+// display. Claims arrive sorted by plugin name, so on key collisions the
+// alphabetically-last plugin wins.
+export function mergedProps(node: NodeResource): Record<string, string> {
+	const merged: Record<string, string> = {};
+	for (const claim of node.pluginClaims ?? []) {
+		Object.assign(merged, claim.props);
+	}
+	return merged;
 }
 
 export interface NodeNameParts {
