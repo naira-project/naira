@@ -14,17 +14,3 @@ export const WORK_ITEMS = [
   { id: 'WI-006', title: 'Archive deprecated pipeline artifacts', status: 'Done', priority: 'Low'},
   { id: 'WI-007', title: 'Set up A/B test for pricing model rollout', status: 'In Progress', priority: 'High' },
 ];
-
-
-
-export const NAV_CATALOG = ['Datasets', 'RAGs', 'Prompts', 'Artifacts', 'Model serving'];
-
-export const MODEL_TYPE = ["Multi-modal", "Text-to-Image", "Text-to-Video", "Audio-to-text"];
-
-export const MODEL_KIND = ["Raw OSS", "Fine-Tuned OSS", "External GP"];
-
-export const RISK = ["High", "Medium", "Low", "Unspecified"];
-
-export const DOMAIN = ["Sales", "HR", "Procurement", "IT", "Marketing"];
-
-export const CATEGORIES = ["Model Name", "Params", "Type", "Domain", "Version", "Kind", "Risk", "Details"];

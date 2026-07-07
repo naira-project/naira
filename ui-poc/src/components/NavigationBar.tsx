@@ -1,7 +1,6 @@
 import { useNavigate, useLocation } from 'react-router';
 import {
   LayoutDashboard,
-  Layers,
   Compass,
   Settings,
   HelpCircle,
@@ -11,7 +10,6 @@ import { cn } from '../lib/utils';
 
 const NAV_PRIMARY = [
   { label: 'Dashboard', icon: LayoutDashboard },
-  { label: 'Model Registries', icon: Layers },
   { label: 'Catalog Explorer', icon: Compass },
 ];
 
@@ -22,7 +20,6 @@ const NAV_BOTTOM = [
 
 const routeMap: Record<string, string> = {
   Dashboard: '/',
-  'Model Registries': '/model-registry',
   'Catalog Explorer': '/catalog',
 };
 
@@ -33,8 +30,6 @@ export default function NavigationBar() {
   const activeNav =
     location.pathname === '/'
       ? 'Dashboard'
-      : location.pathname.startsWith('/model-registry')
-      ? 'Model Registries'
       : location.pathname.startsWith('/catalog')
       ? 'Catalog Explorer'
       : 'Dashboard';
