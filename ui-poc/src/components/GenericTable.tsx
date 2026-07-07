@@ -17,8 +17,14 @@ interface GenericTableProps {
  */
 export default function GenericTable({ nodes, kind, onSelect }: GenericTableProps) {
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
-  // Grid: name + each prop column + actions column
-  const gridTemplateColumns = `minmax(140px, 1fr) repeat(${columns.length - 1}, minmax(100px, 1fr)) 80px`;
+  
+  // Fix: Safe guard against repeat(0, ...) which breaks CSS grid rendering
+  const gridTemplateColumns = useMemo(() => {
+    if (columns.length <= 1) {
+      return 'minmax(140px, 1fr) 80px';
+    }
+    return `minmax(140px, 1fr) repeat(${columns.length - 1}, minmax(100px, 1fr)) 80px`;
+  }, [columns]);
 
   if (nodes.length === 0) {
     return (
