@@ -11,6 +11,7 @@ metadata:
 type: Opaque
 stringData:
   LITELLM_API_KEY: sk-local-litellm
+  OPENMETADATA_ADMIN_PASSWORD: admin
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -223,6 +224,29 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+        - name: plugin-openmetadata
+          image: openmetadata:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50055"
+            - name: OPENMETADATA_BASE_URL
+              value: http://openmetadata.openmetadata.svc.cluster.local:8585
+            - name: OPENMETADATA_ADMIN_EMAIL
+              value: admin@open-metadata.org
+            - name: OPENMETADATA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: OPENMETADATA_ADMIN_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
       containers:
         - name: catalog
           image: catalog:local
@@ -231,7 +255,7 @@ spec:
             - name: PORT
               value: "8090"
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056"
           ports:
             - containerPort: 8090
               name: http
