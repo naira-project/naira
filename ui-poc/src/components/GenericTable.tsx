@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { NodeResource } from '../lib/catalogApi';
-import { inferColumns, formatPropValue, RelationSummary } from '../lib/kindUtils';
+import { inferColumns, formatPropValue, parsePath, RelationSummary } from '../lib/kindUtils';
 
 interface GenericTableProps {
   nodes: NodeResource[];
@@ -13,12 +13,17 @@ interface GenericTableProps {
 /**
  * A generic, kind-agnostic table that:
  * 1. Infers columns from the union of all node props.
- * 2. Always shows `name` as the first column.
+ * 2. Always shows `name` (short name from path) and `namespace` as first columns.
  * 3. When `relationSummaries` is provided, shows a "Relations" column
  *    with badges per relation kind (inbound/outbound counts).
  * 4. Renders a clickable "Details" action column last.
  */
 export default function GenericTable({ nodes, kind, onSelect, relationSummaries }: GenericTableProps) {
+  // Pre-compute parsed path data for all nodes
+  const parsedPaths = useMemo(
+    () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
+    [nodes]
+  );
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
   const hasRelations = relationSummaries !== undefined;
 
@@ -73,18 +78,34 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
           style={{ gridTemplateColumns }}
         >
           {columns.map((col, idx) => {
-            if (idx === 0) {
-              // Name column — always the first
+            const parsed = parsedPaths.get(node.name);
+
+            if (col === 'name') {
+              // Name column — short name from path
               return (
                 <span
                   key={col}
                   className="truncate text-sm font-medium text-foreground dark:text-foreground-dark-default"
                   title={node.name}
                 >
-                  {node.name}
+                  {parsed?.name ?? node.name}
                 </span>
               );
             }
+
+            if (col === 'namespace') {
+              // Namespace column — second-to-last path segment
+              return (
+                <span
+                  key={col}
+                  className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
+                  title={parsed?.namespace}
+                >
+                  {parsed?.namespace ?? '—'}
+                </span>
+              );
+            }
+
             // Prop columns
             const value = node.props?.[col];
             return (

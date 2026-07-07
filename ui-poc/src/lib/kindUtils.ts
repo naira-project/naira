@@ -1,6 +1,24 @@
 import { fetchNodes, fetchRelations, NodeResource, RelationResource } from './catalogApi';
 
 /**
+ * Parse a node path into its structural segments.
+ * Path format varies per kind, but the last segment is always the short name,
+ * and the second-to-last is the namespace or source.
+ *
+ * @example
+ *   "deployment/8d8c…/cert-manager/cert-manager-cainjector"
+ *     → { name: "cert-manager-cainjector", namespace: "cert-manager" }
+ *   "model/litellm/idp-claude-sonnet"
+ *     → { name: "idp-claude-sonnet", namespace: "litellm" }
+ */
+export function parsePath(path: string): { name: string; namespace?: string } {
+  const segments = path.split('/').filter(Boolean);
+  const name = segments[segments.length - 1] ?? path;
+  const namespace = segments.length >= 2 ? segments[segments.length - 2] : undefined;
+  return { name, namespace };
+}
+
+/**
  * Discover all unique node kinds from the catalog API.
  * Fetches a large page of nodes and deduplicates their `kind` values.
  */
@@ -12,8 +30,8 @@ export async function discoverKinds(): Promise<string[]> {
 
 /**
  * Infer display columns from a set of nodes of the same kind.
- * Always includes `name` as the first column, then deduplicates
- * all keys found across every node's `props`.
+ * Always includes `name` and `namespace` as the first columns,
+ * then deduplicates all keys found across every node's `props`.
  */
 export function inferColumns(nodes: NodeResource[]): string[] {
   const propKeys = new Set<string>();
@@ -24,7 +42,7 @@ export function inferColumns(nodes: NodeResource[]): string[] {
       }
     }
   }
-  return ['name', ...Array.from(propKeys).sort()];
+  return ['name', 'namespace', ...Array.from(propKeys).sort()];
 }
 
 /**
