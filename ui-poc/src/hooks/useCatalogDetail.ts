@@ -5,23 +5,19 @@ import {
   fetchNodeByName,
   fetchRelations,
   NodeResource,
-  RelationResource,
 } from '../lib/catalogApi';
 
 interface CatalogDetailResult {
   node: NodeResource | null;
-  relations: RelationResource[];
   loading: boolean;
   error: string | null;
 }
 
 /**
- * Generic hook to fetch a single catalog node by kind + path,
- * along with all its relations.
+ * Generic hook to fetch a single catalog node by kind + path.
  */
 export function useCatalogDetail(kind: string, path: string): CatalogDetailResult {
   const [node, setNode] = useState<NodeResource | null>(null);
-  const [relations, setRelations] = useState<RelationResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,13 +29,7 @@ export function useCatalogDetail(kind: string, path: string): CatalogDetailResul
       try {
         const fetchedNode = await fetchNode(kind, path);
 
-        const fetchedRelations = await fetchRelations({
-          filter: buildEqualityFilter('toNode', fetchedNode.name),
-          pageSize: 1000,
-        });
-
         setNode(fetchedNode);
-        setRelations(fetchedRelations);
         setLoading(false);
       } catch {
         setError(`Failed to load ${kind} "${path}"`);
@@ -50,7 +40,7 @@ export function useCatalogDetail(kind: string, path: string): CatalogDetailResul
     load();
   }, [kind, path]);
 
-  return { node, relations, loading, error };
+  return { node, loading, error };
 }
 
 /**

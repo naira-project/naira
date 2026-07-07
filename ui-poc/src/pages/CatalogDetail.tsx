@@ -5,7 +5,6 @@ import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import PropertiesPanel from '../components/PropertiesPanel';
 import CatalogGraph from './CatalogGraph';
 import { cn } from '../lib/utils';
-import { NodeResource } from '../lib/catalogApi';
 
 type DetailTab = 'Properties' | 'Graph';
 
@@ -21,7 +20,7 @@ export default function CatalogDetail() {
   const navigate = useNavigate();
   const decodedKind = decodeURIComponent(kind);
   const decodedPath = decodeURIComponent(path);
-  const { node, relations, loading, error } = useCatalogDetail(decodedKind, decodedPath);
+  const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
   const [activeTab, setActiveTab] = useState<DetailTab>('Properties');
 
   const tabs: { value: DetailTab; label: string }[] = [
@@ -35,11 +34,11 @@ export default function CatalogDetail() {
         {/* Top bar */}
         <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-background-dark-paper">
           <button
-            onClick={() => navigate(`/catalog/${encodeURIComponent(decodedKind)}`)}
+            onClick={() => navigate(`/catalog`)}
             className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
           >
             <ArrowLeft size={16} />
-            Back to {decodedKind}
+            Back to catalog
           </button>
 
           <div className="h-5 w-px bg-gray-300 dark:bg-gray-600" />
