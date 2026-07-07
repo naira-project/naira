@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Avatar, AvatarFallback } from '../components/ui/avatar';
 import { Tooltip, TooltipProvider } from '../components/ui/tooltip';
 import { WORK_ITEMS, STAT_CARDS } from '../constants/Constants';
+import { useOpenMFPContext } from '../hooks/useOpenMFPContext';
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { variant: 'success' | 'warning' | 'default'; icon: React.ReactNode }> = {
@@ -32,17 +33,25 @@ function PriorityDot({ priority }: { priority: string }) {
 }
 
 function SyncCatalogButton() {
+  const { token, isReady } = useOpenMFPContext();
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   const handleSync = async () => {
+    if (!isReady) {
+      return;
+    }
+
     setSyncing(true);
     setSyncMessage(null);
     setSyncError(null);
 
     try {
-      const response = await fetch('/v1/plugins:run', { method: 'POST' });
+      const response = await fetch('/v1/plugins:run', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const payload = await response.json();
 
       if (!response.ok) {
@@ -64,7 +73,7 @@ function SyncCatalogButton() {
     <>
       <button
         onClick={handleSync}
-        disabled={syncing}
+        disabled={syncing || !isReady}
         className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
