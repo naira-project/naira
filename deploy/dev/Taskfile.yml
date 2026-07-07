@@ -35,6 +35,21 @@ vars:
   DEPL_CALLS_SVC_PLUGIN_IMAGE: depl-calls-svc:local
   FLUXCD_PLUGIN_DIR: '{{.PLUGINS_BASE}}/fluxcd'
   FLUXCD_PLUGIN_IMAGE: fluxcd:local
+  OPENMETADATA_PLUGIN_DIR: '{{.PLUGINS_BASE}}/openmetadata'
+  OPENMETADATA_PLUGIN_IMAGE: openmetadata:local
+  OPENMETADATA_NAMESPACE: openmetadata
+  OPENMETADATA_HELM_REPO_NAME: open-metadata
+  OPENMETADATA_HELM_REPO_URL: https://helm.open-metadata.org/
+  OPENMETADATA_DEPS_RELEASE: openmetadata-dependencies
+  OPENMETADATA_DEPS_CHART: open-metadata/openmetadata-dependencies
+  OPENMETADATA_DEPS_VALUES: infra/helm/openmetadata-deps-values.yaml
+  OPENMETADATA_RELEASE: openmetadata
+  OPENMETADATA_CHART: open-metadata/openmetadata
+  OPENMETADATA_VALUES: infra/helm/openmetadata-values.yaml
+  OPENMETADATA_SECRETS_MANIFEST: infra/kubernetes/openmetadata-secrets.yaml
+  OPENMETADATA_SERVICE: svc/openmetadata
+  OPENMETADATA_LOCAL_PORT: '8585'
+  OPENMETADATA_REMOTE_PORT: '8585'
   CATALOG_NAMESPACE: idp-system
   CATALOG_MANIFEST: infra/kubernetes/catalog.yaml
   CATALOG_SERVICE: svc/catalog
@@ -51,6 +66,10 @@ vars:
   MLFLOW_REGISTER_SCRIPT: '{{.MLFLOW_TOOL_DIR}}/register_dummy_model.py'
   MLFLOW_REQUIREMENTS: '{{.MLFLOW_TOOL_DIR}}/requirements.txt'
   MLFLOW_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/mlflow-registry'
+  OPENMETADATA_TOOL_DIR: tools/openmetadata
+  OPENMETADATA_SEED_SCRIPT: '{{.OPENMETADATA_TOOL_DIR}}/seed_sample_tables.py'
+  OPENMETADATA_REQUIREMENTS: '{{.OPENMETADATA_TOOL_DIR}}/requirements.txt'
+  OPENMETADATA_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/openmetadata-seed'
 
 tasks:
   default:
@@ -168,6 +187,56 @@ tasks:
     cmds:
       - kubectl -n {{.LITELLM_NAMESPACE}} port-forward {{.LITELLM_SERVICE}} {{.LITELLM_LOCAL_PORT}}:{{.LITELLM_REMOTE_PORT}}
 
+  openmetadata:deploy:
+    desc: Deploy OpenMetadata (and its dependencies) to kind
+    deps:
+      - cluster:create
+    cmds:
+      - task: openmetadata:apply
+
+  openmetadata:apply:
+    internal: true
+    cmds:
+      - helm repo add {{.OPENMETADATA_HELM_REPO_NAME}} {{.OPENMETADATA_HELM_REPO_URL}} --force-update
+      - helm repo update {{.OPENMETADATA_HELM_REPO_NAME}}
+      - kubectl create namespace {{.OPENMETADATA_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+      - kubectl apply -f {{.OPENMETADATA_SECRETS_MANIFEST}}
+      - helm upgrade --install {{.OPENMETADATA_DEPS_RELEASE}} {{.OPENMETADATA_DEPS_CHART}} --namespace {{.OPENMETADATA_NAMESPACE}} --create-namespace --values {{.OPENMETADATA_DEPS_VALUES}} --wait --timeout 15m
+      - helm upgrade --install {{.OPENMETADATA_RELEASE}} {{.OPENMETADATA_CHART}} --namespace {{.OPENMETADATA_NAMESPACE}} --values {{.OPENMETADATA_VALUES}} --wait --timeout 15m
+      - kubectl -n {{.OPENMETADATA_NAMESPACE}} rollout status deploy/openmetadata --timeout=600s
+      - kubectl -n {{.OPENMETADATA_NAMESPACE}} get pods
+
+  openmetadata:undeploy:
+    desc: Remove OpenMetadata (and its dependencies) from kind
+    cmds:
+      - |
+        if helm status {{.OPENMETADATA_RELEASE}} -n {{.OPENMETADATA_NAMESPACE}} >/dev/null 2>&1; then
+          helm uninstall {{.OPENMETADATA_RELEASE}} -n {{.OPENMETADATA_NAMESPACE}}
+        fi
+      - |
+        if helm status {{.OPENMETADATA_DEPS_RELEASE}} -n {{.OPENMETADATA_NAMESPACE}} >/dev/null 2>&1; then
+          helm uninstall {{.OPENMETADATA_DEPS_RELEASE}} -n {{.OPENMETADATA_NAMESPACE}}
+        fi
+
+  openmetadata:port-forward:
+    desc: Expose OpenMetadata on localhost:8585
+    cmds:
+      - kubectl -n {{.OPENMETADATA_NAMESPACE}} port-forward {{.OPENMETADATA_SERVICE}} {{.OPENMETADATA_LOCAL_PORT}}:{{.OPENMETADATA_REMOTE_PORT}}
+
+  openmetadata:seed:
+    desc: Seed sample tables in OpenMetadata (requires openmetadata:port-forward)
+    cmds:
+      - |
+        mkdir -p '{{.LOCAL_WORK_DIR}}/venvs'
+      - |
+        python3 -m venv '{{.OPENMETADATA_VENV_DIR}}'
+      - |
+        '{{.OPENMETADATA_VENV_DIR}}/bin/pip' install --upgrade pip
+      - |
+        '{{.OPENMETADATA_VENV_DIR}}/bin/pip' install -r '{{.OPENMETADATA_REQUIREMENTS}}'
+      - |
+        OPENMETADATA_HOST_PORT=http://127.0.0.1:{{.OPENMETADATA_LOCAL_PORT}} '{{.OPENMETADATA_VENV_DIR}}/bin/python' '{{.OPENMETADATA_SEED_SCRIPT}}'
+
   mlflow:image:build:
     desc: Build the mlflow Docker image
     cmds:
@@ -224,6 +293,20 @@ tasks:
       - task: _docker:load
         vars: { IMAGE: '{{.FLUXCD_PLUGIN_IMAGE}}' }
 
+  openmetadata:image:build:
+    desc: Build the openmetadata plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.OPENMETADATA_PLUGIN_IMAGE}}', DIR: '{{.OPENMETADATA_PLUGIN_DIR}}' }
+
+  openmetadata:image:load:
+    desc: Load the openmetadata plugin image into kind
+    deps:
+      - openmetadata:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.OPENMETADATA_PLUGIN_IMAGE}}' }
+
   catalog:image:build:
     desc: Build the catalog Docker image
     cmds:
@@ -253,6 +336,7 @@ tasks:
       - task: litellm:image:load
       - task: depl-calls-svc:image:load
       - task: fluxcd:image:load
+      - task: openmetadata:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods
@@ -306,23 +390,25 @@ tasks:
       - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}
 
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, Catalog, UI, and Portal to kind
+    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal to kind
     cmds:
       - task: cluster:create
       - task: mlflow:apply
       - task: postgres:apply
       - task: litellm:apply
+      - task: openmetadata:apply
       - task: catalog:apply
       - task: ui:apply
       - task: portal:apply
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, Catalog, UI, and Portal from kind
+    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal from kind
     cmds:
       - task: portal:undeploy
       - task: catalog:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
+      - task: openmetadata:undeploy
       - task: mlflow:undeploy
       - task: ui:undeploy
 
@@ -337,6 +423,8 @@ tasks:
         echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
         echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
+        echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
+        echo "Catalog:        http://localhost:{{.CATALOG_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
 
@@ -379,7 +467,7 @@ tasks:
 
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+    deps: [mlflow:port-forward, litellm:port-forward, openmetadata:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
   
    # Reusable "Macro" Tasks
   _docker:build:
