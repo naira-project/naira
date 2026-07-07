@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -87,11 +88,20 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 		hostToModels := make(map[string][]string)
 		for _, host := range p.config.Hosts {
-			models, err := fetchModels(p.httpClient, host, d.secret)
+			models, err := fetchModels(p.httpClient, "https://"+host, d.secret)
 			if err != nil {
 				log.Printf("%s: WARN: fetching models from %s (key ...%s): %v",
 					pluginName, host, d.secret[len(d.secret)-4:], err)
-				continue
+				if !errors.Is(err, http.ErrSchemeMismatch) {
+					continue
+				}
+				log.Printf("%s: retrying %s with http scheme", pluginName, host)
+				models, err = fetchModels(p.httpClient, "http://"+host, d.secret)
+				if err != nil {
+					log.Printf("%s: WARN: fetching models from %s (key ...%s): %v",
+						pluginName, host, d.secret[len(d.secret)-4:], err)
+					continue
+				}
 			}
 			if len(models) > 0 {
 				hostToModels[host] = models
@@ -271,13 +281,13 @@ func referencedSecretsNames(obj map[string]any) map[string]struct{} {
 	return names
 }
 
-// fetchModels calls GET https://<host>/v1/models with the given key and returns a list of model IDs.
+// fetchModels calls GET <baseURL>/v1/models with the given key and returns a list of model IDs.
 // A 401/403 response means the key is not valid for that host and empty results are returned.
-func fetchModels(client *http.Client, host, apiKey string) ([]string, error) {
-	addr := "https://" + host + "/v1/models"
+func fetchModels(client *http.Client, baseURL, apiKey string) ([]string, error) {
+	addr := baseURL + "/v1/models"
 	req, err := http.NewRequest(http.MethodGet, addr, nil)
 	if err != nil {
-		return nil, fmt.Errorf("preparing HTTPS request: %w", err)
+		return nil, fmt.Errorf("preparing %q request: %w", addr, err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 

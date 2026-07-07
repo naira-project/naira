@@ -45,7 +45,7 @@ metadata:
   name: plugin-depl-uses-litellm
 rules:
   - apiGroups: [""]
-    resources: ["namespaces"]
+    resources: ["namespaces", "secrets"]
     verbs: ["get", "list"]
   - apiGroups: ["apps"]
     resources: ["deployments"]

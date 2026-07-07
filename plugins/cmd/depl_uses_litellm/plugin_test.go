@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -254,8 +253,7 @@ func TestFetchModels(t *testing.T) {
 			}))
 			defer mockServer.Close()
 
-			host := strings.TrimPrefix(mockServer.URL, "https://")
-			models, err := fetchModels(mockServer.Client(), host, testAPIKey)
+			models, err := fetchModels(mockServer.Client(), mockServer.URL, testAPIKey)
 
 			if tt.wantErr {
 				assert.Error(t, err)
