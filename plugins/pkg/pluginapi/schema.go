@@ -18,4 +18,5 @@ const (
 	RelationKindSourcedFrom  = "sourced_from"
 	RelationKindDescribes    = "describes"
 	RelationKindDeployedFrom = "deployed_from"
+	RelationKindDerivedFrom  = "derived_from"
 )
