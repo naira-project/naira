@@ -26,6 +26,9 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
   );
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
   const hasRelations = relationSummaries !== undefined;
+  const CORE_COL_COUNT = 2; // name + namespace
+  const pluginColCount = columns.length - CORE_COL_COUNT;
+  const hasPluginColumns = pluginColCount > 0;
 
   // Grid: prop columns + (optional relations) + actions
   const gridTemplateColumns = useMemo(() => {
@@ -47,25 +50,64 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
 
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-      {/* Header */}
+      {/* Header — two-row grid when plugin columns exist */}
       <div
         className="grid items-center gap-3 rounded-t-lg border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-gray-700 dark:bg-white/5"
-        style={{ gridTemplateColumns }}
+        style={{
+          gridTemplateColumns,
+          ...(hasPluginColumns ? { gridTemplateRows: 'auto auto' } : {}),
+        }}
       >
-        {columns.map((col) => (
-          <span
-            key={col}
-            className="truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary"
-          >
-            {col}
-          </span>
-        ))}
+        {/* Row 1: Group headers (Core Metadata | Plugin Properties) */}
+        {hasPluginColumns && (
+          <>
+            <div
+              className="flex items-center text-[0.6rem] font-semibold uppercase tracking-wide text-foreground-secondary leading-none"
+              style={{ gridColumn: `span ${CORE_COL_COUNT}`, gridRow: 1 }}
+            >
+              Core Metadata
+            </div>
+            <div
+              className="flex items-center text-[0.6rem] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 leading-none rounded-[4px] bg-indigo-50/50 px-2 py-0.5 -mx-2 dark:bg-indigo-950/20"
+              style={{ gridColumn: `span ${pluginColCount}`, gridRow: 1 }}
+            >
+              Plugin Properties
+            </div>
+            {/* Empty cells to fill remaining columns (Relations + Actions) */}
+            {hasRelations && <div style={{ gridColumn: 'span 1', gridRow: 1 }} />}
+            <div style={{ gridColumn: 'span 1', gridRow: 1 }} />
+          </>
+        )}
+
+        {/* Row 2 / single row: Column header labels */}
+        {columns.map((col, idx) => {
+          const isPlugin = idx >= CORE_COL_COUNT;
+          return (
+            <span
+              key={col}
+              className={`truncate text-[0.65rem] font-semibold uppercase tracking-wide ${
+                isPlugin
+                  ? 'text-indigo-500/65 dark:text-indigo-400/55'
+                  : 'text-foreground-secondary dark:text-foreground-dark-secondary'
+              }`}
+              style={{ gridRow: hasPluginColumns ? 2 : undefined }}
+            >
+              {col}
+            </span>
+          );
+        })}
         {hasRelations && (
-          <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary">
+          <span
+            className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary"
+            style={{ gridRow: hasPluginColumns ? 2 : undefined }}
+          >
             Relations
           </span>
         )}
-        <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary">
+        <span
+          className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary"
+          style={{ gridRow: hasPluginColumns ? 2 : undefined }}
+        >
           Actions
         </span>
       </div>
@@ -106,13 +148,13 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
               );
             }
 
-            // Prop columns
+            // Prop columns (from pluginClaims) — visual differentiation
             const props = nodeProps(node);
             const value = props[col];
             return (
               <span
                 key={col}
-                className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
+                className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
                 title={typeof value === 'string' ? value : undefined}
               >
                 {formatPropValue(value)}
