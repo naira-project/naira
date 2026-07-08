@@ -1,4 +1,4 @@
-import { fetchNodes, fetchRelations, NodeResource, RelationResource } from './catalogApi';
+import { fetchNodes, fetchRelations, nodeProps, NodeResource, RelationResource } from './catalogApi';
 
 /**
  * Parse a node path into its structural segments.
@@ -36,10 +36,9 @@ export async function discoverKinds(): Promise<string[]> {
 export function inferColumns(nodes: NodeResource[]): string[] {
   const propKeys = new Set<string>();
   for (const node of nodes) {
-    if (node.props) {
-      for (const key of Object.keys(node.props)) {
-        propKeys.add(key);
-      }
+    const props = nodeProps(node);
+    for (const key of Object.keys(props)) {
+      propKeys.add(key);
     }
   }
   return ['name', 'namespace', ...Array.from(propKeys).sort()];

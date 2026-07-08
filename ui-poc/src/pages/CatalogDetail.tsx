@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
+import { nodeProps } from '../lib/catalogApi';
 import PropertiesPanel from '../components/PropertiesPanel';
 import CatalogGraph from './CatalogGraph';
 import { cn } from '../lib/utils';
@@ -101,7 +102,7 @@ export default function CatalogDetail() {
               {/* Tab content */}
               <div>
                 {activeTab === 'Properties' && (
-                  <PropertiesPanel props={node.props ?? {}} title={`${node.kind} Properties`} />
+                  <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
                 )}
 
                 {activeTab === 'Graph' && (

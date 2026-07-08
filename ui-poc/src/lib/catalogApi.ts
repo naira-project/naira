@@ -1,8 +1,27 @@
+export interface PluginClaim {
+	plugin: string;
+	props: Record<string, string>;
+}
+
 export interface NodeResource {
 	name: string;
 	kind: string;
 	path: string;
-	props?: Record<string, any>;
+	pluginClaims: PluginClaim[];
+}
+
+/**
+ * Merge all plugin claim props into a single flat map.
+ * Later plugins override earlier ones for the same key.
+ */
+export function nodeProps(node: NodeResource): Record<string, string> {
+	const merged: Record<string, string> = {};
+	for (const claim of node.pluginClaims ?? []) {
+		for (const [key, value] of Object.entries(claim.props)) {
+			merged[key] = value;
+		}
+	}
+	return merged;
 }
 
 export interface NodeNameParts {

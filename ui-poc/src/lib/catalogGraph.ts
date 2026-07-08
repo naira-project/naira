@@ -1,4 +1,4 @@
-import { buildEqualityFilter, fetchNodeByName, fetchRelations, NodeResource, RelationResource } from './catalogApi';
+import { buildEqualityFilter, fetchNodeByName, fetchRelations, nodeProps, NodeResource, RelationResource } from './catalogApi';
 
 export interface CatalogGraphRoot {
 	name: string;
@@ -49,7 +49,7 @@ function toGraphNode(node: NodeResource, depth: number, isRoot = false): Catalog
 		label: nameFromPath(node.path),
 		depth,
 		isRoot,
-		properties: node.props ?? {},
+		properties: nodeProps(node),
 	};
 }
 

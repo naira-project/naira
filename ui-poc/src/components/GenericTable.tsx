@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { NodeResource } from '../lib/catalogApi';
+import { NodeResource, nodeProps } from '../lib/catalogApi';
 import { inferColumns, formatPropValue, parsePath, RelationSummary } from '../lib/kindUtils';
 
 interface GenericTableProps {
@@ -107,7 +107,8 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
             }
 
             // Prop columns
-            const value = node.props?.[col];
+            const props = nodeProps(node);
+            const value = props[col];
             return (
               <span
                 key={col}
