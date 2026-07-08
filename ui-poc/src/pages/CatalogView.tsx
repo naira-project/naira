@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, RefreshCw, Layers } from 'lucide-react';
 import { Input } from '../components/ui/input';
+import { Badge } from '../components/ui/badge';
 import { discoverKinds, computeRelationSummaries, RelationSummary } from '../lib/kindUtils';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { NodeResource } from '../lib/catalogApi';
@@ -74,6 +75,38 @@ export default function CatalogView() {
     navigate(`/catalog/${encodeURIComponent(activeKind!)}/${encodeURIComponent(node.path)}`);
   };
 
+  // Sync catalog — triggers plugin execution
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    setSyncError(null);
+
+    try {
+      const response = await fetch('/v1/plugins:run', { method: 'POST' });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Failed to synchronize data');
+      }
+
+      const results = Array.isArray(payload.results) ? payload.results : [];
+      const errorCount = results.filter((result: { error?: string }) => typeof result.error === 'string' && result.error.length > 0).length;
+      const successCount = results.length - errorCount;
+      setSyncMessage(errorCount > 0 ? `Synced ${successCount} plugin(s), ${errorCount} error(s)` : `Synced ${successCount} plugin(s)`);
+
+      // Refresh kinds after sync
+      loadKinds();
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'Failed to synchronize data');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background dark:bg-background-dark-default">
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -87,13 +120,15 @@ export default function CatalogView() {
             className="max-w-[320px]"
           />
           <button
-            onClick={loadKinds}
-            disabled={kindsLoading}
+            onClick={handleSync}
+            disabled={syncing}
             className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw size={16} className={kindsLoading ? 'animate-spin' : ''} />
-            Refresh
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Synchronizing…' : 'Synchronize Data'}
           </button>
+          {syncMessage && <Badge variant="success">{syncMessage}</Badge>}
+          {syncError && <Badge variant="error">{syncError}</Badge>}
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
