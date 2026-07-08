@@ -68,7 +68,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
               Core Metadata
             </div>
             <div
-              className="flex items-center text-[0.6rem] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 leading-none rounded-[4px] bg-indigo-50/50 px-2 py-0.5 -mx-2 dark:bg-indigo-950/20"
+              className="flex items-center text-[0.6rem] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 leading-none rounded-[4px] px-2 py-0.5 -mx-2 dark:bg-indigo-950/20"
               style={{ gridColumn: `span ${pluginColCount}`, gridRow: 1 }}
             >
               Plugin Properties
