@@ -117,26 +117,6 @@ function toFlowEdge(edge: CatalogGraphEdge): Edge {
   };
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
-  return (
-    <Card className="min-w-36 border-gray-200 dark:border-gray-700">
-      <CardContent className="flex items-start gap-3 py-3.5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          {icon}
-        </div>
-        <div>
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
-            {label}
-          </p>
-          <p className="mt-1 text-3xl font-bold text-foreground dark:text-foreground-dark-default">
-            {value}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 type CatalogGraphProps = {
   rootNode: CatalogGraphRoot;
 };
@@ -153,57 +133,58 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const outgoingCount = graph.edges.filter((edge) => edge.direction === 'outgoing').length;
 
   return (
-    <div className="space-y-4">
-      <Card className="border-gray-200 dark:border-gray-700">
-        <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
-              Root Node
-            </p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground dark:text-foreground-dark-default">
-              {rootNode.label}
-            </h2>
-            <p className="mt-1 font-mono text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-              {rootNode.name}
-            </p>
-          </div>
+    <div className="flex flex-col gap-3">
+      {/* Compact toolbar: depth controls + inline stats */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary">
+            Depth
+          </label>
+          <Input
+            type="number"
+            min={1}
+            value={depth}
+            onChange={(event) => setDepth(Math.max(1, Number(event.target.value) || 1))}
+            className="w-16 h-8"
+          />
+          <button
+            onClick={reload}
+            className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-dark"
+          >
+            <RefreshCw size={14} />
+            Reload
+          </button>
+        </div>
 
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
-                Depth
-              </label>
-              <Input
-                type="number"
-                min={1}
-                value={depth}
-                onChange={(event) => setDepth(Math.max(1, Number(event.target.value) || 1))}
-                className="w-24"
-              />
-            </div>
+        <div className="flex-1 min-w-4" />
 
-            <button
-              onClick={reload}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-dark"
-            >
-              <RefreshCw size={16} />
-              Reload
-            </button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-wrap gap-4">
-        <StatCard label="Nodes" value={graph.nodes.length} icon={<Network size={18} />} />
-        <StatCard label="Edges" value={graph.edges.length} icon={<Share2 size={18} />} />
-        <StatCard label="Incoming" value={incomingCount} icon={<ArrowRight size={18} />} />
-        <StatCard label="Outgoing" value={outgoingCount} icon={<ArrowRight size={18} />} />
-        <StatCard label="Depth" value={depth} icon={<GitBranch size={18} />} />
+        <div className="flex items-center gap-3 text-xs text-foreground-secondary">
+          <span className="inline-flex items-center gap-1">
+            <Network size={14} className="text-primary" />
+            <strong className="text-foreground">{graph.nodes.length}</strong> nodes
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Share2 size={14} className="text-primary" />
+            <strong className="text-foreground">{graph.edges.length}</strong> edges
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ArrowRight size={14} className="text-[#7b4bb3]" />
+            <strong className="text-foreground">{incomingCount}</strong> in
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ArrowRight size={14} className="text-[#3b6a8a]" />
+            <strong className="text-foreground">{outgoingCount}</strong> out
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <GitBranch size={14} className="text-primary" />
+            <strong className="text-foreground">{depth}</strong> depth
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="min-h-0 overflow-hidden rounded-[20px] border-gray-200 dark:border-gray-700">
-          <div className="relative h-[520px]">
+          <div className="relative h-[580px]">
             {loading && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/85 dark:bg-background-dark-paper/85">
                 <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">Loading graph...</p>
