@@ -26,7 +26,6 @@ export default function CatalogView() {
 
   // Relation summaries — fetched when nodes change
   const [relationSummaries, setRelationSummaries] = useState<Map<string, RelationSummary>>(new Map());
-  const [relationsLoading, setRelationsLoading] = useState(false);
 
   useEffect(() => {
     if (nodes.length === 0) {
@@ -34,15 +33,12 @@ export default function CatalogView() {
       return;
     }
 
-    setRelationsLoading(true);
     computeRelationSummaries(nodes)
       .then((summaries) => {
         setRelationSummaries(summaries);
-        setRelationsLoading(false);
       })
       .catch(() => {
         setRelationSummaries(new Map());
-        setRelationsLoading(false);
       });
   }, [nodes]);
 
