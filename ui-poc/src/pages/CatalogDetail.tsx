@@ -69,18 +69,6 @@ export default function CatalogDetail() {
 
           {!loading && !error && node && (
             <div className="flex flex-col gap-6">
-              {/* Identity card */}
-              <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-background-dark-paper">
-                <div className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-                  <span className="font-medium text-foreground-secondary dark:text-foreground-dark-secondary">Name</span>
-                  <span className="font-mono text-foreground dark:text-foreground-dark-default">{node.name}</span>
-                  <span className="font-medium text-foreground-secondary dark:text-foreground-dark-secondary">Kind</span>
-                  <span className="text-foreground dark:text-foreground-dark-default">{node.kind}</span>
-                  <span className="font-medium text-foreground-secondary dark:text-foreground-dark-secondary">Path</span>
-                  <span className="font-mono text-foreground dark:text-foreground-dark-default">{node.path}</span>
-                </div>
-              </div>
-
               {/* Tabs */}
               <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
                 {tabs.map(({ value, label }) => (
