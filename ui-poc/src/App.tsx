@@ -1,5 +1,5 @@
 import { ThemeProvider } from './contexts/ThemeContext';
-import { HashRouter as Router, Routes, Route, Navigate } from "react-router";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
 import CatalogView from './pages/CatalogView';
 import CatalogDetail from './pages/CatalogDetail';
 
