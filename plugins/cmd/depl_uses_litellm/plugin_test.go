@@ -251,7 +251,11 @@ func TestFetchModels(t *testing.T) {
 			}))
 			defer mockServer.Close()
 
-			models, err := fetchModels(mockServer.Client(), mockServer.URL, testAPIKey)
+			models, err := fetchModels(
+				context.Background(),
+				mockServer.Client(),
+				mockServer.URL,
+				testAPIKey)
 
 			if tt.wantErr {
 				assert.Error(t, err)

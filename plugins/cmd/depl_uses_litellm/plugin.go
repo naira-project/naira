@@ -88,7 +88,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 		hostToModels := make(map[string][]string)
 		for _, host := range p.config.Hosts {
-			models, err := fetchModels(p.httpClient, "https://"+host, d.secret)
+			models, err := fetchModels(ctx, p.httpClient, "https://"+host, d.secret)
 			if err != nil {
 				log.Printf("%s: WARN: fetching models from %s (key ...%s): %v",
 					pluginName, host, d.secret[len(d.secret)-4:], err)
@@ -96,7 +96,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 					continue
 				}
 				log.Printf("%s: retrying %s with http scheme", pluginName, host)
-				models, err = fetchModels(p.httpClient, "http://"+host, d.secret)
+				models, err = fetchModels(ctx, p.httpClient, "http://"+host, d.secret)
 				if err != nil {
 					log.Printf("%s: WARN: fetching models from %s (key ...%s): %v",
 						pluginName, host, d.secret[len(d.secret)-4:], err)
@@ -283,9 +283,9 @@ func referencedSecretsNames(obj map[string]any) map[string]struct{} {
 
 // fetchModels calls GET <baseURL>/v1/models with the given key and returns a list of model IDs.
 // A 401/403 response means the key is not valid for that host and empty results are returned.
-func fetchModels(client *http.Client, baseURL, apiKey string) ([]string, error) {
+func fetchModels(ctx context.Context, client *http.Client, baseURL, apiKey string) ([]string, error) {
 	addr := baseURL + "/v1/models"
-	req, err := http.NewRequest(http.MethodGet, addr, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, addr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("preparing %q request: %w", addr, err)
 	}
