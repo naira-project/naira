@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+// import { useNavigate } from 'react-router-dom';
 import { ArrowRight, GitBranch, Network, RefreshCw, Share2 } from 'lucide-react';
 import {
   Background,
@@ -6,8 +7,11 @@ import {
   MarkerType,
   MiniMap,
   ReactFlow,
+  useEdgesState,
+  useNodesState,
   type Edge,
   type Node,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -27,6 +31,19 @@ function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
+// Maps a graph node to its detail page route. Returns null if the specific
+// node type does not have a dedicated detail page (e.g., application).
+function detailRouteForNode(node: CatalogGraphNode): string | null {
+  switch (node.kind) {
+    case 'model':
+      return `/models/${encodeURIComponent(node.name)}`;
+    case 'dataset':
+      return `/datasets/${encodeURIComponent(node.name)}`;
+    default:
+      return null;
+  }
+}
+
 function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }): Node {
   const palette = typePalette[node.kind] ?? { fill: '#eceff3', stroke: '#516170' };
 
@@ -40,7 +57,7 @@ function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }):
       depth: node.depth,
       isRoot: node.isRoot,
     },
-    draggable: false,
+    draggable: true,
     selectable: true,
     style: {
       width: 220,
@@ -122,15 +139,47 @@ type CatalogGraphProps = {
 };
 
 export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
+  // const navigate = useNavigate();
   const [depth, setDepth] = useState(1);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { graph, loading, error, reload } = useCatalogGraph(rootNode, depth);
 
-  const flowNodes = useMemo(() => layoutNodes(graph.nodes), [graph.nodes]);
-  const flowEdges = useMemo(() => graph.edges.map(toFlowEdge), [graph.edges]);
+  // The state of nodes/edges is controlled by React Flow, allowing the
+  // user to drag them. The layout is recalculated from scratch on every
+  // data change from the hook (e.g., after a depth change or reload).
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>([]);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const instanceRef = useRef<ReactFlowInstance | null>(null);
+
+  useEffect(() => {
+    setFlowNodes(layoutNodes(graph.nodes));
+    setFlowEdges(graph.edges.map(toFlowEdge));
+  }, [graph, setFlowNodes, setFlowEdges]);
+
+  // Auto-fit view after each layout change (e.g., depth change or reload).
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      instanceRef.current?.fitView();
+    });
+  }, [graph]);
+
   const selectedNode = graph.nodes.find((node) => graphNodeId(node) === selectedNodeId) ?? graph.nodes[0] ?? null;
   const incomingCount = graph.edges.filter((edge) => edge.direction === 'incoming').length;
   const outgoingCount = graph.edges.filter((edge) => edge.direction === 'outgoing').length;
+
+  const handleNodeClick = (_: React.MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+
+    const graphNode = graph.nodes.find((item) => graphNodeId(item) === node.id);
+    if (!graphNode) {
+      return;
+    }
+
+    // const route = detailRouteForNode(graphNode);
+    // if (route) {
+    //   navigate(route);
+    // }
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -200,9 +249,14 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
             <ReactFlow
               nodes={flowNodes}
               edges={flowEdges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onInit={(instance) => {
+                instanceRef.current = instance;
+              }}
               fitView
-              onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-              nodesDraggable={false}
+              onNodeClick={handleNodeClick}
+              nodesDraggable
               nodesConnectable={false}
               elementsSelectable
               proOptions={{ hideAttribution: true }}
