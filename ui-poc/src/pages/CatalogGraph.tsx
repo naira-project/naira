@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import {
   ArrowRight,
   GitBranch,
+  GripVertical,
   Network,
   RefreshCw,
   Share2,
@@ -48,13 +49,14 @@ function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }):
 
   const displayLabel = (
     <div className="flex flex-col gap-1.5 text-left">
-      <div className="flex items-center gap-1.5">
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider"
-          style={{ color: palette.stroke }}
-        >
+      <div className="flex items-center justify-between gap-1.5">
+        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: palette.stroke }}>
           {node.kind}
         </span>
+        <GripVertical
+          size={12}
+          className="catalog-node-drag-handle cursor-grab text-gray-300 hover:text-gray-500"
+        />
       </div>
       <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
         {node.label}
@@ -65,6 +67,7 @@ function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }):
   return {
     id: graphNodeId(node),
     position,
+    dragHandle: '.catalog-node-drag-handle',
     data: {
       label: displayLabel,
       path: node.path,
@@ -75,6 +78,7 @@ function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }):
     draggable: true,
     selectable: true,
     style: {
+      cursor: 'pointer',
       width: 220,
       borderRadius: 10,
       border: '1px solid #e2e8f0',
