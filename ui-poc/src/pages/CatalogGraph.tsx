@@ -260,7 +260,9 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   // Auto-fit view after each layout change (e.g., depth change or reload).
   useEffect(() => {
     requestAnimationFrame(() => {
-      instanceRef.current?.fitView();
+      instanceRef.current?.fitView({
+        maxZoom: 1,   // Prevents from zooming in too much in default view
+      });
     });
   }, [graph]);
 
