@@ -16,6 +16,7 @@ type config struct {
 	KeycloakBaseURL string
 	KeycloakRealm   string
 	KeycloakClient  string
+	OpenfgaBaseURL 	string
 }
 
 type envConfig struct {
@@ -25,6 +26,7 @@ type envConfig struct {
 	KeycloakBaseURL string `env:"KEYCLOAK_BASE_URL"`
 	KeycloakRealm   string `env:"KEYCLOAK_REALM"`
 	KeycloakClient  string `env:"KEYCLOAK_CLIENT"`
+	OpenfgaBaseURL 	string	`env:"FGA_API_URL"`
 }
 
 
@@ -41,5 +43,6 @@ func loadConfig() (config, error) {
 		KeycloakBaseURL: raw.KeycloakBaseURL,
 		KeycloakRealm:   raw.KeycloakRealm,
 		KeycloakClient:  raw.KeycloakClient,
+		OpenfgaBaseURL:	 raw.OpenfgaBaseURL,
 	}, nil
 }

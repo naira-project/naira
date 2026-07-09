@@ -1,0 +1,19 @@
+model
+  schema 1.1
+
+type user
+
+type naira_io_model
+      relations
+        define owner: [user]
+        define member: [user] or owner
+        define viewer: [user] or member
+
+        define get: viewer
+        define list: member
+        define watch: member
+        
+        define can_list_litellm: viewer
+        define can_list_mlflow: viewer
+        define can_update_mlflow: owner
+        define can_update_litellm: owner

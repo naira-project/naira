@@ -78,6 +78,8 @@ spec:
               value: newone
             - name: KEYCLOAK_CLIENT
               value: admin-cli
+            - name: FGA_API_URL
+              value: http://openfga-2.default.svc.cluster.local:8080
           ports:
             - containerPort: 8090
               name: http

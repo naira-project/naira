@@ -16,6 +16,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/auth"
 )
 
 type routeHandler func(http.ResponseWriter, *http.Request) error
@@ -24,6 +25,11 @@ type listOptionsHandler func(http.ResponseWriter, *http.Request, listOptions) er
 type contextKey string
 
 const claimsKey contextKey = "claims"
+
+const (
+	fgaModelType   = "naira_io_model"
+	fgaGetRelation = "get"
+)
 
 // KeycloakConfig holds the gocloak client and realm needed for token verification.
 type KeycloakConfig struct {
@@ -125,6 +131,42 @@ func stringClaim(claims map[string]interface{}, key string) string {
 	return ""
 }
 
+func claimsFromContext(ctx context.Context) (TokenClaims, bool) {
+	tc, ok := ctx.Value(claimsKey).(TokenClaims)
+	return tc, ok
+}
+
+// authorizeNodeRead checks the existing OpenFGA tuples to determine whether the
+// authenticated caller has the "get" relation on the requested node.
+func authorizeNodeRead(ctx context.Context, node catalog.NodeID) error {
+	claims, ok := claimsFromContext(ctx)
+	if !ok || claims.Sub == "" {
+		return fmt.Errorf("no authenticated user in request context")
+	}
+
+	fgaClient, err := auth.GetClient()
+	if err != nil {
+		return fmt.Errorf("openfga client not configured: %w", err)
+	}
+
+	modelID, err := auth.GetModelID()
+	if err != nil {
+		return fmt.Errorf("getting openfga model id: %w", err)
+	}
+
+	object := fmt.Sprintf("%s:%s/%s", fgaModelType, node.Kind, node.Path)
+	allowed, err := auth.CheckTuples(fgaClient, "user:"+claims.Sub, fgaGetRelation, object, modelID)
+	if err != nil {
+		return fmt.Errorf("checking openfga tuples: %w", err)
+	}
+
+	if !allowed.Allowed {
+		return fmt.Errorf("user %q is not allowed to %s %s", claims.Sub, fgaGetRelation, object)
+	}
+
+	return nil
+}
+
 func NewRouter(service *catalog.Service, logger *log.Logger, kc KeycloakConfig) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
@@ -155,15 +197,19 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc KeycloakConfig) 
 			r.Get("/nodes", handleWithListOptions(nodeListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 
 				nodes := make([]Node, 0)
-				for _, node := range service.ListNodes(r.Context()) {
-					node := nodeFromCatalogNode(node)
+				for _, catalogNode := range service.ListNodes(r.Context()) {
+					node := nodeFromCatalogNode(catalogNode)
 					matches, err := matchNodeFilter(node, options.filter)
 					if err != nil {
 						return fmt.Errorf("matching node filter: %w", err)
 					}
-					if matches {
-						nodes = append(nodes, node)
+					if !matches {
+						continue
 					}
+					if err := authorizeNodeRead(r.Context(), catalogNode.ID); err != nil {
+						continue
+					}
+					nodes = append(nodes, node)
 				}
 
 				sortNodes(nodes)
@@ -178,7 +224,14 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc KeycloakConfig) 
 			}))
 
 			r.Get("/nodes/{kind}/*", handle(func(w http.ResponseWriter, r *http.Request) error {
-				node, err := service.GetNode(r.Context(), catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")})
+				nodeID := catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")}
+
+				if err := authorizeNodeRead(r.Context(), nodeID); err != nil {
+					writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+					return fmt.Errorf("Status forbidden: %w", err)
+				}
+
+				node, err := service.GetNode(r.Context(), nodeID)
 				if err != nil {
 					return fmt.Errorf("getting node: %w", err)
 				}
