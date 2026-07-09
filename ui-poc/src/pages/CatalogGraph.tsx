@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   ArrowRight,
+  Focus,
   GitBranch,
   GripVertical,
   Network,
@@ -44,25 +45,46 @@ function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
-function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }): Node {
+function toFlowNode(
+  node: CatalogGraphNode,
+  position: { x: number; y: number },
+  onFocus: (node: CatalogGraphNode) => void,
+): Node {
   const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
 
   const displayLabel = (
-    <div className="flex flex-col gap-1.5 text-left">
-      <div className="flex items-center justify-between gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: palette.stroke }}>
+  <div className="flex gap-2 text-left h-full">
+    <div className="catalog-node-drag-handle flex items-center justify-center cursor-grab text-gray-300 hover:text-gray-500 transition-colors px-0.5 -my-2 -ml-2 rounded-l hover:bg-black/[0.02]">
+      <GripVertical size={14} />
+    </div>
+
+    <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span 
+          className="text-[10px] font-bold uppercase tracking-wider truncate" 
+          style={{ color: palette.stroke }}
+        >
           {node.kind}
         </span>
-        <GripVertical
-          size={12}
-          className="catalog-node-drag-handle cursor-grab text-gray-300 hover:text-gray-500"
-        />
+        {!node.isRoot && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onFocus(node);
+            }}
+            title="Set as root"
+            className="rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors shrink-0"
+          >
+            <Focus size={13} />
+          </button>
+        )}
       </div>
       <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
         {node.label}
       </span>
     </div>
-  );
+  </div>
+);
 
   return {
     id: graphNodeId(node),
@@ -87,13 +109,13 @@ function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }):
       boxShadow: node.isRoot
         ? '0 20px 40px rgba(15, 23, 42, 0.12)'
         : '0 12px 28px rgba(15, 23, 42, 0.06)',
-      padding: '14px 14px 14px 12px',
+      padding: '14px 14px 14px 8px',
       color: '#17324d',
     },
   };
 }
 
-function layoutNodes(nodes: CatalogGraphNode[]): Node[] {
+function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode) => void): Node[] {
   const grouped = new Map<number, CatalogGraphNode[]>();
   const sortedDepths = Array.from(new Set(nodes.map((node) => node.depth))).sort((left, right) => left - right);
   const depthOffsets = new Map(sortedDepths.map((depth, index) => [depth, index]));
@@ -120,7 +142,7 @@ function layoutNodes(nodes: CatalogGraphNode[]): Node[] {
         positioned.push(toFlowNode(node, {
           x: (depthOffsets.get(depth) ?? 0) * 300,
           y: index * 150,
-        }));
+        }, onFocus));
       });
     });
 
@@ -174,7 +196,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const instanceRef = useRef<ReactFlowInstance | null>(null);
 
   useEffect(() => {
-    setFlowNodes(layoutNodes(graph.nodes));
+    setFlowNodes(layoutNodes(graph.nodes, handleFocusNode));
     setFlowEdges(graph.edges.map(toFlowEdge));
   }, [graph, setFlowNodes, setFlowEdges]);
 
@@ -191,14 +213,12 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
 
   const handleNodeClick = (_: React.MouseEvent, node: Node) => {
     setSelectedNodeId(node.id);
+  };
 
-    const graphNode = graph.nodes.find((item) => graphNodeId(item) === node.id);
-    if (!graphNode) {
-      return;
-    }
-
+  const handleFocusNode = (graphNode: CatalogGraphNode) => {
     navigate(`/catalog/${graphNode.kind}/${encodeURIComponent(graphNode.path)}`);
   };
+
 
   return (
     <div className="flex flex-col gap-3">
