@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Focus,
   GitBranch,
-  GripVertical,
   Network,
   RefreshCw,
   Share2,
@@ -111,10 +110,6 @@ function toFlowNode(
 
   const displayLabel = (
     <div className="flex gap-2 text-left h-full">
-      <div className="catalog-node-drag-handle flex items-center justify-center cursor-grab text-gray-300 hover:text-gray-500 transition-colors px-0.5 -my-2 -ml-2 rounded-l hover:bg-black/[0.02]">
-        <GripVertical size={14} />
-      </div>
-
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
           <span 
@@ -130,7 +125,7 @@ function toFlowNode(
                 onFocus(node);
               }}
               title="Set as root"
-              className="rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors shrink-0"
+              className="cursor-pointer rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors shrink-0"
             >
               <Focus size={13} />
             </button>
@@ -146,7 +141,6 @@ function toFlowNode(
   return {
     id: graphNodeId(node),
     position,
-    dragHandle: '.catalog-node-drag-handle',
     data: {
       label: displayLabel,
       path: node.path,
@@ -157,7 +151,6 @@ function toFlowNode(
     draggable: true,
     selectable: true,
     style: {
-      cursor: 'pointer',
       width: 220,
       borderRadius: 10,
       border: '1px solid #e2e8f0',
@@ -166,7 +159,7 @@ function toFlowNode(
       boxShadow: node.isRoot
         ? '0 20px 40px rgba(15, 23, 42, 0.12)'
         : '0 12px 28px rgba(15, 23, 42, 0.06)',
-      padding: '14px 14px 14px 8px',
+      padding: '14px 14px 14px 14px',
       color: '#17324d',
     },
   };
