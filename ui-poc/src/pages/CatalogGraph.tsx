@@ -45,6 +45,63 @@ function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
+// Separate component to handle rendering node properties cleanly
+// TODO: This component should be updated or refactored to align and share 
+// a consistent style/logic with the PropertiesPanel component.
+function NodeProperties({ properties }: { properties?: Record<string, any> }) {
+  if (!properties || Object.keys(properties).length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6 space-y-4">
+      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
+        Properties
+      </p>
+      
+      <div className="space-y-3.5">
+        {Object.entries(properties).map(([key, val]) => {
+          const isJson = typeof val === 'object' || (typeof val === 'string' && (val.startsWith('[') || val.startsWith('{')));
+          const isUrl = typeof val === 'string' && val.startsWith('http');
+
+          return (
+            <div key={key} className="group border-b border-gray-100 dark:border-gray-800 pb-3 last:border-0 last:pb-0">
+              {/* Key / Label */}
+              <span className="block text-[11px] font-mono font-medium text-gray-400 dark:text-gray-500 mb-1 break-all">
+                {key}
+              </span>
+
+              {/* Value rendered dynamically based on data type */}
+              <div className="text-sm text-gray-800 dark:text-gray-200">
+                {isJson ? (
+                  <pre className="mt-1 p-2.5 text-[11px] font-mono bg-gray-50 dark:bg-white/5 rounded-lg overflow-x-auto max-h-40 border border-gray-100 dark:border-white/5 custom-scrollbar">
+                    {typeof val === 'string' 
+                      ? JSON.stringify(JSON.parse(val), null, 2) 
+                      : JSON.stringify(val, null, 2)}
+                  </pre>
+                ) : isUrl ? (
+                  <a 
+                    href={String(val)} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-primary hover:underline font-mono text-xs break-all inline-block bg-blue-50/50 dark:bg-blue-950/30 px-2 py-1 rounded border border-blue-100/50"
+                  >
+                    {String(val)}
+                  </a>
+                ) : (
+                  <span className="font-sans leading-relaxed text-gray-700 dark:text-gray-300">
+                    {String(val)}
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function toFlowNode(
   node: CatalogGraphNode,
   position: { x: number; y: number },
@@ -53,38 +110,38 @@ function toFlowNode(
   const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
 
   const displayLabel = (
-  <div className="flex gap-2 text-left h-full">
-    <div className="catalog-node-drag-handle flex items-center justify-center cursor-grab text-gray-300 hover:text-gray-500 transition-colors px-0.5 -my-2 -ml-2 rounded-l hover:bg-black/[0.02]">
-      <GripVertical size={14} />
-    </div>
-
-    <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2">
-        <span 
-          className="text-[10px] font-bold uppercase tracking-wider truncate" 
-          style={{ color: palette.stroke }}
-        >
-          {node.kind}
-        </span>
-        {!node.isRoot && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onFocus(node);
-            }}
-            title="Set as root"
-            className="rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors shrink-0"
-          >
-            <Focus size={13} />
-          </button>
-        )}
+    <div className="flex gap-2 text-left h-full">
+      <div className="catalog-node-drag-handle flex items-center justify-center cursor-grab text-gray-300 hover:text-gray-500 transition-colors px-0.5 -my-2 -ml-2 rounded-l hover:bg-black/[0.02]">
+        <GripVertical size={14} />
       </div>
-      <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
-        {node.label}
-      </span>
+
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span 
+            className="text-[10px] font-bold uppercase tracking-wider truncate" 
+            style={{ color: palette.stroke }}
+          >
+            {node.kind}
+          </span>
+          {!node.isRoot && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onFocus(node);
+              }}
+              title="Set as root"
+              className="rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors shrink-0"
+            >
+              <Focus size={13} />
+            </button>
+          )}
+        </div>
+        <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
+          {node.label}
+        </span>
+      </div>
     </div>
-  </div>
-);
+  );
 
   return {
     id: graphNodeId(node),
@@ -218,7 +275,6 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const handleFocusNode = (graphNode: CatalogGraphNode) => {
     navigate(`/catalog/${graphNode.kind}/${encodeURIComponent(graphNode.path)}`);
   };
-
 
   return (
     <div className="flex flex-col gap-3">
@@ -386,6 +442,9 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
                       {selectedNode.path}
                     </p>
                   </div>
+
+                  {/* Render abstracted properties section */}
+                  <NodeProperties properties={selectedNode.properties} />
                 </div>
               )}
             </CardContent>
