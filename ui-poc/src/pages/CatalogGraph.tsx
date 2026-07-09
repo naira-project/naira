@@ -1,6 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-// import { useNavigate } from 'react-router-dom';
-import { ArrowRight, GitBranch, Network, RefreshCw, Share2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import {
+  ArrowRight,
+  Box,
+  Cloud,
+  Code,
+  Cpu,
+  Database,
+  GitBranch,
+  Globe,
+  HardDrive,
+  Layout,
+  Network,
+  RefreshCw,
+  Server,
+  Share2,
+  Shield,
+} from 'lucide-react';
 import {
   Background,
   Controls,
@@ -25,33 +41,68 @@ const typePalette: Record<string, { fill: string; stroke: string }> = {
   application: { fill: '#dff4ff', stroke: '#0b6fa4' },
   model: { fill: '#fff1d6', stroke: '#b36b00' },
   dataset: { fill: '#def7e5', stroke: '#13795b' },
+  deployment: { fill: '#f3e8ff', stroke: '#6b21a8' },
+  service: { fill: '#fce7f3', stroke: '#9d174d' },
+  api: { fill: '#e0f2fe', stroke: '#0369a1' },
+  system: { fill: '#ffe4e6', stroke: '#9f1239' },
+  pipeline: { fill: '#d1fae5', stroke: '#047857' },
+  infrastructure: { fill: '#f5f5f4', stroke: '#44403c' },
+  storage: { fill: '#fef3c7', stroke: '#b45309' },
+  network: { fill: '#e0e7ff', stroke: '#3730a3' },
+  security: { fill: '#fef2f2', stroke: '#991b1b' },
 };
+
+const kindIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  deployment: Server,
+  application: Layout,
+  model: Cpu,
+  dataset: Database,
+  service: Box,
+  api: Globe,
+  system: Cloud,
+  pipeline: GitBranch,
+  infrastructure: HardDrive,
+  storage: HardDrive,
+  network: Network,
+  security: Shield,
+};
+
+function kindIcon(kind: string): React.ComponentType<{ size?: number; className?: string }> {
+  return kindIcons[kind] ?? Code;
+}
 
 function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
-// Maps a graph node to its detail page route. Returns null if the specific
-// node type does not have a dedicated detail page (e.g., application).
-function detailRouteForNode(node: CatalogGraphNode): string | null {
-  switch (node.kind) {
-    case 'model':
-      return `/models/${encodeURIComponent(node.name)}`;
-    case 'dataset':
-      return `/datasets/${encodeURIComponent(node.name)}`;
-    default:
-      return null;
-  }
-}
-
 function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }): Node {
-  const palette = typePalette[node.kind] ?? { fill: '#eceff3', stroke: '#516170' };
+  const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
+  const Icon = kindIcon(node.kind);
+
+  const displayLabel = (
+    <div className="flex flex-col gap-1.5 text-left">
+      <div className="flex items-center gap-1.5">
+        <span className="shrink-0" style={{ color: palette.stroke, lineHeight: 0 }}>
+          <Icon size={14} />
+        </span>
+        <span
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: palette.stroke }}
+        >
+          {node.kind}
+        </span>
+      </div>
+      <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
+        {node.label}
+      </span>
+    </div>
+  );
 
   return {
     id: graphNodeId(node),
     position,
     data: {
-      label: node.label,
+      label: displayLabel,
       path: node.path,
       nodeKind: node.kind,
       depth: node.depth,
@@ -61,11 +112,14 @@ function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }):
     selectable: true,
     style: {
       width: 220,
-      borderRadius: 18,
-      border: `2px solid ${palette.stroke}`,
-      background: node.isRoot ? '#eef6ff' : palette.fill,
-      boxShadow: node.isRoot ? '0 20px 40px rgba(15, 23, 42, 0.12)' : '0 12px 28px rgba(15, 23, 42, 0.06)',
-      padding: 16,
+      borderRadius: 10,
+      border: '1px solid #e2e8f0',
+      borderLeft: `6px solid ${palette.stroke}`,
+      background: node.isRoot ? '#f0faf4' : '#ffffff',
+      boxShadow: node.isRoot
+        ? '0 20px 40px rgba(15, 23, 42, 0.12)'
+        : '0 12px 28px rgba(15, 23, 42, 0.06)',
+      padding: '14px 14px 14px 12px',
       color: '#17324d',
     },
   };
@@ -139,7 +193,7 @@ type CatalogGraphProps = {
 };
 
 export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
-  // const navigate = useNavigate();
+  const navigate = useNavigate();
   const [depth, setDepth] = useState(1);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { graph, loading, error, reload } = useCatalogGraph(rootNode, depth);
@@ -175,10 +229,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
       return;
     }
 
-    // const route = detailRouteForNode(graphNode);
-    // if (route) {
-    //   navigate(route);
-    // }
+    navigate(`/catalog/${graphNode.kind}/${encodeURIComponent(graphNode.path)}`);
   };
 
   return (
@@ -267,7 +318,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
                 zoomable
                 nodeColor={(node) => {
                   const typedNode = graph.nodes.find((item) => graphNodeId(item) === node.id);
-                  const palette = typePalette[typedNode?.kind ?? ''] ?? { fill: '#ced6de', stroke: '#516170' };
+                  const palette = typePalette[typedNode?.kind ?? ''] ?? { fill: '#ced6de', stroke: '#94a3b8' };
                   return typedNode?.isRoot ? '#0f5c61' : palette.stroke;
                 }}
               />
