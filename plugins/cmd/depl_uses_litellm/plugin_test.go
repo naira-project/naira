@@ -178,6 +178,20 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 				{namespace: "team-a", deployment: "app-good", secret: "sk-BBB"},
 			},
 		},
+		{
+			name:       "Two Deployments reference the same secret, both are reported",
+			namespaces: []string{"team-a"},
+			objs: []runtime.Object{
+				namespace("team-a"),
+				secret("team-a", "shared-secret", stringmap{"KEY": "sk-AAA"}),
+				deployment("team-a", "app-1", withEnvFrom(0, "shared-secret")),
+				deployment("team-a", "app-2", withEnvFrom(0, "shared-secret")),
+			},
+			want: []deploymentWithSecret{
+				{namespace: "team-a", deployment: "app-1", secret: "sk-AAA"},
+				{namespace: "team-a", deployment: "app-2", secret: "sk-AAA"},
+			},
+		},
 	}
 
 	for _, tt := range tests {

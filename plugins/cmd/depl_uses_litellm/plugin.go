@@ -183,7 +183,7 @@ var (
 func findDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interface, namespaces []string, pattern *regexp.Regexp) ([]deploymentWithSecret, error) {
 	var result []deploymentWithSecret
 	type nameWithNs struct{ name, ns string }
-	seenSecrets := make(map[nameWithNs]struct{})
+	secretsCache := make(map[nameWithNs]*unstructured.Unstructured)
 	for _, ns := range namespaces {
 		depls, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
@@ -196,16 +196,15 @@ func findDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interfa
 
 			for secretName := range referencedSecretsNames(depl.Object) {
 				nameWithNs := nameWithNs{name: secretName, ns: ns}
-				if _, seen := seenSecrets[nameWithNs]; seen {
-					continue
-				}
-				seenSecrets[nameWithNs] = struct{}{}
-
-				secret, err := dyn.Resource(gvrSecrets).Namespace(ns).Get(ctx, secretName, metav1.GetOptions{})
-				if err != nil {
-					log.Printf("%s: WARN: %s/%s: cannot read secret %q: %v",
-						pluginName, ns, name, secretName, err)
-					continue
+				secret := secretsCache[nameWithNs]
+				if secret == nil {
+					secret, err = dyn.Resource(gvrSecrets).Namespace(ns).Get(ctx, secretName, metav1.GetOptions{})
+					if err != nil {
+						log.Printf("%s: WARN: %s/%s: cannot read secret %q: %v",
+							pluginName, ns, name, secretName, err)
+						continue
+					}
+					secretsCache[nameWithNs] = secret
 				}
 
 				dataMap, _, _ := unstructured.NestedStringMap(secret.Object, "data")
