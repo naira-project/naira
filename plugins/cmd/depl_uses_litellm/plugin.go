@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -28,7 +29,7 @@ const pluginName = "depl_uses_litellm"
 
 type config struct {
 	Kubeconfig   string        `env:"DEPL_USES_LITELLM_KUBECONFIG"`
-	NamedHosts   []string      `env:"DEPL_USES_LITELLM_NAMED_HOSTS" usage:"comma-separated list of named LiteLLM base URLs, e.g. 'host1=https://litellm.example.com,host2=http://litellm2.example.com:1234/base/'"`
+	NamedHosts   []namedHost   `env:"DEPL_USES_LITELLM_NAMED_HOSTS" usage:"comma-separated list of named LiteLLM base URLs, e.g. 'host1=https://litellm.example.com,host2=http://litellm2.example.com:1234/base/'"`
 	APIKeyRegexp string        `env:"DEPL_USES_LITELLM_APIKEY_REGEXP" default:"^sk-.{22}$"` // optional custom regexp to match API keys; defaults to current (May 2026) LiteLLM format
 	HTTPTimeout  time.Duration `env:"DEPL_USES_LITELLM_HTTP_TIMEOUT" default:"5s"`
 }
@@ -44,14 +45,8 @@ func main() {
 
 type Plugin struct {
 	httpClient   *http.Client
-	namedHosts   []namedHost
 	config       config
 	apiKeyRegexp *regexp.Regexp
-}
-
-type namedHost struct {
-	name    string
-	baseURL string
 }
 
 func New(config config) (*Plugin, error) {
@@ -62,21 +57,8 @@ func New(config config) (*Plugin, error) {
 	if len(config.NamedHosts) == 0 {
 		return nil, fmt.Errorf("no LiteLLM hosts configured: DEPL_USES_LITELLM_NAMED_HOSTS is empty")
 	}
-	namedHosts := make([]namedHost, 0, len(config.NamedHosts))
-	for _, s := range config.NamedHosts {
-		name, baseURL, ok := strings.Cut(s, "=")
-		if !ok || name == "" || baseURL == "" {
-			return nil, fmt.Errorf(`invalid DEPL_USES_LITELLM_NAMED_HOSTS entry %q: expected "name=baseURL" format`, s)
-		}
-		if strings.Contains(name, "/") {
-			// We'll use the name as a path segment in the NodeID, so it cannot contain slashes.
-			return nil, fmt.Errorf(`invalid DEPL_USES_LITELLM_NAMED_HOSTS entry %q: name cannot contain "/"`, s)
-		}
-		namedHosts = append(namedHosts, namedHost{name: name, baseURL: baseURL})
-	}
 	return &Plugin{
 		httpClient:   &http.Client{Timeout: config.HTTPTimeout},
-		namedHosts:   namedHosts,
 		config:       config,
 		apiKeyRegexp: re,
 	}, nil
@@ -105,7 +87,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 			continue
 		}
 		hostToModels := make(map[string][]string)
-		for _, nh := range p.namedHosts {
+		for _, nh := range p.config.NamedHosts {
 			models, err := fetchModels(ctx, p.httpClient, nh.baseURL, d.secret)
 			if err != nil {
 				log.Printf("%s: WARN: fetching models from %s=%s (key ...%s): %v",
@@ -166,6 +148,27 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	}
 
 	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
+}
+
+type namedHost struct {
+	name    string
+	baseURL string
+}
+
+func (nh *namedHost) UnmarshalText(text []byte) error {
+	name, baseURL, ok := bytes.Cut(text, []byte("="))
+	name = bytes.TrimSpace(name)
+	baseURL = bytes.TrimSpace(baseURL)
+	if !ok || len(name) == 0 || len(baseURL) == 0 {
+		return fmt.Errorf(`invalid DEPL_USES_LITELLM_NAMED_HOSTS entry %q: expected "name=baseURL" format`, string(text))
+	}
+	if bytes.Contains(name, []byte("/")) {
+		// We'll use the name as a path segment in the NodeID, so it cannot contain slashes.
+		return fmt.Errorf(`invalid DEPL_USES_LITELLM_NAMED_HOSTS entry %q: name cannot contain "/"`, string(text))
+	}
+	nh.name = string(name)
+	nh.baseURL = string(bytes.TrimRight(baseURL, "/"))
+	return nil
 }
 
 type deploymentWithSecret struct {
