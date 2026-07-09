@@ -7,38 +7,51 @@ interface GenericTableProps {
   nodes: NodeResource[];
   kind: string;
   onSelect: (node: NodeResource) => void;
-  relationSummaries?: Map<string, RelationSummary>;
+  relationSummaries: Map<string, RelationSummary>;
 }
 
 /**
  * A generic, kind-agnostic table that:
  * 1. Infers columns from the union of all node props.
- * 2. Always shows `name` (short name from path) and `namespace` as first columns.
- * 3. When `relationSummaries` is provided, shows a "Relations" column
- * with badges per relation kind (inbound/outbound counts).
- * 4. Renders a clickable "Details" action column last.
+ * 2. Always shows `name`, `namespace`, and `Relations` as the "Core Metadata" columns.
+ * 3. Renders plugin-derived prop columns as "Plugin Properties", immediately after Core Metadata.
+ *    The group-header row (Core Metadata / Plugin Properties) is always rendered, even when a
+ *    kind has zero plugin properties — this keeps table height/layout stable when switching
+ *    between kinds instead of the header jumping around.
+ * 4. Renders a clickable "Details" action column pinned to the right; every other column
+ *    hugs the left edge (a flexible spacer column absorbs leftover space, and also stands in
+ *    for "Plugin Properties" visually when there are no plugin columns).
+ *
+ * Implementation note: the whole table (header rows + every data row) lives inside a SINGLE
+ * CSS grid container. Row wrappers use `display: contents` so their cells become direct grid
+ * items. This matters — if each row were its own independent grid, `max-content` column
+ * sizing would be computed separately per row and columns would drift out of alignment on
+ * wider screens.
  */
 export default function GenericTable({ nodes, kind, onSelect, relationSummaries }: GenericTableProps) {
-  // Pre-compute parsed path data for all nodes
   const parsedPaths = useMemo(
     () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
     [nodes]
   );
+
+  // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
+  // rendered explicitly as the core columns, so we only need the plugin tail here.
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
-  const hasRelations = relationSummaries !== undefined;
-  const CORE_COL_COUNT = 2; // name + namespace
-  const pluginColCount = columns.length - CORE_COL_COUNT;
+  const pluginColumns = useMemo(() => columns.slice(2), [columns]);
+  const pluginColCount = pluginColumns.length;
   const hasPluginColumns = pluginColCount > 0;
+  const CORE_COL_COUNT = 3; // name + namespace + relations
+  const ACTIONS_COL_WIDTH = '110px';
 
-  // Grid: prop columns + (optional relations) + actions
+  // Core + plugin columns hug the left (content-sized), a flexible spacer absorbs leftover
+  // width (and doubles as the "Plugin Properties" area when there are no plugin columns), and
+  // Actions is pinned to the right.
   const gridTemplateColumns = useMemo(() => {
-    const propPart = columns.length <= 1
-      ? 'minmax(140px, 1fr)'
-      : `minmax(140px, 1fr) repeat(${columns.length - 1}, minmax(100px, 1fr))`;
-
-    const relationsPart = hasRelations ? ' minmax(180px, 2fr)' : '';
-    return `${propPart}${relationsPart} 80px`;
-  }, [columns, hasRelations]);
+    const pluginPart = hasPluginColumns
+      ? ` repeat(${pluginColCount}, minmax(100px, max-content))`
+      : '';
+    return `minmax(140px, max-content) minmax(100px, max-content) minmax(160px, max-content)${pluginPart} 1fr ${ACTIONS_COL_WIDTH}`;
+  }, [pluginColCount, hasPluginColumns]);
 
   if (nodes.length === 0) {
     return (
@@ -48,145 +61,128 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
     );
   }
 
+  const headerCell =
+    'flex items-center h-full bg-gray-50 px-4 py-2.5 dark:bg-white/5';
+  const labelText =
+    'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
+  const groupText =
+    'flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none';
+
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-      {/* Header — two-row grid when plugin columns exist */}
-      <div
-        className="grid items-center gap-x-3 gap-y-2 rounded-t-lg border-b border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-white/5"
-        style={{
-          gridTemplateColumns,
-          ...(hasPluginColumns ? { gridTemplateRows: 'auto auto' } : {}),
-        }}
-      >
-        {/* Row 1: Group headers */}
-        {hasPluginColumns && (
-          <>
-            <div
-              className="flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none"
-              style={{ gridColumn: `span ${CORE_COL_COUNT}`, gridRow: 1 }}
-            >
-              Core Metadata
-            </div>
-            <div
-              className="flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none border-l border-gray-300 dark:border-gray-600 pl-3"
-              style={{ gridColumn: `span ${pluginColCount}`, gridRow: 1 }}
-            >
-              Plugin Properties
-            </div>
-            {/* Empty cells to fill remaining columns (Relations + Actions) */}
-            {hasRelations && <div style={{ gridColumn: 'span 1', gridRow: 1 }} />}
-            <div style={{ gridColumn: 'span 1', gridRow: 1 }} />
-          </>
-        )}
-
-        {/* Row 2: Column header labels */}
-        {columns.map((col, idx) => {
-          const isFirstPlugin = idx === CORE_COL_COUNT;
-          return (
-            <span
-              key={col}
-              className={`truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary ${
-                isFirstPlugin && hasPluginColumns
-                  ? 'border-l border-gray-300 dark:border-gray-600 pl-3'
-                  : ''
-              }`}
-              style={{ gridRow: hasPluginColumns ? 2 : undefined }}
-            >
-              {col}
-            </span>
-          );
-        })}
-        {hasRelations && (
-          <span
-            className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary"
-            style={{ gridRow: hasPluginColumns ? 2 : undefined }}
-          >
-            Relations
-          </span>
-        )}
-        <span
-          className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary"
-          style={{ gridRow: hasPluginColumns ? 2 : undefined }}
-        >
-          Actions
-        </span>
-      </div>
-
-      {/* Rows */}
-      {nodes.map((node) => (
+      <div className="grid" style={{ gridTemplateColumns }}>
+        {/* Row 1: group headers — always rendered so the table doesn't jump in height when a
+            kind has no plugin properties. "Plugin Properties" spans the plugin columns plus the
+            spacer, so it still shows even with zero plugin columns. */}
         <div
-          key={node.name}
-          className="grid items-center gap-x-3 border-b border-gray-200 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
-          style={{ gridTemplateColumns }}
+          className={`${headerCell} ${groupText} rounded-tl-lg`}
+          style={{ gridColumn: `span ${CORE_COL_COUNT}` }}
         >
-          {columns.map((col, idx) => {
-            const parsed = parsedPaths.get(node.name);
-            const isFirstPlugin = idx === CORE_COL_COUNT;
+          Core Metadata
+        </div>
+        <div
+          className={`${headerCell} ${groupText}`}
+          style={{ gridColumn: `span ${pluginColCount + 1}` }}
+        >
+          Plugin Properties
+        </div>
+        <div className={`${headerCell} rounded-tr-lg`} />
 
-            // Wrapper function to inject vertical border seamlessly for plugin data start
-            const renderCell = (content: React.ReactNode) => (
-              <div 
-                className={`truncate flex items-center h-full ${
-                  isFirstPlugin && hasPluginColumns 
-                    ? 'border-l border-gray-200 dark:border-gray-700/60 pl-3' 
-                    : ''
-                }`}
-              >
-                {content}
-              </div>
-            );
+        {/* Row 2: column labels */}
+        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
+          <span className={labelText}>name</span>
+        </div>
+        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
+          <span className={labelText}>namespace</span>
+        </div>
+        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
+          <span className={labelText}>Relations</span>
+        </div>
+        {pluginColumns.map((col, idx) => (
+          <div
+            key={col}
+            className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
+          >
+            <span className={labelText}>{col}</span>
+          </div>
+        ))}
+        <div
+          className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
+        />
+        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
+          <span className={labelText}>Actions</span>
+        </div>
 
-            if (col === 'name') {
-              return renderCell(
+        {/* Data rows — `contents` makes each row's cells direct grid items so they share the
+            same column tracks as the header (see note above). */}
+        {nodes.map((node, rowIdx) => {
+          const parsed = parsedPaths.get(node.name);
+          const props = nodeProps(node);
+          const isLastRow = rowIdx === nodes.length - 1;
+          const cellBase = `flex items-center h-full px-4 py-3 group-hover/row:bg-gray-50 dark:group-hover/row:bg-white/5 ${
+            isLastRow ? '' : 'border-b border-gray-200 dark:border-gray-700'
+          }`;
+
+          return (
+            <div key={node.name} className="contents group/row">
+              <div className={`${cellBase} truncate ${isLastRow ? 'rounded-bl-lg' : ''}`}>
                 <span
                   className="truncate text-sm font-medium text-foreground dark:text-foreground-dark-default"
                   title={node.name}
                 >
                   {parsed?.name ?? node.name}
                 </span>
-              );
-            }
+              </div>
 
-            if (col === 'namespace') {
-              return renderCell(
+              <div className={`${cellBase} truncate`}>
                 <span
                   className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
                   title={parsed?.namespace}
                 >
                   {parsed?.namespace ?? '—'}
                 </span>
-              );
-            }
+              </div>
 
-            // Prop columns (from plugins)
-            const props = nodeProps(node);
-            const value = props[col];
-            return renderCell(
-              <span
-                className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
-                title={typeof value === 'string' ? value : undefined}
-              >
-                {formatPropValue(value)}
-              </span>
-            );
-          })}
+              <div className={cellBase}>
+                <RelationCell nodeName={node.name} summaries={relationSummaries} />
+              </div>
 
-          {/* Relations badges */}
-          {hasRelations && (
-            <RelationCell nodeName={node.name} summaries={relationSummaries!} />
-          )}
+              {pluginColumns.map((col) => {
+                const value = props[col];
+                return (
+                  <div
+                    key={col}
+                    className={`${cellBase} truncate}`}
+                  >
+                    <span
+                      className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
+                      title={typeof value === 'string' ? value : undefined}
+                    >
+                      {formatPropValue(value)}
+                    </span>
+                  </div>
+                );
+              })}
 
-          {/* Actions */}
-          <button
-            onClick={() => onSelect(node)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
-            title="View details"
-          >
-            <Info size={14} />
-            Details
-          </button>
-        </div>
-      ))}
+              {/* Spacer — absorbs leftover width so only Actions sits on the right */}
+              <div
+                className={`${cellBase}`}
+              />
+
+              <div className={`${cellBase} ${isLastRow ? 'rounded-br-lg' : ''}`}>
+                <button
+                  onClick={() => onSelect(node)}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
+                  title="View details"
+                >
+                  <Info size={14} />
+                  Details
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
