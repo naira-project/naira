@@ -24,10 +24,7 @@ import (
 
 const (
 	testClusterID = "test-cluster-uid-1234"
-	testAPIKey    = "sk-123456789_123456789_12" // should match default config.APIKeyRegexp
 )
-
-var defaultKeyRegexp = compileDefaultAPIKeyRegexp()
 
 // attrs reduces verbosity when building unstructured objects inline.
 type attrs = map[string]any
@@ -243,6 +240,7 @@ func TestFetchModels(t *testing.T) {
 	}
 
 	for _, tt := range tests {
+		const testAPIKey = "test-api-key"
 		t.Run(tt.name, func(t *testing.T) {
 			mockServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, http.MethodGet, r.Method)
@@ -473,20 +471,4 @@ func sortedDeplsWithSecrets(depls []deploymentWithSecret) []deploymentWithSecret
 		return a.secret < b.secret
 	})
 	return depls
-}
-
-func compileDefaultAPIKeyRegexp() *regexp.Regexp {
-	var cfg config
-	err := env.Load(&cfg, &env.Options{Source: env.Map{}})
-	if err != nil {
-		panic(fmt.Sprintf("failed to load default config: %v", err))
-	}
-	re, err := regexp.Compile(cfg.APIKeyRegexp)
-	if err != nil {
-		panic(fmt.Sprintf("failed to compile default APIKeyRegexp %q: %v", cfg.APIKeyRegexp, err))
-	}
-	if !re.MatchString(testAPIKey) {
-		panic(fmt.Sprintf("testAPIKey %q does not match default APIKeyRegexp %q", testAPIKey, cfg.APIKeyRegexp))
-	}
-	return re
 }
