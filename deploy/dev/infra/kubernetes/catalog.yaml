@@ -200,8 +200,8 @@ spec:
               value: "50054"
             - name: DEPL_USES_LITELLM_KUBECONFIG
               value: ""
-            - name: DEPL_USES_LITELLM_HOSTS
-              value: "litellm.litellm:4000"
+            - name: DEPL_USES_LITELLM_NAMED_HOSTS
+              value: "litellm=http://litellm.litellm:4000"
           resources:
             requests:
               cpu: 50m

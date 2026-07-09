@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -29,7 +28,7 @@ const pluginName = "depl_uses_litellm"
 
 type config struct {
 	Kubeconfig   string        `env:"DEPL_USES_LITELLM_KUBECONFIG"`
-	Hosts        []string      `env:"DEPL_USES_LITELLM_HOSTS"`                              // bare hostnames; "https://" is prepended automatically
+	NamedHosts   []string      `env:"DEPL_USES_LITELLM_NAMED_HOSTS" usage:"comma-separated list of named LiteLLM base URLs, e.g. 'host1=https://litellm.example.com,host2=http://litellm2.example.com:1234/base/'"`
 	APIKeyRegexp string        `env:"DEPL_USES_LITELLM_APIKEY_REGEXP" default:"^sk-.{22}$"` // optional custom regexp to match API keys; defaults to current (May 2026) LiteLLM format
 	HTTPTimeout  time.Duration `env:"DEPL_USES_LITELLM_HTTP_TIMEOUT" default:"5s"`
 }
@@ -45,8 +44,14 @@ func main() {
 
 type Plugin struct {
 	httpClient   *http.Client
+	namedHosts   []namedHost
 	config       config
 	apiKeyRegexp *regexp.Regexp
+}
+
+type namedHost struct {
+	name    string
+	baseURL string
 }
 
 func New(config config) (*Plugin, error) {
@@ -54,11 +59,24 @@ func New(config config) (*Plugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid DEPL_USES_LITELLM_APIKEY_REGEXP: %w", err)
 	}
-	if len(config.Hosts) == 0 {
-		return nil, fmt.Errorf("no LiteLLM hosts configured: DEPL_USES_LITELLM_HOSTS is empty")
+	if len(config.NamedHosts) == 0 {
+		return nil, fmt.Errorf("no LiteLLM hosts configured: DEPL_USES_LITELLM_NAMED_HOSTS is empty")
+	}
+	namedHosts := make([]namedHost, 0, len(config.NamedHosts))
+	for _, s := range config.NamedHosts {
+		name, baseURL, ok := strings.Cut(s, "=")
+		if !ok || name == "" || baseURL == "" {
+			return nil, fmt.Errorf(`invalid DEPL_USES_LITELLM_NAMED_HOSTS entry %q: expected "name=baseURL" format`, s)
+		}
+		if strings.Contains(name, "/") {
+			// We'll use the name as a path segment in the NodeID, so it cannot contain slashes.
+			return nil, fmt.Errorf(`invalid DEPL_USES_LITELLM_NAMED_HOSTS entry %q: name cannot contain "/"`, s)
+		}
+		namedHosts = append(namedHosts, namedHost{name: name, baseURL: baseURL})
 	}
 	return &Plugin{
 		httpClient:   &http.Client{Timeout: config.HTTPTimeout},
+		namedHosts:   namedHosts,
 		config:       config,
 		apiKeyRegexp: re,
 	}, nil
@@ -81,30 +99,21 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	}
 
 	// Query each unique API key against every host once, cache results.
-	keyToHostsToModels := make(map[string]map[string][]string) // apiKey -> host -> []modelID
+	keyToHostsToModels := make(map[string]map[string][]string) // apiKey -> hostName -> []modelID
 	for _, d := range deplsWithAPIKeys {
 		if _, seen := keyToHostsToModels[d.secret]; seen {
 			continue
 		}
 		hostToModels := make(map[string][]string)
-		for _, host := range p.config.Hosts {
-			models, err := fetchModels(ctx, p.httpClient, "https://"+host, d.secret)
+		for _, nh := range p.namedHosts {
+			models, err := fetchModels(ctx, p.httpClient, nh.baseURL, d.secret)
 			if err != nil {
-				log.Printf("%s: WARN: fetching models from %s (key ...%s): %v",
-					pluginName, host, d.secret[len(d.secret)-4:], err)
-				if !errors.Is(err, http.ErrSchemeMismatch) {
-					continue
-				}
-				log.Printf("%s: retrying %s with http scheme", pluginName, host)
-				models, err = fetchModels(ctx, p.httpClient, "http://"+host, d.secret)
-				if err != nil {
-					log.Printf("%s: WARN: fetching models from %s (key ...%s): %v",
-						pluginName, host, d.secret[len(d.secret)-4:], err)
-					continue
-				}
+				log.Printf("%s: WARN: fetching models from %s=%s (key ...%s): %v",
+					pluginName, nh.name, nh.baseURL, d.secret[len(d.secret)-4:], err)
+				continue
 			}
 			if len(models) > 0 {
-				hostToModels[host] = models
+				hostToModels[nh.name] = models
 			}
 		}
 		keyToHostsToModels[d.secret] = hostToModels
@@ -126,21 +135,13 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 		deplsByPath[deplID.Path] = pluginapi.NodeClaim{ID: deplID}
 
-		for host, models := range keyToHostsToModels[d.secret] {
+		for name, models := range keyToHostsToModels[d.secret] {
 			for _, m := range models {
 				modelID := pluginapi.NodeID{
 					Kind: pluginapi.NodeKindModel,
-					// TODO: somehow resolve the hostname, it could be local
-					Path: "litellm/" + host + "/" + m,
+					Path: "litellm/" + name + "/" + m,
 				}
-				// TODO: deterministic behavior in case of multiple matches (e.g. when same instance of litellm has multiple hostnames)
-				modelsByPath[modelID.Path] = pluginapi.NodeClaim{
-					ID: modelID,
-					Properties: pluginapi.PropertyMap{
-						"host": host,
-						"id":   m,
-					},
-				}
+				modelsByPath[modelID.Path] = pluginapi.NodeClaim{ID: modelID}
 
 				ft := fromTo{from: deplID, to: modelID}
 				if _, seen := seenRelations[ft]; seen {
