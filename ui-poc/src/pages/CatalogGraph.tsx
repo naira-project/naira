@@ -2,20 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   ArrowRight,
-  Box,
-  Cloud,
-  Code,
-  Cpu,
-  Database,
   GitBranch,
-  Globe,
-  HardDrive,
-  Layout,
   Network,
   RefreshCw,
-  Server,
   Share2,
-  Shield,
 } from 'lucide-react';
 import {
   Background,
@@ -37,39 +27,17 @@ import { Input } from '../components/ui/input';
 import { Separator } from '../components/ui/separator';
 import { useCatalogGraph, type CatalogGraphEdge, type CatalogGraphNode, type CatalogGraphRoot } from '../hooks/useCatalogGraph';
 
+// TODO: how to make in a way that is not hardcoded?
 const typePalette: Record<string, { fill: string; stroke: string }> = {
   application: { fill: '#dff4ff', stroke: '#0b6fa4' },
   model: { fill: '#fff1d6', stroke: '#b36b00' },
   dataset: { fill: '#def7e5', stroke: '#13795b' },
   deployment: { fill: '#f3e8ff', stroke: '#6b21a8' },
   service: { fill: '#fce7f3', stroke: '#9d174d' },
-  api: { fill: '#e0f2fe', stroke: '#0369a1' },
-  system: { fill: '#ffe4e6', stroke: '#9f1239' },
-  pipeline: { fill: '#d1fae5', stroke: '#047857' },
-  infrastructure: { fill: '#f5f5f4', stroke: '#44403c' },
-  storage: { fill: '#fef3c7', stroke: '#b45309' },
-  network: { fill: '#e0e7ff', stroke: '#3730a3' },
-  security: { fill: '#fef2f2', stroke: '#991b1b' },
+  'Kustomization.fluxcd': { fill: '#e0f2fe', stroke: '#0369a1' },
+  'HelmChart.fluxcd': { fill: '#fef3c7', stroke: '#b45309' },
+  git_repository: { fill: '#e0e7ff', stroke: '#3730a3' },
 };
-
-const kindIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  deployment: Server,
-  application: Layout,
-  model: Cpu,
-  dataset: Database,
-  service: Box,
-  api: Globe,
-  system: Cloud,
-  pipeline: GitBranch,
-  infrastructure: HardDrive,
-  storage: HardDrive,
-  network: Network,
-  security: Shield,
-};
-
-function kindIcon(kind: string): React.ComponentType<{ size?: number; className?: string }> {
-  return kindIcons[kind] ?? Code;
-}
 
 function graphNodeId(node: CatalogGraphNode) {
   return node.name;
@@ -77,14 +45,10 @@ function graphNodeId(node: CatalogGraphNode) {
 
 function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }): Node {
   const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
-  const Icon = kindIcon(node.kind);
 
   const displayLabel = (
     <div className="flex flex-col gap-1.5 text-left">
       <div className="flex items-center gap-1.5">
-        <span className="shrink-0" style={{ color: palette.stroke, lineHeight: 0 }}>
-          <Icon size={14} />
-        </span>
         <span
           className="text-[10px] font-bold uppercase tracking-wider"
           style={{ color: palette.stroke }}
