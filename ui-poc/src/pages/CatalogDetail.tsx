@@ -13,8 +13,8 @@ type DetailTab = 'Properties' | 'Graph';
  * Generic detail page for any catalog node.
  * Displays:
  * - Node identity (name, kind, path)
- * - Properties tab: key-value rendering of all props
  * - Graph tab: relationship graph centred on this node
+ * - Properties tab: key-value rendering of all props
  */
 export default function CatalogDetail() {
   const { kind = '', '*': path = '' } = useParams();
@@ -22,11 +22,11 @@ export default function CatalogDetail() {
   const decodedKind = decodeURIComponent(kind);
   const decodedPath = decodeURIComponent(path);
   const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
-  const [activeTab, setActiveTab] = useState<DetailTab>('Properties');
+  const [activeTab, setActiveTab] = useState<DetailTab>('Graph');
 
   const tabs: { value: DetailTab; label: string }[] = [
-    { value: 'Properties', label: 'Properties' },
     { value: 'Graph', label: 'Graph' },
+    { value: 'Properties', label: 'Properties' },
   ];
 
   return (
@@ -89,14 +89,14 @@ export default function CatalogDetail() {
 
               {/* Tab content */}
               <div>
-                {activeTab === 'Properties' && (
-                  <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
-                )}
-
                 {activeTab === 'Graph' && (
                   <div className="h-[500px]">
                     <CatalogGraph rootNode={{ name: node.name, label: node.name }} />
                   </div>
+                )}
+
+                {activeTab === 'Properties' && (
+                  <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
                 )}
               </div>
             </div>
