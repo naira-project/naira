@@ -15,7 +15,7 @@ interface GenericTableProps {
  * 1. Infers columns from the union of all node props.
  * 2. Always shows `name` (short name from path) and `namespace` as first columns.
  * 3. When `relationSummaries` is provided, shows a "Relations" column
- *    with badges per relation kind (inbound/outbound counts).
+ * with badges per relation kind (inbound/outbound counts).
  * 4. Renders a clickable "Details" action column last.
  */
 export default function GenericTable({ nodes, kind, onSelect, relationSummaries }: GenericTableProps) {
@@ -52,23 +52,23 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
     <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
       {/* Header — two-row grid when plugin columns exist */}
       <div
-        className="grid items-center gap-3 rounded-t-lg border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-gray-700 dark:bg-white/5"
+        className="grid items-center gap-x-3 gap-y-2 rounded-t-lg border-b border-gray-200 bg-gray-50 px-4 py-2.5 dark:border-gray-700 dark:bg-white/5"
         style={{
           gridTemplateColumns,
           ...(hasPluginColumns ? { gridTemplateRows: 'auto auto' } : {}),
         }}
       >
-        {/* Row 1: Group headers (Core Metadata | Plugin Properties) */}
+        {/* Row 1: Group headers */}
         {hasPluginColumns && (
           <>
             <div
-              className="flex items-center text-[0.6rem] font-semibold uppercase tracking-wide text-foreground-secondary leading-none"
+              className="flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none"
               style={{ gridColumn: `span ${CORE_COL_COUNT}`, gridRow: 1 }}
             >
               Core Metadata
             </div>
             <div
-              className="flex items-center text-[0.6rem] font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 leading-none rounded-[4px] px-2 py-0.5 -mx-2 dark:bg-indigo-950/20"
+              className="flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none border-l border-gray-300 dark:border-gray-600 pl-3"
               style={{ gridColumn: `span ${pluginColCount}`, gridRow: 1 }}
             >
               Plugin Properties
@@ -79,16 +79,16 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
           </>
         )}
 
-        {/* Row 2 / single row: Column header labels */}
+        {/* Row 2: Column header labels */}
         {columns.map((col, idx) => {
-          const isPlugin = idx >= CORE_COL_COUNT;
+          const isFirstPlugin = idx === CORE_COL_COUNT;
           return (
             <span
               key={col}
-              className={`truncate text-[0.65rem] font-semibold uppercase tracking-wide ${
-                isPlugin
-                  ? 'text-indigo-500/65 dark:text-indigo-400/55'
-                  : 'text-foreground-secondary dark:text-foreground-dark-secondary'
+              className={`truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary ${
+                isFirstPlugin && hasPluginColumns
+                  ? 'border-l border-gray-300 dark:border-gray-600 pl-3'
+                  : ''
               }`}
               style={{ gridRow: hasPluginColumns ? 2 : undefined }}
             >
@@ -116,17 +116,29 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
       {nodes.map((node) => (
         <div
           key={node.name}
-          className="grid items-center gap-3 border-b border-gray-200 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
+          className="grid items-center gap-x-3 border-b border-gray-200 px-4 py-3 last:border-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-white/5"
           style={{ gridTemplateColumns }}
         >
           {columns.map((col, idx) => {
             const parsed = parsedPaths.get(node.name);
+            const isFirstPlugin = idx === CORE_COL_COUNT;
+
+            // Wrapper function to inject vertical border seamlessly for plugin data start
+            const renderCell = (content: React.ReactNode) => (
+              <div 
+                className={`truncate flex items-center h-full ${
+                  isFirstPlugin && hasPluginColumns 
+                    ? 'border-l border-gray-200 dark:border-gray-700/60 pl-3' 
+                    : ''
+                }`}
+              >
+                {content}
+              </div>
+            );
 
             if (col === 'name') {
-              // Name column — short name from path
-              return (
+              return renderCell(
                 <span
-                  key={col}
                   className="truncate text-sm font-medium text-foreground dark:text-foreground-dark-default"
                   title={node.name}
                 >
@@ -136,10 +148,8 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
             }
 
             if (col === 'namespace') {
-              // Namespace column — second-to-last path segment
-              return (
+              return renderCell(
                 <span
-                  key={col}
                   className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
                   title={parsed?.namespace}
                 >
@@ -148,12 +158,11 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
               );
             }
 
-            // Prop columns (from pluginClaims) — visual differentiation
+            // Prop columns (from plugins)
             const props = nodeProps(node);
             const value = props[col];
-            return (
+            return renderCell(
               <span
-                key={col}
                 className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
                 title={typeof value === 'string' ? value : undefined}
               >
