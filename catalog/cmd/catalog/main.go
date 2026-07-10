@@ -70,7 +70,6 @@ type naira_io_model
 	router := httpapi.NewRouter(service, logger, auth.KeycloakConfig{
 		Client: keycloak,
 		Realm:  config.KeycloakRealm,
-		ClientID: config.KeycloakClient,
 	})
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),

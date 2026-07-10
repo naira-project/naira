@@ -20,7 +20,6 @@ const claimsKey contextKey = "claims"
 type KeycloakConfig struct {
 	Client *gocloak.GoCloak
 	Realm  string
-	ClientID string
 }
 
 // TokenClaims holds the user identity extracted from a verified Keycloak JWT.
@@ -29,7 +28,6 @@ type TokenClaims struct {
 	Email    string
 	Username string
 	RealmRoles  []string
-	ClientRoles []string
 }
 
 type keycloakClaims struct {
@@ -39,9 +37,6 @@ type keycloakClaims struct {
 	RealmAccess       struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
-	ResourceAccess map[string]struct {
-		Roles []string `json:"roles"`
-	} `json:"resource_access"`
 }
 
 
@@ -67,7 +62,7 @@ func NewAuthMiddleware(kc KeycloakConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			tc := parseTokenClaims(rawClaims, kc.ClientID)
+			tc := parseTokenClaims(rawClaims)
 			ctx := context.WithValue(r.Context(), claimsKey, tc)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -79,7 +74,7 @@ func ClaimsFromContext(ctx context.Context) (TokenClaims, bool) {
 	return tc, ok
 }
 
-func parseTokenClaims(rawClaims *jwt.MapClaims, clientID string) TokenClaims {
+func parseTokenClaims(rawClaims *jwt.MapClaims) TokenClaims {
 	claims := *rawClaims
 	tc := TokenClaims{
 		Sub:      stringClaim(claims, "sub"),
@@ -92,18 +87,6 @@ func parseTokenClaims(rawClaims *jwt.MapClaims, clientID string) TokenClaims {
 			for _, r := range roles {
 				if s, ok := r.(string); ok {
 					tc.RealmRoles = append(tc.RealmRoles, s)
-				}
-			}
-		}
-	}
-
-	if ra, ok := claims["resource_access"].(map[string]interface{}); ok {
-		if client, ok := ra[clientID].(map[string]interface{}); ok {
-			if roles, ok := client["roles"].([]interface{}); ok {
-				for _, r := range roles {
-					if s, ok := r.(string); ok {
-						tc.ClientRoles = append(tc.ClientRoles, s)
-					}
 				}
 			}
 		}
