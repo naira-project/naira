@@ -24,38 +24,7 @@ const (
 	fgaGetRelation = "get"
 )
 
-// authorizeNodeRead checks the existing OpenFGA tuples to determine whether the
-// authenticated caller has the "get" relation on the requested node.
-func authorizeNodeRead(ctx context.Context, node catalog.NodeID) error {
-	claims, ok := auth.ClaimsFromContext(ctx)
-	if !ok || claims.Sub == "" {
-		return fmt.Errorf("no authenticated user in request context")
-	}
-
-	fgaClient, err := auth.GetClient()
-	if err != nil {
-		return fmt.Errorf("openfga client not configured: %w", err)
-	}
-
-	modelID, err := auth.GetModelID()
-	if err != nil {
-		return fmt.Errorf("getting openfga model id: %w", err)
-	}
-
-	object := fmt.Sprintf("%s:%s/%s", fgaModelType, node.Kind, node.Path)
-	allowed, err := auth.CheckTuples(fgaClient, "user:"+claims.Sub, fgaGetRelation, object, modelID)
-	if err != nil {
-		return fmt.Errorf("checking openfga tuples: %w", err)
-	}
-
-	if !allowed.Allowed {
-		return fmt.Errorf("user %q is not allowed to %s %s", claims.Sub, fgaGetRelation, object)
-	}
-
-	return nil
-}
-
-func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakConfig) http.Handler {
+func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakConfig, fgaClient auth.OpenfgaClient) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
@@ -94,7 +63,7 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakCon
 					if !matches {
 						continue
 					}
-					if err := authorizeNodeRead(r.Context(), catalogNode.ID); err != nil {
+					if err := fgaClient.AuthorizeNodeRead(r.Context(), catalogNode.ID, fgaModelType, fgaGetRelation); err != nil {
 						continue
 					}
 					nodes = append(nodes, node)
@@ -114,7 +83,7 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakCon
 			r.Get("/nodes/{kind}/*", handle(func(w http.ResponseWriter, r *http.Request) error {
 				nodeID := catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")}
 
-				if err := authorizeNodeRead(r.Context(), nodeID); err != nil {
+				if err := fgaClient.AuthorizeNodeRead(r.Context(), nodeID, fgaModelType, fgaGetRelation); err != nil {
 					writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 					return fmt.Errorf("Status forbidden: %w", err)
 				}

@@ -54,7 +54,7 @@ type naira_io_model
 		log.Fatalf("failed to transform DSL to JSON: %v", err)
 	}
 
-	_, _, err = auth.SetupOpenfgaClient(config.OpenfgaBaseURL, "Naira", jsonStr)
+	fgaClient, err := auth.SetupOpenfgaClient(config.OpenfgaBaseURL, "Naira", jsonStr)
 	if err != nil {
 		logger.Fatalf("OpenFGA client could not configured: %v", err)
 	}
@@ -62,7 +62,7 @@ type naira_io_model
 	seedTuples := []openfga.TupleKey{
 		{User: "user:sample-user-id", Relation: "viewer", Object: "naira_io_model:model/mlflow/fraud-detector"},
 	}
-	if err := auth.WriteTuples(seedTuples); err != nil {
+	if err := fgaClient.WriteTuples(seedTuples); err != nil {
 		logger.Fatalf("writing openfga tuples: %v", err)
 	}
 
@@ -70,7 +70,7 @@ type naira_io_model
 	router := httpapi.NewRouter(service, logger, auth.KeycloakConfig{
 		Client: keycloak,
 		Realm:  config.KeycloakRealm,
-	})
+	}, fgaClient)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           router,

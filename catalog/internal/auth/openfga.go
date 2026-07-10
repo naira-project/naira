@@ -6,63 +6,100 @@ import (
 	"fmt"
 	openfga "github.com/openfga/go-sdk"
 	. "github.com/openfga/go-sdk/client"
+
+	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
 type Allowed struct {
 	Allowed bool
 }
 
-var (
-	fgaClient  *OpenFgaClient
-	fgaModelID string
-)
 
-func SetupOpenfgaClient(apiUrl, storeName, modelJSON string) (*OpenFgaClient, string, error) {
+type OpenfgaClient struct {
+	FgaClient  *OpenFgaClient
+	FgaModelID string
+}
+
+
+// AuthorizeNodeRead checks the existing OpenFGA tuples to determine whether the
+// authenticated caller has the given relation on the requested node.
+func (cli OpenfgaClient) AuthorizeNodeRead(ctx context.Context, node catalog.NodeID, fgaModelType, fgaRelation string) error {
+	claims, ok := ClaimsFromContext(ctx)
+	if !ok || claims.Sub == "" {
+		return fmt.Errorf("no authenticated user in request context")
+	}
+
+	fgaClient, err := cli.GetClient()
+	if err != nil {
+		return fmt.Errorf("OpenFGA client not configured: %w", err)
+	}
+
+	modelID, err := cli.GetModelID()
+	if err != nil {
+		return fmt.Errorf("getting openfga model id: %w", err)
+	}
+
+	object := fmt.Sprintf("%s:%s/%s", fgaModelType, node.Kind, node.Path)
+	allowed, err := CheckTuples(fgaClient, "user:"+claims.Sub, fgaRelation, object, modelID)
+	if err != nil {
+		return fmt.Errorf("checking openfga tuples: %w", err)
+	}
+
+	if !allowed.Allowed {
+		return fmt.Errorf("user %q is not allowed to %s %s", claims.Sub, fgaRelation, object)
+	}
+
+	return nil
+}
+
+func SetupOpenfgaClient(apiUrl, storeName, modelJSON string) (OpenfgaClient, error) {
 	client, err := createClient(apiUrl)
 	if err != nil {
-		return nil, "", err
+		return OpenfgaClient{}, err
 	}
 
 	storeId, err := createStore(client, storeName)
 	if err != nil {
-		return nil, "", err
+		return OpenfgaClient{}, err
 	}
 
 	if err := client.SetStoreId(storeId); err != nil {
-		return nil, "", fmt.Errorf("setting openfga store id: %w", err)
+		return OpenfgaClient{}, fmt.Errorf("setting openfga store id: %w", err)
 	}
 
 
 	modelId, err := writeOpenFGAModel(client, modelJSON)
 	if err != nil {
-		return nil, "", err
+		return OpenfgaClient{}, err
 	}
 
-	fgaClient = client
-	fgaModelID = modelId
+	var cli OpenfgaClient
 
-	return client, modelId, nil
+	cli.FgaClient = client
+	cli.FgaModelID = modelId
+
+	return cli, nil
 }
 
-func GetClient() (*OpenFgaClient, error) {
-	if fgaClient == nil {
+func (cli OpenfgaClient) GetClient() (*OpenFgaClient, error) {
+	if cli.FgaClient == nil {
 		return nil, fmt.Errorf("openfga client not initialized: call Setup first")
 	}
-	return fgaClient, nil
+	return cli.FgaClient, nil
 }
 
-func GetModelID() (string, error) {
-	if fgaClient == nil {
+func (cli OpenfgaClient) GetModelID() (string, error) {
+	if cli.FgaClient == nil {
 		return "", fmt.Errorf("openfga client not initialized: call Setup first")
 	}
-	return fgaModelID, nil
+	return cli.FgaModelID, nil
 }
 
-func WriteTuples(tuples []openfga.TupleKey) error {
-	if fgaClient == nil {
+func (cli OpenfgaClient) WriteTuples(tuples []openfga.TupleKey) error {
+	if cli.FgaClient == nil {
 		return fmt.Errorf("openfga client not initialized: call Setup first")
 	}
-	return writeTuples(fgaClient, tuples, fgaModelID)
+	return writeTuples(cli.FgaClient, tuples, cli.FgaModelID)
 }
 
 func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId string) (*Allowed, error) {
