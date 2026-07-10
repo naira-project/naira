@@ -91,7 +91,7 @@ export default function CatalogDetail() {
               <div>
                 {activeTab === 'Graph' && (
                   <div className="h-[500px]">
-                    <CatalogGraph rootNode={{ name: node.name, label: node.name }} />
+                    <CatalogGraph rootNode={{ name: node.name }} />
                   </div>
                 )}
 

@@ -2,7 +2,6 @@ import { buildEqualityFilter, fetchNodeByName, fetchRelations, nodeProps, NodeRe
 
 export interface CatalogGraphRoot {
 	name: string;
-	label: string;
 }
 
 export interface CatalogGraphNode {
@@ -109,7 +108,7 @@ export async function buildCatalogGraphSlice(root: CatalogGraphRoot, maxDepth: n
 
 	nodes.set(rootResource.name, {
 		...toGraphNode(rootResource, 0, true),
-		label: root.label || nameFromPath(rootResource.path),
+		label: nameFromPath(rootResource.path),
 	});
 
 	let frontier: FrontierNode[] = [

@@ -375,25 +375,6 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
           <Card className="rounded-[20px] border-gray-200 dark:border-gray-700">
             <CardContent>
               <h2 className="text-base font-semibold text-foreground dark:text-foreground-dark-default">
-                Graph Scope
-              </h2>
-              <p className="mt-2 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-                This view combines incoming and outgoing relations around the current root node.
-              </p>
-              <div className="mt-4 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-3 dark:bg-white/5">
-                <span className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">Incoming</span>
-                <ArrowRight size={16} className="rotate-180 text-[#7b4bb3]" />
-                <Badge variant="default">Root</Badge>
-                <span className="truncate text-sm text-foreground dark:text-foreground-dark-default">{rootNode.label}</span>
-                <ArrowRight size={16} className="text-[#3b6a8a]" />
-                <span className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">Outgoing</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[20px] border-gray-200 dark:border-gray-700">
-            <CardContent>
-              <h2 className="text-base font-semibold text-foreground dark:text-foreground-dark-default">
                 Node Details
               </h2>
               <p className="mt-1 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
