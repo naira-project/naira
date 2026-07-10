@@ -67,7 +67,7 @@ type naira_io_model
 	}
 
 	keycloak := gocloak.NewClient(config.KeycloakBaseURL)
-	router := httpapi.NewRouter(service, logger, httpapi.KeycloakConfig{
+	router := httpapi.NewRouter(service, logger, auth.KeycloakConfig{
 		Client: keycloak,
 		Realm:  config.KeycloakRealm,
 		ClientID: config.KeycloakClient,

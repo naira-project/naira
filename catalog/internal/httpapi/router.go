@@ -8,13 +8,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
-	"github.com/Nerzal/gocloak/v13"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/auth"
 )
@@ -22,124 +19,15 @@ import (
 type routeHandler func(http.ResponseWriter, *http.Request) error
 type listOptionsHandler func(http.ResponseWriter, *http.Request, listOptions) error
 
-type contextKey string
-
-const claimsKey contextKey = "claims"
-
 const (
 	fgaModelType   = "naira_io_model"
 	fgaGetRelation = "get"
 )
 
-// KeycloakConfig holds the gocloak client and realm needed for token verification.
-type KeycloakConfig struct {
-	Client *gocloak.GoCloak
-	Realm  string
-	ClientID string
-}
-
-// TokenClaims holds the user identity extracted from a verified Keycloak JWT.
-type TokenClaims struct {
-	Sub      string
-	Email    string
-	Username string
-	RealmRoles  []string
-	ClientRoles []string
-}
-
-type keycloakClaims struct {
-	jwt.RegisteredClaims
-	Email             string         `json:"email"`
-	PreferredUsername string         `json:"preferred_username"`
-	RealmAccess       struct {
-		Roles []string `json:"roles"`
-	} `json:"realm_access"`
-	ResourceAccess map[string]struct {
-		Roles []string `json:"roles"`
-	} `json:"resource_access"`
-}
-
-
-func newAuthMiddleware(kc KeycloakConfig) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				http.Error(w, "missing authorization header", http.StatusUnauthorized)
-				return
-			}
-
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				http.Error(w, "authorization header must be Bearer {token}", http.StatusUnauthorized)
-				return
-			}
-			tokenString := parts[1]
-
-			_, rawClaims, err := kc.Client.DecodeAccessToken(r.Context(), tokenString, kc.Realm)
-			if err != nil {
-				http.Error(w, fmt.Sprintf("invalid token: %v", err), http.StatusUnauthorized)
-				return
-			}
-
-			tc := parseTokenClaims(rawClaims, kc.ClientID)
-			ctx := context.WithValue(r.Context(), claimsKey, tc)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-func parseTokenClaims(rawClaims *jwt.MapClaims, clientID string) TokenClaims {
-	claims := *rawClaims
-	tc := TokenClaims{
-		Sub:      stringClaim(claims, "sub"),
-		Email:    stringClaim(claims, "email"),
-		Username: stringClaim(claims, "preferred_username"),
-	}
-
-	if ra, ok := claims["realm_access"].(map[string]interface{}); ok {
-		if roles, ok := ra["roles"].([]interface{}); ok {
-			for _, r := range roles {
-				if s, ok := r.(string); ok {
-					tc.RealmRoles = append(tc.RealmRoles, s)
-				}
-			}
-		}
-	}
-
-	if ra, ok := claims["resource_access"].(map[string]interface{}); ok {
-		if client, ok := ra[clientID].(map[string]interface{}); ok {
-			if roles, ok := client["roles"].([]interface{}); ok {
-				for _, r := range roles {
-					if s, ok := r.(string); ok {
-						tc.ClientRoles = append(tc.ClientRoles, s)
-					}
-				}
-			}
-		}
-	}
-
-	return tc
-}
-
-func stringClaim(claims map[string]interface{}, key string) string {
-	if v, ok := claims[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
-
-func claimsFromContext(ctx context.Context) (TokenClaims, bool) {
-	tc, ok := ctx.Value(claimsKey).(TokenClaims)
-	return tc, ok
-}
-
 // authorizeNodeRead checks the existing OpenFGA tuples to determine whether the
 // authenticated caller has the "get" relation on the requested node.
 func authorizeNodeRead(ctx context.Context, node catalog.NodeID) error {
-	claims, ok := claimsFromContext(ctx)
+	claims, ok := auth.ClaimsFromContext(ctx)
 	if !ok || claims.Sub == "" {
 		return fmt.Errorf("no authenticated user in request context")
 	}
@@ -167,7 +55,7 @@ func authorizeNodeRead(ctx context.Context, node catalog.NodeID) error {
 	return nil
 }
 
-func NewRouter(service *catalog.Service, logger *log.Logger, kc KeycloakConfig) http.Handler {
+func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakConfig) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
@@ -180,7 +68,7 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc KeycloakConfig) 
 	})
 
 	router.Route("/v1", func(r chi.Router) {
-			r.Use(newAuthMiddleware(kc))
+			r.Use(auth.NewAuthMiddleware(kc))
 
 			r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
 				response := service.RunAllPlugins(r.Context())

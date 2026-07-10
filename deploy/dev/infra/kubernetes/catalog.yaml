@@ -75,7 +75,7 @@ spec:
             - name: KEYCLOAK_BASE_URL
               value: http://keycloak.platform-mesh-system.svc.cluster.local:80/keycloak
             - name: KEYCLOAK_REALM
-              value: newone
+              value: naira
             - name: KEYCLOAK_CLIENT
               value: admin-cli
             - name: FGA_API_URL

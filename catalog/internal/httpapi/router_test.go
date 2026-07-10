@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/naira-project/naira/catalog/internal/auth"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/pluginapi"
 	"github.com/stretchr/testify/assert"
@@ -215,7 +216,7 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 		catalog.NewMemoryStore(),
 		log.New(io.Discard, "", 0),
 		stubPlugin{name: "seed", err: errors.New("seed failed")},
-	), log.New(io.Discard, "", 0), KeycloakConfig{})
+	), log.New(io.Discard, "", 0), auth.KeycloakConfig{})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)
 	rec := httptest.NewRecorder()
