@@ -98,7 +98,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
           <span className={labelText}>Relations</span>
         </div>
-        {pluginColumns.map((col, idx) => (
+        {pluginColumns.map((col) => (
           <div
             key={col}
             className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
@@ -152,7 +152,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
                 return (
                   <div
                     key={col}
-                    className={`${cellBase} truncate}`}
+                    className={`${cellBase}`}
                   >
                     <span
                       className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"

@@ -5,7 +5,6 @@ import {
   Focus,
   GitBranch,
   Network,
-  RefreshCw,
   Share2,
 } from 'lucide-react';
 import {
@@ -45,66 +44,6 @@ function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
-// Separate component to handle rendering node properties cleanly
-// TODO: This component should be updated or refactored to align and share 
-// a consistent style/logic with the PropertiesPanel component.
-function NodeProperties({ properties }: { properties?: Record<string, any> }) {
-  const hasProperties = properties && Object.keys(properties).length > 0;
-
-  return (
-    <div className="mt-6 space-y-4">
-      <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">
-        Properties
-      </p>
-      
-      {!hasProperties ? (
-        <p className="text-sm italic text-gray-400 dark:text-gray-500">
-          No properties available for this node.
-        </p>
-      ) : (
-        <div className="space-y-3.5">
-          {Object.entries(properties).map(([key, val]) => {
-            const isJson = typeof val === 'object' || (typeof val === 'string' && (val.startsWith('[') || val.startsWith('{')));
-            const isUrl = typeof val === 'string' && val.startsWith('http');
-
-            return (
-              <div key={key} className="group border-b border-gray-100 dark:border-gray-800 pb-3 last:border-0 last:pb-0">
-                {/* Key / Label */}
-                <span className="block text-[11px] font-mono font-medium text-gray-400 dark:text-gray-500 mb-1 break-all">
-                  {key}
-                </span>
-
-                {/* Value rendered dynamically based on data type */}
-                <div className="text-sm text-gray-800 dark:text-gray-200">
-                  {isJson ? (
-                    <pre className="mt-1 p-2.5 text-[11px] font-mono bg-gray-50 dark:bg-white/5 rounded-lg overflow-x-auto max-h-40 border border-gray-100 dark:border-white/5 custom-scrollbar">
-                      {typeof val === 'string' 
-                        ? JSON.stringify(JSON.parse(val), null, 2) 
-                        : JSON.stringify(val, null, 2)}
-                    </pre>
-                  ) : isUrl ? (
-                    <a 
-                      href={String(val)} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="text-primary hover:underline font-mono text-xs break-all inline-block bg-blue-50/50 dark:bg-blue-950/30 px-2 py-1 rounded border border-blue-100/50"
-                    >
-                      {String(val)}
-                    </a>
-                  ) : (
-                    <span className="font-sans leading-relaxed text-gray-700 dark:text-gray-300">
-                      {String(val)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function toFlowNode(
   node: CatalogGraphNode,
@@ -241,11 +180,11 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const navigate = useNavigate();
   const [depth, setDepth] = useState(1);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const { graph, loading, error, reload } = useCatalogGraph(rootNode, depth);
+  const { graph, loading, error } = useCatalogGraph(rootNode, depth);
 
   // The state of nodes/edges is controlled by React Flow, allowing the
   // user to drag them. The layout is recalculated from scratch on every
-  // data change from the hook (e.g., after a depth change or reload).
+  // data change from the hook (e.g., after a depth change).
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>([]);
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const instanceRef = useRef<ReactFlowInstance | null>(null);
@@ -255,7 +194,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
     setFlowEdges(graph.edges.map(toFlowEdge));
   }, [graph, setFlowNodes, setFlowEdges]);
 
-  // Auto-fit view after each layout change (e.g., depth change or reload).
+  // Auto-fit view after each layout change (e.g., depth change).
   useEffect(() => {
     requestAnimationFrame(() => {
       instanceRef.current?.fitView({
@@ -273,7 +212,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   };
 
   const handleFocusNode = (graphNode: CatalogGraphNode) => {
-    navigate(`/catalog/${graphNode.kind}/${encodeURIComponent(graphNode.path)}`);
+    navigate(`/catalog/${encodeURIComponent(graphNode.kind)}/${encodeURIComponent(graphNode.path)}`);
   };
 
   return (
@@ -291,13 +230,6 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
             onChange={(event) => setDepth(Math.max(1, Number(event.target.value) || 1))}
             className="w-16 h-8"
           />
-          <button
-            onClick={reload}
-            className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-dark"
-          >
-            <RefreshCw size={14} />
-            Reload
-          </button>
         </div>
 
         <div className="flex-1 min-w-4" />

@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import {
   buildEqualityFilter,
   fetchNode,
@@ -6,6 +5,7 @@ import {
   fetchRelations,
   NodeResource,
 } from '../lib/catalogApi';
+import { useAsyncData } from './useAsyncData';
 
 interface CatalogDetailResult {
   node: NodeResource | null;
@@ -16,29 +16,13 @@ interface CatalogDetailResult {
 /**
  * Generic hook to fetch a single catalog node by kind + path.
  */
-export function useCatalogDetail(kind: string, path: string): CatalogDetailResult {
-  const [node, setNode] = useState<NodeResource | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-
-    const load = async () => {
-      try {
-        const fetchedNode = await fetchNode(kind, path);
-
-        setNode(fetchedNode);
-        setLoading(false);
-      } catch {
-        setError(`Failed to load ${kind} "${path}"`);
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [kind, path]);
+export function useCatalogDetail(kind: string, path: string) {
+  const { data: node, loading, error } = useAsyncData<NodeResource | null>(
+    () => fetchNode(kind, path),
+    [kind, path],
+    null,
+    `Failed to load ${kind} "${path}"`
+  );
 
   return { node, loading, error };
 }
