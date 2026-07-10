@@ -71,7 +71,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			}},
 	)
 
-	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), stubPlugin{name: "seed"}), log.New(io.Discard, "", 0), auth.KeycloakConfig{}, auth.OpenfgaClient{})
+	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), nil, stubPlugin{name: "seed"}), log.New(io.Discard, "", 0), auth.KeycloakConfig{}, auth.OpenfgaClient{})
 
 	tests := []struct {
 		name               string
@@ -215,6 +215,7 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 	router := NewRouter(catalog.NewService(
 		catalog.NewMemoryStore(),
 		log.New(io.Discard, "", 0),
+		nil,
 		stubPlugin{name: "seed", err: errors.New("seed failed")},
 	), log.New(io.Discard, "", 0), auth.KeycloakConfig{}, auth.OpenfgaClient{})
 

@@ -49,7 +49,7 @@ func TestListNodesProjectsStoredNode(t *testing.T) {
 		},
 	}}, nil)
 
-	response := NewService(store, nil).ListNodes(t.Context())
+	response := NewService(store, nil, nil).ListNodes(t.Context())
 
 	assert.Equal(t, []Node{
 		{
@@ -107,12 +107,12 @@ func TestGetNodeReturnsStoredNode(t *testing.T) {
 		},
 	)
 
-	response, err := NewService(store, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
+	response, err := NewService(store, nil, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
 	require.NoError(t, err)
 	assert.Equal(t, "model", response.ID.Kind)
 	assert.Equal(t, "mlflow/fraud-detector", response.ID.Path)
 
-	_, err = NewService(store, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
+	_, err = NewService(store, nil, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
 	assert.True(t, errors.Is(err, ErrNodeNotFound))
 }
 
@@ -152,7 +152,7 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 		},
 	)
 
-	response := NewService(store, nil).ListRelations(t.Context())
+	response := NewService(store, nil, nil).ListRelations(t.Context())
 
 	assert.Equal(t, []Relation{
 		{
@@ -182,7 +182,7 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 
 func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
 	store := NewMemoryStore()
-	service := NewService(store, nil, stubPlugin{
+	service := NewService(store, nil, nil, stubPlugin{
 		name: "mlflow",
 		request: IngestionRequest{
 			Nodes: []NodeClaim{{

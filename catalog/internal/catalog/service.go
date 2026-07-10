@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	openfga "github.com/openfga/go-sdk"
 )
 
 var (
@@ -17,13 +18,24 @@ var (
 	ErrPluginNotFound    = errors.New("plugin not found")
 )
 
+// TupleWriter writes OpenFGA tuples. Satisfied by auth.OpenfgaClient without
+// importing the auth package, which would create an import cycle (auth already
+// imports catalog for catalog.NodeID).
+type TupleWriter interface {
+	WriteTuples(tuples []openfga.TupleKey) error
+}
+
+// defaultViewerRole is granted viewer access to every node synced from a plugin.
+const defaultViewerRole = "role:ai-engineer#assignee"
+
 type Service struct {
 	store   Store
 	plugins map[string]Plugin
 	logger  *log.Logger
+	fga     TupleWriter
 }
 
-func NewService(store Store, logger *log.Logger, plugins ...Plugin) *Service {
+func NewService(store Store, logger *log.Logger, fga TupleWriter, plugins ...Plugin) *Service {
 	registeredPlugins := make(map[string]Plugin, len(plugins))
 	for _, plugin := range plugins {
 		if plugin == nil {
@@ -32,7 +44,7 @@ func NewService(store Store, logger *log.Logger, plugins ...Plugin) *Service {
 		registeredPlugins[normalizePluginName(plugin.Name())] = plugin
 	}
 
-	return &Service{store: store, plugins: registeredPlugins, logger: logger}
+	return &Service{store: store, plugins: registeredPlugins, logger: logger, fga: fga}
 }
 
 func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
@@ -56,6 +68,21 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, request.Nodes, request.Relations)
 	if err != nil {
 		return fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err)
+	}
+
+	if s.fga != nil && len(request.Nodes) > 0 {
+		tuples := make([]openfga.TupleKey, 0, len(request.Nodes))
+		for _, nodeClaim := range request.Nodes {
+			tuples = append(tuples, openfga.TupleKey{
+				User:     defaultViewerRole,
+				Relation: "viewer",
+				Object:   fmt.Sprintf("naira_io_model:%s/%s", nodeClaim.ID.Kind, nodeClaim.ID.Path),
+			})
+		}
+
+		if err := s.fga.WriteTuples(tuples); err != nil {
+			return fmt.Errorf("granting default viewer role for plugin %q: %w", pluginName, err)
+		}
 	}
 
 	if s.logger != nil {

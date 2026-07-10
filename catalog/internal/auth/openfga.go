@@ -43,7 +43,8 @@ func (cli OpenfgaClient) AuthorizeNodeRead(ctx context.Context, node catalog.Nod
 	}
 
 	object := fmt.Sprintf("%s:%s/%s", fgaModelType, node.Kind, node.Path)
-	allowed, err := CheckTuples(fgaClient, "user:"+claims.Sub, fgaRelation, object, modelID)
+	roleTuples := roleContextualTuples(claims, "user:"+claims.Sub)
+	allowed, err := CheckTuples(fgaClient, "user:"+claims.Sub, fgaRelation, object, modelID, roleTuples)
 	if err != nil {
 		return fmt.Errorf("checking openfga tuples: %w", err)
 	}
@@ -115,15 +116,28 @@ func (cli OpenfgaClient) WriteTuples(tuples []openfga.TupleKey) error {
 	return writeTuples(cli.FgaClient, tuples, cli.FgaModelID)
 }
 
-func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId string) (*Allowed, error) {
+func roleContextualTuples(claims TokenClaims, user string) []ClientContextualTupleKey {
+	tuples := make([]ClientContextualTupleKey, 0, len(claims.RealmRoles))
+	for _, role := range claims.RealmRoles {
+		tuples = append(tuples, ClientContextualTupleKey{
+			User:     user,
+			Relation: "assignee",
+			Object:   "role:" + role,
+		})
+	}
+	return tuples
+}
+
+func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId string, contextualTuples []ClientContextualTupleKey) (*Allowed, error) {
 	options := ClientCheckOptions{
     	AuthorizationModelId: openfga.PtrString(modelId),
 	}
 
 	body := ClientCheckRequest{
-		User:     user,
-		Relation: relation,
-		Object:   object,
+		User:             user,
+		Relation:         relation,
+		Object:           object,
+		ContextualTuples: contextualTuples,
 	}
 
 	data, err := fgaClient.Check(context.Background()).

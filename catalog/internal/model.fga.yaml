@@ -3,11 +3,15 @@ model
 
 type user
 
+type role
+      relations
+        define assignee: [user]
+
 type naira_io_model
       relations
-        define owner: [user]
-        define member: [user] or owner
-        define viewer: [user] or member
+        define owner: [user, role#assignee]
+        define member: [user, role#assignee] or owner
+        define viewer: [user, role#assignee] or member
 
         define get: viewer
         define list: member
