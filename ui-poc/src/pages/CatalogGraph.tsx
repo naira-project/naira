@@ -27,6 +27,7 @@ import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Separator } from '../components/ui/separator';
 import { useCatalogGraph, type CatalogGraphEdge, type CatalogGraphNode, type CatalogGraphRoot } from '../hooks/useCatalogGraph';
+import PropertiesPanel from '../components/PropertiesPanel';
 
 // TODO: how to make in a way that is not hardcoded?
 const typePalette: Record<string, { fill: string; stroke: string }> = {
@@ -424,7 +425,11 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
                   </div>
 
                   {/* Render abstracted properties section */}
-                  <NodeProperties properties={selectedNode.properties} />
+                  <PropertiesPanel
+                    props={selectedNode.properties ?? {}}
+                    title="Properties"
+                    layout="stacked"
+                  />
                 </div>
               )}
             </CardContent>

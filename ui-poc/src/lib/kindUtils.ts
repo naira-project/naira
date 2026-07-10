@@ -50,16 +50,15 @@ export function inferColumns(nodes: NodeResource[]): string[] {
  * - objects/arrays → JSON-stringified, truncated
  * - everything else → String(value)
  */
-export function formatPropValue(value: unknown, maxLen = 60): string {
-  if (value === null || value === undefined) {
-    return '—';
+export function formatPropValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (isComplexValue(value)) {
+    const parsed = tryParseJson(value);
+    return Array.isArray(parsed)
+      ? `[${parsed.length} items]`
+      : `{${Object.keys(parsed as object).length} keys}`;
   }
-  if (typeof value === 'object') {
-    const json = JSON.stringify(value);
-    return json.length > maxLen ? `${json.slice(0, maxLen)}…` : json;
-  }
-  const str = String(value);
-  return str.length > maxLen ? `${str.slice(0, maxLen)}…` : str;
+  return String(value);
 }
 
 /**
@@ -73,12 +72,25 @@ export interface RelationSummary {
   };
 }
 
-/**
- * Check if a prop value is a "complex" type (object or array)
- * that might warrant special rendering in a detail view.
- */
+export function tryParseJson(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!(trimmed.startsWith('[') || trimmed.startsWith('{'))) return value;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
+}
+
 export function isComplexValue(value: unknown): boolean {
-  return value !== null && value !== undefined && typeof value === 'object';
+  if (value !== null && typeof value === 'object') return true;
+  const parsed = tryParseJson(value);
+  return parsed !== value && parsed !== null && typeof parsed === 'object';
+}
+
+export function isUrlValue(value: unknown): value is string {
+  return typeof value === 'string' && /^https?:\/\//i.test(value);
 }
 
 /**
