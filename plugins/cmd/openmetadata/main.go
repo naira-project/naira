@@ -107,11 +107,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 	relations, err := p.collectLineage(ctx, tables, nodeByEntityID, token)
 	response := pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
-	if err != nil {
-		return response, err
-	}
-
-	return response, nil
+	return response, err
 }
 
 // collectLineage fetches lineage for each table; failures for individual
@@ -167,7 +163,7 @@ func (p *Plugin) collectLineage(ctx context.Context, tables []table, nodeByEntit
 func (p *Plugin) fetchTableLineage(ctx context.Context, tableID string, token string) ([]lineageEdge, error) {
 	endpoint, err := url.Parse(p.config.BaseURL + "/api/v1/lineage/table/" + url.PathEscape(tableID))
 	if err != nil {
-		return nil, fmt.Errorf("building OpenMetadata lineage URL: %w", err)
+		return nil, fmt.Errorf("building API URL: %w", err)
 	}
 
 	query := endpoint.Query()
@@ -177,13 +173,13 @@ func (p *Plugin) fetchTableLineage(ctx context.Context, tableID string, token st
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("building OpenMetadata lineage request: %w", err)
+		return nil, fmt.Errorf("building request: %w", err)
 	}
 	addAuthorization(req, token)
 
 	var payload lineageResponse
-	if err := p.doJSON(req, "lineage", &payload); err != nil {
-		return nil, err
+	if err := p.doJSON(req, &payload); err != nil {
+		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
 	edges := make([]lineageEdge, 0, len(payload.UpstreamEdges)+len(payload.DownstreamEdges))
@@ -197,7 +193,7 @@ func (p *Plugin) fetchTableLineage(ctx context.Context, tableID string, token st
 func (p *Plugin) fetchTables(ctx context.Context, token string) ([]table, error) {
 	endpoint, err := url.Parse(p.config.BaseURL + "/api/v1/tables")
 	if err != nil {
-		return nil, fmt.Errorf("building OpenMetadata tables URL: %w", err)
+		return nil, fmt.Errorf("building API URL: %w", err)
 	}
 
 	query := endpoint.Query()
@@ -208,13 +204,13 @@ func (p *Plugin) fetchTables(ctx context.Context, token string) ([]table, error)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("building OpenMetadata tables request: %w", err)
+		return nil, fmt.Errorf("building request: %w", err)
 	}
 	addAuthorization(req, token)
 
 	var payload tablesResponse
-	if err := p.doJSON(req, "tables", &payload); err != nil {
-		return nil, err
+	if err := p.doJSON(req, &payload); err != nil {
+		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
 	tables := make([]table, 0, len(payload.Data))
@@ -249,51 +245,52 @@ func (p *Plugin) login(ctx context.Context) (string, error) {
 		return "", errors.New("both OPENMETADATA_ADMIN_EMAIL and OPENMETADATA_ADMIN_PASSWORD must be set, or neither")
 	}
 
-	body, err := json.Marshal(loginRequest{
-		Email:    email,
-		Password: base64.StdEncoding.EncodeToString([]byte(password)),
+	body, err := json.Marshal(map[string]string{
+		"email":    email,
+		"password": base64.StdEncoding.EncodeToString([]byte(password)),
 	})
 	if err != nil {
-		return "", fmt.Errorf("encoding OpenMetadata login request: %w", err)
+		return "", fmt.Errorf("encoding request: %w", err)
 	}
 
 	endpoint := strings.TrimRight(p.config.BaseURL, "/") + "/api/v1/users/login"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
-		return "", fmt.Errorf("building OpenMetadata login request: %w", err)
+		return "", fmt.Errorf("building request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	var payload loginResponse
-	if err := p.doJSON(req, "login", &payload); err != nil {
-		return "", err
+	var loginResponse struct {
+		AccessToken string `json:"accessToken"`
+	}
+	if err := p.doJSON(req, &loginResponse); err != nil {
+		return "", fmt.Errorf("executing request: %w", err)
 	}
 
-	token := strings.TrimSpace(payload.AccessToken)
+	token := strings.TrimSpace(loginResponse.AccessToken)
 	if token == "" {
-		return "", errors.New("OpenMetadata login response did not contain an access token")
+		return "", errors.New("response did not contain an access token")
 	}
 
 	return token, nil
 }
 
 // doJSON sends req, treats any non-2xx status as an error (including a snippet
-// of the response body), and decodes a successful JSON response into out. label
-// names the call in error messages, e.g. "tables" or "lineage".
-func (p *Plugin) doJSON(req *http.Request, label string, out any) error {
+// of the response body), and decodes a successful JSON response into out.
+func (p *Plugin) doJSON(req *http.Request, out any) error {
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("calling OpenMetadata %s endpoint: %w", label, err)
+		return fmt.Errorf("executing HTTP request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("OpenMetadata %s returned %s: %s", label, resp.Status, strings.TrimSpace(string(body)))
+		return fmt.Errorf("got HTTP status %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("decoding OpenMetadata %s response: %w", label, err)
+		return fmt.Errorf("decoding response: %w", err)
 	}
 
 	return nil
@@ -371,15 +368,6 @@ func collectOwnerNames(owners []owner) []string {
 		}
 	}
 	return result
-}
-
-type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-type loginResponse struct {
-	AccessToken string `json:"accessToken"`
 }
 
 type tablesResponse struct {
