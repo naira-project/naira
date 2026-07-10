@@ -12,7 +12,6 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
 	"github.com/naira-project/naira/catalog/internal/plugins"
-	"github.com/openfga/language/pkg/go/transformer"
 	"github.com/naira-project/naira/catalog/internal/auth"
 )
 
@@ -28,35 +27,9 @@ func main() {
 	registeredPlugins := plugins.Register(config.Plugins, httpClient, logger)
 	service := catalog.NewService(catalog.NewMemoryStore(), logger, registeredPlugins...)
 
-	dsl := `
-model
-  schema 1.1
-
-type user
-
-type naira_io_model
-      relations
-        define owner: [user]
-        define member: [user] or owner
-        define viewer: [user] or member
-
-        define get: viewer
-        define list: member
-        define watch: member
-        
-        define can_list_litellm: viewer
-        define can_list_mlflow: viewer
-        define can_update_mlflow: owner
-        define can_update_litellm: owner
-`
-	jsonStr, err := transformer.TransformDSLToJSON(dsl)
+	fgaClient, err := auth.SetupOpenfgaClient(config.OpenfgaBaseURL, config.OpenfgaStoreName, config.OpenfgaSchemaPath)
 	if err != nil {
-		log.Fatalf("failed to transform DSL to JSON: %v", err)
-	}
-
-	fgaClient, err := auth.SetupOpenfgaClient(config.OpenfgaBaseURL, "Naira", jsonStr)
-	if err != nil {
-		logger.Fatalf("OpenFGA client could not configured: %v", err)
+		logger.Fatalf("OpenFGA client could not be configured: %v", err)
 	}
 
 	seedTuples := []openfga.TupleKey{

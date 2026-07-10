@@ -4,22 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"bufio"
+	"strings"
+	"os"
+
 	openfga "github.com/openfga/go-sdk"
 	. "github.com/openfga/go-sdk/client"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/openfga/language/pkg/go/transformer"
 )
 
 type Allowed struct {
 	Allowed bool
 }
 
-
 type OpenfgaClient struct {
 	FgaClient  *OpenFgaClient
 	FgaModelID string
 }
-
 
 // AuthorizeNodeRead checks the existing OpenFGA tuples to determine whether the
 // authenticated caller has the given relation on the requested node.
@@ -31,7 +34,7 @@ func (cli OpenfgaClient) AuthorizeNodeRead(ctx context.Context, node catalog.Nod
 
 	fgaClient, err := cli.GetClient()
 	if err != nil {
-		return fmt.Errorf("OpenFGA client not configured: %w", err)
+		return fmt.Errorf("openfga client not configured: %w", err)
 	}
 
 	modelID, err := cli.GetModelID()
@@ -52,7 +55,18 @@ func (cli OpenfgaClient) AuthorizeNodeRead(ctx context.Context, node catalog.Nod
 	return nil
 }
 
-func SetupOpenfgaClient(apiUrl, storeName, modelJSON string) (OpenfgaClient, error) {
+func SetupOpenfgaClient(apiUrl, storeName, filePath string) (OpenfgaClient, error) {
+
+	dsl, err := readSchema(filePath)
+	if err != nil {
+		return OpenfgaClient{}, err
+	}
+	
+	jsonStr, err := transformer.TransformDSLToJSON(dsl)
+	if err != nil {
+		return OpenfgaClient{}, err
+	}
+
 	client, err := createClient(apiUrl)
 	if err != nil {
 		return OpenfgaClient{}, err
@@ -67,8 +81,7 @@ func SetupOpenfgaClient(apiUrl, storeName, modelJSON string) (OpenfgaClient, err
 		return OpenfgaClient{}, fmt.Errorf("setting openfga store id: %w", err)
 	}
 
-
-	modelId, err := writeOpenFGAModel(client, modelJSON)
+	modelId, err := writeOpenFGAModel(client, jsonStr)
 	if err != nil {
 		return OpenfgaClient{}, err
 	}
@@ -123,6 +136,33 @@ func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId strin
 	}
 
 	return &Allowed{Allowed: *data.Allowed}, nil
+}
+
+func readSchema(filePath string) (string, error) {
+	
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	var builder strings.Builder
+	scanner := bufio.NewScanner(file)
+
+	if scanner == nil {
+		return "", fmt.Errorf("scanner could not be initialized")
+	}
+
+	for scanner.Scan() {
+		builder.WriteString(scanner.Text())
+		builder.WriteString("\n")
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error reading file: %w", err)
+	}
+
+	return builder.String(), nil
 }
 
 func createClient(apiUrl string) (*OpenFgaClient, error) {
