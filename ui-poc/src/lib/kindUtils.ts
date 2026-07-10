@@ -72,6 +72,11 @@ export interface RelationSummary {
   };
 }
 
+/**
+ * Safely attempt to parse a value as a JSON string.
+ * Returns the parsed object/array if it looks like JSON and parses successfully,
+ * otherwise returns the original value.
+ */
 export function tryParseJson(value: unknown): unknown {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
@@ -83,12 +88,19 @@ export function tryParseJson(value: unknown): unknown {
   }
 }
 
+/**
+ * Determine if a value is complex (an object, an array, or a valid JSON string
+ * representing an object or an array).
+ */
 export function isComplexValue(value: unknown): boolean {
   if (value !== null && typeof value === 'object') return true;
   const parsed = tryParseJson(value);
   return parsed !== value && parsed !== null && typeof parsed === 'object';
 }
 
+/**
+ * Check if a value is a valid HTTP or HTTPS URL string.
+ */
 export function isUrlValue(value: unknown): value is string {
   return typeof value === 'string' && /^https?:\/\//i.test(value);
 }
