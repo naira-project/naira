@@ -75,34 +75,36 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	// resolved back to nodes that are part of this same ingestion.
 	nodeByEntityID := make(map[string]pluginapi.NodeID, len(tables))
 	for _, table := range tables {
+		if table.ID == "" {
+			continue
+		}
+
 		properties := pluginapi.PropertyMap{
 			propertyKeySource:      pluginName,
 			propertyKeyDescription: table.Description,
-			propertyKeyFQN:         table.FQN,
-			propertyKeySourceURL:   p.tableURL(table.FQN),
+			propertyKeyFQN:         table.FullyQualifiedName,
+			propertyKeySourceURL:   p.tableURL(table.FullyQualifiedName),
 		}
 
-		if table.Platform != "" {
-			properties[propertyKeyPlatform] = table.Platform
+		if table.ServiceType != "" {
+			properties[propertyKeyPlatform] = table.ServiceType
 		}
 		if table.TableType != "" {
 			properties[propertyKeyTableType] = table.TableType
 		}
-		if len(table.Tags) > 0 {
-			properties[propertyKeyTags] = strings.Join(table.Tags, ",")
+		if tags := collectTagFQNs(table.Tags); len(tags) > 0 {
+			properties[propertyKeyTags] = strings.Join(tags, ",")
 		}
-		if len(table.Owners) > 0 {
-			properties[propertyKeyOwners] = strings.Join(table.Owners, ",")
+		if owners := collectOwnerNames(table.Owners); len(owners) > 0 {
+			properties[propertyKeyOwners] = strings.Join(owners, ",")
 		}
 		if columnsJSON := marshalColumns(table.Columns); columnsJSON != "" {
 			properties[propertyKeyColumnsJSON] = columnsJSON
 		}
 
-		nodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindDataset, Path: datasetPath(table)}
+		nodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindDataset, Path: pluginName + "/" + table.ID}
 		nodes = append(nodes, pluginapi.NodeClaim{ID: nodeID, Properties: properties})
-		if table.ID != "" {
-			nodeByEntityID[table.ID] = nodeID
-		}
+		nodeByEntityID[table.ID] = nodeID
 	}
 
 	relations, err := p.collectLineage(ctx, tables, nodeByEntityID, token)
@@ -113,7 +115,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 // collectLineage fetches lineage for each table; failures for individual
 // tables are accumulated and joined into the returned error, so the relations
 // gathered from the remaining tables are still ingested.
-func (p *Plugin) collectLineage(ctx context.Context, tables []table, nodeByEntityID map[string]pluginapi.NodeID, token string) ([]pluginapi.RelationClaim, error) {
+func (p *Plugin) collectLineage(ctx context.Context, tables []tableItem, nodeByEntityID map[string]pluginapi.NodeID, token string) ([]pluginapi.RelationClaim, error) {
 	relations := make([]pluginapi.RelationClaim, 0)
 	seen := make(map[[2]pluginapi.NodeID]struct{})
 	fetchLineageErrors := make([]error, 0)
@@ -125,7 +127,7 @@ func (p *Plugin) collectLineage(ctx context.Context, tables []table, nodeByEntit
 
 		edges, err := p.fetchTableLineage(ctx, table.ID, token)
 		if err != nil {
-			fetchLineageErrors = append(fetchLineageErrors, fmt.Errorf("fetching OpenMetadata lineage for table %s: %w", datasetPath(table), err))
+			fetchLineageErrors = append(fetchLineageErrors, fmt.Errorf("fetching OpenMetadata lineage for table %s: %w", table.ID, err))
 			continue
 		}
 
@@ -190,7 +192,7 @@ func (p *Plugin) fetchTableLineage(ctx context.Context, tableID string, token st
 }
 
 // TODO: add pagination; tables beyond the first page are currently dropped.
-func (p *Plugin) fetchTables(ctx context.Context, token string) ([]table, error) {
+func (p *Plugin) fetchTables(ctx context.Context, token string) ([]tableItem, error) {
 	endpoint, err := url.Parse(p.config.BaseURL + "/api/v1/tables")
 	if err != nil {
 		return nil, fmt.Errorf("building API URL: %w", err)
@@ -213,22 +215,7 @@ func (p *Plugin) fetchTables(ctx context.Context, token string) ([]table, error)
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
-	tables := make([]table, 0, len(payload.Data))
-	for _, item := range payload.Data {
-		tables = append(tables, table{
-			ID:          strings.TrimSpace(item.ID),
-			Name:        strings.TrimSpace(item.Name),
-			FQN:         strings.TrimSpace(item.FullyQualifiedName),
-			Description: strings.TrimSpace(item.Description),
-			TableType:   strings.TrimSpace(item.TableType),
-			Platform:    strings.TrimSpace(item.ServiceType),
-			Columns:     item.Columns,
-			Tags:        collectTagFQNs(item.Tags),
-			Owners:      collectOwnerNames(item.Owners),
-		})
-	}
-
-	return tables, nil
+	return payload.Data, nil
 }
 
 // login exchanges the configured admin credentials for a short-lived JWT via
@@ -310,39 +297,12 @@ func (p *Plugin) tableURL(fqn string) string {
 	return strings.TrimRight(p.config.BaseURL, "/") + "/table/" + url.PathEscape(fqn)
 }
 
-func datasetPath(table table) string {
-	if table.FQN != "" {
-		return pluginName + "/" + table.FQN
-	}
-	if table.Name != "" {
-		return pluginName + "/" + table.Name
-	}
-	return pluginName + "/" + table.ID
-}
-
 func marshalColumns(columns []column) string {
 	if len(columns) == 0 {
 		return ""
 	}
 
-	type columnProjection struct {
-		Name        string `json:"name"`
-		Type        string `json:"type"`
-		NativeType  string `json:"native_type,omitempty"`
-		Description string `json:"description,omitempty"`
-	}
-
-	payload := make([]columnProjection, 0, len(columns))
-	for _, item := range columns {
-		payload = append(payload, columnProjection{
-			Name:        strings.TrimSpace(item.Name),
-			Type:        strings.TrimSpace(item.DataType),
-			NativeType:  strings.TrimSpace(item.DataTypeDisplay),
-			Description: strings.TrimSpace(item.Description),
-		})
-	}
-
-	encoded, err := json.Marshal(payload)
+	encoded, err := json.Marshal(columns)
 	if err != nil {
 		return ""
 	}
@@ -389,8 +349,8 @@ type tableItem struct {
 type column struct {
 	Name            string `json:"name"`
 	DataType        string `json:"dataType"`
-	DataTypeDisplay string `json:"dataTypeDisplay"`
-	Description     string `json:"description"`
+	DataTypeDisplay string `json:"dataTypeDisplay,omitempty"`
+	Description     string `json:"description,omitempty"`
 }
 
 type tagItem struct {
@@ -410,16 +370,4 @@ type lineageResponse struct {
 type lineageEdge struct {
 	FromEntity string `json:"fromEntity"`
 	ToEntity   string `json:"toEntity"`
-}
-
-type table struct {
-	ID          string
-	Name        string
-	FQN         string
-	Description string
-	TableType   string
-	Platform    string
-	Columns     []column
-	Tags        []string
-	Owners      []string
 }
