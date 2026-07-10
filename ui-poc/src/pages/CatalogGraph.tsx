@@ -48,9 +48,7 @@ function graphNodeId(node: CatalogGraphNode) {
 // TODO: This component should be updated or refactored to align and share 
 // a consistent style/logic with the PropertiesPanel component.
 function NodeProperties({ properties }: { properties?: Record<string, any> }) {
-  if (!properties || Object.keys(properties).length === 0) {
-    return null;
-  }
+  const hasProperties = properties && Object.keys(properties).length > 0;
 
   return (
     <div className="mt-6 space-y-4">
@@ -58,45 +56,51 @@ function NodeProperties({ properties }: { properties?: Record<string, any> }) {
         Properties
       </p>
       
-      <div className="space-y-3.5">
-        {Object.entries(properties).map(([key, val]) => {
-          const isJson = typeof val === 'object' || (typeof val === 'string' && (val.startsWith('[') || val.startsWith('{')));
-          const isUrl = typeof val === 'string' && val.startsWith('http');
+      {!hasProperties ? (
+        <p className="text-sm italic text-gray-400 dark:text-gray-500">
+          No properties available for this node.
+        </p>
+      ) : (
+        <div className="space-y-3.5">
+          {Object.entries(properties).map(([key, val]) => {
+            const isJson = typeof val === 'object' || (typeof val === 'string' && (val.startsWith('[') || val.startsWith('{')));
+            const isUrl = typeof val === 'string' && val.startsWith('http');
 
-          return (
-            <div key={key} className="group border-b border-gray-100 dark:border-gray-800 pb-3 last:border-0 last:pb-0">
-              {/* Key / Label */}
-              <span className="block text-[11px] font-mono font-medium text-gray-400 dark:text-gray-500 mb-1 break-all">
-                {key}
-              </span>
+            return (
+              <div key={key} className="group border-b border-gray-100 dark:border-gray-800 pb-3 last:border-0 last:pb-0">
+                {/* Key / Label */}
+                <span className="block text-[11px] font-mono font-medium text-gray-400 dark:text-gray-500 mb-1 break-all">
+                  {key}
+                </span>
 
-              {/* Value rendered dynamically based on data type */}
-              <div className="text-sm text-gray-800 dark:text-gray-200">
-                {isJson ? (
-                  <pre className="mt-1 p-2.5 text-[11px] font-mono bg-gray-50 dark:bg-white/5 rounded-lg overflow-x-auto max-h-40 border border-gray-100 dark:border-white/5 custom-scrollbar">
-                    {typeof val === 'string' 
-                      ? JSON.stringify(JSON.parse(val), null, 2) 
-                      : JSON.stringify(val, null, 2)}
-                  </pre>
-                ) : isUrl ? (
-                  <a 
-                    href={String(val)} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className="text-primary hover:underline font-mono text-xs break-all inline-block bg-blue-50/50 dark:bg-blue-950/30 px-2 py-1 rounded border border-blue-100/50"
-                  >
-                    {String(val)}
-                  </a>
-                ) : (
-                  <span className="font-sans leading-relaxed text-gray-700 dark:text-gray-300">
-                    {String(val)}
-                  </span>
-                )}
+                {/* Value rendered dynamically based on data type */}
+                <div className="text-sm text-gray-800 dark:text-gray-200">
+                  {isJson ? (
+                    <pre className="mt-1 p-2.5 text-[11px] font-mono bg-gray-50 dark:bg-white/5 rounded-lg overflow-x-auto max-h-40 border border-gray-100 dark:border-white/5 custom-scrollbar">
+                      {typeof val === 'string' 
+                        ? JSON.stringify(JSON.parse(val), null, 2) 
+                        : JSON.stringify(val, null, 2)}
+                    </pre>
+                  ) : isUrl ? (
+                    <a 
+                      href={String(val)} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="text-primary hover:underline font-mono text-xs break-all inline-block bg-blue-50/50 dark:bg-blue-950/30 px-2 py-1 rounded border border-blue-100/50"
+                    >
+                      {String(val)}
+                    </a>
+                  ) : (
+                    <span className="font-sans leading-relaxed text-gray-700 dark:text-gray-300">
+                      {String(val)}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
