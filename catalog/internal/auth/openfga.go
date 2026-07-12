@@ -2,11 +2,9 @@ package auth
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
-	"bufio"
-	"strings"
-	"os"
 
 	openfga "github.com/openfga/go-sdk"
 	. "github.com/openfga/go-sdk/client"
@@ -14,6 +12,9 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/openfga/language/pkg/go/transformer"
 )
+
+//go:embed model.fga.yaml
+var modelDSL string
 
 type Allowed struct {
 	Allowed bool
@@ -56,14 +57,8 @@ func (cli OpenfgaClient) AuthorizeNodeRead(ctx context.Context, node catalog.Nod
 	return nil
 }
 
-func SetupOpenfgaClient(apiUrl, storeName, filePath string) (OpenfgaClient, error) {
-
-	dsl, err := readSchema(filePath)
-	if err != nil {
-		return OpenfgaClient{}, err
-	}
-	
-	jsonStr, err := transformer.TransformDSLToJSON(dsl)
+func SetupOpenfgaClient(apiUrl, storeName string) (OpenfgaClient, error) {
+	jsonStr, err := transformer.TransformDSLToJSON(modelDSL)
 	if err != nil {
 		return OpenfgaClient{}, err
 	}
@@ -152,33 +147,6 @@ func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId strin
 	return &Allowed{Allowed: *data.Allowed}, nil
 }
 
-func readSchema(filePath string) (string, error) {
-	
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open file: %w", err)
-	}
-	defer file.Close()
-
-	var builder strings.Builder
-	scanner := bufio.NewScanner(file)
-
-	if scanner == nil {
-		return "", fmt.Errorf("scanner could not be initialized")
-	}
-
-	for scanner.Scan() {
-		builder.WriteString(scanner.Text())
-		builder.WriteString("\n")
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("error reading file: %w", err)
-	}
-
-	return builder.String(), nil
-}
-
 func createClient(apiUrl string) (*OpenFgaClient, error) {
 	fgaClient, err := NewSdkClient(&ClientConfiguration{
         ApiUrl: apiUrl,
@@ -190,11 +158,34 @@ func createClient(apiUrl string) (*OpenFgaClient, error) {
 }
 
 func createStore(fgaClient *OpenFgaClient, name string) (string, error) {
+	existing, err := findStoreByName(fgaClient, name)
+	if err != nil {
+		return "", err
+	}
+	if existing != "" {
+		return existing, nil
+	}
+
 	resp, err := fgaClient.CreateStore(context.Background()).Body(ClientCreateStoreRequest{Name: name}).Execute()
     if err != nil {
         return "", err
     }
 	return resp.Id, nil
+}
+
+func findStoreByName(fgaClient *OpenFgaClient, name string) (string, error) {
+	options := ClientListStoresOptions{
+		PageSize: openfga.PtrInt32(10),
+		Name:     openfga.PtrString(name),
+	}
+	stores, err := fgaClient.ListStores(context.Background()).Options(options).Execute()
+	if err != nil {
+		return "", fmt.Errorf("listing openfga stores: %w", err)
+	}
+	if len(stores.Stores) == 0 {
+		return "", nil
+	}
+	return stores.Stores[0].Id, nil
 }
 
 func writeOpenFGAModel(fgaClient *OpenFgaClient, model string) (string, error) {

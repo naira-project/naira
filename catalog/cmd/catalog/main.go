@@ -25,7 +25,7 @@ func main() {
 	httpClient := &http.Client{Timeout: config.HTTPTimeout}
 	registeredPlugins := plugins.Register(config.Plugins, httpClient, logger)
 
-	fgaClient, err := auth.SetupOpenfgaClient(config.OpenfgaBaseURL, config.OpenfgaStoreName, config.OpenfgaSchemaPath)
+	fgaClient, err := auth.SetupOpenfgaClient(config.OpenfgaBaseURL, config.OpenfgaStoreName)
 	if err != nil {
 		logger.Fatalf("OpenFGA client could not be configured: %v", err)
 	}
