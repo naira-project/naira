@@ -23,9 +23,5 @@ Ensures code quality and buildability. Gatekeeper: `All Checks Passed`.
 
 ---
 
-## 2. Release (`release.yml`)
-
-Triggered by `v*` tags. Builds and pushes multi-arch images to `ghcr.io`.
-
-* **`container-publish-catalog` / `ui**`: Builds and pushes images with standard tags.
-* **`all-published`**: Aggregate status check for the release process.
+## 2. Release (`release-please.yml`)
+ refer to naira-project/naira/.github/workflows/release.md

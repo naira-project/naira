@@ -1,0 +1,209 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Release Pipeline
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write       # Required for publishing containers
+  id-token: write       # Required for Cosign keyless signing
+  attestations: write   # Required for provenance (if repo is public)
+
+jobs:
+  # ── 1. Release Generation & Tagging ───────────────────────────────────────
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      # Export the tag name so downstream build jobs know if they should run
+      target_tag: ${{ steps.set_tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to push tags later
+          
+      - name: Run Release Please
+        uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          
+      - name: Check for Silent RC Release
+        id: check_release
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          # 1. Check if the commit is a Release Please PR merge
+          if echo "$COMMIT_MESSAGE" | grep -qE "chore\(.*\):.*release"; then
+            
+            # 2. Extract the newly merged version from the manifest
+            VERSION=$(jq -r '."."' .release-please-manifest.json)
+            
+            # 3. ONLY trigger our custom manual tag logic if it is an RC version
+            if [[ "$VERSION" == *-rc* ]]; then
+              echo "is_release=true" >> $GITHUB_OUTPUT
+              echo "version=$VERSION" >> $GITHUB_OUTPUT
+              echo "RC release detected: $VERSION. Proceeding with manual tag and label cleanup."
+            else
+              echo "Stable release detected: $VERSION. Skipping manual tag and letting Release Please handle it natively."
+            fi      
+          fi
+
+      - name: Push Git Tag and Update Labels
+        if: steps.check_release.outputs.is_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Push the tag (this will NOT trigger downstream 'on: push: tags' workflows)
+          git tag v${{ steps.check_release.outputs.version }}
+          git push origin v${{ steps.check_release.outputs.version }}
+          
+          # Find any merged Release Please PRs that are stuck in pending
+          MERGED_PRS=$(gh pr list --state merged --label "autorelease: pending" --json number --jq '.[].number')
+          # Transition the labels to satisfy the Release Please state machine
+          for PR in $MERGED_PRS; do
+            echo "Updating labels for PR #$PR"
+            gh pr edit $PR --remove-label "autorelease: pending" --add-label "autorelease: tagged"
+          done
+
+      - name: Export Target Tag
+        id: set_tag
+        run: |
+          if [[ "${{ steps.check_release.outputs.is_release }}" == 'true' ]]; then
+            # Output the RC tag we just manually pushed
+            echo "tag=v${{ steps.check_release.outputs.version }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ steps.release.outputs.release_created }}" == 'true' ]]; then
+            # Output the Stable tag Release Please natively created
+            echo "tag=${{ steps.release.outputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Release Body with Squashed Changelog
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=${{ steps.release.outputs.tag_name }}
+          VERSION_BARE=${VERSION#v}
+          # Extract the section for this version from CHANGELOG.md (content between this header and the next)
+          NOTES=$(awk "/^## \[${VERSION_BARE}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          gh release edit "$VERSION" --notes "$NOTES"
+
+  # ── 2. Build & Push Artifacts (Only runs if a release tag was created) ────     
+  container-publish-catalog:
+    name: Publish · Catalog.
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-catalog"
+      dockerfile: "catalog/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 2. Build & push UI image ───────────────────────────────────────────────
+  container-publish-ui:
+    name: Publish · UI
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-ui"
+      dockerfile: "ui-poc/Dockerfile"
+      context: "ui-poc"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 3. Build & push Portal image ───────────────────────────────────────────
+  container-publish-portal:
+    name: Publish · Portal
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-portal"
+      dockerfile: "naira-openmfp-portal/Dockerfile"
+      context: "naira-openmfp-portal"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 4. Plugins ─────────────────────────────────────────────────────────────
+  container-publish-plugin-mlflow:
+    name: Publish · Plugin MLflow
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-mlflow"
+      dockerfile: "plugins/cmd/mlflow/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-litellm:
+    name: Publish · Plugin LiteLLM
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-litellm"
+      dockerfile: "plugins/cmd/litellm/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-depl-calls-svc:
+    name: Publish · Plugin Depl Calls Svc
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-depl-calls-svc"
+      dockerfile: "plugins/cmd/depl_calls_svc/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-fluxcd:
+    name: Publish · Plugin FluxCD
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-fluxcd"
+      dockerfile: "plugins/cmd/fluxcd/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
