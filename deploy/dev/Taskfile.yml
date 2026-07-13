@@ -24,6 +24,11 @@ vars:
   LITELLM_MASTER_KEY: sk-local-litellm
   POSTGRES_NAMESPACE: litellm-db
   POSTGRES_MANIFEST: infra/kubernetes/postgres.yaml
+  OPENFGA_NAMESPACE: default
+  OPENFGA_RELEASE: openfga-2
+  OPENFGA_CHART_REPO_NAME: openfga
+  OPENFGA_CHART_REPO_URL: https://openfga.github.io/helm-charts
+  OPENFGA_CHART: openfga/openfga
   CATALOG_DIR: ../../catalog
   CATALOG_IMAGE: catalog:local
   CATALOG_NAMESPACE: idp-system
@@ -135,6 +140,26 @@ tasks:
     cmds:
       - kubectl delete -f {{.POSTGRES_MANIFEST}} --ignore-not-found
 
+  openfga:deploy:
+    desc: Deploy OpenFGA to kind
+    deps:
+      - cluster:create
+    cmds:
+      - task: openfga:apply
+
+  openfga:apply:
+    internal: true
+    cmds:
+      - helm repo add {{.OPENFGA_CHART_REPO_NAME}} {{.OPENFGA_CHART_REPO_URL}} --force-update
+      - helm repo update {{.OPENFGA_CHART_REPO_NAME}}
+      - helm upgrade --install {{.OPENFGA_RELEASE}} {{.OPENFGA_CHART}} --namespace {{.OPENFGA_NAMESPACE}} --wait --timeout 5m
+      - kubectl -n {{.OPENFGA_NAMESPACE}} get pods -l app.kubernetes.io/instance={{.OPENFGA_RELEASE}}
+
+  openfga:undeploy:
+    desc: Remove OpenFGA from kind
+    cmds:
+      - helm uninstall {{.OPENFGA_RELEASE}} -n {{.OPENFGA_NAMESPACE}} || true
+
   litellm:deploy:
     desc: Deploy LiteLLM to kind
     deps:
@@ -176,6 +201,7 @@ tasks:
     deps:
       - cluster:create
     cmds:
+      - task: openfga:apply
       - task: catalog:apply
 
   catalog:apply:
@@ -235,21 +261,23 @@ tasks:
       - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}
 
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, Catalog, UI, and Portal to kind
+    desc: Deploy MLflow, LiteLLM, OpenFGA, Catalog, UI, and Portal to kind
     cmds:
       - task: cluster:create
       - task: mlflow:apply
       - task: postgres:apply
       - task: litellm:apply
+      - task: openfga:apply
       - task: catalog:apply
       - task: ui:apply
       - task: portal:apply
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, Catalog, UI, and Portal from kind
+    desc: Remove MLflow, LiteLLM, OpenFGA, Catalog, UI, and Portal from kind
     cmds:
       - task: portal:undeploy
       - task: catalog:undeploy
+      - task: openfga:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
       - task: mlflow:undeploy
