@@ -26,7 +26,7 @@ export function parsePath(path: string): { name: string; namespace?: string } {
 export async function discoverKinds(): Promise<string[]> {
   const nodes = await fetchNodes({ pageSize: 1000 });
   const kinds = new Set(nodes.map((n) => n.kind).filter(Boolean));
-  return Array.from(kinds).sort();
+  return Array.from(kinds).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 /**
