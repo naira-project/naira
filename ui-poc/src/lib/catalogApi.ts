@@ -14,6 +14,7 @@ export interface NodeResource {
  * Merge all plugin claim props into a single flat map.
  * Later plugins override earlier ones for the same key.
  */
+// TODO: Visualise props from all plugins in the properties panel, instead of overwriting them by key.
 export function nodeProps(node: NodeResource): Record<string, string> {
 	const merged: Record<string, string> = {};
 	for (const claim of node.pluginClaims ?? []) {

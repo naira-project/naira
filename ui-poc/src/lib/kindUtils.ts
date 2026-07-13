@@ -22,6 +22,7 @@ export function parsePath(path: string): { name: string; namespace?: string } {
  * Discover all unique node kinds from the catalog API.
  * Fetches a large page of nodes and deduplicates their `kind` values.
  */
+// TODO: add API endpoint to fetch kinds directly, instead of fetching nodes and deduplicating
 export async function discoverKinds(): Promise<string[]> {
   const nodes = await fetchNodes({ pageSize: 1000 });
   const kinds = new Set(nodes.map((n) => n.kind).filter(Boolean));
