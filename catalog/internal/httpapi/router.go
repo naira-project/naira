@@ -105,6 +105,13 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakCon
 			r.Get("/relations", handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 				relations := make([]Relation, 0)
 				for _, relation := range service.ListRelations(r.Context()) {
+					if err := fgaClient.AuthorizeNodeRead(r.Context(), relation.From, fgaModelType, fgaGetRelation); err != nil {
+						continue
+					}
+					if err := fgaClient.AuthorizeNodeRead(r.Context(), relation.To, fgaModelType, fgaGetRelation); err != nil {
+						continue
+					}
+
 					resource := relationFromCatalogRelation(relation)
 					matches, err := matchRelationFilter(resource, options.filter)
 					if err != nil {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	openfga "github.com/openfga/go-sdk"
+	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 var (
@@ -18,15 +19,28 @@ var (
 	ErrPluginNotFound    = errors.New("plugin not found")
 )
 
-// TupleWriter writes OpenFGA tuples. Satisfied by auth.OpenfgaClient without
-// importing the auth package, which would create an import cycle (auth already
-// imports catalog for catalog.NodeID).
+// TupleWriter writes OpenFGA tuples.
 type TupleWriter interface {
 	WriteTuples(tuples []openfga.TupleKey) error
 }
 
-// defaultViewerRole is granted viewer access to every node synced from a plugin.
+// defaultViewerRole is granted viewer access to every node synced from a
+// plugin, except for node kinds with a more specific entry in
+// viewerRoleByNodeKind.
 const defaultViewerRole = "role:ai-engineer#assignee"
+
+// viewerRoleByNodeKind overrides defaultViewerRole for specific node kinds.
+var viewerRoleByNodeKind = map[string]string{
+	pluginapi.NodeKindDeployment: "role:application-engineer#assignee",
+	pluginapi.NodeKindService: "role:application-engineer#assignee",
+}
+
+func viewerRoleForNodeKind(kind string) string {
+	if role, ok := viewerRoleByNodeKind[kind]; ok {
+		return role
+	}
+	return defaultViewerRole
+}
 
 type Service struct {
 	store   Store
@@ -73,10 +87,11 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 	if s.fga != nil && len(request.Nodes) > 0 {
 		tuples := make([]openfga.TupleKey, 0, len(request.Nodes))
 		for _, nodeClaim := range request.Nodes {
+			kind := nodeClaim.ID.Kind
 			tuples = append(tuples, openfga.TupleKey{
-				User:     defaultViewerRole,
+				User:     viewerRoleForNodeKind(kind),
 				Relation: "viewer",
-				Object:   fmt.Sprintf("naira_io_model:%s/%s", nodeClaim.ID.Kind, nodeClaim.ID.Path),
+				Object:   fmt.Sprintf("naira_io_model:%s/%s", kind, nodeClaim.ID.Path),
 			})
 		}
 
