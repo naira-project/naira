@@ -16,10 +16,6 @@ import (
 //go:embed model.fga.yaml
 var modelDSL string
 
-type Allowed struct {
-	Allowed bool
-}
-
 type Authorizer interface {
 	AuthorizeNodeRead(ctx context.Context, node catalog.NodeID, fgaModelType, fgaRelation string) error
 }
@@ -54,7 +50,7 @@ func (cli OpenfgaClient) AuthorizeNodeRead(ctx context.Context, node catalog.Nod
 		return fmt.Errorf("checking openfga tuples: %w", err)
 	}
 
-	if !allowed.Allowed {
+	if !allowed {
 		return fmt.Errorf("user %q is not allowed to %s %s", claims.Sub, fgaRelation, object)
 	}
 
@@ -127,7 +123,7 @@ func roleContextualTuples(claims TokenClaims, user string) []ClientContextualTup
 	return tuples
 }
 
-func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId string, contextualTuples []ClientContextualTupleKey) (*Allowed, error) {
+func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId string, contextualTuples []ClientContextualTupleKey) (bool, error) {
 	options := ClientCheckOptions{
 		AuthorizationModelId: openfga.PtrString(modelId),
 	}
@@ -145,10 +141,10 @@ func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId strin
 		Execute()
 
 	if err != nil {
-		return nil, fmt.Errorf("checking the tuple: %w", err)
+		return false, fmt.Errorf("checking the tuple: %w", err)
 	}
 
-	return &Allowed{Allowed: *data.Allowed}, nil
+	return *data.Allowed, nil
 }
 
 func createClient(apiUrl string) (*OpenFgaClient, error) {
