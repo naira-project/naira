@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
   
 jobs:
   # ── 1. Build & push catalog image ─────────────────────────────────────────
@@ -20,7 +21,7 @@ jobs:
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
-      context: "catalog"
+      context: "."
       platforms: "linux/amd64,linux/arm64"
       push: true
     secrets:

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	openfga "github.com/openfga/go-sdk"
 )
 
@@ -49,13 +49,13 @@ type Service struct {
 	fga     TupleWriter
 }
 
-func NewService(store Store, logger *log.Logger, fga TupleWriter, plugins ...Plugin) *Service {
+func NewService(store Store, plugins map[string]Plugin, logger *log.Logger, fga TupleWriter) *Service {
 	registeredPlugins := make(map[string]Plugin, len(plugins))
-	for _, plugin := range plugins {
+	for name, plugin := range plugins {
 		if plugin == nil {
 			continue
 		}
-		registeredPlugins[normalizePluginName(plugin.Name())] = plugin
+		registeredPlugins[normalizePluginName(name)] = plugin
 	}
 
 	return &Service{store: store, plugins: registeredPlugins, logger: logger, fga: fga}
@@ -72,21 +72,21 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 		return fmt.Errorf("looking up plugin %q: %w", pluginName, ErrPluginNotFound)
 	}
 
-	request, err := plugin.Collect(ctx)
+	response, err := plugin.Collect(ctx)
 	if err != nil {
 		return fmt.Errorf("collecting response from plugin %q: %w", pluginName, err)
 	}
 
 	snapshotID := uuid.New()
 
-	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, request.Nodes, request.Relations)
+	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, response.Nodes, response.Relations)
 	if err != nil {
 		return fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err)
 	}
 
-	if s.fga != nil && len(request.Nodes) > 0 {
-		tuples := make([]openfga.TupleKey, 0, len(request.Nodes))
-		for _, nodeClaim := range request.Nodes {
+	if s.fga != nil && len(response.Nodes) > 0 {
+		tuples := make([]openfga.TupleKey, 0, len(response.Nodes))
+		for _, nodeClaim := range response.Nodes {
 			kind := nodeClaim.ID.Kind
 			tuples = append(tuples, openfga.TupleKey{
 				User:     viewerRoleForNodeKind(kind),
@@ -101,7 +101,7 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 	}
 
 	if s.logger != nil {
-		s.logger.Printf("plugin %q upserted %d nodes and %d relations", plugin.Name(), upsertedNodes, upsertedRelations)
+		s.logger.Printf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
 	}
 
 	return nil

@@ -175,7 +175,7 @@ func (s *MemoryStore) pruneNodes(pluginName string, snapshotID uuid.UUID) {
 			delete(s.nodes[id].PluginClaims, pluginName)
 		}
 
-		if len(node.PluginClaims) == 0 {
+		if len(s.nodes[id].PluginClaims) == 0 {
 			delete(s.nodes, id)
 		}
 	}
@@ -192,7 +192,7 @@ func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
 			delete(s.relations[id].PluginClaims, pluginName)
 		}
 
-		if len(relation.PluginClaims) == 0 {
+		if len(s.relations[id].PluginClaims) == 0 {
 			delete(s.relations, id)
 		}
 	}

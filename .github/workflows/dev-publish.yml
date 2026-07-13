@@ -1,0 +1,138 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Dev Publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Build & push catalog image ─────────────────────────────────────────
+  container-publish-catalog:
+    name: Publish · Catalog
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-catalog"
+      dockerfile: "catalog/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 2. Build & push UI image ───────────────────────────────────────────────
+  container-publish-ui:
+    name: Publish · UI
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-ui"
+      dockerfile: "ui-poc/Dockerfile"
+      context: "ui-poc"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 3. Build & push Portal image ───────────────────────────────────────────
+  container-publish-portal:
+    name: Publish · Portal
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-portal"
+      dockerfile: "naira-openmfp-portal/Dockerfile"
+      context: "naira-openmfp-portal"
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 4. Plugins ─────────────────────────────────────────────────────────────
+  container-publish-plugin-mlflow:
+    name: Publish · Plugin MLflow
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-mlflow"
+      dockerfile: "plugins/cmd/mlflow/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-litellm:
+    name: Publish · Plugin LiteLLM
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-litellm"
+      dockerfile: "plugins/cmd/litellm/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-depl-calls-svc:
+    name: Publish · Plugin Depl Calls Svc
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-depl-calls-svc"
+      dockerfile: "plugins/cmd/depl_calls_svc/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-fluxcd:
+    name: Publish · Plugin FluxCD
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    with:
+      image-name: "naira-plugin-fluxcd"
+      dockerfile: "plugins/cmd/fluxcd/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      push: true
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Gate: surfaces overall publish status as a single check ───────────────
+  all-published:
+    name: All Images Published
+    needs:
+      - container-publish-catalog
+      - container-publish-ui
+      - container-publish-portal
+      - container-publish-plugin-mlflow
+      - container-publish-plugin-litellm
+      - container-publish-plugin-depl-calls-svc
+      - container-publish-plugin-fluxcd
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          RESULTS=(
+            "${{ needs.container-publish-catalog.result }}"
+            "${{ needs.container-publish-ui.result }}"
+            "${{ needs.container-publish-portal.result }}"
+            "${{ needs.container-publish-plugin-mlflow.result }}"
+            "${{ needs.container-publish-plugin-litellm.result }}"
+            "${{ needs.container-publish-plugin-depl-calls-svc.result }}"
+            "${{ needs.container-publish-plugin-fluxcd.result }}"
+          )
+          for r in "${RESULTS[@]}"; do
+            if [[ "$r" != "success" ]]; then
+              echo "::error::One or more publish jobs did not succeed: $r"
+              exit 1
+            fi
+          done
+          echo "All images published successfully."

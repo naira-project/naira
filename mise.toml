@@ -1,0 +1,9 @@
+[tools]
+buf = "1.71"
+go = "1.26"
+task = "3.51"
+# deploy/
+helm = "4.2"
+kubectl = "1.36" # update kind in kind-config.yaml if changing version 
+kind = "0.32"
+python = "3.11"

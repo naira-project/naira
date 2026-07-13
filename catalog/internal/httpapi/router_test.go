@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/naira-project/naira/catalog/internal/auth"
 	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,17 +43,12 @@ func withAuth(req *http.Request) *http.Request {
 }
 
 type stubPlugin struct {
-	name    string
-	request catalog.IngestionRequest
-	err     error
+	response catalog.CollectResponse
+	err      error
 }
 
-func (p stubPlugin) Name() string {
-	return p.name
-}
-
-func (p stubPlugin) Collect(context.Context) (catalog.IngestionRequest, error) {
-	return p.request, p.err
+func (p stubPlugin) Collect(context.Context) (catalog.CollectResponse, error) {
+	return p.response, p.err
 }
 
 func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
@@ -95,7 +90,12 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			}},
 	)
 
-	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), nil, stubPlugin{name: "seed"}), log.New(io.Discard, "", 0), auth.KeycloakConfig{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
+	router := NewRouter(catalog.NewService(
+		store,
+		map[string]catalog.Plugin{"seed": stubPlugin{}},
+		log.New(io.Discard, "", 0),
+		nil,
+	), log.New(io.Discard, "", 0), auth.KeycloakConfig{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
 
 	tests := []struct {
 		name               string
@@ -238,9 +238,9 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 	router := NewRouter(catalog.NewService(
 		catalog.NewMemoryStore(),
+		map[string]catalog.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}},
 		log.New(io.Discard, "", 0),
 		nil,
-		stubPlugin{name: "seed", err: errors.New("seed failed")},
 	), log.New(io.Discard, "", 0), auth.KeycloakConfig{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
 
 	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil))

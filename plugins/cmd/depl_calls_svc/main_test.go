@@ -1,4 +1,4 @@
-package depl_calls_svc
+package main
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,8 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic/fake"
 	k8stesting "k8s.io/client-go/testing"
-
-	"github.com/naira-project/naira/catalog/pluginapi"
 )
 
 const testClusterID = "test-cluster-uid-1234"
@@ -27,7 +26,7 @@ func TestCollect(t *testing.T) {
 		name    string
 		objs    []runtime.Object
 		reactor func(*fake.FakeDynamicClient)
-		want    pluginapi.IngestionRequest
+		want    pluginapi.CollectResponse
 	}{
 		{
 			name: `"simple happy path": Deployment referencing same-namespace Service by name produces a "calls" Relation`,
@@ -35,9 +34,9 @@ func TestCollect(t *testing.T) {
 				namespace("team-a"),
 				service("team-a", "payments"),
 				deployment("team-a", "checkout",
-					env("PAYMENTS_URL", "http://payments/api")),
+					envVar("PAYMENTS_URL", "http://payments/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-a/checkout")},
 					{ID: nodeID("service", "team-a/payments")},
@@ -59,9 +58,9 @@ func TestCollect(t *testing.T) {
 				service("infra", "redis"),
 				namespace("team-a"),
 				deployment("team-a", "worker",
-					env("CACHE_URL", "redis.infra:6379")),
+					envVar("CACHE_URL", "redis.infra:6379")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-a/worker")},
 					{ID: nodeID("service", "infra/redis")},
@@ -82,9 +81,9 @@ func TestCollect(t *testing.T) {
 				namespace("team-a"),
 				service("team-a", "payments"),
 				deployment("team-a", "checkout",
-					env("SOME_URL", "http://external.example.com/api")),
+					envVar("SOME_URL", "http://external.example.com/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-a/checkout")},
 					{ID: nodeID("service", "team-a/payments")},
@@ -100,11 +99,11 @@ func TestCollect(t *testing.T) {
 				service("team-b", "svc2"),
 				service("team-b", "svc3"),
 				deployment("team-b", "depl",
-					env("SVC1_URL", "http://svc1.team-a/api"),
-					env("SVC2_URL", "http://svc2.team-b/api"),
-					env("SVC3_URL", "http://svc3/api")),
+					envVar("SVC1_URL", "http://svc1.team-a/api"),
+					envVar("SVC2_URL", "http://svc2.team-b/api"),
+					envVar("SVC3_URL", "http://svc3/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-b/depl")},
 					{ID: nodeID("service", "team-a/svc1")},
@@ -140,9 +139,9 @@ func TestCollect(t *testing.T) {
 				service("team-a", "svc"),
 				namespace("team-b"),
 				deployment("team-b", "depl",
-					env("SVC_URL", "http://svc/api")),
+					envVar("SVC_URL", "http://svc/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-b/depl")},
 					{ID: nodeID("service", "team-a/svc")},
@@ -155,12 +154,12 @@ func TestCollect(t *testing.T) {
 				namespace("team-a"),
 				service("team-a", "svc"),
 				deployment("team-a", "depl1",
-					env("SVC_URL", "http://svc/api")),
+					envVar("SVC_URL", "http://svc/api")),
 				namespace("team-b"),
 				deployment("team-b", "depl2",
-					env("SVC_URL", "http://svc.team-a/api")),
+					envVar("SVC_URL", "http://svc.team-a/api")),
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-a/depl1")},
 					{ID: nodeID("deployment", "team-b/depl2")},
@@ -190,8 +189,8 @@ func TestCollect(t *testing.T) {
 				namespace("team-b"),
 				service("team-b", "payments"),
 				deployment("team-b", "checkout",
-					env("PAYMENTS_URL", "http://payments/api"),
-					env("SECRET_SERVICE_URL", "http://secret-service.secret-namespace/api")),
+					envVar("PAYMENTS_URL", "http://payments/api"),
+					envVar("SECRET_SERVICE_URL", "http://secret-service.secret-namespace/api")),
 			},
 			reactor: func(client *fake.FakeDynamicClient) {
 				client.PrependReactor("list", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -201,7 +200,7 @@ func TestCollect(t *testing.T) {
 					return false, nil, nil
 				})
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-b/checkout")},
 					{ID: nodeID("service", "team-b/payments")},
@@ -224,7 +223,7 @@ func TestCollect(t *testing.T) {
 				namespace("team-b"),
 				service("team-b", "payments"),
 				deployment("team-b", "checkout",
-					env("PAYMENTS_URL", "http://payments/api")),
+					envVar("PAYMENTS_URL", "http://payments/api")),
 			},
 			reactor: func(client *fake.FakeDynamicClient) {
 				client.PrependReactor("list", "deployments", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -234,7 +233,7 @@ func TestCollect(t *testing.T) {
 					return false, nil, nil
 				})
 			},
-			want: pluginapi.IngestionRequest{
+			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("deployment", "team-b/checkout")},
 					{ID: nodeID("service", "team-b/payments")},
@@ -256,14 +255,14 @@ func TestCollect(t *testing.T) {
 			if tt.reactor != nil {
 				tt.reactor(client)
 			}
-			result, err := New(Config{}).collect(context.Background(), client)
+			result, err := New(config{}).collect(context.Background(), client)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, sortedByIDs(result))
 		})
 	}
 }
 
-func sortedByIDs(r pluginapi.IngestionRequest) pluginapi.IngestionRequest {
+func sortedByIDs(r pluginapi.CollectResponse) pluginapi.CollectResponse {
 	lessID := func(a, b pluginapi.NodeID) bool {
 		if a.Kind != b.Kind {
 			return a.Kind < b.Kind
@@ -330,7 +329,7 @@ func deployment(ns, name string, envVars ...corev1.EnvVar) *appsv1.Deployment {
 	}
 }
 
-func env(name, value string) corev1.EnvVar {
+func envVar(name, value string) corev1.EnvVar {
 	return corev1.EnvVar{Name: name, Value: value}
 }
 

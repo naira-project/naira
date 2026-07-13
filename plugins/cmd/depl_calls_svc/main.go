@@ -1,12 +1,12 @@
-// Package depl_calls_svc implements a plugin scanning k8s Deployments and
-// Services, then claiming "calls" relation from each Deployment that mentions
-// a Service's hostname in any plaintext Env value.
+// depl_calls_svc implements a plugin scanning k8s Deployments and Services, then
+// claiming "calls" relation from each Deployment that mentions a Service's
+// hostname in any plaintext Env value.
 //
 // TODO: could also scan "calls" to ExternalDNS, Ingress, LoadBalancer, hostAliases, etc.
 // TODO: add a configurable list of hostnames to filter out (blocklist)
 // TODO: add a configurable list of external hostnames to search for
 // TODO: add feature for loading service names from Nodes already known in Naira
-package depl_calls_svc
+package main
 
 import (
 	"context"
@@ -20,69 +20,56 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/naira-project/naira/catalog/internal/kubeconn"
-	"github.com/naira-project/naira/catalog/pluginapi"
+	"github.com/naira-project/naira/plugins/internal/kubeutil"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
 const pluginName = "depl_calls_svc"
-const systemNamespace = "kube-system"
 
 var (
 	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
-	gvrNamespaces  = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "namespaces"}
 	gvrServices    = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}
 )
 
-type Config struct {
-	Enabled    bool   `env:"ENABLED" default:"true"`
-	Kubeconfig string `env:"KUBECONFIG"`
+type config struct {
+	Kubeconfig string `env:"DEPL_CALLS_SVC_KUBECONFIG"`
 }
 
 type Plugin struct {
-	config Config
+	config config
 }
 
-func New(config Config) *Plugin {
+func New(config config) *Plugin {
 	return &Plugin{config: config}
 }
 
-func (*Plugin) Name() string { return pluginName }
+func main() {
+	app := pluginmain.New[config]()
 
-func (p *Plugin) Collect(ctx context.Context) (pluginapi.IngestionRequest, error) {
+	app.Serve(New(app.PluginConfig))
+}
+
+func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	dyn, err := p.connect()
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("connecting to cluster: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 	return p.collect(ctx, dyn)
 }
 
-func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.IngestionRequest, error) {
-	var claims pluginapi.IngestionRequest
+func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.CollectResponse, error) {
+	var claims pluginapi.CollectResponse
 
-	namespaces, err := dyn.Resource(gvrNamespaces).List(ctx, metav1.ListOptions{})
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("listing namespaces: %w", err)
-	}
-	var nsNames []string
-	// clusterID will store the UID of the (mandatory) "kube-system" namespace;
-	// this is a common workaround, for lack of a better way go get cluster ID;
-	// see e.g.: https://opentelemetry.io/docs/specs/semconv/resource/k8s/#cluster
-	var clusterID string
-	for _, nsObj := range namespaces.Items {
-		nsNames = append(nsNames, nsObj.GetName())
-		if nsObj.GetName() == systemNamespace {
-			clusterID = string(nsObj.GetUID())
-		}
-	}
-	if clusterID == "" {
-		// should never happen - "kube-system" namespace is expected to always be present
-		return pluginapi.IngestionRequest{}, fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
+		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces: %w", err)
 	}
 
 	// Build per-namespace service index and precompile patterns.
-	svcsByNs, err := collectServicesByNamespace(ctx, dyn, nsNames, clusterID)
+	svcsByNs, err := collectServicesByNamespace(ctx, dyn, namespaces, clusterID)
 	if err != nil {
-		return pluginapi.IngestionRequest{}, fmt.Errorf("collecting services: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("collecting services: %w", err)
 	}
 	for _, svcs := range svcsByNs {
 		for _, s := range svcs {
@@ -95,7 +82,7 @@ func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.
 	// Scan Deployments' Env values, find references to Service names collected
 	// above, interpret them as calls from the Deployment to the Service.
 	var depls []unstructured.Unstructured
-	for _, ns := range nsNames {
+	for _, ns := range namespaces {
 		deplsInNs, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
 			log.Printf("%s: WARN: listing deployments in namespace %q: %v", pluginName, ns, err)
@@ -170,6 +157,8 @@ func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, name
 		}
 		for _, svc := range svcs.Items {
 			name := svc.GetName()
+			// FIXME: `\b` will lead to false positives on `-` (and possibly others) in service names (e.g. `\bpayments\b` will match `payments-api`).
+			// FIXME: domain names are technically case-insensitive
 			localPattern, err := regexp.Compile(`\b` + regexp.QuoteMeta(name) + `\b`)
 			if err != nil {
 				return nil, fmt.Errorf("compiling local pattern for service %s/%s: %w", ns, name, err)
@@ -235,7 +224,7 @@ func iterDeploymentEnvs(obj map[string]any) iter.Seq2[string, string] {
 }
 
 func (p *Plugin) connect() (dynamic.Interface, error) {
-	cfg, err := kubeconn.RestConfig(p.config.Kubeconfig)
+	cfg, err := kubeutil.RestConfig(p.config.Kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("loading k8s config: %w", err)
 	}
