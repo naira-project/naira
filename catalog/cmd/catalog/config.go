@@ -14,10 +14,10 @@ type config struct {
 	ShutdownTimeout         time.Duration
 	PluginAddresses         map[string]string
 	PluginConnectionTimeout time.Duration
-	KeycloakBaseURL  string
-	KeycloakRealm    string
-	OpenfgaBaseURL   string
-	OpenfgaStoreName string
+	KeycloakBaseURL         string
+	KeycloakRealm           string
+	OpenfgaBaseURL          string
+	OpenfgaStoreName        string
 }
 
 type envConfig struct {
@@ -26,11 +26,10 @@ type envConfig struct {
 	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" default:"5s"`
 	PluginAddresses         []string      `env:"PLUGIN_ADDRESSES"`
 	PluginConnectionTimeout time.Duration `env:"PLUGIN_CONNECTION_TIMEOUT" default:"10s"`
-	KeycloakBaseURL  string `env:"KEYCLOAK_BASE_URL"`
-	KeycloakRealm    string `env:"KEYCLOAK_REALM"`
-	OpenfgaBaseURL   string `env:"FGA_API_URL"`
-	OpenfgaStoreName string `env:"FGA_STORE_NAME"`
-	
+	KeycloakBaseURL         string        `env:"KEYCLOAK_BASE_URL"`
+	KeycloakRealm           string        `env:"KEYCLOAK_REALM"`
+	OpenfgaBaseURL          string        `env:"FGA_API_URL"`
+	OpenfgaStoreName        string        `env:"FGA_STORE_NAME"`
 }
 
 func loadConfig() (config, error) {
@@ -53,12 +52,12 @@ func loadConfig() (config, error) {
 		ShutdownTimeout:         raw.ShutdownTimeout,
 		PluginAddresses:         pluginAddresses,
 		PluginConnectionTimeout: raw.PluginConnectionTimeout,
-		KeycloakBaseURL:  raw.KeycloakBaseURL,
-		KeycloakRealm:    raw.KeycloakRealm,
-		OpenfgaBaseURL:   raw.OpenfgaBaseURL,
-		OpenfgaStoreName: raw.OpenfgaStoreName,
+		KeycloakBaseURL:         raw.KeycloakBaseURL,
+		KeycloakRealm:           raw.KeycloakRealm,
+		OpenfgaBaseURL:          raw.OpenfgaBaseURL,
+		OpenfgaStoreName:        raw.OpenfgaStoreName,
 	}
-	
+
 	return cfg, nil
 }
 

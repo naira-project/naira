@@ -276,13 +276,12 @@ tasks:
     internal: true
     cmds:
       - task: catalog:image:load
-      - |
-        sed "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" {{.CATALOG_MANIFEST}} | kubectl apply -f -
       - task: mlflow:image:load
       - task: litellm:image:load
       - task: depl-calls-svc:image:load
       - task: fluxcd:image:load
-      - kubectl apply -f {{.CATALOG_MANIFEST}}
+      - |
+        sed "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" {{.CATALOG_MANIFEST}} | kubectl apply -f -
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods
 
