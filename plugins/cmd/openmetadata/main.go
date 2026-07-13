@@ -20,15 +20,15 @@ import (
 const (
 	pluginName = "openmetadata"
 
-	propertyKeySource      = "source"
-	propertyKeyDescription = "description"
-	propertyKeyFQN         = "fqn"
-	propertyKeySourceURL   = "source_url"
-	propertyKeyPlatform    = "platform"
-	propertyKeyTableType   = "table_type"
-	propertyKeyTags        = "tags"
-	propertyKeyOwners      = "owners"
-	propertyKeyColumnsJSON = "columns_json"
+	propertyKeySource             = "source"
+	propertyKeyDescription        = "description"
+	propertyKeyFullyQualifiedName = "fullyQualifiedName"
+	propertyKeySourceURL          = "source_url"
+	propertyKeyServiceType        = "serviceType"
+	propertyKeyTableType          = "tableType"
+	propertyKeyTags               = "tags"
+	propertyKeyOwners             = "owners"
+	propertyKeyColumns            = "columns"
 )
 
 type config struct {
@@ -80,14 +80,14 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 
 		properties := pluginapi.PropertyMap{
-			propertyKeySource:      pluginName,
-			propertyKeyDescription: table.Description,
-			propertyKeyFQN:         table.FullyQualifiedName,
-			propertyKeySourceURL:   p.tableURL(table.FullyQualifiedName),
+			propertyKeySource:             pluginName,
+			propertyKeyDescription:        table.Description,
+			propertyKeyFullyQualifiedName: table.FullyQualifiedName,
+			propertyKeySourceURL:          p.tableURL(table.FullyQualifiedName),
 		}
 
 		if table.ServiceType != "" {
-			properties[propertyKeyPlatform] = table.ServiceType
+			properties[propertyKeyServiceType] = table.ServiceType
 		}
 		if table.TableType != "" {
 			properties[propertyKeyTableType] = table.TableType
@@ -99,7 +99,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 			properties[propertyKeyOwners] = strings.Join(owners, ",")
 		}
 		if columnsJSON := marshalColumns(table.Columns); columnsJSON != "" {
-			properties[propertyKeyColumnsJSON] = columnsJSON
+			properties[propertyKeyColumns] = columnsJSON
 		}
 
 		nodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindDataset, Path: pluginName + "/" + table.ID}
