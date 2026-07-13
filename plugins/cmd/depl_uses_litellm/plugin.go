@@ -2,6 +2,30 @@
 // referenced Secrets, then queries each configured LiteLLM host to discover
 // which models that key can access, and emits deployment→model "uses_model"
 // relations.
+//
+// Currently, the plugin emits Nodes for all Deployments with at least one
+// secret with value matching the configured API key regexp
+// (DEPL_USES_LITELLM_APIKEY_REGEXP), even if the key is not verified to be
+// found in any of the configured LiteLLM hosts. This is intended to help
+// detect potentially missing LiteLLM host configurations.
+// TODO(security): add option to emit only verified deployments, to avoid leaking parts of accidentally matched secrets.
+//
+// # Environment Variables
+//
+//   - DEPL_USES_LITELLM_NAMED_HOSTS - MANDATORY - comma-separated list of
+//     named LiteLLM base URLs, e.g.:
+//     "host1=https://litellm.example.com,host2=http://litellm2.example.com:1234/base/"
+//
+//   - DEPL_USES_LITELLM_KUBECONFIG (optional) - path to kubeconfig file; if
+//     unset, in-cluster config is used.
+//
+//   - DEPL_USES_LITELLM_APIKEY_REGEXP (optional) - custom regexp to match API
+//     keys; defaults to: "^sk-.{22}$" (LiteLLM API keys format as of May 2026)
+//
+//   - DEPL_USES_LITELLM_HTTP_TIMEOUT (optional) - HTTP request timeout for
+//     LiteLLM API calls; defaults to: 5s.
+//
+//go:generate goreadme -out README.md -use-stdlib-markdown -title "depl_uses_litellm plugin"
 package main
 
 import (
