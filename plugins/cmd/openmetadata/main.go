@@ -109,7 +109,11 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 	relations, err := p.collectLineage(ctx, tables, nodeByEntityID, token)
 	response := pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
-	return response, err
+	if err != nil {
+		return response, fmt.Errorf("collecting lineage: %w", err)
+	}
+
+	return response, nil
 }
 
 // collectLineage fetches lineage for each table; failures for individual
