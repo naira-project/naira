@@ -1,3 +1,16 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: portal-secrets
+  namespace: idp-system
+type: Opaque
+stringData:
+  # Set with: kubectl create secret generic portal-secrets -n idp-system \
+  #   --from-literal=OIDC_CLIENT_SECRET_KEYCLOAK=<value> --dry-run=client -o yaml | kubectl apply -f -
+  # This must be from the client id that is being added under OIDC_CLIENT_ID_KEYCLOAK. You can see it in Platform Mesh's Keycloak instance
+  # by clicking on your Keycloak realm 
+  OIDC_CLIENT_SECRET_KEYCLOAK: REPLACE_ME
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,6 +26,10 @@ spec:
       labels:
         app: portal
     spec:
+      hostAliases:
+      - ip: __TRAEFIK_CLUSTER_IP__
+        hostnames:
+        - portal.localhost
       containers:
         - name: portal
           image: portal:local
@@ -21,7 +38,31 @@ spec:
             - name: PORT
               value: "3000"
             - name: NAIRA_UI_BASE_URL
-              value: "http://localhost:3001"
+              value: http://localhost:3001
+            - name: IDP_NAMES
+              value: keycloak
+            - name: BASE_DOMAINS_KEYCLOAK
+              value: localhost
+            - name: NODE_EXTRA_CA_CERTS
+              value: /etc/ssl/platform-mesh/ca.crt
+            # KEYCLOAK_REALM variable must be changed in Taskfile.yaml in /deploy/dev
+            - name: AUTH_SERVER_URL_KEYCLOAK
+              value: https://portal.localhost:8443/keycloak/realms/__KEYCLOAK_REALM__/protocol/openid-connect/auth
+            - name: TOKEN_URL_KEYCLOAK
+              value: https://portal.localhost:8443/keycloak/realms/__KEYCLOAK_REALM__/protocol/openid-connect/token
+
+            # Please add here the Keycloak client id that your realm uses.
+            - name: OIDC_CLIENT_ID_KEYCLOAK
+              value: REPLACE_ME
+            - name: OIDC_CLIENT_SECRET_KEYCLOAK
+              valueFrom:
+                secretKeyRef:
+                  name: portal-secrets
+                  key: OIDC_CLIENT_SECRET_KEYCLOAK
+          volumeMounts:
+            - name: platform-mesh-ca
+              mountPath: /etc/ssl/platform-mesh
+              readOnly: true
           ports:
             - containerPort: 3000
               name: http
@@ -44,6 +85,10 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+      volumes:
+        - name: platform-mesh-ca
+          configMap:
+            name: platform-mesh-ca
 ---
 apiVersion: v1
 kind: Service

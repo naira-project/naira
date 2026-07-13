@@ -74,8 +74,9 @@ spec:
                   key: LITELLM_API_KEY
             - name: KEYCLOAK_BASE_URL
               value: http://keycloak.platform-mesh-system.svc.cluster.local:80/keycloak
+            # KEYCLOAK_REALM variable must be changed in Taskfile.yaml in /deploy/dev
             - name: KEYCLOAK_REALM
-              value: naira
+              value: __KEYCLOAK_REALM__
             - name: FGA_API_URL
               value: http://openfga-2.default.svc.cluster.local:8080
             - name: FGA_STORE_NAME

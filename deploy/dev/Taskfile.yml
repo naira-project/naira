@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  CLUSTER_NAME: naira-idp
+  CLUSTER_NAME: platform-mesh
   PORTAL_DIR: ../../naira-openmfp-portal
   UI_DIR: ../../ui-poc
   UI_IMAGE: ui:local
@@ -34,6 +34,7 @@ vars:
   PORTAL_IMAGE: portal:local
   PORTAL_NAMESPACE: idp-system
   PORTAL_MANIFEST: infra/kubernetes/portal.yaml
+  KEYCLOAK_REALM: naira
   PORTAL_SERVICE: svc/portal
   PORTAL_LOCAL_PORT: '3000'
   PORTAL_REMOTE_PORT: '3000'
@@ -181,7 +182,8 @@ tasks:
     internal: true
     cmds:
       - task: catalog:image:load
-      - kubectl apply -f {{.CATALOG_MANIFEST}}
+      - |
+        sed "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" {{.CATALOG_MANIFEST}} | kubectl apply -f -
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods
 
@@ -290,7 +292,15 @@ tasks:
     internal: true
     cmds:
       - task: portal:image:load
-      - kubectl apply -f {{.PORTAL_MANIFEST}}
+      - |
+        kubectl create configmap platform-mesh-ca -n {{.PORTAL_NAMESPACE}} \
+          --from-literal=ca.crt="$(kubectl get secret domain-certificate -n platform-mesh-system -o jsonpath='{.data.ca\.crt}' | base64 -d)" \
+          --dry-run=client -o yaml | kubectl apply -f -
+      - |
+        TRAEFIK_CLUSTER_IP=$(kubectl get svc traefik -n default -o jsonpath='{.spec.clusterIP}')
+        sed -e "s/__TRAEFIK_CLUSTER_IP__/${TRAEFIK_CLUSTER_IP}/" \
+            -e "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" \
+            {{.PORTAL_MANIFEST}} | kubectl apply -f -
       - kubectl -n {{.PORTAL_NAMESPACE}} rollout status deploy/portal --timeout=180s
       - kubectl -n {{.PORTAL_NAMESPACE}} get pods
 
