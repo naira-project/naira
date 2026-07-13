@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	openfga "github.com/openfga/go-sdk"
 	"github.com/naira-project/naira/catalog/pluginapi"
+	openfga "github.com/openfga/go-sdk"
 )
 
 var (
@@ -32,7 +32,7 @@ const defaultViewerRole = "role:ai-engineer#assignee"
 // viewerRoleByNodeKind overrides defaultViewerRole for specific node kinds.
 var viewerRoleByNodeKind = map[string]string{
 	pluginapi.NodeKindDeployment: "role:application-engineer#assignee",
-	pluginapi.NodeKindService: "role:application-engineer#assignee",
+	pluginapi.NodeKindService:    "role:application-engineer#assignee",
 }
 
 func viewerRoleForNodeKind(kind string) string {

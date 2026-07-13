@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/Nerzal/gocloak/v13"
+	"github.com/naira-project/naira/catalog/internal/auth"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
 	"github.com/naira-project/naira/catalog/internal/plugins"
-	"github.com/naira-project/naira/catalog/internal/auth"
 )
 
 func main() {

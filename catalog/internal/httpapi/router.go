@@ -11,8 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/auth"
+	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
 type routeHandler func(http.ResponseWriter, *http.Request) error
@@ -36,103 +36,103 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakCon
 	})
 
 	router.Route("/v1", func(r chi.Router) {
-			r.Use(auth.NewAuthMiddleware(kc))
+		r.Use(auth.NewAuthMiddleware(kc))
 
-			r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
-				response := service.RunAllPlugins(r.Context())
-				writeJSON(w, http.StatusAccepted, runPluginsResponseFromResult(response))
-				return nil
-			}))
+		r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
+			response := service.RunAllPlugins(r.Context())
+			writeJSON(w, http.StatusAccepted, runPluginsResponseFromResult(response))
+			return nil
+		}))
 
-			// GET /v1/nodes lists catalog nodes.
-			// Supported query params:
-			// - pageSize
-			// - pageToken
-			// - filter: only field="value" equality filters
-			// Supported node filter fields: name, kind, path.
-			r.Get("/nodes", handleWithListOptions(nodeListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
+		// GET /v1/nodes lists catalog nodes.
+		// Supported query params:
+		// - pageSize
+		// - pageToken
+		// - filter: only field="value" equality filters
+		// Supported node filter fields: name, kind, path.
+		r.Get("/nodes", handleWithListOptions(nodeListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 
-				nodes := make([]Node, 0)
-				for _, catalogNode := range service.ListNodes(r.Context()) {
-					node := nodeFromCatalogNode(catalogNode)
-					matches, err := matchNodeFilter(node, options.filter)
-					if err != nil {
-						return fmt.Errorf("matching node filter: %w", err)
-					}
-					if !matches {
-						continue
-					}
-					if err := fgaClient.AuthorizeNodeRead(r.Context(), catalogNode.ID, fgaModelType, fgaGetRelation); err != nil {
-						continue
-					}
-					nodes = append(nodes, node)
-				}
-
-				sortNodes(nodes)
-
-				page, nextPageToken, totalSize, err := paginate(nodes, options.pageSize, options.offset, "nodes", logger)
+			nodes := make([]Node, 0)
+			for _, catalogNode := range service.ListNodes(r.Context()) {
+				node := nodeFromCatalogNode(catalogNode)
+				matches, err := matchNodeFilter(node, options.filter)
 				if err != nil {
-					return fmt.Errorf("paginating nodes: %w", err)
+					return fmt.Errorf("matching node filter: %w", err)
+				}
+				if !matches {
+					continue
+				}
+				if err := fgaClient.AuthorizeNodeRead(r.Context(), catalogNode.ID, fgaModelType, fgaGetRelation); err != nil {
+					continue
+				}
+				nodes = append(nodes, node)
+			}
+
+			sortNodes(nodes)
+
+			page, nextPageToken, totalSize, err := paginate(nodes, options.pageSize, options.offset, "nodes", logger)
+			if err != nil {
+				return fmt.Errorf("paginating nodes: %w", err)
+			}
+
+			writeJSON(w, http.StatusOK, ListNodesResponse{Nodes: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
+			return nil
+		}))
+
+		r.Get("/nodes/{kind}/*", handle(func(w http.ResponseWriter, r *http.Request) error {
+			nodeID := catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")}
+
+			if err := fgaClient.AuthorizeNodeRead(r.Context(), nodeID, fgaModelType, fgaGetRelation); err != nil {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+				return fmt.Errorf("Status forbidden: %w", err)
+			}
+
+			node, err := service.GetNode(r.Context(), nodeID)
+			if err != nil {
+				return fmt.Errorf("getting node: %w", err)
+			}
+
+			writeJSON(w, http.StatusOK, nodeFromCatalogNode(node))
+			return nil
+		}))
+
+		// GET /v1/relations lists catalog relations.
+		// Supported query params:
+		// - pageSize
+		// - pageToken
+		// - filter: only field="value" equality filters
+		// Supported relation filter fields: name, kind, fromNode, toNode.
+		r.Get("/relations", handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
+			relations := make([]Relation, 0)
+			for _, relation := range service.ListRelations(r.Context()) {
+				if err := fgaClient.AuthorizeNodeRead(r.Context(), relation.From, fgaModelType, fgaGetRelation); err != nil {
+					continue
+				}
+				if err := fgaClient.AuthorizeNodeRead(r.Context(), relation.To, fgaModelType, fgaGetRelation); err != nil {
+					continue
 				}
 
-				writeJSON(w, http.StatusOK, ListNodesResponse{Nodes: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
-				return nil
-			}))
-
-			r.Get("/nodes/{kind}/*", handle(func(w http.ResponseWriter, r *http.Request) error {
-				nodeID := catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")}
-
-				if err := fgaClient.AuthorizeNodeRead(r.Context(), nodeID, fgaModelType, fgaGetRelation); err != nil {
-					writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-					return fmt.Errorf("Status forbidden: %w", err)
-				}
-
-				node, err := service.GetNode(r.Context(), nodeID)
+				resource := relationFromCatalogRelation(relation)
+				matches, err := matchRelationFilter(resource, options.filter)
 				if err != nil {
-					return fmt.Errorf("getting node: %w", err)
+					return fmt.Errorf("matching relation filter: %w", err)
 				}
-
-				writeJSON(w, http.StatusOK, nodeFromCatalogNode(node))
-				return nil
-			}))
-
-			// GET /v1/relations lists catalog relations.
-			// Supported query params:
-			// - pageSize
-			// - pageToken
-			// - filter: only field="value" equality filters
-			// Supported relation filter fields: name, kind, fromNode, toNode.
-			r.Get("/relations", handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-				relations := make([]Relation, 0)
-				for _, relation := range service.ListRelations(r.Context()) {
-					if err := fgaClient.AuthorizeNodeRead(r.Context(), relation.From, fgaModelType, fgaGetRelation); err != nil {
-						continue
-					}
-					if err := fgaClient.AuthorizeNodeRead(r.Context(), relation.To, fgaModelType, fgaGetRelation); err != nil {
-						continue
-					}
-
-					resource := relationFromCatalogRelation(relation)
-					matches, err := matchRelationFilter(resource, options.filter)
-					if err != nil {
-						return fmt.Errorf("matching relation filter: %w", err)
-					}
-					if matches {
-						relations = append(relations, resource)
-					}
+				if matches {
+					relations = append(relations, resource)
 				}
+			}
 
-				sortRelations(relations)
+			sortRelations(relations)
 
-				page, nextPageToken, totalSize, err := paginate(relations, options.pageSize, options.offset, "relations", logger)
-				if err != nil {
-					return fmt.Errorf("paginating relations: %w", err)
-				}
+			page, nextPageToken, totalSize, err := paginate(relations, options.pageSize, options.offset, "relations", logger)
+			if err != nil {
+				return fmt.Errorf("paginating relations: %w", err)
+			}
 
-				writeJSON(w, http.StatusOK, ListRelationsResponse{Relations: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
-				return nil
-			}))
-		})
+			writeJSON(w, http.StatusOK, ListRelationsResponse{Relations: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
+			return nil
+		}))
+	})
 
 	return router
 }

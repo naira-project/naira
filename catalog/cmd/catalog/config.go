@@ -10,27 +10,24 @@ import (
 )
 
 type config struct {
-	Port        int
-	HTTPTimeout time.Duration
-	Plugins     plugins.Config
-	KeycloakBaseURL string
-	KeycloakRealm   string
-	KeycloakClient  string
-	OpenfgaBaseURL 	string
+	Port             int
+	HTTPTimeout      time.Duration
+	Plugins          plugins.Config
+	KeycloakBaseURL  string
+	KeycloakRealm    string
+	OpenfgaBaseURL   string
 	OpenfgaStoreName string
 }
 
 type envConfig struct {
-	Port        int           `env:"PORT" default:"8090"`
-	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
-	Plugins     plugins.Config
-	KeycloakBaseURL string `env:"KEYCLOAK_BASE_URL"`
-	KeycloakRealm   string `env:"KEYCLOAK_REALM"`
-	KeycloakClient  string `env:"KEYCLOAK_CLIENT"`
-	OpenfgaBaseURL 	string	`env:"FGA_API_URL"`
-	OpenfgaStoreName  string `env:"FGA_STORE_NAME"`
+	Port             int           `env:"PORT" default:"8090"`
+	HTTPTimeout      time.Duration `env:"HTTP_TIMEOUT" default:"5s"`
+	Plugins          plugins.Config
+	KeycloakBaseURL  string `env:"KEYCLOAK_BASE_URL"`
+	KeycloakRealm    string `env:"KEYCLOAK_REALM"`
+	OpenfgaBaseURL   string `env:"FGA_API_URL"`
+	OpenfgaStoreName string `env:"FGA_STORE_NAME"`
 }
-
 
 func loadConfig() (config, error) {
 	var raw envConfig
@@ -39,13 +36,12 @@ func loadConfig() (config, error) {
 	}
 
 	return config{
-		Port:        raw.Port,
-		HTTPTimeout: raw.HTTPTimeout,
-		Plugins:     raw.Plugins,
-		KeycloakBaseURL: raw.KeycloakBaseURL,
-		KeycloakRealm:   raw.KeycloakRealm,
-		KeycloakClient:  raw.KeycloakClient,
-		OpenfgaBaseURL:	 raw.OpenfgaBaseURL,
+		Port:             raw.Port,
+		HTTPTimeout:      raw.HTTPTimeout,
+		Plugins:          raw.Plugins,
+		KeycloakBaseURL:  raw.KeycloakBaseURL,
+		KeycloakRealm:    raw.KeycloakRealm,
+		OpenfgaBaseURL:   raw.OpenfgaBaseURL,
 		OpenfgaStoreName: raw.OpenfgaStoreName,
 	}, nil
 }

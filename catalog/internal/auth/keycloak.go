@@ -13,7 +13,6 @@ type contextKey string
 
 const claimsKey contextKey = "claims"
 
-
 type TokenDecoder interface {
 	DecodeAccessToken(ctx context.Context, accessToken, realm string) (*jwt.Token, *jwt.MapClaims, error)
 }
@@ -26,21 +25,20 @@ type KeycloakConfig struct {
 
 // TokenClaims holds the user identity extracted from a verified Keycloak JWT.
 type TokenClaims struct {
-	Sub      string
-	Email    string
-	Username string
-	RealmRoles  []string
+	Sub        string
+	Email      string
+	Username   string
+	RealmRoles []string
 }
 
 type keycloakClaims struct {
 	jwt.RegisteredClaims
-	Email             string         `json:"email"`
-	PreferredUsername string         `json:"preferred_username"`
+	Email             string `json:"email"`
+	PreferredUsername string `json:"preferred_username"`
 	RealmAccess       struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
 }
-
 
 func NewAuthMiddleware(kc KeycloakConfig) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

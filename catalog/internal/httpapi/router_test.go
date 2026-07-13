@@ -21,7 +21,6 @@ import (
 
 const testBearerToken = "test-token"
 
-
 type stubTokenDecoder struct{}
 
 func (stubTokenDecoder) DecodeAccessToken(_ context.Context, accessToken, _ string) (*jwt.Token, *jwt.MapClaims, error) {

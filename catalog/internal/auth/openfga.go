@@ -129,7 +129,7 @@ func roleContextualTuples(claims TokenClaims, user string) []ClientContextualTup
 
 func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId string, contextualTuples []ClientContextualTupleKey) (*Allowed, error) {
 	options := ClientCheckOptions{
-    	AuthorizationModelId: openfga.PtrString(modelId),
+		AuthorizationModelId: openfga.PtrString(modelId),
 	}
 
 	body := ClientCheckRequest{
@@ -142,8 +142,8 @@ func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId strin
 	data, err := fgaClient.Check(context.Background()).
 		Body(body).
 		Options(options).
-    	Execute()
-	
+		Execute()
+
 	if err != nil {
 		return nil, fmt.Errorf("checking the tuple: %w", err)
 	}
@@ -153,10 +153,10 @@ func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId strin
 
 func createClient(apiUrl string) (*OpenFgaClient, error) {
 	fgaClient, err := NewSdkClient(&ClientConfiguration{
-        ApiUrl: apiUrl,
-    })
+		ApiUrl: apiUrl,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("creating a new client for OpenFGA: %w", err) 
+		return nil, fmt.Errorf("creating a new client for OpenFGA: %w", err)
 	}
 	return fgaClient, nil
 }
@@ -171,9 +171,9 @@ func createStore(fgaClient *OpenFgaClient, name string) (string, error) {
 	}
 
 	resp, err := fgaClient.CreateStore(context.Background()).Body(ClientCreateStoreRequest{Name: name}).Execute()
-    if err != nil {
-        return "", fmt.Errorf("creating a store in OpenFGA: %w", err)
-    }
+	if err != nil {
+		return "", fmt.Errorf("creating a store in OpenFGA: %w", err)
+	}
 	return resp.Id, nil
 }
 
@@ -210,14 +210,14 @@ func writeOpenFGAModel(fgaClient *OpenFgaClient, model string) (string, error) {
 
 func writeTuples(fgaClient *OpenFgaClient, tuples []openfga.TupleKey, modelId string) error {
 	options := ClientWriteOptions{
-    	AuthorizationModelId: openfga.PtrString(modelId),
+		AuthorizationModelId: openfga.PtrString(modelId),
 		Conflict: ClientWriteConflictOptions{
-        	OnDuplicateWrites: CLIENT_WRITE_REQUEST_ON_DUPLICATE_WRITES_IGNORE,
+			OnDuplicateWrites: CLIENT_WRITE_REQUEST_ON_DUPLICATE_WRITES_IGNORE,
 		},
 	}
 
 	body := ClientWriteRequest{
-    	Writes: tuples,
+		Writes: tuples,
 	}
 
 	_, err := fgaClient.Write(context.Background()).
