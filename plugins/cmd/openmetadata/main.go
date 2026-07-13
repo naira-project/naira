@@ -69,11 +69,24 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching OpenMetadata tables: %w", err)
 	}
 
+	nodes, nodeByEntityID := p.collectNodes(tables)
+
+	relations, err := p.collectLineage(ctx, tables, nodeByEntityID, token)
+	response := pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
+	if err != nil {
+		return response, fmt.Errorf("collecting lineage: %w", err)
+	}
+
+	return response, nil
+}
+
+// collectNodes converts tables into dataset node claims. It also returns a map
+// from OpenMetadata entity UUID to the node it produced, so lineage edges
+// (which reference entities by UUID) can be resolved back to the nodes
+func (p *Plugin) collectNodes(tables []tableItem) ([]pluginapi.NodeClaim, map[string]pluginapi.NodeID) {
 	nodes := make([]pluginapi.NodeClaim, 0, len(tables))
-	// nodeByEntityID maps an OpenMetadata entity UUID to the dataset node it
-	// produced, so lineage edges (which reference entities by UUID) can be
-	// resolved back to nodes that are part of this same ingestion.
 	nodeByEntityID := make(map[string]pluginapi.NodeID, len(tables))
+
 	for _, table := range tables {
 		if table.ID == "" {
 			continue
@@ -107,13 +120,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		nodeByEntityID[table.ID] = nodeID
 	}
 
-	relations, err := p.collectLineage(ctx, tables, nodeByEntityID, token)
-	response := pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
-	if err != nil {
-		return response, fmt.Errorf("collecting lineage: %w", err)
-	}
-
-	return response, nil
+	return nodes, nodeByEntityID
 }
 
 // collectLineage fetches lineage for each table; failures for individual
