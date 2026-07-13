@@ -23,7 +23,7 @@ const (
 	fgaGetRelation = "get"
 )
 
-func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakConfig, fgaClient auth.OpenfgaClient) http.Handler {
+func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakConfig, fgaClient auth.Authorizer) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)

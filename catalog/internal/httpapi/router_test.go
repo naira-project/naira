@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/naira-project/naira/catalog/internal/auth"
 	"github.com/naira-project/naira/catalog/internal/catalog"
@@ -17,6 +18,30 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const testBearerToken = "test-token"
+
+
+type stubTokenDecoder struct{}
+
+func (stubTokenDecoder) DecodeAccessToken(_ context.Context, accessToken, _ string) (*jwt.Token, *jwt.MapClaims, error) {
+	if accessToken != testBearerToken {
+		return nil, nil, errors.New("invalid token")
+	}
+	claims := jwt.MapClaims{"sub": "test-user", "preferred_username": "test-user"}
+	return nil, &claims, nil
+}
+
+type allowAllAuthorizer struct{}
+
+func (allowAllAuthorizer) AuthorizeNodeRead(context.Context, catalog.NodeID, string, string) error {
+	return nil
+}
+
+func withAuth(req *http.Request) *http.Request {
+	req.Header.Set("Authorization", "Bearer "+testBearerToken)
+	return req
+}
 
 type stubPlugin struct {
 	name    string
@@ -71,7 +96,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			}},
 	)
 
-	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), nil, stubPlugin{name: "seed"}), log.New(io.Discard, "", 0), auth.KeycloakConfig{}, auth.OpenfgaClient{})
+	router := NewRouter(catalog.NewService(store, log.New(io.Discard, "", 0), nil, stubPlugin{name: "seed"}), log.New(io.Discard, "", 0), auth.KeycloakConfig{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
 
 	tests := []struct {
 		name               string
@@ -198,7 +223,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req := withAuth(httptest.NewRequest(tt.method, tt.path, nil))
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -217,9 +242,9 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 		log.New(io.Discard, "", 0),
 		nil,
 		stubPlugin{name: "seed", err: errors.New("seed failed")},
-	), log.New(io.Discard, "", 0), auth.KeycloakConfig{}, auth.OpenfgaClient{})
+	), log.New(io.Discard, "", 0), auth.KeycloakConfig{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil))
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)

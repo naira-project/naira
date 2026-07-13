@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Nerzal/gocloak/v13"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -15,10 +14,13 @@ type contextKey string
 const claimsKey contextKey = "claims"
 
 
+type TokenDecoder interface {
+	DecodeAccessToken(ctx context.Context, accessToken, realm string) (*jwt.Token, *jwt.MapClaims, error)
+}
 
-// KeycloakConfig holds the gocloak client and realm needed for token verification.
+// KeycloakConfig holds the client and realm needed for token verification.
 type KeycloakConfig struct {
-	Client *gocloak.GoCloak
+	Client TokenDecoder
 	Realm  string
 }
 

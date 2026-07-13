@@ -20,6 +20,10 @@ type Allowed struct {
 	Allowed bool
 }
 
+type Authorizer interface {
+	AuthorizeNodeRead(ctx context.Context, node catalog.NodeID, fgaModelType, fgaRelation string) error
+}
+
 type OpenfgaClient struct {
 	FgaClient  *OpenFgaClient
 	FgaModelID string
