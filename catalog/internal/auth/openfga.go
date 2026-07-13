@@ -60,17 +60,17 @@ func (cli OpenfgaClient) AuthorizeNodeRead(ctx context.Context, node catalog.Nod
 func SetupOpenfgaClient(apiUrl, storeName string) (OpenfgaClient, error) {
 	jsonStr, err := transformer.TransformDSLToJSON(modelDSL)
 	if err != nil {
-		return OpenfgaClient{}, err
+		return OpenfgaClient{}, fmt.Errorf("transforming DSL schema to JSON: %w", err)
 	}
 
 	client, err := createClient(apiUrl)
 	if err != nil {
-		return OpenfgaClient{}, err
+		return OpenfgaClient{}, fmt.Errorf("creating a client for OpenFGA: %w", err)
 	}
 
 	storeId, err := createStore(client, storeName)
 	if err != nil {
-		return OpenfgaClient{}, err
+		return OpenfgaClient{}, fmt.Errorf("creating a store with the client: %w", err)
 	}
 
 	if err := client.SetStoreId(storeId); err != nil {
@@ -79,7 +79,7 @@ func SetupOpenfgaClient(apiUrl, storeName string) (OpenfgaClient, error) {
 
 	modelId, err := writeOpenFGAModel(client, jsonStr)
 	if err != nil {
-		return OpenfgaClient{}, err
+		return OpenfgaClient{}, fmt.Errorf("Writing OpenFGA model: %w", err)
 	}
 
 	var cli OpenfgaClient
@@ -141,7 +141,7 @@ func CheckTuples(fgaClient *OpenFgaClient, user, relation, object, modelId strin
     	Execute()
 	
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("checking the tuple: %w", err)
 	}
 
 	return &Allowed{Allowed: *data.Allowed}, nil
@@ -152,7 +152,7 @@ func createClient(apiUrl string) (*OpenFgaClient, error) {
         ApiUrl: apiUrl,
     })
 	if err != nil {
-		return nil, err 
+		return nil, fmt.Errorf("creating a new client for OpenFGA: %w", err) 
 	}
 	return fgaClient, nil
 }
@@ -160,7 +160,7 @@ func createClient(apiUrl string) (*OpenFgaClient, error) {
 func createStore(fgaClient *OpenFgaClient, name string) (string, error) {
 	existing, err := findStoreByName(fgaClient, name)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("finding store by name: %w", err)
 	}
 	if existing != "" {
 		return existing, nil
@@ -168,7 +168,7 @@ func createStore(fgaClient *OpenFgaClient, name string) (string, error) {
 
 	resp, err := fgaClient.CreateStore(context.Background()).Body(ClientCreateStoreRequest{Name: name}).Execute()
     if err != nil {
-        return "", err
+        return "", fmt.Errorf("creating a store in OpenFGA: %w", err)
     }
 	return resp.Id, nil
 }
@@ -191,7 +191,7 @@ func findStoreByName(fgaClient *OpenFgaClient, name string) (string, error) {
 func writeOpenFGAModel(fgaClient *OpenFgaClient, model string) (string, error) {
 	var body openfga.WriteAuthorizationModelRequest
 	if err := json.Unmarshal([]byte(model), &body); err != nil {
-		return "", err
+		return "", fmt.Errorf("Unmarshalling the model: %w", err)
 	}
 
 	data, err := fgaClient.WriteAuthorizationModel(context.Background()).
@@ -199,7 +199,7 @@ func writeOpenFGAModel(fgaClient *OpenFgaClient, model string) (string, error) {
 		Execute()
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Writing the authorization model to the respective store: %w", err)
 	}
 	return data.AuthorizationModelId, nil
 }
@@ -222,7 +222,7 @@ func writeTuples(fgaClient *OpenFgaClient, tuples []openfga.TupleKey, modelId st
 		Execute()
 
 	if err != nil {
-		return err
+		return fmt.Errorf("Writing the tuples to the model: %w", err)
 	}
 
 	return nil
