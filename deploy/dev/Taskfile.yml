@@ -305,41 +305,6 @@ tasks:
     cmds:
       - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}
 
-  platform:deploy:
-    desc: Deploy MLflow, LiteLLM, Catalog, UI, and Portal to kind
-    cmds:
-      - task: cluster:create
-      - task: mlflow:apply
-      - task: postgres:apply
-      - task: litellm:apply
-      - task: catalog:apply
-      - task: ui:apply
-      - task: portal:apply
-
-  platform:undeploy:
-    desc: Remove MLflow, LiteLLM, Catalog, UI, and Portal from kind
-    cmds:
-      - task: portal:undeploy
-      - task: catalog:undeploy
-      - task: litellm:undeploy
-      - task: postgres:undeploy
-      - task: mlflow:undeploy
-      - task: ui:undeploy
-
-  forward:all:
-    desc: Port-forward all services (MLflow, LiteLLM, Catalog, UI, Portal)
-    silent: true
-    cmds:
-      - |
-        echo "Port-forwarding all services..."
-        echo "----------------------------------------------------------------"
-        echo "Portal:         http://localhost:{{.PORTAL_LOCAL_PORT}}"
-        echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
-        echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
-        echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
-        echo "----------------------------------------------------------------"
-      - task: forward:all:tunnels
-
   portal:image:build:
     desc: Build the portal Docker image
     cmds:
@@ -376,6 +341,41 @@ tasks:
     desc: Expose the portal on localhost:3000
     cmds:
       - kubectl -n {{.PORTAL_NAMESPACE}} port-forward {{.PORTAL_SERVICE}} {{.PORTAL_LOCAL_PORT}}:{{.PORTAL_REMOTE_PORT}}
+
+  platform:deploy:
+    desc: Deploy MLflow, LiteLLM, Catalog, UI, and Portal to kind
+    cmds:
+      - task: cluster:create
+      - task: mlflow:apply
+      - task: postgres:apply
+      - task: litellm:apply
+      - task: catalog:apply
+      - task: ui:apply
+      - task: portal:apply
+
+  platform:undeploy:
+    desc: Remove MLflow, LiteLLM, Catalog, UI, and Portal from kind
+    cmds:
+      - task: portal:undeploy
+      - task: catalog:undeploy
+      - task: litellm:undeploy
+      - task: postgres:undeploy
+      - task: mlflow:undeploy
+      - task: ui:undeploy
+
+  forward:all:
+    desc: Port-forward all services (MLflow, LiteLLM, Catalog, UI, Portal)
+    silent: true
+    cmds:
+      - |
+        echo "Port-forwarding all services..."
+        echo "----------------------------------------------------------------"
+        echo "Portal:         http://localhost:{{.PORTAL_LOCAL_PORT}}"
+        echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
+        echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
+        echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
+        echo "----------------------------------------------------------------"
+      - task: forward:all:tunnels
 
   forward:all:tunnels:
     internal: true
