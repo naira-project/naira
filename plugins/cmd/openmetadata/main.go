@@ -22,10 +22,10 @@ const (
 
 	propertyKeySource             = "source"
 	propertyKeyDescription        = "description"
-	propertyKeyFullyQualifiedName = "fullyQualifiedName"
+	propertyKeyFullyQualifiedName = "fully_qualified_name"
 	propertyKeySourceURL          = "source_url"
-	propertyKeyServiceType        = "serviceType"
-	propertyKeyTableType          = "tableType"
+	propertyKeyServiceType        = "service_type"
+	propertyKeyTableType          = "table_type"
 	propertyKeyTags               = "tags"
 	propertyKeyOwners             = "owners"
 	propertyKeyColumns            = "columns"
