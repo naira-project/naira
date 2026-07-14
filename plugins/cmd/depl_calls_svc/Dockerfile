@@ -10,7 +10,7 @@ COPY plugins/pkg/ ./plugins/pkg/
 COPY plugins/internal/ ./plugins/internal/
 COPY plugins/cmd/depl_calls_svc/ ./plugins/depl_calls_svc/
 
-RUN CGO_ENABLED=0 go build -o /out/depl_calls_svc ./plugins/depl_calls_svc
+RUN CGO_ENABLED=0 go build -trimpath -o /out/depl_calls_svc ./plugins/depl_calls_svc
 
 # --- Stage 2: Final ---
 FROM gcr.io/distroless/static-debian12:latest

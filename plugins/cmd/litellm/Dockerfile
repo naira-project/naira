@@ -10,7 +10,7 @@ COPY plugins/pkg/ ./plugins/pkg/
 COPY plugins/internal/ ./plugins/internal/
 COPY plugins/cmd/litellm/ ./plugins/litellm/
 
-RUN CGO_ENABLED=0 go build -o /out/litellm ./plugins/litellm
+RUN CGO_ENABLED=0 go build -trimpath -o /out/litellm ./plugins/litellm
 
 # --- Stage 2: Final ---
 FROM gcr.io/distroless/static-debian12:latest

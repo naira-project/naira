@@ -12,7 +12,7 @@ permissions:
   contents: read
   packages: write
   id-token: write
-  
+
 jobs:
   # ── 1. Build & push catalog image ─────────────────────────────────────────
   container-publish-catalog:
@@ -24,6 +24,9 @@ jobs:
       context: "."
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-labels: |
+        org.opencontainers.image.version=${{ github.ref_name }}
+        org.opencontainers.image.revision=${{ github.sha }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -37,6 +40,9 @@ jobs:
       context: "ui-poc"
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-labels: |
+        org.opencontainers.image.version=${{ github.ref_name }}
+        org.opencontainers.image.revision=${{ github.sha }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
