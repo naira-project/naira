@@ -5,7 +5,7 @@ name: Release Pipeline
 on:
   push:
     branches:
-      - main
+      - pr-96-verification
 
 permissions:
   contents: write
@@ -30,7 +30,7 @@ jobs:
         uses: googleapis/release-please-action@v4
         id: release
         with:
-          target-branch: main
+          target-branch: pr-96-verification
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           
@@ -78,15 +78,7 @@ jobs:
       - name: Export Target Tag
         id: set_tag
         run: |
-          if [[ "${{ steps.check_release.outputs.is_release }}" == 'true' ]]; then
-            # Output the RC tag we just manually pushed
-            echo "tag=v${{ steps.check_release.outputs.version }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ steps.release.outputs.release_created }}" == 'true' ]]; then
-            # Output the Stable tag Release Please natively created
-            echo "tag=${{ steps.release.outputs.tag_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=" >> $GITHUB_OUTPUT
-          fi
+          echo "tag=v0.12.0-ci-test" >> $GITHUB_OUTPUT
 
       - name: Update Release Body with Squashed Changelog
         if: steps.release.outputs.release_created == 'true'
@@ -103,8 +95,6 @@ jobs:
   container-publish-catalog:
     name: Publish · Catalog.
     needs: release-please
-    # Only run if the release-please job successfully output a tag
-    if: needs.release-please.outputs.target_tag != ''
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-catalog"
@@ -120,8 +110,6 @@ jobs:
   container-publish-ui:
     name: Publish · UI
     needs: release-please
-    # Only run if the release-please job successfully output a tag
-    if: needs.release-please.outputs.target_tag != ''
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-ui"
@@ -137,8 +125,6 @@ jobs:
   container-publish-portal:
     name: Publish · Portal
     needs: release-please
-    # Only run if the release-please job successfully output a tag
-    if: needs.release-please.outputs.target_tag != ''
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-portal"
@@ -154,8 +140,6 @@ jobs:
   container-publish-plugin-mlflow:
     name: Publish · Plugin MLflow
     needs: release-please
-    # Only run if the release-please job successfully output a tag
-    if: needs.release-please.outputs.target_tag != ''
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-plugin-mlflow"
@@ -170,8 +154,6 @@ jobs:
   container-publish-plugin-litellm:
     name: Publish · Plugin LiteLLM
     needs: release-please
-    # Only run if the release-please job successfully output a tag
-    if: needs.release-please.outputs.target_tag != ''
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-plugin-litellm"
@@ -186,8 +168,6 @@ jobs:
   container-publish-plugin-depl-calls-svc:
     name: Publish · Plugin Depl Calls Svc
     needs: release-please
-    # Only run if the release-please job successfully output a tag
-    if: needs.release-please.outputs.target_tag != ''
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-plugin-depl-calls-svc"
@@ -202,8 +182,6 @@ jobs:
   container-publish-plugin-fluxcd:
     name: Publish · Plugin FluxCD
     needs: release-please
-    # Only run if the release-please job successfully output a tag
-    if: needs.release-please.outputs.target_tag != ''
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-plugin-fluxcd"
