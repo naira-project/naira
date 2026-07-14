@@ -1,6 +1,11 @@
 > [!WARNING]
 > This Repository is under development and not ready for productive use. It is in an alpha stage. That means APIs and concepts may change on short notice including breaking changes or complete removal of apis.
 
+<p align="center">
+  <img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/naira-project/naira?filename=go.mod&style=flat-square&logo=go"/>
+  <img alt="License" src="https://img.shields.io/github/license/naira-project/naira?style=flat-square"/>
+  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/naira-project/naira?style=flat-square"/>
+</p>
 
 ## About this project
 
@@ -18,24 +23,67 @@ Naira helps teams:
 
 Built with and for the cloud-native ecosystem, Naira is designed to integrate closely with technologies such as **PlatformMesh**, **OpenMFP/Luigi**, **KCP**, and other components of the NeoNephos stack.
 
+## Preview
+
+<p align="center">
+  <img alt="Catalog graph view" src="docs/assets/graph.png" width="70%"/>
+  <br/>
+  <em>Catalog graph — browse assets and their relationships</em>
+</p>
+
+<p align="center">
+  <img alt="Generic table view" src="docs/assets/generic-table.png" width="70%"/>
+  <br/>
+  <em>Catalog explorer — browse all kind of assets</em>
+</p>
+
 ## Getting Started
 
 ### Prerequisites
 
-This project requires several local tools (such as `kind`, `task`,`go`). 
+This project requires several local tools: (for example `kind`, `task`,`go`).
 
 **The Recommended Way (Using mise):**
-We use [mise](https://mise.jdx.dev/) to manage tools automatically. If you have `mise` installed, simply run:
+We use [mise](https://mise.jdx.dev/) to manage tools automatically. If you have `mise` installed and activated, simply run:
 ```bash
 mise install
 ```
-Alternative Way (Manual Installation):
-If you prefer not to use mise, you can find the exact versions of all tools in the mise.toml file.
+**Alternative Way (Manual Installation):**
+If you prefer not to use mise, you can find the exact versions of all tools in the [`mise.toml`](mise.toml) file.
 
 ### Local Development
-To spin up the environment and access the services locally, follow these steps:
-- `task platform:deploy` - deploys the platform to kind
-- `task forward:all` - port-forward the main developer-facing services
+
+To spin up the full environment on your machine:
+
+1. **Deploy the platform** to a local kind cluster:
+   ```bash
+   task platform:deploy
+   ```
+   This creates a cluster, builds container images, loads them into kind, and applies all Kubernetes manifests.
+
+2. **Port-forward services** to your localhost:
+   ```bash
+   task forward:all
+   ```
+   Once executed, the terminal will display the specific local endpoints for the UI, APIs, and various backend integrations.
+
+3. **(Optional) Seed demo data:**
+   ```bash
+   task mlflow:seed
+   ```
+   Registers dummy models in MLflow so the catalog has data to display.
+
+### Repository Structure
+
+```
+├── catalog/              # Go catalog service (HTTP API, plugin manager)
+├── plugins/              # Collector plugins (mlflow, litellm, fluxcd, depl_calls_svc)
+├── ui-poc/               # React/TypeScript UI
+├── naira-openmfp-portal/ # OpenMFP Portal (This is the backbone for future UI plugins)
+├── deploy/               # Helm charts + dev environment (kind, k8s manifests)
+├── docs/                 # Documentation
+└── Taskfile.yml          # Root developer entrypoints
+```
 
 ## Support, Feedback, Contributing
 
