@@ -10,7 +10,10 @@
       "prerelease": true,
       "versioning": "prerelease",
       "prerelease-type": "rc",
-      "skip-github-release": true
+      "skip-github-release": true,
+      "extra-files": [
+        "version.txt"
+      ]
     }
   }
 }

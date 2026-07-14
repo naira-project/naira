@@ -96,7 +96,7 @@ jobs:
           VERSION=${{ steps.release.outputs.tag_name }}
           VERSION_BARE=${VERSION#v}
           # Extract the section for this version from CHANGELOG.md (content between this header and the next)
-          NOTES=$(awk "/^## \[${VERSION_BARE}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+          NOTES=$(awk "/^## \[${VERSION_BARE}\]/{found=1; next} found && /^## \[[0-9]+[0-9]*\.[0-9]+[0-9]*\.[0-9]+[0-9]*\]/{exit} found{print}" CHANGELOG.md)
           gh release edit "$VERSION" --notes "$NOTES"
 
   # ── 2. Build & Push Artifacts (Only runs if a release tag was created) ────     
@@ -105,13 +105,14 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -121,13 +122,14 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-ui"
       dockerfile: "ui-poc/Dockerfile"
       context: "ui-poc"
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -137,13 +139,14 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-portal"
       dockerfile: "naira-openmfp-portal/Dockerfile"
       context: "naira-openmfp-portal"
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -153,13 +156,14 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-plugin-mlflow"
       dockerfile: "plugins/cmd/mlflow/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -168,13 +172,14 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-plugin-litellm"
       dockerfile: "plugins/cmd/litellm/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -183,13 +188,14 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-plugin-depl-calls-svc"
       dockerfile: "plugins/cmd/depl_calls_svc/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -198,12 +204,13 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
     with:
       image-name: "naira-plugin-fluxcd"
       dockerfile: "plugins/cmd/fluxcd/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
       push: true
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}

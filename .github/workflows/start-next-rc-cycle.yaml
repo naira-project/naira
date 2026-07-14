@@ -9,6 +9,8 @@ on:
         description: 'The stable release tag just published (e.g., v1.2.0)'
         required: true
         type: string
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -22,10 +24,20 @@ jobs:
         with:
           ref: main
 
-      - name: Set Target Tag
-        run: echo "TAG_NAME=${{ inputs.release_tag }}" >> $GITHUB_ENV
-          
+      - name: Check stable release
+        id: check
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
+          if [[ "$TAG" == *-rc* ]]; then
+            echo "is_stable=false" >> $GITHUB_OUTPUT
+            echo "Prerelease tag ($TAG) skipped."
+          else
+            echo "is_stable=true" >> $GITHUB_OUTPUT
+            echo "TAG_NAME=$TAG" >> $GITHUB_ENV
+          fi
+
       - name: Revert Config to Prerelease & Silent
+        if: steps.check.outputs.is_stable == 'true'
         run: |
           # Remove "release-as" and inject all prerelease, silent, and changelog-skipping settings back
           jq '
@@ -36,8 +48,9 @@ jobs:
             .packages["."]."skip-github-release" = true
           ' release-please-config.json > tmp.json
           mv tmp.json release-please-config.json
-          
+
       - name: Create Reset PR
+        if: steps.check.outputs.is_stable == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
