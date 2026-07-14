@@ -85,6 +85,22 @@ To spin up the full environment on your machine:
 └── Taskfile.yml          # Root developer entrypoints
 ```
 
+## Architecture
+
+Naira uses a plugin-based collector model. Plugins run in your Kubernetes cluster, pull data from external systems (MLflow, LiteLLM, FluxCD, etc.), and push it to the catalog service. The UI then consumes the catalog API to visualize your platform landscape.
+
+```mermaid
+flowchart LR
+    ML["MLflow"] --> P1["mlflow\nplugin"]
+    LT["LiteLLM"] --> P2["litellm\nplugin"]
+    FX["FluxCD"] --> P3["fluxcd\nplugin"]
+    DP["Any Tool"] --> P4["custom\nplugin"]
+
+    P1 & P2 & P3 & P4 --> CAT["Naira Catalog\n(Go HTTP API)"]
+
+    CAT --> UI["React UI"]
+```
+
 ## Support, Feedback, Contributing
 
 This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/naira-project/naira/issues). Contribution and feedback are encouraged and always welcome. For more information about how to contribute, the project structure, as well as additional contribution information, see our [Contribution Guidelines](CONTRIBUTING.md).
