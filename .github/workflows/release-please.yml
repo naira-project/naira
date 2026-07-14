@@ -95,7 +95,7 @@ jobs:
   container-publish-catalog:
     name: Publish · Catalog.
     needs: release-please
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
@@ -110,7 +110,7 @@ jobs:
   container-publish-ui:
     name: Publish · UI
     needs: release-please
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-ui"
       dockerfile: "ui-poc/Dockerfile"
@@ -125,7 +125,7 @@ jobs:
   container-publish-portal:
     name: Publish · Portal
     needs: release-please
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-portal"
       dockerfile: "naira-openmfp-portal/Dockerfile"
@@ -140,7 +140,7 @@ jobs:
   container-publish-plugin-mlflow:
     name: Publish · Plugin MLflow
     needs: release-please
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-mlflow"
       dockerfile: "plugins/cmd/mlflow/Dockerfile"
@@ -154,7 +154,7 @@ jobs:
   container-publish-plugin-litellm:
     name: Publish · Plugin LiteLLM
     needs: release-please
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-litellm"
       dockerfile: "plugins/cmd/litellm/Dockerfile"
@@ -168,7 +168,7 @@ jobs:
   container-publish-plugin-depl-calls-svc:
     name: Publish · Plugin Depl Calls Svc
     needs: release-please
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-depl-calls-svc"
       dockerfile: "plugins/cmd/depl_calls_svc/Dockerfile"
@@ -182,7 +182,7 @@ jobs:
   container-publish-plugin-fluxcd:
     name: Publish · Plugin FluxCD
     needs: release-please
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-fluxcd"
       dockerfile: "plugins/cmd/fluxcd/Dockerfile"
