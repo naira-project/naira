@@ -11,7 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/naira-project/naira/catalog/internal/auth"
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
+	"github.com/naira-project/naira/catalog/internal/auth/openfga"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
@@ -23,7 +24,7 @@ const (
 	fgaGetRelation = "get"
 )
 
-func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakConfig, fgaClient auth.Authorizer) http.Handler {
+func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config, fgaClient openfga.Authorizer) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
@@ -36,7 +37,7 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc auth.KeycloakCon
 	})
 
 	router.Route("/v1", func(r chi.Router) {
-		r.Use(auth.NewAuthMiddleware(kc))
+		r.Use(keycloak.NewAuthMiddleware(kc))
 
 		r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
 			response := service.RunAllPlugins(r.Context())

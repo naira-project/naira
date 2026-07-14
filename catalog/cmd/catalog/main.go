@@ -10,7 +10,8 @@ import (
 	"syscall"
 
 	"github.com/Nerzal/gocloak/v13"
-	"github.com/naira-project/naira/catalog/internal/auth"
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
+	"github.com/naira-project/naira/catalog/internal/auth/openfga"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
 	"github.com/naira-project/naira/catalog/internal/pluginmanager"
@@ -30,15 +31,15 @@ func main() {
 	}
 	defer cleanup()
 
-	fgaClient, err := auth.SetupOpenfgaClient(config.OpenfgaBaseURL, config.OpenfgaStoreName)
+	fgaClient, err := openfga.NewClient(config.OpenfgaBaseURL, config.OpenfgaStoreName)
 	if err != nil {
 		logger.Fatalf("OpenFGA client could not be configured: %v", err)
 	}
 
-	keycloak := gocloak.NewClient(config.KeycloakBaseURL)
+	keycloakClient := gocloak.NewClient(config.KeycloakBaseURL)
 	service := catalog.NewService(catalog.NewMemoryStore(), registeredPlugins, logger, fgaClient)
-	router := httpapi.NewRouter(service, logger, auth.KeycloakConfig{
-		Client: keycloak,
+	router := httpapi.NewRouter(service, logger, keycloak.Config{
+		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 	}, fgaClient)
 	server := &http.Server{

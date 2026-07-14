@@ -1,4 +1,4 @@
-package auth
+package keycloak
 
 import (
 	"context"
@@ -17,30 +17,21 @@ type TokenDecoder interface {
 	DecodeAccessToken(ctx context.Context, accessToken, realm string) (*jwt.Token, *jwt.MapClaims, error)
 }
 
-// KeycloakConfig holds the client and realm needed for token verification.
-type KeycloakConfig struct {
+// Config holds the client and realm needed for token verification.
+type Config struct {
 	Client TokenDecoder
 	Realm  string
 }
 
 // TokenClaims holds the user identity extracted from a verified Keycloak JWT.
 type TokenClaims struct {
-	Sub        string
+	UserID     string
 	Email      string
 	Username   string
 	RealmRoles []string
 }
 
-type keycloakClaims struct {
-	jwt.RegisteredClaims
-	Email             string `json:"email"`
-	PreferredUsername string `json:"preferred_username"`
-	RealmAccess       struct {
-		Roles []string `json:"roles"`
-	} `json:"realm_access"`
-}
-
-func NewAuthMiddleware(kc KeycloakConfig) func(http.Handler) http.Handler {
+func NewAuthMiddleware(kc Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -49,12 +40,12 @@ func NewAuthMiddleware(kc KeycloakConfig) func(http.Handler) http.Handler {
 				return
 			}
 
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			before, after, found := strings.Cut(authHeader, " ")
+			if !found || !strings.EqualFold(before, "Bearer") {
 				http.Error(w, "authorization header must be Bearer {token}", http.StatusUnauthorized)
 				return
 			}
-			tokenString := parts[1]
+			tokenString := after
 
 			_, rawClaims, err := kc.Client.DecodeAccessToken(r.Context(), tokenString, kc.Realm)
 			if err != nil {
@@ -77,7 +68,7 @@ func ClaimsFromContext(ctx context.Context) (TokenClaims, bool) {
 func parseTokenClaims(rawClaims *jwt.MapClaims) TokenClaims {
 	claims := *rawClaims
 	tc := TokenClaims{
-		Sub:      stringClaim(claims, "sub"),
+		UserID:   stringClaim(claims, "sub"),
 		Email:    stringClaim(claims, "email"),
 		Username: stringClaim(claims, "preferred_username"),
 	}

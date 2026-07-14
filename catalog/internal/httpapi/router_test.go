@@ -12,7 +12,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/naira-project/naira/catalog/internal/auth"
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/stretchr/testify/assert"
@@ -95,7 +95,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 		map[string]catalog.Plugin{"seed": stubPlugin{}},
 		log.New(io.Discard, "", 0),
 		nil,
-	), log.New(io.Discard, "", 0), auth.KeycloakConfig{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
+	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
 
 	tests := []struct {
 		name               string
@@ -241,7 +241,7 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 		map[string]catalog.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}},
 		log.New(io.Discard, "", 0),
 		nil,
-	), log.New(io.Discard, "", 0), auth.KeycloakConfig{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
+	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
 
 	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil))
 	rec := httptest.NewRecorder()
