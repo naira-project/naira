@@ -1,4 +1,4 @@
-import { fetchNodes, fetchRelations, nodeProps, NodeResource, RelationResource } from './catalogApi';
+import { fetchNodes, fetchRelations, nodeProps, NodeResource } from './catalogApi';
 
 /**
  * Parse a node path into its structural segments.

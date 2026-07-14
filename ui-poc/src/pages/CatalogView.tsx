@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, RefreshCw, Layers } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
-import { discoverKinds, computeRelationSummaries, RelationSummary } from '../lib/kindUtils';
+import { useKinds } from '../hooks/useKinds';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
+import { useRelationSummaries } from '../hooks/useRelationSummaries';
+import { useCatalogSync } from '../hooks/useCatalogSync';
 import { NodeResource } from '../lib/catalogApi';
 import KindSelector from '../components/KindSelector';
 import GenericTable from '../components/GenericTable';
@@ -16,55 +18,19 @@ import GenericTable from '../components/GenericTable';
  */
 export default function CatalogView() {
   const navigate = useNavigate();
-  const [kinds, setKinds] = useState<string[]>([]);
-  const [kindsLoading, setKindsLoading] = useState(true);
-  const [kindsError, setKindsError] = useState<string | null>(null);
-  const [activeKind, setActiveKind] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+
+  // Kind discovery & selection
+  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds} = useKinds();
 
   // Fetch nodes for the active kind
   const { nodes, loading: nodesLoading, error: nodesError } = useCatalogNodes(activeKind ?? '');
 
-  // Relation summaries — fetched when nodes change
-  const [relationSummaries, setRelationSummaries] = useState<Map<string, RelationSummary>>(new Map());
+  // Relation summaries — computed whenever nodes change
+  const { relationSummaries } = useRelationSummaries(nodes);
 
-  useEffect(() => {
-    if (nodes.length === 0) {
-      setRelationSummaries(new Map());
-      return;
-    }
-
-    computeRelationSummaries(nodes)
-      .then((summaries) => {
-        setRelationSummaries(summaries);
-      })
-      .catch(() => {
-        setRelationSummaries(new Map());
-      });
-  }, [nodes]);
-
-  // Discover kinds on mount
-  const loadKinds = () => {
-    setKindsLoading(true);
-    setKindsError(null);
-    discoverKinds()
-      .then((result) => {
-        setKinds(result);
-        // Auto-select first kind if none selected
-        if (!activeKind && result.length > 0) {
-          setActiveKind(result[0]);
-        }
-        setKindsLoading(false);
-      })
-      .catch(() => {
-        setKindsError('Failed to discover kinds');
-        setKindsLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    loadKinds();
-  }, []);
+  // Catalog sync — triggers plugin execution
+  const { syncing, syncMessage, syncError, handleSync } = useCatalogSync(refreshKinds);
 
   // Filter kinds by search
   const filteredKinds = kinds.filter((k) =>
@@ -73,38 +39,6 @@ export default function CatalogView() {
 
   const handleSelect = (node: NodeResource) => {
     navigate(`/catalog/${encodeURIComponent(activeKind!)}/${encodeURIComponent(node.path)}`);
-  };
-
-  // Sync catalog — triggers plugin execution
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncMessage(null);
-    setSyncError(null);
-
-    try {
-      const response = await fetch('/v1/plugins:run', { method: 'POST' });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to synchronize data');
-      }
-
-      const results = Array.isArray(payload.results) ? payload.results : [];
-      const errorCount = results.filter((result: { error?: string }) => typeof result.error === 'string' && result.error.length > 0).length;
-      const successCount = results.length - errorCount;
-      setSyncMessage(errorCount > 0 ? `Synced ${successCount} plugin(s), ${errorCount} error(s)` : `Synced ${successCount} plugin(s)`);
-
-      // Refresh kinds after sync
-      loadKinds();
-    } catch (error) {
-      setSyncError(error instanceof Error ? error.message : 'Failed to synchronize data');
-    } finally {
-      setSyncing(false);
-    }
   };
 
   return (
@@ -144,7 +78,7 @@ export default function CatalogView() {
             {kindsError && (
               <div className="mb-4 flex items-center gap-2 text-sm text-red-500">
                 <span>{kindsError}</span>
-                <button onClick={loadKinds} className="underline hover:no-underline">
+                <button onClick={refreshKinds} className="underline hover:no-underline">
                   Retry
                 </button>
               </div>
