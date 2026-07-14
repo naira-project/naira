@@ -8,13 +8,14 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  artifact-metadata: write
 
 jobs:
   trigger-promotion:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Update Release Please Config & Manifest
         run: |
           # Compute the stable target from the manifest (strip -rc.* suffix).
@@ -36,7 +37,7 @@ jobs:
             .packages["."]["release-as"] = $rv
           ' release-please-config.json > tmp-config.json
           mv tmp-config.json release-please-config.json
-          
+
       - name: Create Promotion PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -44,14 +45,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b chore/promote-to-stable
-          
+
           # 2. Use a 'fix:' prefix instead of 'chore:'. 
           # This acts as a user-facing commit to naturally wake up Release Please.
           # and perfectly squash the CHANGELOG.md RC entries into a single Stable entry.
           git commit -a -m "fix: finalize stable release promotion"
-          
+
           git push -f -u origin chore/promote-to-stable
-          
+
           # 3. Create the PR without the override footer
           gh pr create \
             --title "fix: finalize stable release promotion" \
