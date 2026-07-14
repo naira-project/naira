@@ -4,7 +4,7 @@ Authentication and authorization are two of the main concepts which would connec
 
 ## Prerequisites
 
-A running Platform Mesh cluster. This could be a local Platform Mesh cluster (you can create a Platform Mesh cluster with kind through [this link](https://platform-mesh.io/main/how-to-guides/set-up-platform-mesh-locally)) or the shared cluster which we are using. 
+A running Platform Mesh cluster. This could be a local Platform Mesh cluster (you can create a Platform Mesh cluster with kind through [this link](https://platform-mesh.io/main/how-to-guides/set-up-platform-mesh-locally)) or the shared cluster which we are using.
 
 ## Setup
 

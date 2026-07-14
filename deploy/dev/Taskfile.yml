@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  CLUSTER_NAME: platform-mesh
+  CLUSTER_NAME: naira-idp
   PORTAL_DIR: ../../naira-openmfp-portal
   UI_DIR: ../../ui-poc
   UI_IMAGE: ui:local
@@ -47,8 +47,15 @@ vars:
   CATALOG_REMOTE_PORT: '8090'
   PORTAL_IMAGE: portal:local
   PORTAL_NAMESPACE: idp-system
-  PORTAL_MANIFEST: infra/kubernetes/portal.yaml
+  PORTAL_MANIFEST: infra/kubernetes/portal.yaml # ../shared-cluster/infra/kubernetes/portal.yaml if portal is in the shared cluster of Platform Mesh (or in a local cluster of Platform Mesh)
   KEYCLOAK_REALM: naira
+  KEYCLOAK_MODE: local # or platform-mesh if you want to work with the shared cluster (or your local Platform Mesh cluster)
+  KEYCLOAK_NAMESPACE: keycloak
+  KEYCLOAK_MANIFEST: infra/kubernetes/keycloak.yaml
+  KEYCLOAK_REALM_IMPORT: infra/keycloak/naira-realm.json
+  KEYCLOAK_SERVICE: svc/keycloak
+  KEYCLOAK_LOCAL_PORT: '8080'
+  KEYCLOAK_REMOTE_PORT: '8080'
   PORTAL_SERVICE: svc/portal
   PORTAL_LOCAL_PORT: '3000'
   PORTAL_REMOTE_PORT: '3000'
@@ -86,6 +93,7 @@ tasks:
           kind delete cluster --name {{.CLUSTER_NAME}} >/dev/null 2>&1 || true
           kind create cluster --name {{.CLUSTER_NAME}} --config {{.KIND_CONFIG}}
         fi
+      - kubectl config use-context kind-{{.CLUSTER_NAME}}
 
   cluster:delete:
     desc: Delete the local kind cluster
@@ -169,6 +177,41 @@ tasks:
     desc: Remove OpenFGA from kind
     cmds:
       - helm uninstall {{.OPENFGA_RELEASE}} -n {{.OPENFGA_NAMESPACE}} || true
+
+  keycloak:deploy:
+    desc: Deploy a local Keycloak (KEYCLOAK_MODE=local) to kind. The realm configurations are seeded from infra/keycloak/naira-realm.json
+    deps:
+      - cluster:create
+    cmds:
+      - task: keycloak:apply
+
+  keycloak:apply:
+    internal: true
+    cmds:
+      - |
+        if [ "{{.KEYCLOAK_MODE}}" != "local" ]; then
+          echo "KEYCLOAK_MODE={{.KEYCLOAK_MODE}}, skipping local Keycloak deployment"
+          exit 0
+        fi
+        kubectl create namespace {{.KEYCLOAK_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create configmap keycloak-realm-import -n {{.KEYCLOAK_NAMESPACE}} \
+          --from-file=naira-realm.json={{.KEYCLOAK_REALM_IMPORT}} \
+          --dry-run=client -o yaml | kubectl apply -f -
+        kubectl apply -f {{.KEYCLOAK_MANIFEST}}
+        kubectl -n {{.KEYCLOAK_NAMESPACE}} rollout restart deploy/keycloak
+        kubectl -n {{.KEYCLOAK_NAMESPACE}} rollout status deploy/keycloak --timeout=180s
+        kubectl -n {{.KEYCLOAK_NAMESPACE}} get pods
+
+  keycloak:undeploy:
+    desc: Remove the local Keycloak from kind
+    cmds:
+      - kubectl delete -f {{.KEYCLOAK_MANIFEST}} --ignore-not-found
+      - kubectl delete configmap keycloak-realm-import -n {{.KEYCLOAK_NAMESPACE}} --ignore-not-found
+
+  keycloak:port-forward:
+    desc: Expose the local Keycloak on localhost:8080
+    cmds:
+      - kubectl -n {{.KEYCLOAK_NAMESPACE}} port-forward {{.KEYCLOAK_SERVICE}} {{.KEYCLOAK_LOCAL_PORT}}:{{.KEYCLOAK_REMOTE_PORT}}
 
   litellm:deploy:
     desc: Deploy LiteLLM to kind
@@ -270,6 +313,7 @@ tasks:
       - cluster:create
     cmds:
       - task: openfga:apply
+      - task: keycloak:apply
       - task: catalog:apply
 
   catalog:apply:
@@ -281,7 +325,14 @@ tasks:
       - task: depl-calls-svc:image:load
       - task: fluxcd:image:load
       - |
-        sed "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" {{.CATALOG_MANIFEST}} | kubectl apply -f -
+        if [ "{{.KEYCLOAK_MODE}}" = "local" ]; then
+          KEYCLOAK_BASE_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}"
+        else
+          KEYCLOAK_BASE_URL="http://keycloak.platform-mesh-system.svc.cluster.local:80/keycloak"
+        fi
+        sed -e "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" \
+            -e "s|__KEYCLOAK_BASE_URL__|${KEYCLOAK_BASE_URL}|" \
+            {{.CATALOG_MANIFEST}} | kubectl apply -f -
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods
 
@@ -334,22 +385,24 @@ tasks:
       - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}
 
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, OpenFGA, Catalog, UI, and Portal to kind
+    desc: Deploy MLflow, LiteLLM, OpenFGA, Keycloak (local mode), Catalog, UI, and Portal to kind
     cmds:
       - task: cluster:create
       - task: mlflow:apply
       - task: postgres:apply
       - task: litellm:apply
       - task: openfga:apply
+      - task: keycloak:apply
       - task: catalog:apply
       - task: ui:apply
       - task: portal:apply
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, OpenFGA, Catalog, UI, and Portal from kind
+    desc: Remove MLflow, LiteLLM, OpenFGA, Keycloak, Catalog, UI, and Portal from kind
     cmds:
       - task: portal:undeploy
       - task: catalog:undeploy
+      - task: keycloak:undeploy
       - task: openfga:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
@@ -367,6 +420,7 @@ tasks:
         echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
         echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
+        echo "Keycloak:       http://localhost:{{.KEYCLOAK_LOCAL_PORT}} (local mode only)"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
 
@@ -393,14 +447,27 @@ tasks:
     internal: true
     cmds:
       - task: portal:image:load
+      - task: keycloak:apply
       - |
-        kubectl create configmap platform-mesh-ca -n {{.PORTAL_NAMESPACE}} \
-          --from-literal=ca.crt="$(kubectl get secret domain-certificate -n platform-mesh-system -o jsonpath='{.data.ca\.crt}' | base64 -d)" \
-          --dry-run=client -o yaml | kubectl apply -f -
+        if [ "{{.KEYCLOAK_MODE}}" != "local" ]; then
+          kubectl create configmap platform-mesh-ca -n {{.PORTAL_NAMESPACE}} \
+            --from-literal=ca.crt="$(kubectl get secret domain-certificate -n platform-mesh-system -o jsonpath='{.data.ca\.crt}' | base64 -d)" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        fi
       - |
-        TRAEFIK_CLUSTER_IP=$(kubectl get svc traefik -n default -o jsonpath='{.spec.clusterIP}')
+        if [ "{{.KEYCLOAK_MODE}}" = "local" ]; then
+          AUTH_SERVER_URL="http://localhost:{{.KEYCLOAK_LOCAL_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
+          TOKEN_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
+          TRAEFIK_CLUSTER_IP="127.0.0.1"
+        else
+          AUTH_SERVER_URL="https://portal.localhost:8443/keycloak/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
+          TOKEN_URL="https://portal.localhost:8443/keycloak/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
+          TRAEFIK_CLUSTER_IP=$(kubectl get svc traefik -n default -o jsonpath='{.spec.clusterIP}' 2>/dev/null || echo "127.0.0.1")
+        fi
         sed -e "s/__TRAEFIK_CLUSTER_IP__/${TRAEFIK_CLUSTER_IP}/" \
-            -e "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" \
+            -e "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/g" \
+            -e "s|__AUTH_SERVER_URL_KEYCLOAK__|${AUTH_SERVER_URL}|" \
+            -e "s|__TOKEN_URL_KEYCLOAK__|${TOKEN_URL}|" \
             {{.PORTAL_MANIFEST}} | kubectl apply -f -
       - kubectl -n {{.PORTAL_NAMESPACE}} rollout status deploy/portal --timeout=180s
       - kubectl -n {{.PORTAL_NAMESPACE}} get pods
@@ -417,7 +484,7 @@ tasks:
 
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward, keycloak:port-forward]
   
    # Reusable "Macro" Tasks
   _docker:build:

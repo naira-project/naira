@@ -189,8 +189,9 @@ spec:
               value: "8090"
             - name: PLUGIN_ADDRESSES
               value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,fluxcd=localhost:50054"
+            # KEYCLOAK_BASE_URL is templated in Taskfile.yaml in /deploy/dev based on KEYCLOAK_MODE
             - name: KEYCLOAK_BASE_URL
-              value: http://keycloak.platform-mesh-system.svc.cluster.local:80/keycloak
+              value: __KEYCLOAK_BASE_URL__
             # KEYCLOAK_REALM variable must be changed in Taskfile.yaml in /deploy/dev
             - name: KEYCLOAK_REALM
               value: __KEYCLOAK_REALM__
