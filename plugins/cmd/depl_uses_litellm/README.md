@@ -2,7 +2,11 @@
 
 depl\_uses\_litellm scans k8s Deployments for LiteLLM API keys stored in referenced Secrets, then queries each configured LiteLLM host to discover which models that key can access, and emits deployment→model "uses\_model" relations.
 
-Currently, the plugin emits Nodes for all Deployments with at least one secret with value matching the configured API key regexp (DEPL\_USES\_LITELLM\_APIKEY\_REGEXP), even if the key is not verified to be found in any of the configured LiteLLM hosts. This is intended to help detect potentially missing LiteLLM host configurations. TODO(security): add option to emit only verified deployments, to avoid leaking parts of accidentally matched secrets.
+## Known Issues {#hdr-Known_Issues}
+
+Currently, the plugin emits Nodes for all Deployments with at least one secret with value matching the configured API key regexp (DEPL\_USES\_LITELLM\_APIKEY\_REGEXP), even if the key is not verified to be found in any of the configured LiteLLM hosts. This is intended to help detect potentially missing LiteLLM host configurations. However, it can accidentally leak some information about Deployments having secrets with values accidentally matching the regexp. TODO(security): add option to emit only verified deployments, to avoid leaking parts of accidentally matched secrets.
+
+Currently, for env keys referenced through ".valueFrom.secretKeyRef.name", all values in the referenced secret are scanned, instead of only scanning the specific named env variable.
 
 ## Environment Variables {#hdr-Environment_Variables}
 

@@ -3,12 +3,20 @@
 // which models that key can access, and emits deployment→model "uses_model"
 // relations.
 //
+// # Known Issues
+//
 // Currently, the plugin emits Nodes for all Deployments with at least one
 // secret with value matching the configured API key regexp
 // (DEPL_USES_LITELLM_APIKEY_REGEXP), even if the key is not verified to be
 // found in any of the configured LiteLLM hosts. This is intended to help
-// detect potentially missing LiteLLM host configurations.
+// detect potentially missing LiteLLM host configurations. However, it can
+// accidentally leak some information about Deployments having secrets with
+// values accidentally matching the regexp.
 // TODO(security): add option to emit only verified deployments, to avoid leaking parts of accidentally matched secrets.
+//
+// Currently, for env keys referenced through ".valueFrom.secretKeyRef.name",
+// all values in the referenced secret are scanned, instead of only scanning
+// the specific named env variable.
 //
 // # Environment Variables
 //
