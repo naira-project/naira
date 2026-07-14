@@ -88,17 +88,6 @@ jobs:
             echo "tag=" >> $GITHUB_OUTPUT
           fi
 
-      - name: Update Release Body with Squashed Changelog
-        if: steps.release.outputs.release_created == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION=${{ steps.release.outputs.tag_name }}
-          VERSION_BARE=${VERSION#v}
-          # Extract the section for this version from CHANGELOG.md (content between this header and the next)
-          NOTES=$(awk "/^## \[${VERSION_BARE}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
-          gh release edit "$VERSION" --notes "$NOTES"
-
   # ── 2. Build & Push Artifacts (Only runs if a release tag was created) ────
   container-publish-catalog:
     name: Publish · Catalog.
