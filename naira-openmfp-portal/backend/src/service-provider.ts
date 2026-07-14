@@ -44,7 +44,7 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
                 label: 'Dashboard',
                 entityType: 'naira',
                 hideFromNav: false,
-                url: `${UI_BASE_URL}`,
+                url: UI_BASE_URL,
                 loadingIndicator: { enabled: false },
               }
             ],
