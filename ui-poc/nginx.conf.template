@@ -1,0 +1,23 @@
+server {
+    listen 80;
+    server_name _;
+
+    resolver ${NAMESERVER} valid=10s ipv6=off;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location /v1/ {
+        set $catalog_upstream http://catalog.idp-system.svc.cluster.local:8090;
+        proxy_pass $catalog_upstream;
+    }
+
+    location /assets/content-configuration.json {
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

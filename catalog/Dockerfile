@@ -1,32 +1,24 @@
-FROM --platform=$BUILDPLATFORM golang:1.26 AS build
+# --- Stage 1: Build ---
+FROM golang:1.26-alpine AS builder
 
-WORKDIR /src
-
-ARG TARGETOS
-ARG TARGETARCH
+WORKDIR /app
 
 COPY go.mod go.sum ./
-COPY cmd ./cmd
-COPY internal ./internal
-COPY pluginapi ./pluginapi
+RUN go mod download
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
-    go build \
-    -trimpath \
-    -o /out/catalog ./cmd/catalog
+COPY catalog/internal/ ./catalog/internal/
+COPY plugins/pkg/pluginapi/ ./plugins/pkg/pluginapi/
+COPY catalog/cmd/catalog/ ./catalog/cmd/catalog/
 
-FROM gcr.io/distroless/static-debian12
+RUN CGO_ENABLED=0 go build -trimpath -o /out/catalog ./catalog/cmd/catalog
 
-ARG VERSION=dev
-ARG COMMIT=unknown
-ARG SOURCE=https://github.com/naira-project/naira
+# --- Stage 2: Final ---
+FROM gcr.io/distroless/static-debian12:latest
 
-LABEL org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${COMMIT}" \
-      org.opencontainers.image.source="${SOURCE}"
-
-COPY --from=build /out/catalog /catalog
+COPY --from=builder /out/catalog /catalog
 
 EXPOSE 8090
+
+USER nonroot:nonroot
 
 ENTRYPOINT ["/catalog"]
