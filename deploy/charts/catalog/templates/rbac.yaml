@@ -1,0 +1,58 @@
+{{- if and .Values.rbac.create .Values.rbac.appIdentities.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "catalog.appIdentitiesRoleName" . }}
+  labels:
+    {{- include "catalog.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["naira.io"]
+    resources: ["appidentities"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "catalog.appIdentitiesRoleName" . }}
+  labels:
+    {{- include "catalog.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "catalog.appIdentitiesRoleName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "catalog.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if and .Values.rbac.create .Values.rbac.deplCallsSvc.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "catalog.deplCallsSvcRoleName" . }}
+  labels:
+    {{- include "catalog.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "catalog.deplCallsSvcRoleName" . }}
+  labels:
+    {{- include "catalog.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "catalog.deplCallsSvcRoleName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "catalog.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
