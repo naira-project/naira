@@ -101,7 +101,6 @@ jobs:
       dockerfile: "catalog/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
-      push: true
       image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -116,7 +115,6 @@ jobs:
       dockerfile: "ui-poc/Dockerfile"
       context: "ui-poc"
       platforms: "linux/amd64,linux/arm64"
-      push: true
       image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -131,7 +129,6 @@ jobs:
       dockerfile: "naira-openmfp-portal/Dockerfile"
       context: "naira-openmfp-portal"
       platforms: "linux/amd64,linux/arm64"
-      push: true
       image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -146,7 +143,6 @@ jobs:
       dockerfile: "plugins/cmd/mlflow/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
-      push: true
       image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -160,7 +156,6 @@ jobs:
       dockerfile: "plugins/cmd/litellm/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
-      push: true
       image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -174,7 +169,6 @@ jobs:
       dockerfile: "plugins/cmd/depl_calls_svc/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
-      push: true
       image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
@@ -188,7 +182,6 @@ jobs:
       dockerfile: "plugins/cmd/fluxcd/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
-      push: true
       image-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
