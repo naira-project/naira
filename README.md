@@ -67,6 +67,12 @@ To spin up the full environment on your machine:
    ```
    Once executed, the terminal will display the specific local endpoints for the UI, APIs, and various backend integrations.
 
+3. **Open the UI** — once port-forwarding is running, go to:
+   ```
+   http://localhost:3001
+   ```
+   You should see the Naira dashboard.
+
 ### Repository Structure
 
 ```
