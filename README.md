@@ -67,17 +67,11 @@ To spin up the full environment on your machine:
    ```
    Once executed, the terminal will display the specific local endpoints for the UI, APIs, and various backend integrations.
 
-3. **(Optional) Seed demo data:**
-   ```bash
-   task mlflow:seed
-   ```
-   Registers dummy models in MLflow so the catalog has data to display.
-
 ### Repository Structure
 
 ```
 ├── catalog/              # Go catalog service (HTTP API, plugin manager)
-├── plugins/              # Collector plugins (mlflow, litellm, fluxcd, depl_calls_svc)
+├── plugins/              # Collector plugins (mlflow, litellm, fluxcd, ...)
 ├── ui-poc/               # React/TypeScript UI
 ├── naira-openmfp-portal/ # OpenMFP Portal (This is the backbone for future UI plugins)
 ├── deploy/               # Helm charts + dev environment (kind, k8s manifests)
@@ -87,7 +81,7 @@ To spin up the full environment on your machine:
 
 ## Architecture
 
-Naira uses a plugin-based collector model. Plugins run in your Kubernetes cluster, pull data from external systems (MLflow, LiteLLM, FluxCD, etc.), and push it to the catalog service. The UI then consumes the catalog API to visualize your platform landscape.
+Naira uses a plugin-based collector model. Plugins run in your Kubernetes cluster, pull data from external systems (MLflow, LiteLLM, FluxCD, etc.), and push it to the catalog service. The UI then consumes the catalog API to visualize your platform landscape. For more details, take a look at the [docs](docs) and the [architecture repo](https://github.com/naira-project/architecture)
 
 ```mermaid
 flowchart LR
@@ -98,7 +92,7 @@ flowchart LR
 
     P1 & P2 & P3 & P4 --> CAT["Naira Catalog\n(Go HTTP API)"]
 
-    CAT --> UI["React UI"]
+    CAT --> UI["UI"]
 ```
 
 ## Support, Feedback, Contributing
