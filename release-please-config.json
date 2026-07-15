@@ -3,10 +3,9 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "prerelease": true,
+      "prerelease": false,
       "versioning": "prerelease",
-      "prerelease-type": "rc",
-      "skip-github-release": true
+      "release-as": "0.0.2"
     }
   }
 }
