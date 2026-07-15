@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Start Next RC Cycle
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'The stable release tag just published (e.g., v1.2.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  reset-to-rc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set Target Tag
+        run: echo "TAG_NAME=${{ inputs.release_tag }}" >> $GITHUB_ENV
+          
+      - name: Revert Config to Prerelease & Silent
+        run: |
+          # Remove "release-as" and inject all prerelease, silent, and changelog-skipping settings back
+          jq '
+            del(.packages["."]."release-as") | 
+            .packages["."].versioning = "prerelease" | 
+            .packages["."].prerelease = true | 
+            .packages["."]."prerelease-type" = "rc" | 
+            .packages["."]."skip-github-release" = true
+          ' release-please-config.json > tmp.json
+          mv tmp.json release-please-config.json
+          
+      - name: Create Reset PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Branch name based on tag
+          BRANCH_NAME="chore/start-next-rc-${TAG_NAME}"
+          
+          git checkout -b $BRANCH_NAME
+          git commit -am "chore: start next release candidate cycle after ${TAG_NAME}"
+          
+          # Force push to safely overwrite if a branch for this tag already exists
+          git push -f -u origin $BRANCH_NAME
+          
+          # Create PR, ignoring failure if one is already open
+          gh pr create \
+            --title "chore: start next release candidate cycle after ${TAG_NAME}" \
+            --body "Merging this PR will re-enable prerelease configuration and silence the changelog so Release Please starts generating silent RC builds for the next version." \
+            --base main || true
