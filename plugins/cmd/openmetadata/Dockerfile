@@ -19,7 +19,7 @@ FROM gcr.io/distroless/static-debian12:latest
 
 COPY --from=builder /out/plugin /plugin
 
-EXPOSE 50055
+EXPOSE 50051
 
 USER nonroot:nonroot
 
