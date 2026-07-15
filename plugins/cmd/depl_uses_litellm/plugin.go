@@ -33,7 +33,7 @@
 //   - DEPL_USES_LITELLM_HTTP_TIMEOUT (optional) - HTTP request timeout for
 //     LiteLLM API calls; defaults to: 5s.
 //
-//go:generate goreadme -out README.md -use-stdlib-markdown -title "depl_uses_litellm plugin"
+//go:generate bash -c "goreadme -use-stdlib-markdown -title 'depl_uses_litellm plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
 
 import (
