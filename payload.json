@@ -1,8 +1,0 @@
-{
-  "model": "minimaxai/minimax-m3",
-  "messages": [{"role":"user","content":"write a simple python HTTP webserver"}],
-  "max_tokens": 8192,
-  "temperature": 1.00,
-  "top_p": 0.95,
-  "stream": false
-}
