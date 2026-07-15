@@ -153,7 +153,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 			for _, m := range models {
 				modelID := pluginapi.NodeID{
 					Kind: pluginapi.NodeKindModel,
-					Path: "litellm/" + name + "/" + m,
+					Path: name + "/" + m,
 				}
 				modelsByPath[modelID.Path] = pluginapi.NodeClaim{ID: modelID}
 
