@@ -13,6 +13,7 @@ permissions:
   packages: write # Required for publishing containers
   id-token: write # Required for Cosign keyless signing
   attestations: write # Required for provenance (if repo is public)
+  artifact-metadata: write
 
 jobs:
   # ── 1. Release Generation & Tagging ───────────────────────────────────────
