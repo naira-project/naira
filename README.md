@@ -9,7 +9,7 @@
 
 ## About this project
 
-**Naira** is an open-source **AI Engineering Development Platform** for cloud-native teams building and operating AI-enabled products on Kubernetes.
+**Naira** is an open-source **AI Engineering Development Hub** for cloud-native teams building and operating AI-enabled products on Kubernetes.
 
 AI engineering today is fragmented: models, inferencing, gateways, observability, policies, and application delivery are spread across many tools, teams, and workflows. Naira brings these worlds together into one coherent platform experience.
 
