@@ -1,6 +1,6 @@
 # Naira UI (Proof of Concept)
 
-React-based frontend for the Naira AI Engineering Platform. It includes a table listing all nodes and catalog graph.
+React-based frontend for the Naira. It includes a table listing all nodes and catalog graph.
 
 ## Tech Stack
 
@@ -35,9 +35,8 @@ Produces a static build in `build/`.
 
 ## Deployment
 
-The `ui-poc` is standalone react app. For showcasing it's functionalities we maintain  local kind cluster setup. See the root [`Taskfile.yml`](../Taskfile.yml) and [`deploy/dev/`](../deploy/dev/) for platform-level deployment tasks.
+The `ui-poc` is a standalone React app. To showcase its functionalities, we maintain a local Kind cluster setup. See the root [`Taskfile.yml`](../Taskfile.yml) and [`deploy/dev/`](../deploy/dev/) for platform-level deployment tasks.
 
 ## Related
 
 - [`catalog/`](../catalog/) — Backend catalog API service
-- [`docs/plugin-authoring.md`](../docs/plugin-authoring.md) — Plugin documentation
