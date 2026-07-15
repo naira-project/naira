@@ -23,7 +23,7 @@ tasks:
     desc: Build all catalog plugin images
     cmds:
       - for: { var: PLUGINS }
-        task: docker:build
+        task: :docker:build
         vars: { IMAGE: '{{.ITEM.image}}', DIR: '{{.ITEM.dir}}' }
 
   image:load:
@@ -31,5 +31,5 @@ tasks:
     deps: [image:build]
     cmds:
       - for: { var: PLUGINS }
-        task: docker:load
+        task: :docker:load
         vars: { IMAGE: '{{.ITEM.image}}', CLUSTER_NAME: '{{.CLUSTER_NAME}}' }
