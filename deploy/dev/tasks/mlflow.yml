@@ -15,12 +15,6 @@ vars:
 tasks:
   deploy:
     desc: Deploy MLflow to kind
-    deps: [cluster:create]
-    cmds:
-      - task: apply
-
-  apply:
-    internal: true
     cmds:
       - kubectl apply -f {{.MLFLOW_MANIFEST}}
       - kubectl -n {{.MLFLOW_NAMESPACE}} rollout status deploy/mlflow --timeout=180s

@@ -26,12 +26,6 @@ tasks:
 
   deploy:
     desc: Deploy the catalog to kind
-    deps: [cluster:create]
-    cmds:
-      - task: apply
-
-  apply:
-    internal: true
     cmds:
       - task: image:load
       - task: :plugins:image:load

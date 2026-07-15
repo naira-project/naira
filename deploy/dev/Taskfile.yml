@@ -51,12 +51,12 @@ tasks:
     desc: Deploy MLflow, LiteLLM, Catalog, UI, and Portal to kind
     cmds:
       - task: cluster:create
-      - task: mlflow:apply
-      - task: postgres:apply
-      - task: litellm:apply
-      - task: catalog:apply
-      - task: ui:apply
-      - task: portal:apply
+      - task: mlflow:deploy
+      - task: postgres:deploy
+      - task: litellm:deploy
+      - task: catalog:deploy
+      - task: ui:deploy
+      - task: portal:deploy
 
   platform:undeploy:
     desc: Remove MLflow, LiteLLM, Catalog, UI, and Portal from kind

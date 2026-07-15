@@ -10,12 +10,6 @@ vars:
 tasks:
   deploy:
     desc: Deploy LiteLLM to kind
-    deps: [postgres:deploy]
-    cmds:
-      - task: apply
-
-  apply:
-    internal: true
     cmds:
       - kubectl apply -f {{.LITELLM_MANIFEST}}
       - kubectl -n {{.LITELLM_NAMESPACE}} rollout status deploy/litellm --timeout=900s

@@ -24,12 +24,6 @@ tasks:
 
   deploy:
     desc: Deploy the UI to kind
-    deps: [cluster:create]
-    cmds:
-      - task: apply
-
-  apply:
-    internal: true
     cmds:
       - task: image:load
       - kubectl apply -f {{.UI_MANIFEST}}

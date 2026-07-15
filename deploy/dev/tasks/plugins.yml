@@ -16,7 +16,6 @@ vars:
     - name: fluxcd
       dir: '{{.PLUGINS_BASE}}/fluxcd'
       image: fluxcd:local
-    # kolejny plugin: dopisz tu 3 linijki, więcej nic
 
 tasks:
   image:build:
