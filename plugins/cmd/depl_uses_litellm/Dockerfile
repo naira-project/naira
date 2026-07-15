@@ -1,7 +1,7 @@
 # --- Stage 1: Build ---
 FROM golang:1.26-alpine AS builder
 
-ARG PLUGIN=depl_calls_svc
+ARG PLUGIN=depl_uses_litellm
 
 WORKDIR /app
 
