@@ -1,0 +1,47 @@
+version: '3'
+
+vars:
+  CLUSTER_NAME: naira-idp
+  UI_DIR: ../../ui-poc
+  UI_IMAGE: ui:local
+  UI_NAMESPACE: idp-system
+  UI_MANIFEST: infra/kubernetes/ui.yaml
+  UI_SERVICE: svc/ui
+  UI_LOCAL_PORT: '3001'
+  UI_REMOTE_PORT: '80'
+
+tasks:
+  image:build:
+    desc: Build the UI Docker image
+    cmds:
+      - docker build -t {{.UI_IMAGE}} {{.UI_DIR}}
+
+  image:load:
+    desc: Load the UI image into kind
+    deps: [image:build]
+    cmds:
+      - kind load docker-image {{.UI_IMAGE}} --name {{.CLUSTER_NAME}}
+
+  deploy:
+    desc: Deploy the UI to kind
+    deps: [cluster:create]
+    cmds:
+      - task: apply
+
+  apply:
+    internal: true
+    cmds:
+      - task: image:load
+      - kubectl apply -f {{.UI_MANIFEST}}
+      - kubectl -n {{.UI_NAMESPACE}} rollout status deploy/ui --timeout=180s
+      - kubectl -n {{.UI_NAMESPACE}} get pods
+
+  undeploy:
+    desc: Remove the UI from kind
+    cmds:
+      - kubectl delete -f {{.UI_MANIFEST}} --ignore-not-found
+
+  port-forward:
+    desc: Expose the UI on localhost:3001
+    cmds:
+      - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}

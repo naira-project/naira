@@ -1,56 +1,33 @@
 version: '3'
 
-vars:
-  CLUSTER_NAME: naira-idp
-  PORTAL_DIR: ../../naira-openmfp-portal
-  UI_DIR: ../../ui-poc
-  UI_IMAGE: ui:local
-  UI_NAMESPACE: idp-system
-  UI_MANIFEST: infra/kubernetes/ui.yaml
-  UI_SERVICE: svc/ui
-  UI_LOCAL_PORT: '3001'
-  UI_REMOTE_PORT: '80'
-  MLFLOW_NAMESPACE: mlflow
-  KIND_CONFIG: infra/kind/kind-config.yaml
-  MLFLOW_MANIFEST: infra/kubernetes/mlflow.yaml
-  MLFLOW_SERVICE: svc/mlflow
-  MLFLOW_LOCAL_PORT: '5000'
-  MLFLOW_REMOTE_PORT: '5000'
-  LITELLM_NAMESPACE: litellm
-  LITELLM_MANIFEST: infra/kubernetes/litellm.yaml
-  LITELLM_SERVICE: svc/litellm
-  LITELLM_LOCAL_PORT: '4000'
-  LITELLM_REMOTE_PORT: '4000'
-  LITELLM_MASTER_KEY: sk-local-litellm
-  POSTGRES_NAMESPACE: litellm-db
-  POSTGRES_MANIFEST: infra/kubernetes/postgres.yaml
-  CATALOG_DIR: ../../catalog
-  CATALOG_IMAGE: catalog:local
-  PLUGINS_BASE: ../../plugins/cmd
-  MLFLOW_PLUGIN_DIR: '{{.PLUGINS_BASE}}/mlflow'
-  MLFLOW_PLUGIN_IMAGE: mlflow:local
-  LITELLM_PLUGIN_DIR: '{{.PLUGINS_BASE}}/litellm'
-  LITELLM_PLUGIN_IMAGE: litellm:local
-  DEPL_CALLS_SVC_PLUGIN_DIR: '{{.PLUGINS_BASE}}/depl_calls_svc'
-  DEPL_CALLS_SVC_PLUGIN_IMAGE: depl-calls-svc:local
-  FLUXCD_PLUGIN_DIR: '{{.PLUGINS_BASE}}/fluxcd'
-  FLUXCD_PLUGIN_IMAGE: fluxcd:local
-  CATALOG_NAMESPACE: idp-system
-  CATALOG_MANIFEST: infra/kubernetes/catalog.yaml
-  CATALOG_SERVICE: svc/catalog
-  CATALOG_LOCAL_PORT: '8090'
-  CATALOG_REMOTE_PORT: '8090'
-  PORTAL_IMAGE: portal:local
-  PORTAL_NAMESPACE: idp-system
-  PORTAL_MANIFEST: infra/kubernetes/portal.yaml
-  PORTAL_SERVICE: svc/portal
-  PORTAL_LOCAL_PORT: '3000'
-  PORTAL_REMOTE_PORT: '3000'
-  LOCAL_WORK_DIR: ../../.local
-  MLFLOW_TOOL_DIR: tools/mlflow
-  MLFLOW_REGISTER_SCRIPT: '{{.MLFLOW_TOOL_DIR}}/register_dummy_model.py'
-  MLFLOW_REQUIREMENTS: '{{.MLFLOW_TOOL_DIR}}/requirements.txt'
-  MLFLOW_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/mlflow-registry'
+includes:
+  cluster:
+    taskfile: ./tasks/cluster.yml
+    dir: .
+  docker:
+    taskfile: ./tasks/docker.yml
+    dir: .
+  plugins:
+    taskfile: ./tasks/plugins.yml
+    dir: .
+  postgres:
+    taskfile: ./tasks/postgres.yml
+    dir: .
+  litellm:
+    taskfile: ./tasks/litellm.yml
+    dir: .
+  mlflow:
+    taskfile: ./tasks/mlflow.yml
+    dir: .
+  catalog:
+    taskfile: ./tasks/catalog.yml
+    dir: .
+  ui:
+    taskfile: ./tasks/ui.yml
+    dir: .
+  portal:
+    taskfile: ./tasks/portal.yml
+    dir: .
 
 tasks:
   default:
@@ -69,278 +46,6 @@ tasks:
       - go version
       - docker version
       - buf --version
-
-  cluster:create:
-    desc: Create the local kind cluster
-    cmds:
-      - |
-        if kind get clusters | grep -qx '{{.CLUSTER_NAME}}'; then
-          echo 'kind cluster {{.CLUSTER_NAME}} already exists'
-        else
-          kind delete cluster --name {{.CLUSTER_NAME}} >/dev/null 2>&1 || true
-          kind create cluster --name {{.CLUSTER_NAME}} --config {{.KIND_CONFIG}}
-        fi
-
-  cluster:delete:
-    desc: Delete the local kind cluster
-    cmds:
-      - kind delete cluster --name {{.CLUSTER_NAME}}
-
-  mlflow:deploy:
-    desc: Deploy MLflow to kind
-    deps:
-      - cluster:create
-    cmds:
-      - task: mlflow:apply
-
-  mlflow:apply:
-    internal: true
-    cmds:
-      - kubectl apply -f {{.MLFLOW_MANIFEST}}
-      - kubectl -n {{.MLFLOW_NAMESPACE}} rollout status deploy/mlflow --timeout=180s
-      - kubectl -n {{.MLFLOW_NAMESPACE}} get pods
-      - kubectl -n {{.MLFLOW_NAMESPACE}} get pvc
-
-  mlflow:undeploy:
-    desc: Remove MLflow from kind
-    cmds:
-      - kubectl delete -f {{.MLFLOW_MANIFEST}} --ignore-not-found
-
-  mlflow:port-forward:
-    desc: Expose MLflow on localhost:5000
-    cmds:
-      - kubectl -n {{.MLFLOW_NAMESPACE}} port-forward {{.MLFLOW_SERVICE}} {{.MLFLOW_LOCAL_PORT}}:{{.MLFLOW_REMOTE_PORT}}
-
-  mlflow:seed:
-    desc: Seed a sample model in MLflow
-    cmds:
-      - |
-        mkdir -p '{{.LOCAL_WORK_DIR}}/venvs'
-      - |
-        python3 -m venv '{{.MLFLOW_VENV_DIR}}'
-      - |
-        '{{.MLFLOW_VENV_DIR}}/bin/pip' install --upgrade pip
-      - |
-        '{{.MLFLOW_VENV_DIR}}/bin/pip' install -r '{{.MLFLOW_REQUIREMENTS}}'
-      - |
-        MLFLOW_TRACKING_URI=http://127.0.0.1:{{.MLFLOW_LOCAL_PORT}} '{{.MLFLOW_VENV_DIR}}/bin/python' '{{.MLFLOW_REGISTER_SCRIPT}}'
-
-  postgres:deploy:
-    desc: Deploy PostgreSQL for LiteLLM to kind
-    deps:
-      - cluster:create
-    cmds:
-      - task: postgres:apply
-
-  postgres:apply:
-    internal: true
-    cmds:
-      - kubectl apply -f {{.POSTGRES_MANIFEST}}
-      - kubectl -n {{.POSTGRES_NAMESPACE}} rollout status deploy/postgres --timeout=180s
-      - kubectl -n {{.POSTGRES_NAMESPACE}} get pods
-
-  postgres:undeploy:
-    desc: Remove PostgreSQL for LiteLLM from kind
-    cmds:
-      - kubectl delete -f {{.POSTGRES_MANIFEST}} --ignore-not-found
-
-  litellm:deploy:
-    desc: Deploy LiteLLM to kind
-    deps:
-      - postgres:deploy
-    cmds:
-      - task: litellm:apply
-
-  litellm:apply:
-    internal: true
-    cmds:
-      - kubectl apply -f {{.LITELLM_MANIFEST}}
-      - kubectl -n {{.LITELLM_NAMESPACE}} rollout status deploy/litellm --timeout=900s
-      - kubectl -n {{.LITELLM_NAMESPACE}} get pods
-
-  litellm:undeploy:
-    desc: Remove LiteLLM from kind
-    cmds:
-      - kubectl delete -f {{.LITELLM_MANIFEST}} --ignore-not-found
-
-  litellm:port-forward:
-    desc: Expose LiteLLM on localhost:4000
-    cmds:
-      - kubectl -n {{.LITELLM_NAMESPACE}} port-forward {{.LITELLM_SERVICE}} {{.LITELLM_LOCAL_PORT}}:{{.LITELLM_REMOTE_PORT}}
-
-  mlflow:image:build:
-    desc: Build the mlflow Docker image
-    cmds:
-      - task: _docker:build
-        vars: { IMAGE: '{{.MLFLOW_PLUGIN_IMAGE}}', DIR: '{{.MLFLOW_PLUGIN_DIR}}' }
-
-  mlflow:image:load:
-    desc: Load the mlflow plugin image into kind
-    deps:
-      - mlflow:image:build
-    cmds:
-      - task: _docker:load
-        vars: { IMAGE: '{{.MLFLOW_PLUGIN_IMAGE}}' }
-
-  litellm:image:build:
-    desc: Build the litellm Docker image
-    cmds:
-      - task: _docker:build
-        vars: { IMAGE: '{{.LITELLM_PLUGIN_IMAGE}}', DIR: '{{.LITELLM_PLUGIN_DIR}}' }
-
-  litellm:image:load:
-    desc: Load the litellm plugin image into kind
-    deps:
-      - litellm:image:build
-    cmds:
-      - task: _docker:load
-        vars: { IMAGE: '{{.LITELLM_PLUGIN_IMAGE}}' }
-
-  depl-calls-svc:image:build:
-    desc: Build the depl-calls-svc plugin Docker image
-    cmds:
-      - task: _docker:build
-        vars: { IMAGE: '{{.DEPL_CALLS_SVC_PLUGIN_IMAGE}}', DIR: '{{.DEPL_CALLS_SVC_PLUGIN_DIR}}' }
-
-  depl-calls-svc:image:load:
-    desc: Load the depl-calls-svc plugin image into kind
-    deps:
-      - depl-calls-svc:image:build
-    cmds:
-      - task: _docker:load
-        vars: { IMAGE: '{{.DEPL_CALLS_SVC_PLUGIN_IMAGE}}' }
-
-  fluxcd:image:build:
-    desc: Build the fluxcd plugin Docker image
-    cmds:
-      - task: _docker:build
-        vars: { IMAGE: '{{.FLUXCD_PLUGIN_IMAGE}}', DIR: '{{.FLUXCD_PLUGIN_DIR}}' }
-
-  fluxcd:image:load:
-    desc: Load the fluxcd plugin image into kind
-    deps:
-      - fluxcd:image:build
-    cmds:
-      - task: _docker:load
-        vars: { IMAGE: '{{.FLUXCD_PLUGIN_IMAGE}}' }
-
-  catalog:image:build:
-    desc: Build the catalog Docker image
-    cmds:
-      - task: _docker:build
-        vars: { IMAGE: '{{.CATALOG_IMAGE}}', DIR: '{{.CATALOG_DIR}}' }
-
-  catalog:image:load:
-    desc: Load the catalog image into kind
-    deps:
-      - catalog:image:build
-    cmds:
-      - task: _docker:load
-        vars: { IMAGE: '{{.CATALOG_IMAGE}}' }
-
-  catalog:deploy:
-    desc: Deploy the catalog to kind
-    deps:
-      - cluster:create
-    cmds:
-      - task: catalog:apply
-
-  catalog:apply:
-    internal: true
-    cmds:
-      - task: catalog:image:load
-      - task: mlflow:image:load
-      - task: litellm:image:load
-      - task: depl-calls-svc:image:load
-      - task: fluxcd:image:load
-      - kubectl apply -f {{.CATALOG_MANIFEST}}
-      - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
-      - kubectl -n {{.CATALOG_NAMESPACE}} get pods
-
-  catalog:undeploy:
-    desc: Remove the catalog from kind
-    cmds:
-      - kubectl delete -f {{.CATALOG_MANIFEST}} --ignore-not-found
-
-  catalog:port-forward:
-    desc: Expose the catalog on localhost:8090
-    cmds:
-      - kubectl -n {{.CATALOG_NAMESPACE}} port-forward {{.CATALOG_SERVICE}} {{.CATALOG_LOCAL_PORT}}:{{.CATALOG_REMOTE_PORT}}
-
-  ui:image:build:
-    desc: Build the UI Docker image
-    cmds:
-      - docker build -t {{.UI_IMAGE}} {{.UI_DIR}}
-
-  ui:image:load:
-    desc: Load the UI image into kind
-    deps:
-      - ui:image:build
-    cmds:
-      - task: _docker:load
-        vars: { IMAGE: '{{.UI_IMAGE}}' }
-
-  ui:deploy:
-    desc: Deploy the UI to kind
-    deps:
-      - cluster:create
-    cmds:
-      - task: ui:apply
-
-  ui:apply:
-    internal: true
-    cmds:
-      - task: ui:image:load
-      - kubectl apply -f {{.UI_MANIFEST}}
-      - kubectl -n {{.UI_NAMESPACE}} rollout status deploy/ui --timeout=180s
-      - kubectl -n {{.UI_NAMESPACE}} get pods
-
-  ui:undeploy:
-    desc: Remove the UI from kind
-    cmds:
-      - kubectl delete -f {{.UI_MANIFEST}} --ignore-not-found
-
-  ui:port-forward:
-    desc: Expose the UI on localhost:3001
-    cmds:
-      - kubectl -n {{.UI_NAMESPACE}} port-forward {{.UI_SERVICE}} {{.UI_LOCAL_PORT}}:{{.UI_REMOTE_PORT}}
-
-  portal:image:build:
-    desc: Build the portal Docker image
-    cmds:
-      - docker build -t {{.PORTAL_IMAGE}} {{.PORTAL_DIR}}
-
-  portal:image:load:
-    desc: Load the portal image into kind
-    deps:
-      - portal:image:build
-    cmds:
-      - kind load docker-image {{.PORTAL_IMAGE}} --name {{.CLUSTER_NAME}}
-
-  portal:deploy:
-    desc: Deploy the portal to kind
-    deps:
-      - cluster:create
-    cmds:
-      - task: portal:apply
-
-  portal:apply:
-    internal: true
-    cmds:
-      - task: portal:image:load
-      - kubectl apply -f {{.PORTAL_MANIFEST}}
-      - kubectl -n {{.PORTAL_NAMESPACE}} rollout status deploy/portal --timeout=180s
-      - kubectl -n {{.PORTAL_NAMESPACE}} get pods
-
-  portal:undeploy:
-    desc: Remove the portal from kind
-    cmds:
-      - kubectl delete -f {{.PORTAL_MANIFEST}} --ignore-not-found
-
-  portal:port-forward:
-    desc: Expose the portal on localhost:3000
-    cmds:
-      - kubectl -n {{.PORTAL_NAMESPACE}} port-forward {{.PORTAL_SERVICE}} {{.PORTAL_LOCAL_PORT}}:{{.PORTAL_REMOTE_PORT}}
 
   platform:deploy:
     desc: Deploy MLflow, LiteLLM, Catalog, UI, and Portal to kind
@@ -366,6 +71,11 @@ tasks:
   forward:all:
     desc: Port-forward all services (MLflow, LiteLLM, Catalog, UI, Portal)
     silent: true
+    vars:
+      PORTAL_LOCAL_PORT: '3000'
+      UI_LOCAL_PORT: '3001'
+      MLFLOW_LOCAL_PORT: '5000'
+      LITELLM_LOCAL_PORT: '4000'
     cmds:
       - |
         echo "Port-forwarding all services..."
@@ -380,14 +90,3 @@ tasks:
   forward:all:tunnels:
     internal: true
     deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
-  
-   # Reusable "Macro" Tasks
-  _docker:build:
-    internal: true
-    cmds:
-      - docker build -t {{.IMAGE}} -f {{.DIR}}/Dockerfile ../../
-
-  _docker:load:
-    internal: true
-    cmds:
-      - kind load docker-image {{.IMAGE}} --name {{.CLUSTER_NAME}}

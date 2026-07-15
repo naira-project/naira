@@ -1,0 +1,38 @@
+version: '3'
+
+vars:
+  MLFLOW_NAMESPACE: mlflow
+  MLFLOW_MANIFEST: infra/kubernetes/mlflow.yaml
+  MLFLOW_SERVICE: svc/mlflow
+  MLFLOW_LOCAL_PORT: '5000'
+  MLFLOW_REMOTE_PORT: '5000'
+  LOCAL_WORK_DIR: ../../.local
+  MLFLOW_TOOL_DIR: tools/mlflow
+  MLFLOW_REGISTER_SCRIPT: '{{.MLFLOW_TOOL_DIR}}/register_dummy_model.py'
+  MLFLOW_REQUIREMENTS: '{{.MLFLOW_TOOL_DIR}}/requirements.txt'
+  MLFLOW_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/mlflow-registry'
+
+tasks:
+  deploy:
+    desc: Deploy MLflow to kind
+    deps: [cluster:create]
+    cmds:
+      - task: apply
+
+  apply:
+    internal: true
+    cmds:
+      - kubectl apply -f {{.MLFLOW_MANIFEST}}
+      - kubectl -n {{.MLFLOW_NAMESPACE}} rollout status deploy/mlflow --timeout=180s
+      - kubectl -n {{.MLFLOW_NAMESPACE}} get pods
+      - kubectl -n {{.MLFLOW_NAMESPACE}} get pvc
+
+  undeploy:
+    desc: Remove MLflow from kind
+    cmds:
+      - kubectl delete -f {{.MLFLOW_MANIFEST}} --ignore-not-found
+
+  port-forward:
+    desc: Expose MLflow on localhost:5000
+    cmds:
+      - kubectl -n {{.MLFLOW_NAMESPACE}} port-forward {{.MLFL

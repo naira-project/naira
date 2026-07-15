@@ -1,0 +1,47 @@
+version: '3'
+
+vars:
+  CLUSTER_NAME: naira-idp
+  PORTAL_DIR: ../../naira-openmfp-portal
+  PORTAL_IMAGE: portal:local
+  PORTAL_NAMESPACE: idp-system
+  PORTAL_MANIFEST: infra/kubernetes/portal.yaml
+  PORTAL_SERVICE: svc/portal
+  PORTAL_LOCAL_PORT: '3000'
+  PORTAL_REMOTE_PORT: '3000'
+
+tasks:
+  image:build:
+    desc: Build the portal Docker image
+    cmds:
+      - docker build -t {{.PORTAL_IMAGE}} {{.PORTAL_DIR}}
+
+  image:load:
+    desc: Load the portal image into kind
+    deps: [image:build]
+    cmds:
+      - kind load docker-image {{.PORTAL_IMAGE}} --name {{.CLUSTER_NAME}}
+
+  deploy:
+    desc: Deploy the portal to kind
+    deps: [cluster:create]
+    cmds:
+      - task: apply
+
+  apply:
+    internal: true
+    cmds:
+      - task: image:load
+      - kubectl apply -f {{.PORTAL_MANIFEST}}
+      - kubectl -n {{.PORTAL_NAMESPACE}} rollout status deploy/portal --timeout=180s
+      - kubectl -n {{.PORTAL_NAMESPACE}} get pods
+
+  undeploy:
+    desc: Remove the portal from kind
+    cmds:
+      - kubectl delete -f {{.PORTAL_MANIFEST}} --ignore-not-found
+
+  port-forward:
+    desc: Expose the portal on localhost:3000
+    cmds:
+      - kubectl -n {{.PORTAL_NAMESPACE}} port-forward {{.PORTAL_SERVICE}} {{.PORTAL_LOCAL_PORT}}:{{.PORTAL_REMOTE_PORT}}
