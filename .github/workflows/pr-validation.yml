@@ -37,7 +37,7 @@ jobs:
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
-      context: "catalog"
+      context: "."
       platforms: "linux/amd64,linux/arm64"
 
   # ── 3. Container build — ui (build-only, no push on PRs) ──────────────────
