@@ -168,6 +168,14 @@ func writeOpenFGAModel(client *openfga.OpenFgaClient, model string) (string, err
 		return "", fmt.Errorf("unmarshalling the model: %w", err)
 	}
 
+	existingId, err := findMatchingAuthorizationModel(client, body)
+	if err != nil {
+		return "", fmt.Errorf("checking for an existing authorization model: %w", err)
+	}
+	if existingId != "" {
+		return existingId, nil
+	}
+
 	data, err := client.WriteAuthorizationModel(context.Background()).
 		Body(body).
 		Execute()
@@ -177,6 +185,22 @@ func writeOpenFGAModel(client *openfga.OpenFgaClient, model string) (string, err
 	}
 	return data.AuthorizationModelId, nil
 }
+
+// findMatchingAuthorizationModel returns the ID of the store's latest authorization
+// model if the store already has a model, so callers can avoid writing a
+// another model on every startup.
+func findMatchingAuthorizationModel(client *openfga.OpenFgaClient, desired sdk.WriteAuthorizationModelRequest) (string, error) {
+	latest, err := client.ReadLatestAuthorizationModel(context.Background()).Execute()
+	if err != nil {
+		return "", nil
+	}
+	if latest.AuthorizationModel == nil {
+		return "", nil
+	}
+
+	return latest.AuthorizationModel.Id, nil
+}
+
 
 func writeTuples(client *openfga.OpenFgaClient, tuples []sdk.TupleKey, modelId string) error {
 	options := openfga.ClientWriteOptions{
