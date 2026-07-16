@@ -4,6 +4,7 @@ resources:
   - catalog.yaml
   - litellm.yaml
   - mlflow.yaml
+  - openmetadata.yaml
   - postgres.yaml
   - portal.yaml
   - ui.yaml

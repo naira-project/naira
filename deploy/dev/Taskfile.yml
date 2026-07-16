@@ -48,7 +48,7 @@ vars:
   OPENMETADATA_RELEASE: openmetadata
   OPENMETADATA_CHART: open-metadata/openmetadata
   OPENMETADATA_VALUES: infra/helm/openmetadata-values.yaml
-  OPENMETADATA_SECRETS_MANIFEST: infra/kubernetes/openmetadata-secrets.yaml
+  OPENMETADATA_SECRETS_MANIFEST: infra/kubernetes/openmetadata.yaml
   OPENMETADATA_SERVICE: svc/openmetadata
   OPENMETADATA_LOCAL_PORT: '8585'
   OPENMETADATA_REMOTE_PORT: '8585'
@@ -201,7 +201,6 @@ tasks:
     cmds:
       - helm repo add {{.OPENMETADATA_HELM_REPO_NAME}} {{.OPENMETADATA_HELM_REPO_URL}} --force-update
       - helm repo update {{.OPENMETADATA_HELM_REPO_NAME}}
-      - kubectl create namespace {{.OPENMETADATA_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
       - kubectl apply -f {{.OPENMETADATA_SECRETS_MANIFEST}}
       - helm upgrade --install {{.OPENMETADATA_DEPS_RELEASE}} {{.OPENMETADATA_DEPS_CHART}} --namespace {{.OPENMETADATA_NAMESPACE}} --create-namespace --values {{.OPENMETADATA_DEPS_VALUES}} --wait --timeout 15m
       - helm upgrade --install {{.OPENMETADATA_RELEASE}} {{.OPENMETADATA_CHART}} --namespace {{.OPENMETADATA_NAMESPACE}} --values {{.OPENMETADATA_VALUES}} --wait --timeout 15m
@@ -220,7 +219,6 @@ tasks:
           helm uninstall {{.OPENMETADATA_DEPS_RELEASE}} -n {{.OPENMETADATA_NAMESPACE}}
         fi
       - kubectl delete -f {{.OPENMETADATA_SECRETS_MANIFEST}} --ignore-not-found
-      - kubectl delete namespace {{.OPENMETADATA_NAMESPACE}} --ignore-not-found
 
   openmetadata:port-forward:
     desc: Expose OpenMetadata on localhost:8585
