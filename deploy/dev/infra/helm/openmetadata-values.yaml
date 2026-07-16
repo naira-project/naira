@@ -1,0 +1,10 @@
+# Helm values override for the openmetadata (server) chart in the local kind cluster.
+#
+# Airflow is disabled in the dependencies chart (see openmetadata-deps-values.yaml),
+# so the server must not try to reach a pipeline service client. Disabling it keeps
+# the server from health-checking an absent Airflow; the REST API the Naira catalog
+# plugin consumes is unaffected.
+openmetadata:
+  config:
+    pipelineServiceClientConfig:
+      enabled: false

@@ -1,38 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
 import { buildCatalogGraphSlice, type CatalogGraphResponse, type CatalogGraphRoot } from '../lib/catalogGraph';
+import { useAsyncData } from './useAsyncData';
 
 export type { CatalogGraphEdge, CatalogGraphNode, CatalogGraphRoot, CatalogGraphResponse } from '../lib/catalogGraph';
 
+const EMPTY_GRAPH: CatalogGraphResponse = { nodes: [], edges: [] };
+
 export function useCatalogGraph(root: CatalogGraphRoot | null, depth: number) {
-  const [graph, setGraph] = useState<CatalogGraphResponse>({ nodes: [], edges: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: graph, loading, error } = useAsyncData<CatalogGraphResponse>(
+    () => (root ? buildCatalogGraphSlice(root, depth) : Promise.resolve(EMPTY_GRAPH)),
+    [root, depth],
+    EMPTY_GRAPH,
+    'Failed to load graph'
+  );
 
-  const loadGraph = useCallback(() => {
-    if (!root) {
-      setGraph({ nodes: [], edges: [] });
-      setLoading(false);
-      setError(null);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    buildCatalogGraphSlice(root, depth)
-      .then((nextGraph) => {
-        setGraph(nextGraph);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError('Failed to load graph');
-        setLoading(false);
-      });
-  }, [depth, root]);
-
-  useEffect(() => {
-    loadGraph();
-  }, [loadGraph]);
-
-  return { graph, loading, error, reload: loadGraph };
+  return { graph, loading, error };
 }
