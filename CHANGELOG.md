@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0](https://github.com/naira-project/naira/compare/v0.0.2...v0.1.0) (2026-07-16)
+
+
+### Features
+
+* Naira is a central catalog, with an API for querying scanned Nodes and Relations. A simple SDK for writing plugins in Go language. A set of example PoC plugins, for scanning the following Nodes and Relations into the central catalog: ([71ed87b](https://github.com/naira-project/naira/commit/71ed87ba4a0d7e14a98fce091f54aefdff70702e))
+
 ## [0.0.2](https://github.com/naira-project/naira/compare/v0.0.1...v0.0.2) (2026-07-16)
 
 
