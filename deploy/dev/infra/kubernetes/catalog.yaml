@@ -230,7 +230,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50055"
+              value: "50056"
             - name: OPENMETADATA_BASE_URL
               value: http://openmetadata.openmetadata.svc.cluster.local:8585
             - name: OPENMETADATA_ADMIN_EMAIL
