@@ -11,28 +11,28 @@ resources:
 images:
   - name: ui
     newName: ghcr.io/naira-project/naira-ui
-    newTag: sha-8420753
+    newTag: 0.1.0
   - name: catalog
     newName: ghcr.io/naira-project/naira-catalog
-    newTag: sha-8420753
+    newTag: 0.1.0
   - name: litellm
     newName: ghcr.io/naira-project/naira-plugin-litellm
-    newTag: sha-8420753
+    newTag: 0.1.0
   - name: mlflow
     newName: ghcr.io/naira-project/naira-plugin-mlflow
-    newTag: sha-8420753
+    newTag: 0.1.0
   - name: depl-calls-svc
     newName: ghcr.io/naira-project/naira-plugin-depl-calls-svc
-    newTag: sha-8420753
+    newTag: 0.1.0
   - name: depl-uses-litellm
     newName: ghcr.io/naira-project/naira-plugin-depl-uses-litellm
     newTag: sha-8420753
   - name: fluxcd
     newName: ghcr.io/naira-project/naira-plugin-fluxcd
-    newTag: sha-8420753
+    newTag: 0.1.0
   - name: openmetadata
     newName: ghcr.io/naira-project/naira-plugin-openmetadata
     newTag: sha-8420753
   - name: portal
     newName: ghcr.io/naira-project/naira-portal
-    newTag: sha-513a84c
+    newTag: 0.1.0
