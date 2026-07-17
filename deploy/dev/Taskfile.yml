@@ -99,3 +99,9 @@ tasks:
   forward:all:tunnels:
     internal: true
     deps: [mlflow:port-forward, litellm:port-forward, openmetadata:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+
+    seed:all:
+    desc: Seed sample data in MLflow and OpenMetadata (requires port-forward)
+    cmds:
+      - task: mlflow:seed
+      - task: openmetadata:seed
