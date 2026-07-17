@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Promote RC to Stable
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  artifact-metadata: write
+
+jobs:
+  trigger-promotion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update Release Please Config & Manifest
+        run: |
+          # Compute the stable target from the manifest (strip -rc.* suffix).
+          # The manifest is intentionally left unchanged so the existing git tag
+          # (e.g. v0.12.0-rc) remains a valid changelog boundary for Release Please.
+          CURRENT=$(jq -r '."."' .release-please-manifest.json)
+          STABLE_VERSION=$(echo "$CURRENT" | sed 's/-rc.*//')
+
+          # Strip only the flags that gate RC behaviour; keep versioning:prerelease
+          # so Release Please can recognise bare -rc versions and graduate them correctly.
+          jq --arg rv "$STABLE_VERSION" '
+            del(
+              .packages["."]."prerelease-type",
+              .packages["."]."skip-github-release",
+              .packages["."]."skip-changelog",
+              .packages["."]."release-as"
+            ) |
+            .packages["."].prerelease = false |
+            .packages["."]["release-as"] = $rv
+          ' release-please-config.json > tmp-config.json
+          mv tmp-config.json release-please-config.json
+
+      - name: Create Promotion PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b chore/promote-to-stable
+
+          # 2. Use a 'fix:' prefix instead of 'chore:'. 
+          # This acts as a user-facing commit to naturally wake up Release Please.
+          # and perfectly squash the CHANGELOG.md RC entries into a single Stable entry.
+          git commit -a -m "fix: finalize stable release promotion"
+
+          git push -f -u origin chore/promote-to-stable
+
+          # 3. Create the PR without the override footer
+          gh pr create \
+            --title "fix: finalize stable release promotion" \
+            --body "Merging this PR updates the baseline configuration to trigger a stable release. Release Please will naturally squash the RC changelog." \
+            --base main || true

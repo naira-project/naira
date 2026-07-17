@@ -1,7 +1,7 @@
 # --- Stage 1: Build ---
 FROM golang:1.26-alpine AS builder
 
-ARG PLUGIN=depl_calls_svc
+ARG PLUGIN=openmetadata
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY plugins/pkg/ ./plugins/pkg/
 COPY plugins/internal/ ./plugins/internal/
 COPY plugins/cmd/${PLUGIN}/ ./plugins/${PLUGIN}/
 
-RUN CGO_ENABLED=0 go build -trimpath -o /out/plugin ./plugins/${PLUGIN}
+RUN CGO_ENABLED=0 go build -o /out/plugin ./plugins/${PLUGIN}
 
 # --- Stage 2: Final ---
 FROM gcr.io/distroless/static-debian12:latest
