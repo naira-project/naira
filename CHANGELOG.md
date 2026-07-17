@@ -12,8 +12,6 @@
   - models and datasets from MLFlow
   - available datasets in OpenMetadata
 
-*  Naira UI and Naira OpenMFP portal, with portal listening to Naira UI as a micro-frontend component.  UI consists of:
-   -  table listing all nodes
-   -  catalog graph
+*  Naira UI leverages OpenMFP to expose two core views into the asset catalog: a tabular "Catalog Explorer" view for browsing all kinds of assets, and an interactive "Catalog Graph" view for visually exploring the relationships between them, giving users both a structured and a visual lens on their data.
      
 ([71ed87b](https://github.com/naira-project/naira/commit/71ed87ba4a0d7e14a98fce091f54aefdff70702e))
