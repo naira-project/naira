@@ -28,6 +28,9 @@ includes:
   portal:
     taskfile: ./tasks/portal.yml
     dir: .
+  openmetadata:
+    taskfile: ./tasks/openmetadata.yml
+    dir: .
 
 tasks:
   default:
@@ -48,20 +51,22 @@ tasks:
       - buf --version
 
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, Catalog, UI, and Portal to kind
+    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal to kind
     cmds:
       - task: cluster:create
       - task: mlflow:deploy
       - task: postgres:deploy
       - task: litellm:deploy
+      - task: openmetadata:deploy
       - task: catalog:deploy
       - task: ui:deploy
       - task: portal:deploy
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, Catalog, UI, and Portal from kind
+    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal from kind
     cmds:
       - task: portal:undeploy
+      - task: openmetadata:undeploy
       - task: catalog:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
@@ -69,13 +74,15 @@ tasks:
       - task: ui:undeploy
 
   forward:all:
-    desc: Port-forward all services (MLflow, LiteLLM, Catalog, UI, Portal)
+    desc: Port-forward all services (MLflow, LiteLLM, OpenMetadata, Catalog, UI, Portal)
     silent: true
     vars:
       PORTAL_LOCAL_PORT: '3000'
       UI_LOCAL_PORT: '3001'
       MLFLOW_LOCAL_PORT: '5000'
       LITELLM_LOCAL_PORT: '4000'
+      OPENMETADATA_LOCAL_PORT: '8585'
+      CATALOG_LOCAL_PORT: '8090'
     cmds:
       - |
         echo "Port-forwarding all services..."
@@ -84,9 +91,11 @@ tasks:
         echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
         echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
+        echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
+        echo "Catalog:        http://localhost:{{.CATALOG_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
 
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+    deps: [mlflow:port-forward, litellm:port-forward, openmetadata:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]

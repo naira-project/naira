@@ -13,9 +13,15 @@ vars:
     - name: depl-calls-svc
       dir: '{{.PLUGINS_BASE}}/depl_calls_svc'
       image: depl-calls-svc:local
+    - name: depl-uses-litellm
+      dir: '{{.PLUGINS_BASE}}/depl_uses_litellm'
+      image: depl-uses-litellm:local
     - name: fluxcd
       dir: '{{.PLUGINS_BASE}}/fluxcd'
       image: fluxcd:local
+    - name: openmetadata
+      dir: '{{.PLUGINS_BASE}}/openmetadata'
+      image: openmetadata:local
 
 tasks:
   image:build:

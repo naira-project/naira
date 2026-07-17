@@ -29,4 +29,18 @@ tasks:
   port-forward:
     desc: Expose MLflow on localhost:5000
     cmds:
-      - kubectl -n {{.MLFLOW_NAMESPACE}} port-forward {{.MLFL
+      - kubectl -n {{.MLFLOW_NAMESPACE}} port-forward {{.MLFLOW_SERVICE}} {{.MLFLOW_LOCAL_PORT}}:{{.MLFLOW_REMOTE_PORT}}
+
+  seed:
+    desc: Seed a sample model in MLflow (requires port-forward)
+    cmds:
+      - |
+        mkdir -p '{{.LOCAL_WORK_DIR}}/venvs'
+      - |
+        python3 -m venv '{{.MLFLOW_VENV_DIR}}'
+      - |
+        '{{.MLFLOW_VENV_DIR}}/bin/pip' install --upgrade pip
+      - |
+        '{{.MLFLOW_VENV_DIR}}/bin/pip' install -r '{{.MLFLOW_REQUIREMENTS}}'
+      - |
+        MLFLOW_TRACKING_URI=http://127.0.0.1:{{.MLFLOW_LOCAL_PORT}} '{{.MLFLOW_VENV_DIR}}/bin/python' '{{.MLFLOW_REGISTER_SCRIPT}}'
