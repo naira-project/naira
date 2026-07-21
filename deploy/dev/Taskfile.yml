@@ -83,6 +83,11 @@ vars:
   THALAMUS_WEBUI_SERVICE: svc/open-webui
   THALAMUS_WEBUI_LOCAL_PORT: '8092'
   THALAMUS_WEBUI_REMOTE_PORT: '80'
+  MCPO_NAMESPACE: idp-system
+  MCPO_MANIFEST: infra/kubernetes/mcpo.yaml
+  MCPO_SERVICE: svc/mcpo
+  MCPO_LOCAL_PORT: '8093'
+  MCPO_REMOTE_PORT: '8000'
 
 tasks:
   default:
@@ -464,7 +469,7 @@ tasks:
       - task: mlflow:apply
       - task: postgres:apply
       - task: litellm:apply
-      - task: openmetadata:apply
+      # - task: openmetadata:apply
       - task: catalog:apply
       - task: ui:apply
       - task: portal:apply
@@ -498,7 +503,7 @@ tasks:
 
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, openmetadata:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
   
    # Reusable "Macro" Tasks
   _docker:build:
@@ -551,3 +556,27 @@ tasks:
     cmds:
       - kubectl -n {{.THALAMUS_NAMESPACE}} port-forward {{.THALAMUS_GATEWAY_SERVICE}} {{.THALAMUS_GATEWAY_LOCAL_PORT}}:{{.THALAMUS_GATEWAY_REMOTE_PORT}} &
       - kubectl -n {{.THALAMUS_WEBUI_NAMESPACE}} port-forward {{.THALAMUS_WEBUI_SERVICE}} {{.THALAMUS_WEBUI_LOCAL_PORT}}:{{.THALAMUS_WEBUI_REMOTE_PORT}}
+
+  mcpo:deploy:
+    desc: Deploy mcpo, bridging the Naira catalog MCP endpoint to Open WebUI as an OpenAPI tool server
+    deps:
+      - cluster:create
+    cmds:
+      - task: mcpo:apply
+
+  mcpo:apply:
+    internal: true
+    cmds:
+      - kubectl apply -f {{.MCPO_MANIFEST}}
+      - kubectl -n {{.MCPO_NAMESPACE}} rollout status deploy/mcpo --timeout=180s
+      - kubectl -n {{.MCPO_NAMESPACE}} get pods -l app=mcpo
+
+  mcpo:undeploy:
+    desc: Remove mcpo from kind
+    cmds:
+      - kubectl delete -f {{.MCPO_MANIFEST}} --ignore-not-found
+
+  mcpo:port-forward:
+    desc: Expose mcpo on localhost:8093
+    cmds:
+      - kubectl -n {{.MCPO_NAMESPACE}} port-forward {{.MCPO_SERVICE}} {{.MCPO_LOCAL_PORT}}:{{.MCPO_REMOTE_PORT}}
