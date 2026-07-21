@@ -498,3 +498,11 @@ tasks:
     internal: true
     cmds:
       - kind load docker-image {{.IMAGE}} --name {{.CLUSTER_NAME}}
+
+
+  openwebui:deploy:
+    cmds:
+      - helm repo add open-webui https://open-webui.github.io/helm-charts
+      - helm repo update
+      - helm install openwebui open-webui/open-webui
+      - kubectl get pods
