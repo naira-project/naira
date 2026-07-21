@@ -29,6 +29,8 @@ func NewRouter(service *catalog.Service, logger *log.Logger) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
+	router.Mount("/mcp", NewMCPHandler(service, logger))
+
 	router.Route("/v1", func(r chi.Router) {
 		r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
 			response := service.RunAllPlugins(r.Context())
@@ -74,6 +76,11 @@ func NewRouter(service *catalog.Service, logger *log.Logger) http.Handler {
 			}
 
 			writeJSON(w, http.StatusOK, nodeFromCatalogNode(node))
+			return nil
+		}))
+
+		r.Get("/kinds", handle(func(w http.ResponseWriter, r *http.Request) error {
+			writeJSON(w, http.StatusOK, catalogKinds)
 			return nil
 		}))
 
