@@ -1,0 +1,204 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "naira-catalog",
+    "description": "Naira catalog REST API — nodes, relations, and plugin runs.",
+    "version": "v1.0.0"
+  },
+  "servers": [
+    { "url": "/" }
+  ],
+  "paths": {
+    "/v1/nodes": {
+      "get": {
+        "operationId": "listNodes",
+        "summary": "List catalog nodes",
+        "description": "List catalog nodes, optionally filtered by name, kind, or path.",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" },
+            "description": "Maximum number of nodes to return per page."
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Opaque token from a previous listNodes call to fetch the next page."
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Equality filter. The value MUST be wrapped in literal double-quote characters: field=\"value\". Supported fields: name, kind, path. Example value for this parameter: kind=\"model\" (note the quote characters around model are required, not optional — kind=model without quotes is rejected)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListNodesResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/kinds": {
+      "get": {
+        "operationId": "listKinds",
+        "summary": "List catalog kinds",
+        "description": "List the known catalog node and relation kinds.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/relations": {
+      "get": {
+        "operationId": "listRelations",
+        "summary": "List catalog relations",
+        "description": "List catalog relations, optionally filtered by name, kind, fromNode, or toNode.",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" },
+            "description": "Maximum number of relations to return per page."
+          },
+          {
+            "name": "pageToken",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Opaque token from a previous listRelations call to fetch the next page."
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Equality filter. The value MUST be wrapped in literal double-quote characters: field=\"value\". Supported fields: name, kind, fromNode, toNode. Example value for this parameter: kind=\"uses_model\" (note the quote characters around uses_model are required, not optional — kind=uses_model without quotes is rejected)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListRelationsResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/plugins:run": {
+      "post": {
+        "operationId": "runPlugins",
+        "summary": "Run all catalog plugins",
+        "description": "Run all registered catalog plugins to refresh nodes and relations.",
+        "responses": {
+          "202": {
+            "description": "Plugins ran",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RunPluginsResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PluginClaim": {
+        "type": "object",
+        "properties": {
+          "plugin": { "type": "string" },
+          "props": { "type": "object", "additionalProperties": { "type": "string" } }
+        }
+      },
+      "Node": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "kind": { "type": "string" },
+          "path": { "type": "string" },
+          "pluginClaims": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PluginClaim" }
+          }
+        }
+      },
+      "ListNodesResponse": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Node" }
+          },
+          "nextPageToken": { "type": "string" },
+          "totalSize": { "type": "integer" }
+        }
+      },
+      "Relation": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "kind": { "type": "string" },
+          "fromNode": { "type": "string" },
+          "toNode": { "type": "string" },
+          "pluginClaims": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PluginClaim" }
+          }
+        }
+      },
+      "ListRelationsResponse": {
+        "type": "object",
+        "properties": {
+          "relations": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Relation" }
+          },
+          "nextPageToken": { "type": "string" },
+          "totalSize": { "type": "integer" }
+        }
+      },
+      "RunPluginResult": {
+        "type": "object",
+        "properties": {
+          "plugin": { "type": "string" },
+          "error": { "type": "string" }
+        }
+      },
+      "RunPluginsResponse": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/RunPluginResult" }
+          }
+        }
+      }
+    }
+  }
+}

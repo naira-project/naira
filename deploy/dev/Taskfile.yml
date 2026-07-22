@@ -83,11 +83,6 @@ vars:
   THALAMUS_WEBUI_SERVICE: svc/open-webui
   THALAMUS_WEBUI_LOCAL_PORT: '8092'
   THALAMUS_WEBUI_REMOTE_PORT: '80'
-  MCPO_NAMESPACE: idp-system
-  MCPO_MANIFEST: infra/kubernetes/mcpo.yaml
-  MCPO_SERVICE: svc/mcpo
-  MCPO_LOCAL_PORT: '8093'
-  MCPO_REMOTE_PORT: '8000'
 
 tasks:
   default:
@@ -522,6 +517,19 @@ tasks:
       - cluster:create
     cmds:
       - task: thalamus:apply
+  
+  thalamus:install-crds:
+      desc: Install Thalamus CRD releases (excluding gateway-api-crds, which is already managed by the flux-system "gateway-api" Kustomization on this cluster)
+      cmds:
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=gateway-api-crds
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=gateway-api-inference-extension-crds
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=thalamus-crds
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=agentgateway-crds
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=agentgateway
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=external-dns
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=open-webui
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=thalamus
+        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=kube-prometheus-stack
 
   thalamus:apply:
     internal: true
@@ -556,27 +564,3 @@ tasks:
     cmds:
       - kubectl -n {{.THALAMUS_NAMESPACE}} port-forward {{.THALAMUS_GATEWAY_SERVICE}} {{.THALAMUS_GATEWAY_LOCAL_PORT}}:{{.THALAMUS_GATEWAY_REMOTE_PORT}} &
       - kubectl -n {{.THALAMUS_WEBUI_NAMESPACE}} port-forward {{.THALAMUS_WEBUI_SERVICE}} {{.THALAMUS_WEBUI_LOCAL_PORT}}:{{.THALAMUS_WEBUI_REMOTE_PORT}}
-
-  mcpo:deploy:
-    desc: Deploy mcpo, bridging the Naira catalog MCP endpoint to Open WebUI as an OpenAPI tool server
-    deps:
-      - cluster:create
-    cmds:
-      - task: mcpo:apply
-
-  mcpo:apply:
-    internal: true
-    cmds:
-      - kubectl apply -f {{.MCPO_MANIFEST}}
-      - kubectl -n {{.MCPO_NAMESPACE}} rollout status deploy/mcpo --timeout=180s
-      - kubectl -n {{.MCPO_NAMESPACE}} get pods -l app=mcpo
-
-  mcpo:undeploy:
-    desc: Remove mcpo from kind
-    cmds:
-      - kubectl delete -f {{.MCPO_MANIFEST}} --ignore-not-found
-
-  mcpo:port-forward:
-    desc: Expose mcpo on localhost:8093
-    cmds:
-      - kubectl -n {{.MCPO_NAMESPACE}} port-forward {{.MCPO_SERVICE}} {{.MCPO_LOCAL_PORT}}:{{.MCPO_REMOTE_PORT}}

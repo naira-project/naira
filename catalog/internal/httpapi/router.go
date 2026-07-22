@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
@@ -21,6 +22,11 @@ func NewRouter(service *catalog.Service, logger *log.Logger) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{"*"},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+		AllowedHeaders: []string{"*"},
+	}))
 	if logger != nil {
 		router.Use(requestLogger(logger))
 	}
@@ -28,6 +34,8 @@ func NewRouter(service *catalog.Service, logger *log.Logger) http.Handler {
 	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	router.Get("/openapi.json", serveOpenAPISpec)
 
 	router.Mount("/mcp", NewMCPHandler(service, logger))
 

@@ -90,6 +90,24 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			},
 		},
 		{
+			name:               "serves the OpenAPI spec",
+			method:             http.MethodGet,
+			path:               "/openapi.json",
+			expectedStatusCode: http.StatusOK,
+			validatePayload: func(t *testing.T, body []byte) {
+				var payload struct {
+					OpenAPI string         `json:"openapi"`
+					Paths   map[string]any `json:"paths"`
+				}
+				require.NoError(t, json.Unmarshal(body, &payload))
+				assert.Equal(t, "3.1.0", payload.OpenAPI)
+				assert.Contains(t, payload.Paths, "/v1/nodes")
+				assert.Contains(t, payload.Paths, "/v1/relations")
+				assert.Contains(t, payload.Paths, "/v1/kinds")
+				assert.Contains(t, payload.Paths, "/v1/plugins:run")
+			},
+		},
+		{
 			name:               "lists models",
 			method:             http.MethodGet,
 			path:               "/v1/nodes?filter=kind=%22model%22",
