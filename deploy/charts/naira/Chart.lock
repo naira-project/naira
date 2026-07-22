@@ -1,12 +1,12 @@
 dependencies:
 - name: catalog
-  repository: file://../catalog
+  repository: oci://ghcr.io/naira-project/charts
   version: 0.1.0
 - name: ui
-  repository: file://../ui
+  repository: oci://ghcr.io/naira-project/charts
   version: 0.1.0
 - name: portal
-  repository: file://../portal
+  repository: oci://ghcr.io/naira-project/charts
   version: 0.1.0
-digest: sha256:233680543b13887763715ecd6a853cb661f9b79097e0f93c8eb0426827567167
-generated: "2026-07-22T10:42:00.663387+02:00"
+digest: sha256:19b2e344c41b3586a25724ee3e4fa502a04c133e9adb1680bb6e5115beeef737
+generated: "2026-07-22T11:04:33.729399+02:00"

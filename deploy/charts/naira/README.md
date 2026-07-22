@@ -10,9 +10,9 @@ Kubernetes: `>=1.29.0-0`
 
 | Repository | Name | Version |
 |------------|------|---------|
-| file://../catalog | catalog | 0.1.0 |
-| file://../portal | portal | 0.1.0 |
-| file://../ui | ui | 0.1.0 |
+| oci://ghcr.io/naira-project/charts | catalog | 0.1.0 |
+| oci://ghcr.io/naira-project/charts | portal | 0.1.0 |
+| oci://ghcr.io/naira-project/charts | ui | 0.1.0 |
 
 ## Values
 
