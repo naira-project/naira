@@ -19,6 +19,7 @@ const (
 
 	propertyKeyOwnedBy         = "owned_by"
 	propertyKeyNamespace       = "namespace"
+	propertyKeyName            = "name"
 	propertyKeyPhase           = "phase"
 	propertyKeyEngineType      = "engine_type"
 	propertyKeyEPPType         = "epp_type"
@@ -76,10 +77,14 @@ func (p *Plugin) collectFromCRD(ctx context.Context) (pluginapi.CollectResponse,
 	relations := make([]pluginapi.RelationClaim, 0, len(crdModels))
 
 	for _, crd := range crdModels {
+		modelPath := crd.Name
+		if crd.Spec.Weights.HF != nil {
+			modelPath = crd.Spec.Weights.HF.RepoID
+		}
 		modelNode := pluginapi.NodeClaim{
 			ID: pluginapi.NodeID{
 				Kind: pluginapi.NodeKindModel,
-				Path: pluginName + "/" + crd.Namespace + "/" + crd.Name,
+				Path: pluginName + "/" + modelPath,
 			},
 			Properties: crdProperties(crd),
 		}
@@ -130,13 +135,13 @@ func (p *Plugin) collectFromAPI(ctx context.Context) (pluginapi.CollectResponse,
 func crdProperties(crd thalamusv1alpha1.Model) pluginapi.PropertyMap {
 	props := pluginapi.PropertyMap{
 		propertyKeyNamespace:   crd.Namespace,
+		propertyKeyName:        crd.Name,
 		propertyKeyPhase:       string(crd.Status.Phase),
 		propertyKeyEngineType:  string(crd.Status.EngineType),
 		propertyKeyEPPType:     string(crd.Status.EPPType),
 		propertyKeyEngineImage: crd.Spec.Serving.Engine.Image,
 		propertyKeyWeightsType: string(crd.Spec.Weights.Type),
 	}
-
 	if crd.Spec.Weights.HF != nil {
 		props[propertyKeyWeightsHFRepoID] = crd.Spec.Weights.HF.RepoID
 	}

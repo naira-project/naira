@@ -76,6 +76,8 @@ vars:
   THALAMUS_PLUGIN_IMAGE: thalamus:local
   THALAMUS_MANIFEST: infra/kubernetes/thalamus.yaml
   THALAMUS_CRD_URL: https://raw.githubusercontent.com/cobaltcore-dev/thalamus/132c032777dc9022f0fc85e7289aebca90317065/helm/thalamus-crds/templates/thalamus.cloud_models.yaml
+  DEPL_USES_THALAMUS_PLUGIN_DIR: '{{.PLUGINS_BASE}}/depl_uses_thalamus'
+  DEPL_USES_THALAMUS_PLUGIN_IMAGE: depl-uses-thalamus:local
 
 tasks:
   default:
@@ -313,6 +315,20 @@ tasks:
       - kubectl delete -f {{.THALAMUS_MANIFEST}} --ignore-not-found
       - kubectl delete -f {{.THALAMUS_CRD_URL}} --ignore-not-found
 
+  depl-uses-thalamus:image:build:
+    desc: Build the depl-uses-thalamus plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.DEPL_USES_THALAMUS_PLUGIN_IMAGE}}', DIR: '{{.DEPL_USES_THALAMUS_PLUGIN_DIR}}' }
+
+  depl-uses-thalamus:image:load:
+    desc: Load the depl-uses-thalamus plugin image into kind
+    deps:
+      - depl-uses-thalamus:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.DEPL_USES_THALAMUS_PLUGIN_IMAGE}}' }
+
   thalamus:image:build:
     desc: Build the thalmaus plugin Docker image
     cmds:
@@ -385,6 +401,7 @@ tasks:
       - task: depl-calls-svc:image:load
       - task: depl-uses-litellm:image:load
       - task: thalamus:image:load
+      - task: depl-uses-thalamus:image:load
       - task: fluxcd:image:load
       - task: openmetadata:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}

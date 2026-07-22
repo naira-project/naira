@@ -110,6 +110,32 @@ subjects:
     name: catalog
     namespace: idp-system
 ---
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: plugin-depl-uses-thalamus
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: plugin-depl-uses-thalamus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: plugin-depl-uses-thalamus
+subjects:
+  - kind: ServiceAccount
+    name: catalog
+    namespace: idp-system
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -291,6 +317,27 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+        - name: plugin-depl-uses-thalamus
+          image: depl-uses-thalamus:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50058"
+            - name: DEPL_USES_THALAMUS_BASE_URL
+              value: "<API_URL>"
+            - name: DEPL_USES_THALAMUS_BEARER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: THALAMUS_BEARER_TOKEN
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
       containers:
         - name: catalog
           image: catalog:local
@@ -299,7 +346,7 @@ spec:
             - name: PORT
               value: "8090"
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,thalamus=localhost:50057"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,thalamus=localhost:50057,depl-uses-thalamus=localhost:50058"
           ports:
             - containerPort: 8090
               name: http
