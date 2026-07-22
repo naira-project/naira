@@ -72,6 +72,8 @@ vars:
   OPENMETADATA_SEED_SCRIPT: '{{.OPENMETADATA_TOOL_DIR}}/seed_sample_tables.py'
   OPENMETADATA_REQUIREMENTS: '{{.OPENMETADATA_TOOL_DIR}}/requirements.txt'
   OPENMETADATA_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/openmetadata-seed'
+  THALAMUS_PLUGIN_DIR: '{{.PLUGINS_BASE}}/thalamus'
+  THALAMUS_PLUGIN_IMAGE: thalamus:local
 
 tasks:
   default:
@@ -297,6 +299,20 @@ tasks:
       - task: _docker:load
         vars: { IMAGE: '{{.DEPL_USES_LITELLM_PLUGIN_IMAGE}}' }
 
+  thalamus:image:build:
+    desc: Build the thalmaus plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.THALAMUS_PLUGIN_IMAGE}}', DIR: '{{.THALAMUS_PLUGIN_DIR}}' }
+
+  thalamus:image:load:
+    desc: Load the thalamus plugin image into kind
+    deps:
+      - thalamus:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.THALAMUS_PLUGIN_IMAGE}}' }
+
   fluxcd:image:build:
     desc: Build the fluxcd plugin Docker image
     cmds:
@@ -354,6 +370,7 @@ tasks:
       - task: litellm:image:load
       - task: depl-calls-svc:image:load
       - task: depl-uses-litellm:image:load
+      - task: thalamus:image:load
       - task: fluxcd:image:load
       - task: openmetadata:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
