@@ -3,3 +3,4 @@
 .claude
 __pycache__/
 *.pyc
+deploy/charts/naira/charts/*.tgz
