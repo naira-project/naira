@@ -72,6 +72,12 @@ vars:
   OPENMETADATA_SEED_SCRIPT: '{{.OPENMETADATA_TOOL_DIR}}/seed_sample_tables.py'
   OPENMETADATA_REQUIREMENTS: '{{.OPENMETADATA_TOOL_DIR}}/requirements.txt'
   OPENMETADATA_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/openmetadata-seed'
+  THALAMUS_PLUGIN_DIR: '{{.PLUGINS_BASE}}/thalamus'
+  THALAMUS_PLUGIN_IMAGE: thalamus:local
+  THALAMUS_MANIFEST: infra/kubernetes/thalamus.yaml
+  THALAMUS_CRD_URL: https://raw.githubusercontent.com/cobaltcore-dev/thalamus/132c032777dc9022f0fc85e7289aebca90317065/helm/thalamus-crds/templates/thalamus.cloud_models.yaml
+  DEPL_USES_THALAMUS_PLUGIN_DIR: '{{.PLUGINS_BASE}}/depl_uses_thalamus'
+  DEPL_USES_THALAMUS_PLUGIN_IMAGE: depl-uses-thalamus:local
 
 tasks:
   default:
@@ -297,6 +303,46 @@ tasks:
       - task: _docker:load
         vars: { IMAGE: '{{.DEPL_USES_LITELLM_PLUGIN_IMAGE}}' }
 
+  thalamus:apply:
+    internal: true
+    cmds:
+      - kubectl apply -f {{.THALAMUS_CRD_URL}}
+      - kubectl apply -f {{.THALAMUS_MANIFEST}}
+
+  thalamus:undeploy:
+    desc: Remove thalamus CRD and dummy models from kind
+    cmds:
+      - kubectl delete -f {{.THALAMUS_MANIFEST}} --ignore-not-found
+      - kubectl delete -f {{.THALAMUS_CRD_URL}} --ignore-not-found
+
+  depl-uses-thalamus:image:build:
+    desc: Build the depl-uses-thalamus plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.DEPL_USES_THALAMUS_PLUGIN_IMAGE}}', DIR: '{{.DEPL_USES_THALAMUS_PLUGIN_DIR}}' }
+
+  depl-uses-thalamus:image:load:
+    desc: Load the depl-uses-thalamus plugin image into kind
+    deps:
+      - depl-uses-thalamus:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.DEPL_USES_THALAMUS_PLUGIN_IMAGE}}' }
+
+  thalamus:image:build:
+    desc: Build the thalmaus plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.THALAMUS_PLUGIN_IMAGE}}', DIR: '{{.THALAMUS_PLUGIN_DIR}}' }
+
+  thalamus:image:load:
+    desc: Load the thalamus plugin image into kind
+    deps:
+      - thalamus:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.THALAMUS_PLUGIN_IMAGE}}' }
+
   fluxcd:image:build:
     desc: Build the fluxcd plugin Docker image
     cmds:
@@ -354,6 +400,8 @@ tasks:
       - task: litellm:image:load
       - task: depl-calls-svc:image:load
       - task: depl-uses-litellm:image:load
+      - task: thalamus:image:load
+      - task: depl-uses-thalamus:image:load
       - task: fluxcd:image:load
       - task: openmetadata:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
@@ -453,6 +501,7 @@ tasks:
       - task: postgres:apply
       - task: litellm:apply
       - task: openmetadata:apply
+      - task: thalamus:apply
       - task: catalog:apply
       - task: ui:apply
       - task: portal:apply
@@ -462,6 +511,7 @@ tasks:
     cmds:
       - task: portal:undeploy
       - task: catalog:undeploy
+      - task: thalamus:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
       - task: openmetadata:undeploy
