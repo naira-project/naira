@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	thalamusv1alpha1 "github.com/cobaltcore-dev/thalamus/api/v1alpha1"
+	"github.com/naira-project/naira/plugins/internal/openaicompat"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -106,7 +106,7 @@ func (p *Plugin) collectFromCRD(ctx context.Context) (pluginapi.CollectResponse,
 }
 
 func (p *Plugin) collectFromAPI(ctx context.Context) (pluginapi.CollectResponse, error) {
-	models, err := p.fetchModels(ctx)
+	models, err := openaicompat.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.BearerToken)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching thalamus models: %w", err)
 	}
@@ -163,45 +163,4 @@ func crdProperties(crd thalamusv1alpha1.Model) pluginapi.PropertyMap {
 	return props
 }
 
-func (p *Plugin) fetchModels(ctx context.Context) ([]model, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/v1/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("building thalamus models request: %w", err)
-	}
-	p.addAuthorization(req)
 
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("calling thalamus models endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("thalamus models endpoint returned %s", resp.Status)
-	}
-
-	var payload modelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decoding thalamus models response: %w", err)
-	}
-
-	return payload.Data, nil
-}
-
-func (p *Plugin) addAuthorization(req *http.Request) {
-	if strings.TrimSpace(p.config.BearerToken) != "" {
-		req.Header.Set("Authorization", "Bearer "+p.config.BearerToken)
-	}
-}
-
-type modelsResponse struct {
-	Object string  `json:"object"`
-	Data   []model `json:"data"`
-}
-
-type model struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
-}
