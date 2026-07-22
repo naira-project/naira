@@ -74,6 +74,8 @@ vars:
   OPENMETADATA_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/openmetadata-seed'
   THALAMUS_PLUGIN_DIR: '{{.PLUGINS_BASE}}/thalamus'
   THALAMUS_PLUGIN_IMAGE: thalamus:local
+  THALAMUS_MANIFEST: infra/kubernetes/thalamus.yaml
+  THALAMUS_CRD_URL: https://raw.githubusercontent.com/cobaltcore-dev/thalamus/132c032777dc9022f0fc85e7289aebca90317065/helm/thalamus-crds/templates/thalamus.cloud_models.yaml
 
 tasks:
   default:
@@ -299,6 +301,18 @@ tasks:
       - task: _docker:load
         vars: { IMAGE: '{{.DEPL_USES_LITELLM_PLUGIN_IMAGE}}' }
 
+  thalamus:apply:
+    internal: true
+    cmds:
+      - kubectl apply -f {{.THALAMUS_CRD_URL}}
+      - kubectl apply -f {{.THALAMUS_MANIFEST}}
+
+  thalamus:undeploy:
+    desc: Remove thalamus CRD and dummy models from kind
+    cmds:
+      - kubectl delete -f {{.THALAMUS_MANIFEST}} --ignore-not-found
+      - kubectl delete -f {{.THALAMUS_CRD_URL}} --ignore-not-found
+
   thalamus:image:build:
     desc: Build the thalmaus plugin Docker image
     cmds:
@@ -470,6 +484,7 @@ tasks:
       - task: postgres:apply
       - task: litellm:apply
       - task: openmetadata:apply
+      - task: thalamus:apply
       - task: catalog:apply
       - task: ui:apply
       - task: portal:apply
@@ -479,6 +494,7 @@ tasks:
     cmds:
       - task: portal:undeploy
       - task: catalog:undeploy
+      - task: thalamus:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
       - task: openmetadata:undeploy

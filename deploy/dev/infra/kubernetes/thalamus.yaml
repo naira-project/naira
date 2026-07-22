@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: thalamus
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: gemma-4-26b-a4b-it
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+  weights:
+    type: hf
+    hf:
+      repoId: google/gemma-4-26B-A4B-it
+      tokenSecret:
+        name: hf-token
+        key: token
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: qwen3-6-27b
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+  weights:
+    type: hf
+    hf:
+      repoId: Qwen/Qwen3.6-27B
+      tokenSecret:
+        name: hf-token
+        key: token
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: gpt-oss-120b
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+  weights:
+    type: hf
+    hf:
+      repoId: openai/gpt-oss-120b
+      tokenSecret:
+        name: hf-token
+        key: token
