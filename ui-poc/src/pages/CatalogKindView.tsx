@@ -24,14 +24,14 @@ export default function CatalogKindView() {
           <h1 className="text-lg font-semibold capitalize text-foreground dark:text-foreground-dark-default">
             {kind}
           </h1>
-          <button
+          {/*<button
             onClick={handleSync}
             disabled={syncing}
             className="ml-auto inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
             {syncing ? 'Synchronizing…' : 'Synchronize Data'}
-          </button>
+          </button>*/}
           {syncMessage && <Badge variant="success">{syncMessage}</Badge>}
           {syncError && <Badge variant="error">{syncError}</Badge>}
         </header>

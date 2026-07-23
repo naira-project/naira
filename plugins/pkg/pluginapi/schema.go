@@ -9,6 +9,7 @@ const (
 	NodeKindFluxKustomization = "Kustomization.fluxcd"
 	NodeKindFluxHelmChart     = "HelmChart.fluxcd"
 	NodeKindGitRepository     = "git_repository"
+	NodeKindHuggingFaceRepository = "hugging_face_repository"
 )
 
 const (

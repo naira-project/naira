@@ -56,11 +56,11 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
                 loadingIndicator: { enabled: false },
               },
               {
-                pathSegment: 'git_repository',
-                label: 'Git Repository',
+                pathSegment: 'hugging_face_repository',
+                label: 'Hugging Face Repository',
                 entityType: 'naira',
                 hideFromNav: false,
-                url: `${UI_BASE_URL}/catalog/kinds/git_repository`,
+                url: `${UI_BASE_URL}/catalog/kinds/hugging_face_repository`,
                 loadingIndicator: { enabled: false },
               },
               {

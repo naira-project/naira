@@ -93,7 +93,7 @@ func (p *Plugin) collectFromCRD(ctx context.Context) (pluginapi.CollectResponse,
 		if crd.Spec.Weights.HF != nil {
 			repoNode := pluginapi.NodeClaim{
 				ID: pluginapi.NodeID{
-					Kind: pluginapi.NodeKindGitRepository,
+					Kind: pluginapi.NodeKindHuggingFaceRepository,
 					Path: "huggingface/" + crd.Spec.Weights.HF.RepoID,
 				},
 				Properties: pluginapi.PropertyMap{},
