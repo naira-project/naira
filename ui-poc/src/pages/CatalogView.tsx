@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, RefreshCw, Layers } from 'lucide-react';
 import { Input } from '../components/ui/input';
@@ -8,7 +8,9 @@ import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { useRelationSummaries } from '../hooks/useRelationSummaries';
 import { useCatalogSync } from '../hooks/useCatalogSync';
 import { NodeResource } from '../lib/catalogApi';
+import { derivePlugins } from '../lib/kindUtils';
 import KindSelector from '../components/KindSelector';
+import PluginTabs from '../components/PluginTabs';
 import GenericTable from '../components/GenericTable';
 
 /**
@@ -26,8 +28,23 @@ export default function CatalogView() {
   // Fetch nodes for the active kind
   const { nodes, loading: nodesLoading, error: nodesError } = useCatalogNodes(activeKind ?? '');
 
-  // Relation summaries — computed whenever nodes change
-  const { relationSummaries } = useRelationSummaries(nodes);
+  // Per-plugin tab, shown below the kind selector. Resets whenever the kind changes.
+  const [activePlugin, setActivePlugin] = useState<string | null>(null);
+  useEffect(() => {
+    setActivePlugin(null);
+  }, [activeKind]);
+
+  const plugins = useMemo(() => derivePlugins(nodes), [nodes]);
+  const filteredNodes = useMemo(
+    () =>
+      activePlugin
+        ? nodes.filter((n) => n.pluginClaims?.some((c) => c.plugin === activePlugin))
+        : nodes,
+    [nodes, activePlugin]
+  );
+
+  // Relation summaries — computed whenever the filtered node set changes
+  const { relationSummaries } = useRelationSummaries(filteredNodes);
 
   // Catalog sync — triggers plugin execution
   const { syncing, syncMessage, syncError, handleSync } = useCatalogSync(refreshKinds);
@@ -117,10 +134,16 @@ export default function CatalogView() {
                 )}
                 {!nodesLoading && !nodesError && (
                   <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
-                    ({nodes.length} node{nodes.length !== 1 ? 's' : ''})
+                    ({filteredNodes.length} node{filteredNodes.length !== 1 ? 's' : ''})
                   </span>
                 )}
               </div>
+
+              {!nodesLoading && !nodesError && plugins.length > 0 && (
+                <div className="mb-4">
+                  <PluginTabs plugins={plugins} activePlugin={activePlugin} onSelect={setActivePlugin} />
+                </div>
+              )}
 
               {nodesError && (
                 <p className="text-sm text-red-500">{nodesError}</p>
@@ -128,7 +151,7 @@ export default function CatalogView() {
 
               {!nodesLoading && !nodesError && (
                 <GenericTable
-                  nodes={nodes}
+                  nodes={filteredNodes}
                   kind={activeKind}
                   onSelect={handleSelect}
                   relationSummaries={relationSummaries}

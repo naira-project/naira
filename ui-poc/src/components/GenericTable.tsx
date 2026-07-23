@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { NodeResource, nodeProps } from '../lib/catalogApi';
-import { inferColumns, formatPropValue, parsePath, RelationSummary } from '../lib/kindUtils';
+import { inferColumns, formatPropValue, parsePath, namespaceColumnLabel, RelationSummary } from '../lib/kindUtils';
 
 interface GenericTableProps {
   nodes: NodeResource[];
@@ -37,6 +37,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
   // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
   // rendered explicitly as the core columns, so we only need the plugin tail here.
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
+  const namespaceLabel = namespaceColumnLabel(kind);
   const pluginColumns = useMemo(() => columns.slice(2), [columns]);
   const pluginColCount = pluginColumns.length;
   const hasPluginColumns = pluginColCount > 0;
@@ -93,7 +94,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
           <span className={labelText}>name</span>
         </div>
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
-          <span className={labelText}>namespace</span>
+          <span className={labelText}>{namespaceLabel}</span>
         </div>
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
           <span className={labelText}>Relations</span>
