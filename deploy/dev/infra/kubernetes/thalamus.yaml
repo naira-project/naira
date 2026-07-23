@@ -1,0 +1,294 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: thalamus
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: hf-token
+  namespace: thalamus
+type: Opaque
+stringData:
+  HF_TOKEN: <HF_TOKEN>
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: qwen3-1-7b
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: docker.io/vllm/vllm-openai-cpu:v0.25.0
+      args:
+        - "--max-model-len=8192"
+        - "--dtype=bfloat16"
+        - "--enable-auto-tool-choice"
+        - "--tool-call-parser=hermes"
+        - '--default-chat-template-kwargs={"enable_thinking": false}'
+      env:
+        - name: VLLM_CPU_KVCACHE_SPACE
+          value: "4"
+      resources:
+        requests:
+          cpu: "4"
+          memory: 14Gi
+        limits:
+          cpu: "6"
+          memory: 14Gi
+  weights:
+    type: hf
+    hf:
+      repoId: Qwen/Qwen3-1.7b
+      tokenSecret:
+        name: hf-token
+        key: HF_TOKEN
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: open-webui
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: open-webui
+  namespace: open-webui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: open-webui
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: open-webui
+    spec:
+      containers:
+        - name: open-webui
+          image: ghcr.io/open-webui/open-webui:main
+          env:
+            - name: WEBUI_AUTH
+              value: "False"
+            - name: DEFAULT_USER_ROLE
+              value: "admin"
+            - name: OPENAI_API_BASE_URL
+              value: "http://inference-gateway.thalamus.svc.cluster.local/v1"
+            - name: ENABLE_OLLAMA_API
+              value: "False"
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: data
+              mountPath: /app/backend/data
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: 1
+              memory: 2Gi
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: open-webui
+  namespace: open-webui
+spec:
+  selector:
+    app: open-webui
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  type: ClusterIP
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: gemma-4-26b-a4b-it
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+      args:
+        - "--max-model-len=8192"
+        - "--tensor-parallel-size=2"
+      resources:
+        requests:
+          nvidia.com/gpu: "2"
+        limits:
+          nvidia.com/gpu: "2"
+    epp:
+      image: us-central1-docker.pkg.dev/k8s-staging-images/llm-d/epp:v0.3.0
+  weights:
+    type: hf
+    hf:
+      repoId: google/gemma-4-26B-A4B-it
+      tokenSecret:
+        name: hf-token
+        key: token
+  scheduling:
+    nodeSelector:
+      cloud.google.com/gke-accelerator: nvidia-h100-80gb
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: gemma-4-31b-it
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+      args:
+        - "--max-model-len=8192"
+        - "--tensor-parallel-size=2"
+      resources:
+        requests:
+          nvidia.com/gpu: "2"
+        limits:
+          nvidia.com/gpu: "2"
+  weights:
+    type: hf
+    hf:
+      repoId: google/gemma-4-31B-it
+      tokenSecret:
+        name: hf-token
+        key: token
+  scheduling:
+    nodeSelector:
+      cloud.google.com/gke-accelerator: nvidia-h100-80gb
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: qwen-agentworld-35b-a3b
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+      args:
+        - "--max-model-len=32768"
+        - "--tensor-parallel-size=2"
+      resources:
+        requests:
+          nvidia.com/gpu: "2"
+        limits:
+          nvidia.com/gpu: "2"
+  weights:
+    type: hf
+    hf:
+      repoId: Qwen/Qwen-AgentWorld-35B-A3B
+      tokenSecret:
+        name: hf-token
+        key: token
+  scheduling:
+    nodeSelector:
+      cloud.google.com/gke-accelerator: nvidia-h100-80gb
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: qwen3-6-27b
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+      args:
+        - "--max-model-len=32768"
+        - "--tensor-parallel-size=2"
+      resources:
+        requests:
+          nvidia.com/gpu: "2"
+        limits:
+          nvidia.com/gpu: "2"
+  weights:
+    type: hf
+    hf:
+      repoId: Qwen/Qwen3.6-27B
+      tokenSecret:
+        name: hf-token
+        key: token
+  scheduling:
+    nodeSelector:
+      cloud.google.com/gke-accelerator: nvidia-h100-80gb
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: jina-embeddings-v5-text-small
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+      args:
+        - "--max-model-len=8192"
+        - "--task=embed"
+      resources:
+        requests:
+          nvidia.com/gpu: "1"
+        limits:
+          nvidia.com/gpu: "1"
+  weights:
+    type: hf
+    hf:
+      repoId: jinaai/jina-embeddings-v5-text-small-retrieval
+      tokenSecret:
+        name: hf-token
+        key: token
+  scheduling:
+    nodeSelector:
+      cloud.google.com/gke-accelerator: nvidia-l4
+---
+apiVersion: thalamus.cloud/v1alpha1
+kind: Model
+metadata:
+  name: gpt-oss-120b
+  namespace: thalamus
+spec:
+  serving:
+    engine:
+      image: vllm/vllm-openai:v0.9.0
+      args:
+        - "--max-model-len=32768"
+        - "--tensor-parallel-size=8"
+      resources:
+        requests:
+          nvidia.com/gpu: "8"
+        limits:
+          nvidia.com/gpu: "8"
+    epp:
+      image: us-central1-docker.pkg.dev/k8s-staging-images/llm-d/epp:v0.3.0
+  weights:
+    type: hf
+    hf:
+      repoId: openai/gpt-oss-120b
+      tokenSecret:
+        name: hf-token
+        key: token
+  scheduling:
+    nodeSelector:
+      cloud.google.com/gke-accelerator: nvidia-h100-80gb

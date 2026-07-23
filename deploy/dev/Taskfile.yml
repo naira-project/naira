@@ -72,14 +72,17 @@ vars:
   OPENMETADATA_SEED_SCRIPT: '{{.OPENMETADATA_TOOL_DIR}}/seed_sample_tables.py'
   OPENMETADATA_REQUIREMENTS: '{{.OPENMETADATA_TOOL_DIR}}/requirements.txt'
   OPENMETADATA_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/openmetadata-seed'
+  THALAMUS_PLUGIN_DIR: '{{.PLUGINS_BASE}}/thalamus'
+  THALAMUS_PLUGIN_IMAGE: thalamus:local
+  THALAMUS_MANIFEST: infra/kubernetes/thalamus.yaml
+  THALAMUS_CRD_URL: https://raw.githubusercontent.com/cobaltcore-dev/thalamus/132c032777dc9022f0fc85e7289aebca90317065/helm/thalamus-crds/templates/thalamus.cloud_models.yaml
+  DEPL_USES_THALAMUS_PLUGIN_DIR: '{{.PLUGINS_BASE}}/depl_uses_thalamus'
+  DEPL_USES_THALAMUS_PLUGIN_IMAGE: depl-uses-thalamus:local
   THALAMUS_NAMESPACE: thalamus
-  THALAMUS_WEBUI_NAMESPACE: open-webui
-  THALAMUS_SRC_DIR: ../../../thalamus
-  THALAMUS_HELMFILE: '{{.THALAMUS_SRC_DIR}}/helm/helmfile.yaml.gotmpl'
-  THALAMUS_VALUES: example.values.cpu.yaml
   THALAMUS_GATEWAY_SERVICE: svc/inference-gateway
   THALAMUS_GATEWAY_LOCAL_PORT: '8091'
   THALAMUS_GATEWAY_REMOTE_PORT: '80'
+  THALAMUS_WEBUI_NAMESPACE: open-webui
   THALAMUS_WEBUI_SERVICE: svc/open-webui
   THALAMUS_WEBUI_LOCAL_PORT: '8092'
   THALAMUS_WEBUI_REMOTE_PORT: '80'
@@ -309,6 +312,45 @@ tasks:
       - task: _docker:load
         vars: { IMAGE: '{{.DEPL_USES_LITELLM_PLUGIN_IMAGE}}' }
 
+  thalamus:apply:
+    internal: true
+    cmds:
+      - kubectl apply -f {{.THALAMUS_MANIFEST}}
+
+  thalamus:undeploy:
+    desc: Remove thalamus CRD and dummy models from kind
+    cmds:
+      - kubectl delete -f {{.THALAMUS_MANIFEST}} --ignore-not-found
+      - kubectl delete -f {{.THALAMUS_CRD_URL}} --ignore-not-found
+
+  depl-uses-thalamus:image:build:
+    desc: Build the depl-uses-thalamus plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.DEPL_USES_THALAMUS_PLUGIN_IMAGE}}', DIR: '{{.DEPL_USES_THALAMUS_PLUGIN_DIR}}' }
+
+  depl-uses-thalamus:image:load:
+    desc: Load the depl-uses-thalamus plugin image into kind
+    deps:
+      - depl-uses-thalamus:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.DEPL_USES_THALAMUS_PLUGIN_IMAGE}}' }
+
+  thalamus:image:build:
+    desc: Build the thalmaus plugin Docker image
+    cmds:
+      - task: _docker:build
+        vars: { IMAGE: '{{.THALAMUS_PLUGIN_IMAGE}}', DIR: '{{.THALAMUS_PLUGIN_DIR}}' }
+
+  thalamus:image:load:
+    desc: Load the thalamus plugin image into kind
+    deps:
+      - thalamus:image:build
+    cmds:
+      - task: _docker:load
+        vars: { IMAGE: '{{.THALAMUS_PLUGIN_IMAGE}}' }
+
   fluxcd:image:build:
     desc: Build the fluxcd plugin Docker image
     cmds:
@@ -366,6 +408,8 @@ tasks:
       - task: litellm:image:load
       - task: depl-calls-svc:image:load
       - task: depl-uses-litellm:image:load
+      - task: thalamus:image:load
+      - task: depl-uses-thalamus:image:load
       - task: fluxcd:image:load
       - task: openmetadata:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
@@ -464,7 +508,8 @@ tasks:
       - task: mlflow:apply
       - task: postgres:apply
       - task: litellm:apply
-      # - task: openmetadata:apply
+      #- task: openmetadata:apply
+      - task: thalamus:apply
       - task: catalog:apply
       - task: ui:apply
       - task: portal:apply
@@ -474,6 +519,7 @@ tasks:
     cmds:
       - task: portal:undeploy
       - task: catalog:undeploy
+      - task: thalamus:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
       - task: openmetadata:undeploy
@@ -493,12 +539,14 @@ tasks:
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
         echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
         echo "Catalog:        http://localhost:{{.CATALOG_LOCAL_PORT}}"
+        echo "Thalamus GW:    http://localhost:{{.THALAMUS_GATEWAY_LOCAL_PORT}}"
+        echo "Open WebUI:     http://localhost:{{.THALAMUS_WEBUI_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
 
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward, thalamus:port-forward:gateway, thalamus:port-forward:webui]
   
    # Reusable "Macro" Tasks
   _docker:build:
@@ -516,51 +564,54 @@ tasks:
     deps:
       - cluster:create
     cmds:
+      - task: thalamus:install-crds
       - task: thalamus:apply
-  
-  thalamus:install-crds:
-      desc: Install Thalamus CRD releases (excluding gateway-api-crds, which is already managed by the flux-system "gateway-api" Kustomization on this cluster)
-      cmds:
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=gateway-api-crds
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=gateway-api-inference-extension-crds
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=thalamus-crds
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=agentgateway-crds
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=agentgateway
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=external-dns
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=open-webui
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=thalamus
-        - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=kube-prometheus-stack
 
-  thalamus:apply:
+  thalamus:install-crds:
+    desc: Install Thalamus CRD + operator releases (excluding gateway-api-crds, managed by the flux-system "gateway-api" Kustomization; and open-webui/kube-prometheus-stack, which we manage/disable ourselves)
+    cmds:
+      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=gateway-api-inference-extension-crds
+      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=thalamus-crds
+      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=agentgateway-crds
+      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=agentgateway
+      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=thalamus
+      
+  thalamus:port-forward:gateway:
     internal: true
     cmds:
-      - |
-        if [ -z "$HF_TOKEN" ]; then
-          echo "HF_TOKEN is not set. Export a Hugging Face read token before running thalamus:deploy." >&2
-          exit 1
-        fi
-      - kubectl create namespace {{.THALAMUS_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
-      - |
-        kubectl create secret generic hf-token \
-          --from-literal=HF_TOKEN="$HF_TOKEN" \
-          --namespace {{.THALAMUS_NAMESPACE}} \
-          --dry-run=client -o yaml | kubectl apply -f -
-      - helmfile --file '{{.THALAMUS_HELMFILE}}' apply --state-values-file '{{.THALAMUS_VALUES}}'
-      - kubectl -n {{.THALAMUS_NAMESPACE}} get pods
-      - kubectl -n {{.THALAMUS_WEBUI_NAMESPACE}} get pods
+      - kubectl -n {{.THALAMUS_NAMESPACE}} port-forward {{.THALAMUS_GATEWAY_SERVICE}} {{.THALAMUS_GATEWAY_LOCAL_PORT}}:{{.THALAMUS_GATEWAY_REMOTE_PORT}}
 
-  thalamus:undeploy:
-    desc: Remove Thalamus (inference gateway + Open WebUI) from kind
+  thalamus:port-forward:webui:
+    internal: true
     cmds:
-      - |
-        if [ -f '{{.THALAMUS_HELMFILE}}' ]; then
-          helmfile --file '{{.THALAMUS_HELMFILE}}' destroy --state-values-file '{{.THALAMUS_VALUES}}' || true
-        fi
-      - kubectl delete namespace {{.THALAMUS_NAMESPACE}} --ignore-not-found
-      - kubectl delete namespace {{.THALAMUS_WEBUI_NAMESPACE}} --ignore-not-found
+      - kubectl -n {{.THALAMUS_WEBUI_NAMESPACE}} port-forward {{.THALAMUS_WEBUI_SERVICE}} {{.THALAMUS_WEBUI_LOCAL_PORT}}:{{.THALAMUS_WEBUI_REMOTE_PORT}}
 
   thalamus:port-forward:
     desc: Expose the Thalamus inference gateway and Open WebUI on localhost
+    silent: true
     cmds:
-      - kubectl -n {{.THALAMUS_NAMESPACE}} port-forward {{.THALAMUS_GATEWAY_SERVICE}} {{.THALAMUS_GATEWAY_LOCAL_PORT}}:{{.THALAMUS_GATEWAY_REMOTE_PORT}} &
-      - kubectl -n {{.THALAMUS_WEBUI_NAMESPACE}} port-forward {{.THALAMUS_WEBUI_SERVICE}} {{.THALAMUS_WEBUI_LOCAL_PORT}}:{{.THALAMUS_WEBUI_REMOTE_PORT}}
+      - |
+        echo "Thalamus Gateway: http://localhost:{{.THALAMUS_GATEWAY_LOCAL_PORT}}"
+        echo "Open WebUI:       http://localhost:{{.THALAMUS_WEBUI_LOCAL_PORT}}"
+      - task: thalamus:port-forward:tunnels
+
+  thalamus:port-forward:tunnels:
+    internal: true
+    deps: [thalamus:port-forward:gateway, thalamus:port-forward:webui]
+
+  openwebui:forward:
+    desc: Port-forward everything needed to use Open WebUI with the Thalamus model and the Naira catalog tools (MCP via OpenAPI)
+    silent: true
+    cmds:
+      - |
+        echo "Port-forwarding Open WebUI stack..."
+        echo "----------------------------------------------------------------"
+        echo "Open WebUI:       http://localhost:{{.THALAMUS_WEBUI_LOCAL_PORT}}"
+        echo "Thalamus Gateway: http://localhost:{{.THALAMUS_GATEWAY_LOCAL_PORT}}"
+        echo "Catalog (tools):  http://localhost:{{.CATALOG_LOCAL_PORT}}/openapi.json"
+        echo "----------------------------------------------------------------"
+      - task: openwebui:forward:tunnels
+
+  openwebui:forward:tunnels:
+    internal: true
+    deps: [thalamus:port-forward:gateway, thalamus:port-forward:webui, catalog:port-forward]
