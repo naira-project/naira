@@ -19,6 +19,28 @@ export function parsePath(path: string): { name: string; namespace?: string } {
 }
 
 /**
+ * Label for the "second segment" column produced by `parsePath`, tailored per kind.
+ * That segment is a real Kubernetes namespace for kinds sourced from cluster objects
+ * (deployment, service, flux resources, litellm applications), but for kinds sourced
+ * from external systems (model, dataset, git_repository) it's actually the owning
+ * plugin/system or provider org — calling it "namespace" there is misleading.
+ */
+const NAMESPACE_COLUMN_LABELS: Record<string, string> = {
+  application: 'namespace',
+  deployment: 'namespace',
+  service: 'namespace',
+  'Kustomization.fluxcd': 'namespace',
+  'HelmChart.fluxcd': 'namespace',
+  model: 'source',
+  dataset: 'source',
+  git_repository: 'source',
+};
+
+export function namespaceColumnLabel(kind: string): string {
+  return NAMESPACE_COLUMN_LABELS[kind] ?? 'group';
+}
+
+/**
  * Discover all unique node kinds from the catalog API.
  * Fetches a large page of nodes and deduplicates their `kind` values.
  */
@@ -27,6 +49,19 @@ export async function discoverKinds(): Promise<string[]> {
   const nodes = await fetchNodes({ pageSize: 1000 });
   const kinds = new Set(nodes.map((n) => n.kind).filter(Boolean));
   return Array.from(kinds).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+/**
+ * Discover all unique plugin names that have claimed at least one of the given nodes.
+ */
+export function derivePlugins(nodes: NodeResource[]): string[] {
+  const plugins = new Set<string>();
+  for (const node of nodes) {
+    for (const claim of node.pluginClaims ?? []) {
+      if (claim.plugin) plugins.add(claim.plugin);
+    }
+  }
+  return Array.from(plugins).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 /**

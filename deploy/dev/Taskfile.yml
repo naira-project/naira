@@ -99,8 +99,14 @@ tasks:
   forward:all:tunnels:
     internal: true
     deps: [mlflow:port-forward, litellm:port-forward, openmetadata:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+      
+   # Reusable "Macro" Tasks
+  _docker:build:
+    internal: true
+    cmds:
+      - docker build -t {{.IMAGE}} -f {{.DIR}}/Dockerfile ../../
 
-    seed:all:
+  seed:all:
     desc: Seed sample data in MLflow and OpenMetadata (requires port-forward)
     cmds:
       - task: mlflow:seed
