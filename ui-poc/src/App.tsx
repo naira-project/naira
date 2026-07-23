@@ -1,6 +1,7 @@
 import { ThemeProvider } from './contexts/ThemeContext';
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
 import CatalogView from './pages/CatalogView';
+import CatalogKindView from './pages/CatalogKindView';
 import CatalogDetail from './pages/CatalogDetail';
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
         <Routes>
           <Route path="/" element={<CatalogView />} />
           <Route path="/catalog" element={<CatalogView />} />
+          <Route path="/catalog/kinds/:kind" element={<CatalogKindView />} />
           <Route path="/catalog/:kind/*" element={<CatalogDetail />} />
         </Routes>
     </Router>

@@ -539,14 +539,12 @@ tasks:
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
         echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
         echo "Catalog:        http://localhost:{{.CATALOG_LOCAL_PORT}}"
-        echo "Thalamus GW:    http://localhost:{{.THALAMUS_GATEWAY_LOCAL_PORT}}"
-        echo "Open WebUI:     http://localhost:{{.THALAMUS_WEBUI_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
 
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward, thalamus:port-forward:gateway, thalamus:port-forward:webui]
+    deps: [mlflow:port-forward, litellm:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
   
    # Reusable "Macro" Tasks
   _docker:build:
@@ -564,18 +562,23 @@ tasks:
     deps:
       - cluster:create
     cmds:
-      - task: thalamus:install-crds
+      - task: thalamus:install-local
       - task: thalamus:apply
+  
+  thalamus:install-local:
+    desc: Install Thalamus locally through Helm charts
+    cmds: 
+      - kubectl create namespace thalamus
+      - kubectl create secret generic hf-token \
+          --from-literal=HF_TOKEN="$HF_TOKEN" \
+          --namespace thalamus
+      - helmfile --file helm/helmfile.yaml.gotmpl apply \
+          --state-values-file helm/example.values.cpu.yaml
 
-  thalamus:install-crds:
-    desc: Install Thalamus CRD + operator releases (excluding gateway-api-crds, managed by the flux-system "gateway-api" Kustomization; and open-webui/kube-prometheus-stack, which we manage/disable ourselves)
-    cmds:
-      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=gateway-api-inference-extension-crds
-      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=thalamus-crds
-      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=agentgateway-crds
-      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=agentgateway
-      - helmfile --file ../../../thalamus/helm/helmfile.yaml.gotmpl apply --state-values-file example.values.cpu.yaml --selector name=thalamus
-      
+  forward:thalamus:
+    desc: Port-forward Thalamus 
+    deps: [thalamus:port-forward:gateway, thalamus:port-forward:webui]
+
   thalamus:port-forward:gateway:
     internal: true
     cmds:

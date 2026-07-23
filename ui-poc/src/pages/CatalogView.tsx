@@ -1,75 +1,46 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useState } from 'react';
 import { Search, RefreshCw, Layers } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { useKinds } from '../hooks/useKinds';
-import { useCatalogNodes } from '../hooks/useCatalogNodes';
-import { useRelationSummaries } from '../hooks/useRelationSummaries';
 import { useCatalogSync } from '../hooks/useCatalogSync';
-import { NodeResource } from '../lib/catalogApi';
-import { derivePlugins } from '../lib/kindUtils';
 import KindSelector from '../components/KindSelector';
-import PluginTabs from '../components/PluginTabs';
-import GenericTable from '../components/GenericTable';
+import KindTable from '../components/KindTable';
 
 /**
- * Unified catalog view.
+ * Unified catalog view (the "Dashboard" nav entry).
  * Shows a kind selector at the top and, when a kind is selected,
  * displays all nodes of that kind in a dynamic table below.
  */
 export default function CatalogView() {
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
   // Kind discovery & selection
   const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds} = useKinds();
 
-  // Fetch nodes for the active kind
-  const { nodes, loading: nodesLoading, error: nodesError } = useCatalogNodes(activeKind ?? '');
-
-  // Per-plugin tab, shown below the kind selector. Resets whenever the kind changes.
-  const [activePlugin, setActivePlugin] = useState<string | null>(null);
-  useEffect(() => {
-    setActivePlugin(null);
-  }, [activeKind]);
-
-  const plugins = useMemo(() => derivePlugins(nodes), [nodes]);
-  const filteredNodes = useMemo(
-    () =>
-      activePlugin
-        ? nodes.filter((n) => n.pluginClaims?.some((c) => c.plugin === activePlugin))
-        : nodes,
-    [nodes, activePlugin]
-  );
-
-  // Relation summaries — computed whenever the filtered node set changes
-  const { relationSummaries } = useRelationSummaries(filteredNodes);
-
   // Catalog sync — triggers plugin execution
   const { syncing, syncMessage, syncError, handleSync } = useCatalogSync(refreshKinds);
 
-  // Filter kinds by search
-  const filteredKinds = kinds.filter((k) =>
-    k.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const handleSelect = (node: NodeResource) => {
-    navigate(`/catalog/${encodeURIComponent(activeKind!)}/${encodeURIComponent(node.path)}`);
-  };
+  // The search box filters the list of kinds while none is selected yet.
+  // Once a kind is active, KindTable's own search box takes over for filtering its nodes.
+  const filteredKinds = activeKind
+    ? kinds
+    : kinds.filter((k) => k.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="flex h-screen overflow-hidden bg-background dark:bg-background-dark-default">
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
         <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-background-dark-paper">
-          <Input
-            startAdornment={<Search size={16} />}
-            placeholder="Search kinds..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-[320px]"
-          />
+          {!activeKind && (
+            <Input
+              startAdornment={<Search size={16} />}
+              placeholder="Search kinds..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="max-w-[320px]"
+            />
+          )}
           <button
             onClick={handleSync}
             disabled={syncing}
@@ -123,40 +94,10 @@ export default function CatalogView() {
           {/* Node table area */}
           {activeKind && (
             <div>
-              <div className="mb-3 flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-foreground dark:text-foreground-dark-default">
-                  {activeKind}
-                </h2>
-                {nodesLoading && (
-                  <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
-                    Loading…
-                  </span>
-                )}
-                {!nodesLoading && !nodesError && (
-                  <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
-                    ({filteredNodes.length} node{filteredNodes.length !== 1 ? 's' : ''})
-                  </span>
-                )}
-              </div>
-
-              {!nodesLoading && !nodesError && plugins.length > 0 && (
-                <div className="mb-4">
-                  <PluginTabs plugins={plugins} activePlugin={activePlugin} onSelect={setActivePlugin} />
-                </div>
-              )}
-
-              {nodesError && (
-                <p className="text-sm text-red-500">{nodesError}</p>
-              )}
-
-              {!nodesLoading && !nodesError && (
-                <GenericTable
-                  nodes={filteredNodes}
-                  kind={activeKind}
-                  onSelect={handleSelect}
-                  relationSummaries={relationSummaries}
-                />
-              )}
+              <h2 className="mb-3 text-sm font-semibold text-foreground dark:text-foreground-dark-default">
+                {activeKind}
+              </h2>
+              <KindTable kind={activeKind} />
             </div>
           )}
         </div>
