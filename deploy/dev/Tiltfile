@@ -13,6 +13,11 @@
 # Docker image, loads it into kind, and triggers a rollout restart.
 # =============================================================================
 
+version_settings(constraint='>=0.33.0')
+
+# Load extensions
+load('ext://helm_resource', 'helm_resource', 'helm_repo')
+
 # =============================================================================
 # 1. Configuration
 # =============================================================================
@@ -22,6 +27,10 @@ CLUSTER_NAME = 'naira-idp'
 
 # Namespace shared by the Naira platform components
 IDP_NAMESPACE = 'idp-system'
+
+# Guard against accidentally applying this Tiltfile against the wrong
+# kubectl context (e.g. a real cluster instead of local kind).
+allow_k8s_contexts('kind-' + CLUSTER_NAME)
 
 # =============================================================================
 # 2. Helper: Go binary custom build
@@ -63,9 +72,10 @@ PLUGIN_SHARED_DEPS = ['../../plugins/pkg/', '../../plugins/internal/']
 
 # Ensure the kind cluster is running.  Tilt reuses an existing cluster if one
 # with the same name already exists.
-kind_create_cluster(
-    name=CLUSTER_NAME,
-    kubeconfig='',          # use the default kubeconfig path
+local_resource(
+    'kind-cluster',
+    cmd='kind create cluster --name ' + CLUSTER_NAME + ' || true',
+    labels=['infra'],
 )
 
 # =============================================================================
@@ -74,44 +84,54 @@ kind_create_cluster(
 
 # --- PostgreSQL (for LiteLLM) ---
 k8s_yaml('infra/kubernetes/postgres.yaml')
+k8s_resource('postgres', labels=['infra'])
 
 # --- MLflow ---
 k8s_yaml('infra/kubernetes/mlflow.yaml')
+k8s_resource('mlflow', port_forwards='5000:5000', labels=['infra'])
 
 # --- LiteLLM ---
 k8s_yaml('infra/kubernetes/litellm.yaml')
+k8s_resource('litellm', port_forwards='4000:4000', labels=['infra'])
 
 # --- OpenMetadata (via Helm) ---
 # The Helm charts require the openmetadata namespace and a couple of secrets to
-# exist before they run.  We create the namespace inline and apply the secrets
-# from the existing manifest.
+# exist before they run.  Both the Namespace and the Secrets live in
+# openmetadata-secrets.yaml.
 
-# Namespace + secrets for OpenMetadata
-k8s_yaml(blob('''
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: openmetadata
-'''))
+k8s_yaml('infra/kubernetes/openmetadata-secrets.yaml')
 
-k8s_yaml(
-    'infra/kubernetes/openmetadata-secrets.yaml',
-    resource_deps=['openmetadata'],   # namespace must exist first
+# Namespace + Secret objects have no owning workload, so Tilt won't surface
+# them as a normal, cleanly-named k8s_resource on its own (bare Secrets get an
+# auto-generated name like "[redacted secret mysql-secrets:...]"). Group them
+# explicitly so we get a stable name we can use in resource_deps below.
+k8s_resource(
+    new_name='openmetadata-secrets',
+    objects=[
+        'openmetadata:namespace',
+        'mysql-secrets:secret:openmetadata',
+        'airflow-secrets:secret:openmetadata',
+    ],
+    labels=['openmetadata'],
 )
 
 # OpenMetadata dependencies (MySQL + OpenSearch, no Airflow)
 helm_repo(
     'open-metadata',
     'https://helm.open-metadata.org/',
+    labels=['openmetadata'],
 )
 
 helm_resource(
     'openmetadata-deps',
     'open-metadata/openmetadata-dependencies',
     namespace='openmetadata',
-    values=['infra/helm/openmetadata-deps-values.yaml'],
-    flags=['--create-namespace'],
+    flags=[
+        '--create-namespace',
+        '--values=infra/helm/openmetadata-deps-values.yaml',
+    ],
     resource_deps=['openmetadata-secrets'],
+    labels=['openmetadata'],
 )
 
 # OpenMetadata server
@@ -119,8 +139,12 @@ helm_resource(
     'openmetadata',
     'open-metadata/openmetadata',
     namespace='openmetadata',
-    values=['infra/helm/openmetadata-values.yaml'],
+    flags=[
+        '--values=infra/helm/openmetadata-values.yaml',
+    ],
     resource_deps=['openmetadata-deps'],
+    port_forwards='8585:8585',
+    labels=['openmetadata'],
 )
 
 # =============================================================================
@@ -198,14 +222,14 @@ go_image(
 docker_build(
     'ui:local',
     '../../ui-poc',
-    dockerfile='Dockerfile',
+    dockerfile='../../ui-poc/Dockerfile',
 )
 
 # --- Portal (Node / Angular + NestJS) ---
 docker_build(
     'portal:local',
     '../../naira-openmfp-portal',
-    dockerfile='Dockerfile',
+    dockerfile='../../naira-openmfp-portal/Dockerfile',
 )
 
 # =============================================================================
@@ -217,14 +241,21 @@ k8s_yaml('infra/kubernetes/ui.yaml')
 k8s_yaml('infra/kubernetes/portal.yaml')
 
 # =============================================================================
-# 8. Port forwarding
+# 8. Port forwarding + resource organization
 # =============================================================================
 # Each resource gets a localhost tunnel so you can reach the service from your
 # browser / CLI without a separate `kubectl port-forward`.
 
-k8s_resource('catalog', port_forwards='8090:8090')
-k8s_resource('ui', port_forwards='3001:80')
-k8s_resource('portal', port_forwards='3000:3000')
-k8s_resource('mlflow', port_forwards='5000:5000')
-k8s_resource('litellm', port_forwards='4000:4000')
-k8s_resource('openmetadata', port_forwards='8585:8585')
+k8s_resource(
+    'catalog',
+    port_forwards='8090:8090',
+    resource_deps=['litellm', 'mlflow', 'openmetadata'],
+    labels=['naira'],
+)
+k8s_resource('ui', port_forwards='3001:80', labels=['naira'])
+k8s_resource(
+    'portal',
+    port_forwards='3000:3000',
+    resource_deps=['ui'],
+    labels=['naira'],
+)
