@@ -258,3 +258,7 @@ k8s_resource(
     resource_deps=['ui'],
     labels=['naira'],
 )
+
+# TODO:
+# - update Readme with Tilt instructions
+# - cache images?
