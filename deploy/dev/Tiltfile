@@ -39,18 +39,18 @@ IDP_NAMESPACE = 'idp-system'
 def go_image(img_name, binary_name, main_pkg, deps, extra_deps=[]):
     all_deps = deps + extra_deps
     build_cmd = (
-        'mkdir -p /tmp/naira-build && '
-        'cd ../../ && '
-        'CGO_ENABLED=0 go build -trimpath -o /tmp/naira-build/' + binary_name + ' ' + main_pkg + ' && '
-        'docker build -t ' + img_name + ' '
-        '-f deploy/dev/tilt-go.Dockerfile '
-        '--build-arg BINARY_NAME=' + binary_name + ' '
+        'mkdir -p /tmp/naira-build && ' +
+        'cd ../../ && ' +
+        'CGO_ENABLED=0 go build -trimpath -o /tmp/naira-build/' + binary_name + ' ' + main_pkg + ' && ' +
+        'docker build -t ' + img_name + ' ' +
+        '-f deploy/dev/tilt-go.Dockerfile ' +
+        '--build-arg BINARY_NAME=' + binary_name + ' ' +
         '/tmp/naira-build'
     )
     custom_build(
         img_name,
         build_cmd,
-        all_deps,
+        deps=all_deps,
     )
 
 # Shared dependency directories for all Go components
