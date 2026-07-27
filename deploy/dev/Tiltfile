@@ -69,7 +69,7 @@ PLUGIN_SHARED_DEPS = ['../../plugins/pkg/', '../../plugins/internal/']
 # 3. Kind cluster
 # =============================================================================
 
-# Ensure the kind cluster is running.  Tilt reuses an existing cluster if one
+# Ensure the kind cluster is running. Tilt reuses an existing cluster if one
 # with the same name already exists.
 local_resource(
     'kind-cluster',

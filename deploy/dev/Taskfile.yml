@@ -49,6 +49,14 @@ tasks:
       - go version
       - docker version
       - buf --version
+      - tilt version
+
+  tilt:
+    desc: Ensure cluster exists and launch Tilt
+    aliases: [dev]
+    cmds:
+      - task: cluster:create
+      - tilt up
 
   platform:deploy:
     desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal to kind
@@ -100,7 +108,7 @@ tasks:
     internal: true
     deps: [mlflow:port-forward, litellm:port-forward, openmetadata:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
 
-    seed:all:
+  seed:all:
     desc: Seed sample data in MLflow and OpenMetadata (requires port-forward)
     cmds:
       - task: mlflow:seed

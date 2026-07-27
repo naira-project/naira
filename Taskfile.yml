@@ -13,8 +13,14 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} check
 
+  tilt:
+    desc: Ensure cluster exists and launch Tilt development environment
+    aliases: [dev]
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} tilt
+
   platform:deploy:
-    desc: Deploy the platform to kind
+    desc: Deploy the platform to kind via Helm/manifests
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:deploy
 
