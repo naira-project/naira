@@ -1,0 +1,230 @@
+# =============================================================================
+# Naira IDP - Tilt Development Environment
+# =============================================================================
+# This Tiltfile automates the development workflow for the Naira IDP.
+# It watches source files, automatically rebuilds components, and redeploys
+# to the local kind cluster.
+#
+# Usage:
+#   cd deploy/dev && tilt up
+#
+# Use-case: writing a new plugin -> just edit Go files in plugins/cmd/<name>/
+# Tilt detects the change, rebuilds only that plugin binary, creates a minimal
+# Docker image, loads it into kind, and triggers a rollout restart.
+# =============================================================================
+
+# =============================================================================
+# 1. Configuration
+# =============================================================================
+
+# Cluster name (must match infra/kind/kind-config.yaml)
+CLUSTER_NAME = 'naira-idp'
+
+# Namespace shared by the Naira platform components
+IDP_NAMESPACE = 'idp-system'
+
+# =============================================================================
+# 2. Helper: Go binary custom build
+# =============================================================================
+# Builds a Go binary on the host (fast, uses local Go build cache) and wraps it
+# in a minimal Docker image.  No multi-stage Docker builds needed.
+#
+# Parameters:
+#   img_name    - Docker image tag (e.g. 'catalog:local')
+#   binary_name - name of the output binary (e.g. 'catalog')
+#   main_pkg    - Go package path relative to the repo root (e.g. './catalog/cmd/catalog')
+#   deps        - list of file/directory paths (relative to Tiltfile) to watch
+#   extra_deps  - optional additional file deps (e.g. go.mod, go.sum)
+# =============================================================================
+def go_image(img_name, binary_name, main_pkg, deps, extra_deps=[]):
+    all_deps = deps + extra_deps
+    build_cmd = (
+        'mkdir -p /tmp/naira-build && '
+        'cd ../../ && '
+        'CGO_ENABLED=0 go build -trimpath -o /tmp/naira-build/' + binary_name + ' ' + main_pkg + ' && '
+        'docker build -t ' + img_name + ' '
+        '-f deploy/dev/tilt-go.Dockerfile '
+        '--build-arg BINARY_NAME=' + binary_name + ' '
+        '/tmp/naira-build'
+    )
+    custom_build(
+        img_name,
+        build_cmd,
+        all_deps,
+    )
+
+# Shared dependency directories for all Go components
+GO_MOD_DEPS = ['../../go.mod', '../../go.sum']
+PLUGIN_SHARED_DEPS = ['../../plugins/pkg/', '../../plugins/internal/']
+
+# =============================================================================
+# 3. Kind cluster
+# =============================================================================
+
+# Ensure the kind cluster is running.  Tilt reuses an existing cluster if one
+# with the same name already exists.
+kind_create_cluster(
+    name=CLUSTER_NAME,
+    kubeconfig='',          # use the default kubeconfig path
+)
+
+# =============================================================================
+# 4. Infrastructure (third-party, stable images, no rebuild)
+# =============================================================================
+
+# --- PostgreSQL (for LiteLLM) ---
+k8s_yaml('infra/kubernetes/postgres.yaml')
+
+# --- MLflow ---
+k8s_yaml('infra/kubernetes/mlflow.yaml')
+
+# --- LiteLLM ---
+k8s_yaml('infra/kubernetes/litellm.yaml')
+
+# --- OpenMetadata (via Helm) ---
+# The Helm charts require the openmetadata namespace and a couple of secrets to
+# exist before they run.  We create the namespace inline and apply the secrets
+# from the existing manifest.
+
+# Namespace + secrets for OpenMetadata
+k8s_yaml(blob('''
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openmetadata
+'''))
+
+k8s_yaml(
+    'infra/kubernetes/openmetadata-secrets.yaml',
+    resource_deps=['openmetadata'],   # namespace must exist first
+)
+
+# OpenMetadata dependencies (MySQL + OpenSearch, no Airflow)
+helm_repo(
+    'open-metadata',
+    'https://helm.open-metadata.org/',
+)
+
+helm_resource(
+    'openmetadata-deps',
+    'open-metadata/openmetadata-dependencies',
+    namespace='openmetadata',
+    values=['infra/helm/openmetadata-deps-values.yaml'],
+    flags=['--create-namespace'],
+    resource_deps=['openmetadata-secrets'],
+)
+
+# OpenMetadata server
+helm_resource(
+    'openmetadata',
+    'open-metadata/openmetadata',
+    namespace='openmetadata',
+    values=['infra/helm/openmetadata-values.yaml'],
+    resource_deps=['openmetadata-deps'],
+)
+
+# =============================================================================
+# 5. Go components (custom_build → fast local compilation)
+# =============================================================================
+# Each component is compiled on the host with `go build` and packaged into a
+# minimal Docker image.  Tilt watches the listed source directories and
+# triggers a rebuild + redeploy on any change.
+
+# --- Catalog (main Go service) ---
+go_image(
+    'catalog:local',
+    'catalog',
+    './catalog/cmd/catalog',
+    ['../../catalog/cmd/', '../../catalog/internal/', '../../plugins/pkg/pluginapi/'],
+    extra_deps=GO_MOD_DEPS,
+)
+
+# --- Plugins ---
+go_image(
+    'litellm:local',
+    'litellm',
+    './plugins/cmd/litellm',
+    ['../../plugins/cmd/litellm/'],
+    extra_deps=GO_MOD_DEPS + PLUGIN_SHARED_DEPS,
+)
+
+go_image(
+    'mlflow:local',
+    'mlflow',
+    './plugins/cmd/mlflow',
+    ['../../plugins/cmd/mlflow/'],
+    extra_deps=GO_MOD_DEPS + PLUGIN_SHARED_DEPS,
+)
+
+go_image(
+    'depl-calls-svc:local',
+    'depl-calls-svc',
+    './plugins/cmd/depl_calls_svc',
+    ['../../plugins/cmd/depl_calls_svc/'],
+    extra_deps=GO_MOD_DEPS + PLUGIN_SHARED_DEPS,
+)
+
+go_image(
+    'depl-uses-litellm:local',
+    'depl-uses-litellm',
+    './plugins/cmd/depl_uses_litellm',
+    ['../../plugins/cmd/depl_uses_litellm/'],
+    extra_deps=GO_MOD_DEPS + PLUGIN_SHARED_DEPS,
+)
+
+go_image(
+    'fluxcd:local',
+    'fluxcd',
+    './plugins/cmd/fluxcd',
+    ['../../plugins/cmd/fluxcd/'],
+    extra_deps=GO_MOD_DEPS + PLUGIN_SHARED_DEPS,
+)
+
+go_image(
+    'openmetadata:local',
+    'openmetadata',
+    './plugins/cmd/openmetadata',
+    ['../../plugins/cmd/openmetadata/'],
+    extra_deps=GO_MOD_DEPS + PLUGIN_SHARED_DEPS,
+)
+
+# =============================================================================
+# 6. Frontend components (docker_build)
+# =============================================================================
+# These use the existing Dockerfiles.  When source files change, Docker
+# rebuilds using its layer cache (fast for npm install, etc.).
+
+# --- UI (React) ---
+docker_build(
+    'ui:local',
+    '../../ui-poc',
+    dockerfile='Dockerfile',
+)
+
+# --- Portal (Node / Angular + NestJS) ---
+docker_build(
+    'portal:local',
+    '../../naira-openmfp-portal',
+    dockerfile='Dockerfile',
+)
+
+# =============================================================================
+# 7. Naira platform Kubernetes manifests
+# =============================================================================
+
+k8s_yaml('infra/kubernetes/catalog.yaml')
+k8s_yaml('infra/kubernetes/ui.yaml')
+k8s_yaml('infra/kubernetes/portal.yaml')
+
+# =============================================================================
+# 8. Port forwarding
+# =============================================================================
+# Each resource gets a localhost tunnel so you can reach the service from your
+# browser / CLI without a separate `kubectl port-forward`.
+
+k8s_resource('catalog', port_forwards='8090:8090')
+k8s_resource('ui', port_forwards='3001:80')
+k8s_resource('portal', port_forwards='3000:3000')
+k8s_resource('mlflow', port_forwards='5000:5000')
+k8s_resource('litellm', port_forwards='4000:4000')
+k8s_resource('openmetadata', port_forwards='8585:8585')
