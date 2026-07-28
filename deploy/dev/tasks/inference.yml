@@ -1,0 +1,36 @@
+version: '3'
+
+vars:
+  INFERENCE_NAMESPACE: inference
+  INFERENCE_MANIFEST: infra/kubernetes/inference.yaml
+
+tasks:
+  deploy:
+    desc: Deploy vLLM inference services (2 CPU models) to kind
+    cmds:
+      - kubectl apply -f {{.INFERENCE_MANIFEST}}
+      - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status deploy/vllm-opt125m --timeout=600s
+      - kubectl -n {{.INFERENCE_NAMESPACE}} get pods
+
+  undeploy:
+    desc: Remove vLLM inference services from kind
+    cmds:
+      - kubectl delete -f {{.INFERENCE_MANIFEST}} --ignore-not-found
+
+  port-forward:
+    desc: Expose vLLM inference services on localhost
+    cmds:
+      - |
+        echo "Port-forwarding inference services..."
+        echo "----------------------------------------------------------------"
+        echo "vLLM opt-125m:   http://localhost:8001"
+        echo "----------------------------------------------------------------"
+      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/vllm-opt125m 8001:8001
+
+  test:
+    desc: Test the inference endpoints are responding
+    cmds:
+      - |
+        echo "Testing vLLM opt-125m..."
+        curl -s http://localhost:8001/v1/models | head -c 200
+        echo ""
