@@ -1,0 +1,100 @@
+# ── kube-prometheus-stack values for local kind dev environment ───────────────
+# Provides: Prometheus Operator, Prometheus, Grafana, kube-state-metrics, node-exporter
+# Disabled: Alertmanager, Thanos, Windows Exporter, Prometheus Adapter (not needed in dev)
+
+prometheus:
+  prometheusSpec:
+    # Discover ALL ServiceMonitors, not just those with Helm release labels.
+    # This lets us add custom ServiceMonitors (e.g. for vLLM) without Helm labels.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    # Also discover PodMonitors independently of Helm labels.
+    podMonitorSelectorNilUsesHelmValues: false
+
+    retention: 7d
+
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
+    # Minimal storage — enough for dev metrics for a few days
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+  # Expose Prometheus UI via port-forward only (no ingress in kind)
+  ingress:
+    enabled: false
+
+  service:
+    type: ClusterIP
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: true
+  adminPassword: admin
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  ingress:
+    enabled: false
+  service:
+    type: ClusterIP
+  # Pre-provision Prometheus as a default datasource
+  additionalDataSources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+      access: proxy
+      isDefault: true
+
+kubeStateMetrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
+
+nodeExporter:
+  enabled: true
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 50m
+      memory: 64Mi
+
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+prometheusAdapter:
+  enabled: false
+
+thanos:
+  enabled: false
+
+windows:
+  enabled: false
