@@ -1,0 +1,34 @@
+version: '3'
+
+includes:
+  mlflow:
+    taskfile: ./tasks/mlflow.yml
+    dir: .
+  openmetadata:
+    taskfile: ./tasks/openmetadata.yml
+    dir: .
+
+tasks:
+  default:
+    desc: Show available MLOps stack tasks
+    cmds:
+      - task --list
+
+  deploy:
+    desc: Deploy the MLOps stack (mlflow + openmetadata)
+    cmds:
+      - task: mlflow:deploy
+      - task: openmetadata:deploy
+
+  undeploy:
+    desc: Remove the MLOps stack from kind
+    cmds:
+      - task: mlflow:undeploy
+      - task: openmetadata:undeploy
+
+  forward:
+    desc: Port-forward all MLOps services (mlflow, openmetadata)
+    internal: true
+    deps:
+      - mlflow:port-forward
+      - openmetadata:port-forward

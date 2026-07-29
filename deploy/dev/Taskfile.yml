@@ -1,36 +1,15 @@
 version: '3'
 
 includes:
-  cluster:
-    taskfile: ./tasks/cluster.yml
-    dir: .
-  docker:
-    taskfile: ./tasks/docker.yml
-    dir: .
-  plugins:
-    taskfile: ./tasks/plugins.yml
-    dir: .
-  postgres:
-    taskfile: ./tasks/postgres.yml
-    dir: .
-  litellm:
-    taskfile: ./tasks/litellm.yml
-    dir: .
-  mlflow:
-    taskfile: ./tasks/mlflow.yml
-    dir: .
-  catalog:
-    taskfile: ./tasks/catalog.yml
-    dir: .
-  ui:
-    taskfile: ./tasks/ui.yml
-    dir: .
-  portal:
-    taskfile: ./tasks/portal.yml
-    dir: .
-  openmetadata:
-    taskfile: ./tasks/openmetadata.yml
-    dir: .
+  core:
+    taskfile: ./stacks/core/Taskfile.yml
+    dir: ./stacks/core
+  llm-inference:
+    taskfile: ./stacks/llm-inference/Taskfile.yml
+    dir: ./stacks/llm-inference
+  mlops:
+    taskfile: ./stacks/mlops/Taskfile.yml
+    dir: ./stacks/mlops
 
 tasks:
   default:
@@ -50,31 +29,54 @@ tasks:
       - docker version
       - buf --version
 
+  # ── Full platform deployment ──────────────────────────────────────────
+
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal to kind
+    desc: Deploy the full platform (core + mlops + llm-inference) to kind
     cmds:
-      - task: cluster:create
-      - task: mlflow:deploy
-      - task: postgres:deploy
-      - task: litellm:deploy
-      - task: openmetadata:deploy
-      - task: catalog:deploy
-      - task: ui:deploy
-      - task: portal:deploy
+      - task: core:deploy
+      - task: mlops:deploy
+      - task: llm-inference:deploy
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal from kind
+    desc: Remove the full platform from kind
     cmds:
-      - task: portal:undeploy
-      - task: openmetadata:undeploy
-      - task: catalog:undeploy
-      - task: litellm:undeploy
-      - task: postgres:undeploy
-      - task: mlflow:undeploy
-      - task: ui:undeploy
+      - task: llm-inference:undeploy
+      - task: mlops:undeploy
+      - task: core:undeploy
+
+  # ── Stack combinations ────────────────────────────────────────────────
+
+  platform:deploy:core-mlops:
+    desc: Deploy core + mlops stacks (Portal, Catalog, UI, MLflow, OpenMetadata)
+    cmds:
+      - task: core:deploy
+      - task: mlops:deploy
+
+  platform:deploy:core-llm-inference:
+    desc: Deploy core + llm-inference stacks (Portal, Catalog, UI, LiteLLM, vLLM, Monitoring)
+    cmds:
+      - task: core:deploy
+      - task: llm-inference:deploy
+
+  platform:deploy:core-mlops-litellm:
+    desc: Deploy core + mlops + LiteLLM only (Portal, Catalog, UI, MLflow, OpenMetadata, LiteLLM)
+    cmds:
+      - task: core:deploy
+      - task: mlops:deploy
+      - task: llm-inference:deploy:litellm
+
+  # ── Cluster management ────────────────────────────────────────────────
+
+  cluster:delete:
+    desc: Remove the kind cluster entirely
+    cmds:
+      - task: core:cluster:delete
+
+  # ── Port-forwarding ───────────────────────────────────────────────────
 
   forward:all:
-    desc: Port-forward all services (MLflow, LiteLLM, OpenMetadata, Catalog, UI, Portal)
+    desc: Port-forward all services
     silent: true
     vars:
       PORTAL_LOCAL_PORT: '3000'
@@ -83,6 +85,8 @@ tasks:
       LITELLM_LOCAL_PORT: '4000'
       OPENMETADATA_LOCAL_PORT: '8585'
       CATALOG_LOCAL_PORT: '8090'
+      PROMETHEUS_LOCAL_PORT: '9090'
+      GRAFANA_LOCAL_PORT: '3002'
     cmds:
       - |
         echo "Port-forwarding all services..."
@@ -93,15 +97,22 @@ tasks:
         echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
         echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
         echo "Catalog:        http://localhost:{{.CATALOG_LOCAL_PORT}}"
+        echo "Prometheus:     http://localhost:{{.PROMETHEUS_LOCAL_PORT}}"
+        echo "Grafana:        http://localhost:{{.GRAFANA_LOCAL_PORT}}  (admin/admin)"
         echo "----------------------------------------------------------------"
       - task: forward:all:tunnels
 
   forward:all:tunnels:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, openmetadata:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
+    deps:
+      - core:forward
+      - mlops:forward
+      - llm-inference:forward
 
-    seed:all:
+  # ── Seeding sample data ───────────────────────────────────────────────
+
+  seed:all:
     desc: Seed sample data in MLflow and OpenMetadata (requires port-forward)
     cmds:
-      - task: mlflow:seed
-      - task: openmetadata:seed
+      - task: mlops:mlflow:seed
+      - task: mlops:openmetadata:seed

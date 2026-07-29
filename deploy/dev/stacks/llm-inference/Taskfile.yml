@@ -1,0 +1,57 @@
+version: '3'
+
+includes:
+  postgres:
+    taskfile: ./tasks/postgres.yml
+    dir: .
+  litellm:
+    taskfile: ./tasks/litellm.yml
+    dir: .
+  inference:
+    taskfile: ./tasks/inference.yml
+    dir: .
+  monitoring:
+    taskfile: ./tasks/monitoring.yml
+    dir: .
+
+tasks:
+  default:
+    desc: Show available LLM Inference stack tasks
+    cmds:
+      - task --list
+
+  deploy:
+    desc: Deploy the full LLM Inference stack (postgres + litellm + inference + monitoring)
+    cmds:
+      - task: postgres:deploy
+      - task: litellm:deploy
+      - task: inference:deploy
+      - task: monitoring:deploy
+
+  deploy:litellm:
+    desc: Deploy only LiteLLM (postgres + litellm), without inference or monitoring
+    cmds:
+      - task: postgres:deploy
+      - task: litellm:deploy
+
+  undeploy:
+    desc: Remove the full LLM Inference stack from kind
+    cmds:
+      - task: monitoring:undeploy
+      - task: inference:undeploy
+      - task: litellm:undeploy
+      - task: postgres:undeploy
+
+  undeploy:litellm:
+    desc: Remove only LiteLLM and its database
+    cmds:
+      - task: litellm:undeploy
+      - task: postgres:undeploy
+
+  forward:
+    desc: Port-forward all LLM Inference services (litellm, inference, monitoring)
+    internal: true
+    deps:
+      - litellm:port-forward
+      - inference:port-forward
+      - monitoring:port-forward

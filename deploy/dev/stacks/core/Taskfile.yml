@@ -1,0 +1,50 @@
+version: '3'
+
+includes:
+  cluster:
+    taskfile: ./tasks/cluster.yml
+    dir: .
+  docker:
+    taskfile: ./tasks/docker.yml
+    dir: .
+  plugins:
+    taskfile: ./tasks/plugins.yml
+    dir: .
+  catalog:
+    taskfile: ./tasks/catalog.yml
+    dir: .
+  portal:
+    taskfile: ./tasks/portal.yml
+    dir: .
+  ui:
+    taskfile: ./tasks/ui.yml
+    dir: .
+
+tasks:
+  default:
+    desc: Show available core stack tasks
+    cmds:
+      - task --list
+
+  deploy:
+    desc: Deploy the core stack (cluster + catalog + portal + ui)
+    cmds:
+      - task: cluster:create
+      - task: catalog:deploy
+      - task: portal:deploy
+      - task: ui:deploy
+
+  undeploy:
+    desc: Remove the core stack from kind
+    cmds:
+      - task: portal:undeploy
+      - task: catalog:undeploy
+      - task: ui:undeploy
+
+  forward:
+    desc: Port-forward all core services (catalog, portal, ui)
+    internal: true
+    deps:
+      - catalog:port-forward
+      - portal:port-forward
+      - ui:port-forward

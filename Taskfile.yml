@@ -13,20 +13,50 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} check
 
+  # ── Full platform ─────────────────────────────────────────────────────
+
   platform:deploy:
-    desc: Deploy the platform to kind
+    desc: Deploy the full platform (core + mlops + llm-inference) to kind
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:deploy
+
+  platform:undeploy:
+    desc: Remove the full platform from kind
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} platform:undeploy
+
+  # ── Stack combinations ────────────────────────────────────────────────
+
+  platform:deploy:core-mlops:
+    desc: Deploy core + mlops stacks (Portal, Catalog, UI, MLflow, OpenMetadata)
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} platform:deploy:core-mlops
+
+  platform:deploy:core-llm-inference:
+    desc: Deploy core + llm-inference stacks (Portal, Catalog, UI, LiteLLM, vLLM, Monitoring)
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} platform:deploy:core-llm-inference
+
+  platform:deploy:core-mlops-litellm:
+    desc: Deploy core + mlops + LiteLLM only (Portal, Catalog, UI, MLflow, OpenMetadata, LiteLLM)
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} platform:deploy:core-mlops-litellm
+
+  # ── Port-forwarding ───────────────────────────────────────────────────
 
   forward:all:
     desc: Port-forward the main developer-facing services
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} forward:all
 
+  # ── Cluster management ────────────────────────────────────────────────
+
   cluster:delete:
     desc: Remove the cluster
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} cluster:delete
+
+  # ── Proto ─────────────────────────────────────────────────────────────
 
   proto:generate:
     desc: Generate protobuf stubs of pluginapi
@@ -37,6 +67,8 @@ tasks:
     desc: Lint proto of pluginapi
     cmds:
       - cd {{.PROTO_DIR}} && buf lint
+
+  # ── Catalog ───────────────────────────────────────────────────────────
 
   catalog:test:
     desc: Run catalog unit tests

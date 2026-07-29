@@ -4,8 +4,8 @@ vars:
   MONITORING_NAMESPACE: monitoring
   PROMETHEUS_RELEASE: prometheus
   PROMETHEUS_CHART: prometheus-community/kube-prometheus-stack
-  PROMETHEUS_VALUES: infra/helm/prometheus-values.yaml
-  SERVICEMONITOR_MANIFEST: infra/kubernetes/monitoring-servicemonitors.yaml
+  PROMETHEUS_VALUES: ./infra/helm/prometheus-values.yaml
+  SERVICEMONITOR_MANIFEST: ./infra/kubernetes/monitoring-servicemonitors.yaml
   PROMETHEUS_LOCAL_PORT: '9090'
   GRAFANA_LOCAL_PORT: '3002'
 

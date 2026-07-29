@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   POSTGRES_NAMESPACE: litellm-db
-  POSTGRES_MANIFEST: infra/kubernetes/postgres.yaml
+  POSTGRES_MANIFEST: ./infra/kubernetes/postgres.yaml
 
 tasks:
   deploy:
