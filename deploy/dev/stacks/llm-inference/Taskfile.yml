@@ -10,6 +10,9 @@ includes:
   inference:
     taskfile: ./tasks/inference.yml
     dir: .
+  llama:
+    taskfile: ./tasks/llama.yml
+    dir: .
   monitoring:
     taskfile: ./tasks/monitoring.yml
     dir: .
@@ -21,11 +24,12 @@ tasks:
       - task --list
 
   deploy:
-    desc: Deploy the full LLM Inference stack (postgres + litellm + inference + monitoring)
+    desc: Deploy the full LLM Inference stack (postgres + litellm + vllm + llama + monitoring)
     cmds:
       - task: postgres:deploy
       - task: litellm:deploy
       - task: inference:deploy
+      - task: llama:deploy
       - task: monitoring:deploy
 
   deploy:litellm:
@@ -34,10 +38,21 @@ tasks:
       - task: postgres:deploy
       - task: litellm:deploy
 
+  deploy:vllm:
+    desc: Deploy only vLLM inference services
+    cmds:
+      - task: inference:deploy
+
+  deploy:llama:
+    desc: Deploy only llama.cpp inference services (10 CPU models)
+    cmds:
+      - task: llama:deploy
+
   undeploy:
     desc: Remove the full LLM Inference stack from kind
     cmds:
       - task: monitoring:undeploy
+      - task: llama:undeploy
       - task: inference:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
@@ -47,3 +62,13 @@ tasks:
     cmds:
       - task: litellm:undeploy
       - task: postgres:undeploy
+
+  undeploy:vllm:
+    desc: Remove only vLLM inference services
+    cmds:
+      - task: inference:undeploy
+
+  undeploy:llama:
+    desc: Remove only llama.cpp inference services
+    cmds:
+      - task: llama:undeploy

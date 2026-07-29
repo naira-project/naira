@@ -1,0 +1,44 @@
+version: '3'
+
+vars:
+  INFERENCE_NAMESPACE: inference
+  LLAMA_MANIFEST: ./infra/kubernetes/llama.yaml
+
+tasks:
+  deploy:
+    desc: Deploy llama.cpp inference services (10 CPU models) to kind
+    cmds:
+      - kubectl apply -f {{.LLAMA_MANIFEST}}
+      - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status "deploy/llama-qwen25-0.5b" --timeout=600s
+      - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status "deploy/llama-dummy-model" --timeout=600s
+      - kubectl -n {{.INFERENCE_NAMESPACE}} get pods
+
+  undeploy:
+    desc: Remove llama.cpp inference services from kind
+    cmds:
+      - kubectl delete -f {{.LLAMA_MANIFEST}} --ignore-not-found
+
+  port-forward:
+    desc: Expose all llama-server services on localhost (incremental ports 8083-8084)
+    cmds:
+      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-qwen25-05b 8083:8080 &
+      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-dummy-model 8084:8080 &
+
+  test:
+    desc: Send a dummy prompt to all llama-server models
+    cmds:
+      - |
+        for port in 8083 8084; do
+          echo "=== Testing localhost:$port ==="
+          curl -s --max-time 30 http://localhost:$port/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -d '{
+              "model": "model",
+              "messages": [
+                {"role": "user", "content": "What is 2+2? Answer in one word."}
+              ],
+              "max_tokens": 20,
+              "temperature": 0.1
+            }' | python3 -m json.tool 2>/dev/null || echo "  (no response or error)"
+          echo ""
+        done
