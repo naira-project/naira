@@ -53,13 +53,8 @@ grafana:
     enabled: false
   service:
     type: ClusterIP
-  # Pre-provision Prometheus as a default datasource
-  additionalDataSources:
-    - name: Prometheus
-      type: prometheus
-      url: http://prometheus-operated.monitoring.svc.cluster.local:9090
-      access: proxy
-      isDefault: true
+  # NOTE: The chart auto-provisions a Prometheus datasource pointing to
+  # the in-cluster Prometheus.  No additionalDataSources needed.
 
 kubeStateMetrics:
   enabled: true

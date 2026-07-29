@@ -15,6 +15,7 @@ metadata:
   namespace: monitoring
 spec:
   # No matchLabels — we don't impose labeling conventions
+  selector: {}
   namespaceSelector:
     matchNames:
       - inference
@@ -38,6 +39,7 @@ metadata:
   name: litellm-proxy
   namespace: monitoring
 spec:
+  selector: {}
   namespaceSelector:
     matchNames:
       - litellm

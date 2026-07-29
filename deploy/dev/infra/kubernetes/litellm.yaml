@@ -14,6 +14,7 @@ stringData:
   OPENAI_API_KEY: change-me
   ANTHROPIC_API_KEY: change-me
   GEMINI_API_KEY: change-me
+  OPENROUTER_API_KEY: change-me
   DATABASE_URL: postgresql://litellm:litellm-local-password@postgres.litellm-db.svc.cluster.local:5432/litellm
 ---
 apiVersion: v1
@@ -40,6 +41,15 @@ data:
         litellm_params:
           model: openai/text-embedding-3-small
           api_key: os.environ/OPENAI_API_KEY
+      - model_name: openrouter-gpt-3.5-turbo
+        litellm_params:
+          model: openrouter/openai/gpt-3.5-turbo
+          api_key: os.environ/OPENROUTER_API_KEY
+
+    litellm_settings:
+      callbacks:
+        - prometheus
+      prometheus_initialize_budget_metrics: true
 ---
 apiVersion: apps/v1
 kind: Deployment
