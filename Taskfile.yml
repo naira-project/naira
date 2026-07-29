@@ -16,7 +16,7 @@ tasks:
   # ── Full platform ─────────────────────────────────────────────────────
 
   platform:deploy:
-    desc: Deploy the full platform (core + mlops + llm-inference) to kind
+    desc: Deploy the full platform (core + mlops + llm-inference) to kind  [RAM: ~9 GiB]
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:deploy
 
@@ -28,7 +28,7 @@ tasks:
   # ── Individual stacks ─────────────────────────────────────────────────
 
   core:deploy:
-    desc: Deploy only the core stack (cluster, catalog, portal, ui)
+    desc: Deploy only the core stack (cluster, catalog, portal, ui)  [RAM: ~2 GiB]
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} core:deploy
 
@@ -38,7 +38,7 @@ tasks:
       - task --taskfile {{.DEV_TASKFILE}} core:undeploy
 
   mlops:deploy:
-    desc: Deploy only the MLOps stack (mlflow, openmetadata)
+    desc: Deploy only the MLOps stack (mlflow, openmetadata)  [RAM: ~3.5 GiB]
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} mlops:deploy
 
@@ -48,7 +48,7 @@ tasks:
       - task --taskfile {{.DEV_TASKFILE}} mlops:undeploy
 
   llm-inference:deploy:
-    desc: Deploy only the LLM Inference stack (postgres, litellm, vllm, monitoring)
+    desc: Deploy only the LLM Inference stack (postgres, litellm, vllm, monitoring)  [RAM: ~3 GiB]
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} llm-inference:deploy
 
