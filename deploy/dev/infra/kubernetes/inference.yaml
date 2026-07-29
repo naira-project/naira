@@ -3,6 +3,22 @@ kind: Namespace
 metadata:
   name: inference
 ---
+# ── Chat template for opt-125m (base model, no default chat template) ───────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-chat-template
+  namespace: inference
+data:
+  chat-template.jinja: |
+    {% for message in messages %}
+    {% if message['role'] == 'system' %}System: {{ message['content'] }}
+    {% elif message['role'] == 'user' %}User: {{ message['content'] }}
+    {% elif message['role'] == 'assistant' %}Assistant: {{ message['content'] }}
+    {% endif %}
+    {% endfor %}
+    Assistant:
+---
 # ── vLLM serving facebook/opt-125m (125M params, CPU-friendly) ──────────────
 apiVersion: apps/v1
 kind: Deployment
@@ -22,6 +38,10 @@ spec:
         naira.io/model: "opt-125m"
     spec:
       enableServiceLinks: false
+      volumes:
+      - name: chat-template
+        configMap:
+          name: vllm-chat-template
       containers:
       - name: vllm
         image: vllm/vllm-openai-cpu:latest-arm64
@@ -29,12 +49,19 @@ spec:
         - facebook/opt-125m
         - --served-model-name
         - opt-125m
+        - --chat-template
+        - /etc/vllm/chat-template.jinja
         env:
         - name: VLLM_CPU_KVCACHE_SPACE
           value: "1"
         ports:
         - containerPort: 8000
           name: http
+        volumeMounts:
+        - name: chat-template
+          mountPath: /etc/vllm/chat-template.jinja
+          subPath: chat-template.jinja
+          readOnly: true
         readinessProbe:
           httpGet:
             path: /health
@@ -73,5 +100,9 @@ spec:
     port: 8001
     targetPort: http
   type: ClusterIP
-# todo: 
 # - think. Do I need vllm? If yes maybe one. Or two very small models.
+# - maybe add llama-cpu test models instead of vllm. Vllm takes 4 ram limits.
+# - add prometheus to observe models. later add perses
+# - think. Do I need vllm? If yes maybe one. Or two very small models.
+# - maybe add llama-cpu test models instead of vllm. Vllm takes 4 ram limits.
+# - add prometheus to observe models. later add perses
