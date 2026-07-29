@@ -6,7 +6,7 @@ vars:
   MLFLOW_SERVICE: svc/mlflow
   MLFLOW_LOCAL_PORT: '5000'
   MLFLOW_REMOTE_PORT: '5000'
-  LOCAL_WORK_DIR: ../../../.local
+  LOCAL_WORK_DIR: ../../../../.local
   MLFLOW_TOOL_DIR: ./tools/mlflow
   MLFLOW_REGISTER_SCRIPT: '{{.MLFLOW_TOOL_DIR}}/register_dummy_model.py'
   MLFLOW_REQUIREMENTS: '{{.MLFLOW_TOOL_DIR}}/requirements.txt'

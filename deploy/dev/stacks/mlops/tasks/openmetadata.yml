@@ -14,7 +14,7 @@ vars:
   OPENMETADATA_SERVICE: svc/openmetadata
   OPENMETADATA_LOCAL_PORT: '8585'
   OPENMETADATA_REMOTE_PORT: '8585'
-  LOCAL_WORK_DIR: ../../../.local
+  LOCAL_WORK_DIR: ../../../../.local
   OPENMETADATA_TOOL_DIR: ./tools/openmetadata
   OPENMETADATA_SEED_SCRIPT: '{{.OPENMETADATA_TOOL_DIR}}/seed_sample_tables.py'
   OPENMETADATA_REQUIREMENTS: '{{.OPENMETADATA_TOOL_DIR}}/requirements.txt'

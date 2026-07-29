@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
-  PORTAL_DIR: ../../../naira-openmfp-portal
+  PORTAL_DIR: ../../../../naira-openmfp-portal
   PORTAL_IMAGE: portal:local
   PORTAL_NAMESPACE: idp-system
   PORTAL_MANIFEST: ./infra/kubernetes/portal.yaml

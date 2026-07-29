@@ -44,35 +44,10 @@ tasks:
   port-forward:
     desc: Expose Prometheus and Grafana UIs on localhost
     cmds:
-      - |
-        echo "Port-forwarding monitoring services..."
-        echo "----------------------------------------------------------------"
-        echo "Prometheus:  http://localhost:{{.PROMETHEUS_LOCAL_PORT}}"
-        echo "Grafana:     http://localhost:{{.GRAFANA_LOCAL_PORT}}  (admin/admin)"
-        echo "----------------------------------------------------------------"
-        echo "NOTE: Grafana uses port 3002 to avoid conflict with Portal (3000)."
-        echo "----------------------------------------------------------------"
       # Prometheus: service 'prometheus-operated' is created by the operator
       - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/prometheus-operated {{.PROMETHEUS_LOCAL_PORT}}:9090 &
       # Grafana: service 'prometheus-grafana' is created by the Helm chart
       - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/{{.PROMETHEUS_RELEASE}}-grafana {{.GRAFANA_LOCAL_PORT}}:80 &
-
-  prometheus:forward:
-    desc: Port-forward only Prometheus UI
-    cmds:
-      - |
-        echo "Prometheus:  http://localhost:{{.PROMETHEUS_LOCAL_PORT}}"
-      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/prometheus-operated {{.PROMETHEUS_LOCAL_PORT}}:9090
-
-  grafana:forward:
-    desc: Port-forward only Grafana UI
-    cmds:
-      - |
-        echo "Grafana:  http://localhost:{{.GRAFANA_LOCAL_PORT}}  (admin/admin)"
-      - |
-        echo "NOTE: Grafana uses port 3002 to avoid conflict with Portal (3000)."
-        echo "To change it, edit GRAFANA_LOCAL_PORT in tasks/monitoring.yml"
-      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/{{.PROMETHEUS_RELEASE}}-grafana {{.GRAFANA_LOCAL_PORT}}:80
 
   test:
     desc: Verify Prometheus is scraping vLLM metrics

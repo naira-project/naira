@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
-  CATALOG_DIR: ../../../catalog
+  CATALOG_DIR: ../../../../catalog
   CATALOG_IMAGE: catalog:local
   CATALOG_NAMESPACE: idp-system
   CATALOG_MANIFEST: ./infra/kubernetes/catalog.yaml
@@ -14,21 +14,21 @@ tasks:
   image:build:
     desc: Build the catalog Docker image
     cmds:
-      - task: docker:build
+      - task: :docker:build
         vars: { IMAGE: '{{.CATALOG_IMAGE}}', DIR: '{{.CATALOG_DIR}}' }
 
   image:load:
     desc: Load the catalog image into kind
     deps: [image:build]
     cmds:
-      - task: docker:load
+      - task: :docker:load
         vars: { IMAGE: '{{.CATALOG_IMAGE}}', CLUSTER_NAME: '{{.CLUSTER_NAME}}' }
 
   deploy:
     desc: Deploy the catalog to kind
     cmds:
       - task: image:load
-      - task: plugins:image:load
+      - task: :plugins:image:load
       - kubectl apply -f {{.CATALOG_MANIFEST}}
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods
