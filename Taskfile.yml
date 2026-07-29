@@ -25,29 +25,59 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:undeploy
 
-  # ── Stack combinations ────────────────────────────────────────────────
+  # ── Individual stacks ─────────────────────────────────────────────────
 
-  platform:deploy:core-mlops:
-    desc: Deploy core + mlops stacks (Portal, Catalog, UI, MLflow, OpenMetadata)
+  core:deploy:
+    desc: Deploy only the core stack (cluster, catalog, portal, ui)
     cmds:
-      - task --taskfile {{.DEV_TASKFILE}} platform:deploy:core-mlops
+      - task --taskfile {{.DEV_TASKFILE}} core:deploy
 
-  platform:deploy:core-llm-inference:
-    desc: Deploy core + llm-inference stacks (Portal, Catalog, UI, LiteLLM, vLLM, Monitoring)
+  core:undeploy:
+    desc: Remove only the core stack from kind
     cmds:
-      - task --taskfile {{.DEV_TASKFILE}} platform:deploy:core-llm-inference
+      - task --taskfile {{.DEV_TASKFILE}} core:undeploy
 
-  platform:deploy:core-mlops-litellm:
-    desc: Deploy core + mlops + LiteLLM only (Portal, Catalog, UI, MLflow, OpenMetadata, LiteLLM)
+  mlops:deploy:
+    desc: Deploy only the MLOps stack (mlflow, openmetadata)
     cmds:
-      - task --taskfile {{.DEV_TASKFILE}} platform:deploy:core-mlops-litellm
+      - task --taskfile {{.DEV_TASKFILE}} mlops:deploy
 
-  # ── Port-forwarding ───────────────────────────────────────────────────
+  mlops:undeploy:
+    desc: Remove only the MLOps stack from kind
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} mlops:undeploy
+
+  llm-inference:deploy:
+    desc: Deploy only the LLM Inference stack (postgres, litellm, vllm, monitoring)
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} llm-inference:deploy
+
+  llm-inference:undeploy:
+    desc: Remove only the LLM Inference stack from kind
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} llm-inference:undeploy
+
+  # ── Port-forwarding (modular) ─────────────────────────────────────────
 
   forward:all:
-    desc: Port-forward the main developer-facing services
+    desc: Port-forward all developer-facing services
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} forward:all
+
+  forward:core:
+    desc: Port-forward core services (catalog, portal, ui)
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} forward:core
+
+  forward:mlops:
+    desc: Port-forward MLOps services (mlflow, openmetadata)
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} forward:mlops
+
+  forward:llm-inference:
+    desc: Port-forward LLM Inference services (litellm, inference, monitoring)
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} forward:llm-inference
 
   # ── Cluster management ────────────────────────────────────────────────
 

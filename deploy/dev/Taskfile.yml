@@ -45,27 +45,6 @@ tasks:
       - task: mlops:undeploy
       - task: core:undeploy
 
-  # ── Stack combinations ────────────────────────────────────────────────
-
-  platform:deploy:core-mlops:
-    desc: Deploy core + mlops stacks (Portal, Catalog, UI, MLflow, OpenMetadata)
-    cmds:
-      - task: core:deploy
-      - task: mlops:deploy
-
-  platform:deploy:core-llm-inference:
-    desc: Deploy core + llm-inference stacks (Portal, Catalog, UI, LiteLLM, vLLM, Monitoring)
-    cmds:
-      - task: core:deploy
-      - task: llm-inference:deploy
-
-  platform:deploy:core-mlops-litellm:
-    desc: Deploy core + mlops + LiteLLM only (Portal, Catalog, UI, MLflow, OpenMetadata, LiteLLM)
-    cmds:
-      - task: core:deploy
-      - task: mlops:deploy
-      - task: llm-inference:deploy:litellm
-
   # ── Cluster management ────────────────────────────────────────────────
 
   cluster:delete:
@@ -73,7 +52,7 @@ tasks:
     cmds:
       - task: core:cluster:delete
 
-  # ── Port-forwarding ───────────────────────────────────────────────────
+  # ── Port-forwarding (modular) ─────────────────────────────────────────
 
   forward:all:
     desc: Port-forward all services
@@ -100,14 +79,29 @@ tasks:
         echo "Prometheus:     http://localhost:{{.PROMETHEUS_LOCAL_PORT}}"
         echo "Grafana:        http://localhost:{{.GRAFANA_LOCAL_PORT}}  (admin/admin)"
         echo "----------------------------------------------------------------"
-      - task: forward:all:tunnels
+      - task: forward:core
+      - task: forward:mlops
+      - task: forward:llm-inference
 
-  forward:all:tunnels:
-    internal: true
+  forward:core:
+    desc: Port-forward core services (catalog, portal, ui)
     deps:
-      - core:forward
-      - mlops:forward
-      - llm-inference:forward
+      - core:catalog:port-forward
+      - core:portal:port-forward
+      - core:ui:port-forward
+
+  forward:mlops:
+    desc: Port-forward MLOps services (mlflow, openmetadata)
+    deps:
+      - mlops:mlflow:port-forward
+      - mlops:openmetadata:port-forward
+
+  forward:llm-inference:
+    desc: Port-forward LLM Inference services (litellm, inference, monitoring)
+    deps:
+      - llm-inference:litellm:port-forward
+      - llm-inference:inference:port-forward
+      - llm-inference:monitoring:port-forward
 
   # ── Seeding sample data ───────────────────────────────────────────────
 

@@ -29,10 +29,6 @@ tasks:
 
       # 4. Show status
       - kubectl -n {{.MONITORING_NAMESPACE}} get pods
-      - |
-        echo ""
-        echo "Prometheus UI:  http://localhost:{{.PROMETHEUS_LOCAL_PORT}}"
-        echo "Grafana:        http://localhost:{{.GRAFANA_LOCAL_PORT}}  (admin/admin)"
 
   undeploy:
     desc: Remove Prometheus stack and ServiceMonitors from kind

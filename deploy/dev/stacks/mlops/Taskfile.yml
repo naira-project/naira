@@ -25,10 +25,3 @@ tasks:
     cmds:
       - task: mlflow:undeploy
       - task: openmetadata:undeploy
-
-  forward:
-    desc: Port-forward all MLOps services (mlflow, openmetadata)
-    internal: true
-    deps:
-      - mlflow:port-forward
-      - openmetadata:port-forward

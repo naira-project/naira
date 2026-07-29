@@ -47,11 +47,3 @@ tasks:
     cmds:
       - task: litellm:undeploy
       - task: postgres:undeploy
-
-  forward:
-    desc: Port-forward all LLM Inference services (litellm, inference, monitoring)
-    internal: true
-    deps:
-      - litellm:port-forward
-      - inference:port-forward
-      - monitoring:port-forward
