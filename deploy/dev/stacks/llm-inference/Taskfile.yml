@@ -18,11 +18,6 @@ includes:
     dir: .
 
 tasks:
-  default:
-    desc: Show available LLM Inference stack tasks
-    cmds:
-      - task --list
-
   deploy:
     desc: Deploy the full LLM Inference stack (postgres + litellm + vllm + llama + monitoring)
     cmds:

@@ -29,14 +29,15 @@ tasks:
       - docker version
       - buf --version
 
-  # ── Full platform deployment ──────────────────────────────────────────
-
+  # Platform deployment
   platform:deploy:
-    desc: Deploy the full platform (core + mlops + llm-inference) to kind
+    desc: Deploy core + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
     cmds:
       - task: core:deploy
-      - task: mlops:deploy
-      - task: llm-inference:deploy
+      - task: llm-inference:postgres:deploy
+      - task: llm-inference:litellm:deploy
+      - task: llm-inference:llama:deploy
+      - task: llm-inference:monitoring:deploy
 
   platform:undeploy:
     desc: Remove the full platform from kind
@@ -45,15 +46,13 @@ tasks:
       - task: mlops:undeploy
       - task: core:undeploy
 
-  # ── Cluster management ────────────────────────────────────────────────
-
+  # Cluster management
   cluster:delete:
     desc: Remove the kind cluster entirely
     cmds:
       - task: core:cluster:delete
 
-  # ── Port-forwarding (modular) ─────────────────────────────────────────
-
+  # Port-forwarding 
   forward:all:
     desc: Port-forward all services
     silent: true
@@ -97,14 +96,14 @@ tasks:
       - mlops:openmetadata:port-forward
 
   forward:llm-inference:
-    desc: Port-forward LLM Inference services (litellm, inference, monitoring)
+    desc: Port-forward LLM Inference services (litellm, llama, vllm, monitoring)
     deps:
       - llm-inference:litellm:port-forward
-      - llm-inference:inference:port-forward
+      - llm-inference:llama:port-forward
+      - llm-inference:vllm:port-forward
       - llm-inference:monitoring:port-forward
 
-  # ── Seeding sample data ───────────────────────────────────────────────
-
+  # Seeding sample data
   seed:all:
     desc: Seed sample data in MLflow and OpenMetadata (requires port-forward)
     cmds:

@@ -21,11 +21,6 @@ includes:
     dir: .
 
 tasks:
-  default:
-    desc: Show available core stack tasks
-    cmds:
-      - task --list
-
   deploy:
     desc: Deploy the core stack (cluster + catalog + portal + ui)
     cmds:

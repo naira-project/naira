@@ -13,10 +13,10 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} check
 
-  # ── Full platform ─────────────────────────────────────────────────────
+  # Full platform
 
   platform:deploy:
-    desc: Deploy the full platform (core + mlops + llm-inference) to kind  [RAM: ~9 GiB]
+    desc: Deploy core + LLM Inference stack (llama.cpp, litellm, monitoring) to kind  [RAM: ~4 GiB]
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:deploy
 
@@ -25,7 +25,7 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:undeploy
 
-  # ── Individual stacks ─────────────────────────────────────────────────
+  # Individual stacks
 
   core:deploy:
     desc: Deploy only the core stack (cluster, catalog, portal, ui)  [RAM: ~2 GiB]
@@ -57,7 +57,7 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} llm-inference:undeploy
 
-  # ── Port-forwarding (modular) ─────────────────────────────────────────
+  # Port-forwarding
 
   forward:all:
     desc: Port-forward all developer-facing services
@@ -79,14 +79,14 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} forward:llm-inference
 
-  # ── Cluster management ────────────────────────────────────────────────
+  # Cluster management
 
   cluster:delete:
     desc: Remove the cluster
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} cluster:delete
 
-  # ── Proto ─────────────────────────────────────────────────────────────
+  # Proto
 
   proto:generate:
     desc: Generate protobuf stubs of pluginapi
@@ -98,7 +98,7 @@ tasks:
     cmds:
       - cd {{.PROTO_DIR}} && buf lint
 
-  # ── Catalog ───────────────────────────────────────────────────────────
+  # Catalog
 
   catalog:test:
     desc: Run catalog unit tests
