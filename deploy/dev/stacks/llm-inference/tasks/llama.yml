@@ -20,9 +20,19 @@ tasks:
 
   port-forward:
     desc: Expose all llama-server services on localhost (ports 8083-8084)
+    deps:
+      - port-forward-qwen
+      - port-forward-dummy
+
+  port-forward-qwen:
+    internal: true
     cmds:
-      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-qwen25-05b 8083:8080 &
-      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-dummy-model 8084:8080 &
+      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-qwen25-05b 8083:8080
+
+  port-forward-dummy:
+    internal: true
+    cmds:
+      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-dummy-model 8084:8080
 
   test:
     desc: Send a dummy prompt to all llama-server models

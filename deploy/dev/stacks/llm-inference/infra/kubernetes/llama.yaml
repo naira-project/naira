@@ -169,10 +169,6 @@ spec:
             - "8080"
             - "--metrics"
             - "--no-ui"
-            - "-c"
-            - "256"
-            - "--threads"
-            - "1"
           volumeMounts:
             - name: model-storage
               mountPath: /models
