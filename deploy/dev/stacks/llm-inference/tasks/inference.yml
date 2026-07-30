@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   INFERENCE_NAMESPACE: inference
-  INFERENCE_MANIFEST: ./infra/kubernetes/inference.yaml
+  INFERENCE_MANIFEST: ./infra/kubernetes/vllm.yaml
 
 tasks:
   deploy:

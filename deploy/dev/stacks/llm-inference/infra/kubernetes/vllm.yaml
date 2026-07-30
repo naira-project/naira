@@ -100,9 +100,3 @@ spec:
     port: 8001
     targetPort: http
   type: ClusterIP
-# - think. Do I need vllm? If yes maybe one. Or two very small models.
-# - maybe add llama-cpu test models instead of vllm. Vllm takes 4 ram limits.
-# - add prometheus to observe models. later add perses
-# - think. Do I need vllm? If yes maybe one. Or two very small models.
-# - maybe add llama-cpu test models instead of vllm. Vllm takes 4 ram limits.
-# - add prometheus to observe models. later add perses
