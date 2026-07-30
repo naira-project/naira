@@ -1,20 +1,13 @@
 # ── ServiceMonitors for Prometheus auto-discovery ────────────────────────────
 # Each block tells Prometheus which services to scrape and how to label the data.
-#
-# Design principle: no custom label conventions.  We select by namespace + port
-# name only, so this works with any existing Kubernetes service.
-
 ---
-# ── vLLM inference engine ────────────────────────────────────────────────────
-# vLLM exposes Prometheus metrics natively at GET /metrics on the API port.
 # Selects any service in the 'inference' namespace with a port named 'http'.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: vllm-inference
+  name: inference
   namespace: monitoring
 spec:
-  # No matchLabels — we don't impose labeling conventions
   selector: {}
   namespaceSelector:
     matchNames:

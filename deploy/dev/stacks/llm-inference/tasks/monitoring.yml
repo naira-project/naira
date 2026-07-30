@@ -39,25 +39,18 @@ tasks:
 
   port-forward:
     desc: Expose Prometheus and Grafana UIs on localhost
+    deps:
+      - port-forward-prometheus
+      - port-forward-grafana
+
+  port-forward-prometheus:
+    internal: true
     cmds:
       # Prometheus: service 'prometheus-operated' is created by the operator
-      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/prometheus-operated {{.PROMETHEUS_LOCAL_PORT}}:9090 &
-      # Grafana: service 'prometheus-grafana' is created by the Helm chart
-      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/{{.PROMETHEUS_RELEASE}}-grafana {{.GRAFANA_LOCAL_PORT}}:80 &
+      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/prometheus-operated {{.PROMETHEUS_LOCAL_PORT}}:9090
 
-  test:
-    desc: Verify Prometheus is scraping vLLM metrics
+  port-forward-grafana:
+    internal: true
     cmds:
-      - |
-        echo "Checking Prometheus targets..."
-        kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/prometheus-operated {{.PROMETHEUS_LOCAL_PORT}}:9090 &
-        PF_PID=$!
-        sleep 2
-        curl -s "http://localhost:{{.PROMETHEUS_LOCAL_PORT}}/api/v1/targets" | head -c 500
-        kill $PF_PID 2>/dev/null || true
-      - |
-        echo ""
-        echo "---"
-        echo "Or query vLLM direct metrics:"
-        echo "  kubectl -n inference port-forward svc/vllm-opt125m 8001:8001"
-        echo "  curl -s http://localhost:8001/metrics | head -50"
+      # Grafana: service 'prometheus-grafana' is created by the Helm chart
+      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/{{.PROMETHEUS_RELEASE}}-grafana {{.GRAFANA_LOCAL_PORT}}:80
