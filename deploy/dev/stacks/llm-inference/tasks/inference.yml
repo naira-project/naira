@@ -2,20 +2,20 @@ version: '3'
 
 vars:
   INFERENCE_NAMESPACE: inference
-  INFERENCE_MANIFEST: ./infra/kubernetes/vllm.yaml
+  VLLM_MANIFEST: ./infra/kubernetes/vllm.yaml
 
 tasks:
   deploy:
     desc: Deploy vLLM inference services (2 CPU models) to kind
     cmds:
-      - kubectl apply -f {{.INFERENCE_MANIFEST}}
+      - kubectl apply -f {{.VLLM_MANIFEST}}
       - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status deploy/vllm-opt125m --timeout=600s
       - kubectl -n {{.INFERENCE_NAMESPACE}} get pods
 
   undeploy:
     desc: Remove vLLM inference services from kind
     cmds:
-      - kubectl delete -f {{.INFERENCE_MANIFEST}} --ignore-not-found
+      - kubectl delete -f {{.VLLM_MANIFEST}} --ignore-not-found
 
   port-forward:
     desc: Expose vLLM inference services on localhost

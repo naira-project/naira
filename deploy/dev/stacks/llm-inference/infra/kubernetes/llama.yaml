@@ -134,10 +134,6 @@ spec:
     metadata:
       labels:
         app: llama-dummy-model
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
-        prometheus.io/path: "/metrics"
     spec:
       enableServiceLinks: false
       initContainers:
