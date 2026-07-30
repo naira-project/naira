@@ -6,10 +6,10 @@ vars:
 
 tasks:
   deploy:
-    desc: Deploy llama.cpp inference services (10 CPU models) to kind
+    desc: Deploy llama.cpp inference services (2 CPU models) to kind
     cmds:
       - kubectl apply -f {{.LLAMA_MANIFEST}}
-      - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status "deploy/llama-qwen25-0.5b" --timeout=600s
+      - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status "deploy/llama-qwen25-05b" --timeout=600s
       - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status "deploy/llama-dummy-model" --timeout=600s
       - kubectl -n {{.INFERENCE_NAMESPACE}} get pods
 
@@ -19,7 +19,7 @@ tasks:
       - kubectl delete -f {{.LLAMA_MANIFEST}} --ignore-not-found
 
   port-forward:
-    desc: Expose all llama-server services on localhost (incremental ports 8083-8084)
+    desc: Expose all llama-server services on localhost (ports 8083-8084)
     cmds:
       - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-qwen25-05b 8083:8080 &
       - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-dummy-model 8084:8080 &
