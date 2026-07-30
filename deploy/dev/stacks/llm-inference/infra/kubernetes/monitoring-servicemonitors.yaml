@@ -17,11 +17,6 @@ spec:
       path: /metrics
       interval: 15s
       scrapeTimeout: 10s
-      relabelings:
-        # Attach the deployment name as a Prometheus label for easier querying
-        - sourceLabels: [__meta_kubernetes_pod_label_app]
-          targetLabel: deployment
-          action: replace
 
 ---
 # ── LiteLLM proxy ────────────────────────────────────────────────────────────
