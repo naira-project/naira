@@ -6,6 +6,7 @@ vars:
 
 tasks:
   deploy:
+    internal: true
     desc: Deploy PostgreSQL for LiteLLM to kind
     cmds:
       - kubectl apply -f {{.POSTGRES_MANIFEST}}
@@ -13,6 +14,7 @@ tasks:
       - kubectl -n {{.POSTGRES_NAMESPACE}} get pods
 
   undeploy:
+    internal: true
     desc: Remove PostgreSQL for LiteLLM from kind
     cmds:
       - kubectl delete -f {{.POSTGRES_MANIFEST}} --ignore-not-found

@@ -1,15 +1,15 @@
 # ── kube-prometheus-stack values for local kind dev environment ───────────────
 # Provides: Prometheus Operator, Prometheus, Grafana, kube-state-metrics, node-exporter
-# Disabled: Alertmanager, Thanos, Windows Exporter, Prometheus Adapter (not needed in dev)
+# Disabled: Alertmanager, Thanos, Windows Exporter, Prometheus Adapter
 
+# ── Prometheus ──────────────────────────────────────────────────────────────────
 prometheus:
   prometheusSpec:
     # Discover ALL ServiceMonitors, not just those with Helm release labels.
     # This lets us add custom ServiceMonitors (e.g. for vLLM) without Helm labels.
     serviceMonitorSelectorNilUsesHelmValues: false
-    # Also discover PodMonitors independently of Helm labels.
-    podMonitorSelectorNilUsesHelmValues: false
 
+    # How long to keep raw metric data before discarding it.
     retention: 7d
 
     resources:
@@ -20,7 +20,7 @@ prometheus:
         cpu: 500m
         memory: 1Gi
 
-    # Minimal storage — enough for dev metrics for a few days
+    # Persistent volume for metric storage — avoids data loss on pod restart.
     storageSpec:
       volumeClaimTemplate:
         spec:
@@ -29,16 +29,17 @@ prometheus:
             requests:
               storage: 10Gi
 
-  # Expose Prometheus UI via port-forward only (no ingress in kind)
+  # Prometheus UI reachable only via kubectl port-forward.
   ingress:
     enabled: false
 
   service:
     type: ClusterIP
 
-alertmanager:
-  enabled: false
 
+# ── Grafana ─────────────────────────────────────────────────────────────────────
+# Pre-configured with admin/admin login.
+# The chart auto-provisions a datasource pointing to the in-cluster Prometheus.
 grafana:
   enabled: true
   adminPassword: admin
@@ -53,9 +54,11 @@ grafana:
     enabled: false
   service:
     type: ClusterIP
-  # NOTE: The chart auto-provisions a Prometheus datasource pointing to
-  # the in-cluster Prometheus.  No additionalDataSources needed.
 
+# ── kube-state-metrics ──────────────────────────────────────────────────────────
+# Translates Kubernetes API objects state into metrics: deployments, pods, nodes, 
+# services, namespaces, etc. Powers dashboards showing "how many pods are running"
+# or "what's the deployment status"
 kubeStateMetrics:
   enabled: true
   resources:
@@ -66,6 +69,10 @@ kubeStateMetrics:
       cpu: 100m
       memory: 256Mi
 
+# ── node-exporter ───────────────────────────────────────────────────────────────
+# Runs on every node and exposes hardware / OS metrics: CPU usage, memory,
+# disk I/O, network traffic, load averages. Gives a node-level view of
+# resource utilisation.
 nodeExporter:
   enabled: true
   resources:
@@ -76,6 +83,8 @@ nodeExporter:
       cpu: 50m
       memory: 64Mi
 
+# ── Prometheus Operator ─────────────────────────────────────────────────────────
+# Watches ServiceMonitor CRDs and translate them into Prometheus configuration.
 prometheusOperator:
   resources:
     requests:
@@ -85,11 +94,20 @@ prometheusOperator:
       cpu: 100m
       memory: 128Mi
 
+# ── Disabled ────────────────────────────────────────────────
+
+# Handles alerts fired by Prometheus (e.g. routing to email/Slack/etc.).
+alertmanager:
+  enabled: false
+
+# Would be needed if we wanted to autoscale deployments based on Prometheus metrics
 prometheusAdapter:
   enabled: false
 
+# Long-term, cross-cluster metrics storage and querying.
 thanos:
   enabled: false
 
+# Windows node-exporter
 windows:
   enabled: false

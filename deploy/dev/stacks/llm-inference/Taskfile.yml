@@ -38,16 +38,6 @@ tasks:
       - task: postgres:deploy
       - task: litellm:deploy
 
-  deploy:vllm:
-    desc: Deploy only vLLM inference services
-    cmds:
-      - task: vllm:deploy
-
-  deploy:llama:
-    desc: Deploy only llama.cpp inference services
-    cmds:
-      - task: llama:deploy
-
   undeploy:
     desc: Remove the full LLM Inference stack from kind
     cmds:
@@ -62,13 +52,3 @@ tasks:
     cmds:
       - task: litellm:undeploy
       - task: postgres:undeploy
-
-  undeploy:vllm:
-    desc: Remove only vLLM inference services
-    cmds:
-      - task: vllm:undeploy
-
-  undeploy:llama:
-    desc: Remove only llama.cpp inference services
-    cmds:
-      - task: llama:undeploy

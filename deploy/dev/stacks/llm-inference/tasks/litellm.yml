@@ -9,6 +9,7 @@ vars:
 
 tasks:
   deploy:
+    internal: true
     desc: Deploy LiteLLM to kind
     cmds:
       - kubectl apply -f {{.LITELLM_MANIFEST}}
@@ -16,6 +17,7 @@ tasks:
       - kubectl -n {{.LITELLM_NAMESPACE}} get pods
 
   undeploy:
+    internal: true
     desc: Remove LiteLLM from kind
     cmds:
       - kubectl delete -f {{.LITELLM_MANIFEST}} --ignore-not-found
