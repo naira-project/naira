@@ -6,7 +6,7 @@ vars:
 
 tasks:
   deploy:
-    desc: Deploy vLLM inference services (2 CPU models) to kind
+    desc: Deploy vLLM inference services to kind
     cmds:
       - kubectl apply -f {{.VLLM_MANIFEST}}
       - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status deploy/vllm-opt125m --timeout=600s

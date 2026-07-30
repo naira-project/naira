@@ -34,8 +34,6 @@ spec:
     metadata:
       labels:
         app: vllm-opt125m
-        naira.io/inference: "true"
-        naira.io/model: "opt-125m"
     spec:
       enableServiceLinks: false
       volumes:
@@ -89,9 +87,6 @@ kind: Service
 metadata:
   name: vllm-opt125m
   namespace: inference
-  labels:
-    naira.io/inference: "true"
-    naira.io/model: "opt-125m"
 spec:
   selector:
     app: vllm-opt125m
