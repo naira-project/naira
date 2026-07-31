@@ -31,6 +31,9 @@ includes:
   openmetadata:
     taskfile: ./tasks/openmetadata.yml
     dir: .
+  keycloak:
+    taskfile: ./tasks/keycloak.yml
+    dir: .
 
 tasks:
   default:
@@ -51,32 +54,32 @@ tasks:
       - buf --version
 
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal to kind
+    desc: Deploy MLflow, LiteLLM, OpenMetadata, Keycloak, Catalog, UI, and Portal to kind
     cmds:
       - task: cluster:create
       - task: mlflow:deploy
       - task: postgres:deploy
       - task: litellm:deploy
       - task: openmetadata:deploy
+      - task: keycloak:deploy
       - task: catalog:deploy
       - task: ui:deploy
       - task: portal:deploy
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal from kind
+    desc: Remove MLflow, LiteLLM, OpenMetadata, Keycloak, Catalog, UI, and Portal from kind
     cmds:
       - task: portal:undeploy
       - task: openmetadata:undeploy
       - task: catalog:undeploy
       - task: keycloak:undeploy
-      - task: openfga:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
       - task: mlflow:undeploy
       - task: ui:undeploy
 
   forward:all:
-    desc: Port-forward all services (MLflow, LiteLLM, OpenMetadata, Catalog, UI, Portal)
+    desc: Port-forward all services (MLflow, LiteLLM, OpenMetadata, Keycloak, Catalog, UI, Portal)
     silent: true
     vars:
       PORTAL_LOCAL_PORT: '3000'
@@ -85,6 +88,7 @@ tasks:
       LITELLM_LOCAL_PORT: '4000'
       OPENMETADATA_LOCAL_PORT: '8585'
       CATALOG_LOCAL_PORT: '8090'
+      KEYCLOAK_LOCAL_PORT: '8080'
     cmds:
       - |
         echo "Port-forwarding all services..."
@@ -97,71 +101,6 @@ tasks:
         echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
         echo "Catalog:        http://localhost:{{.CATALOG_LOCAL_PORT}}"
         echo "----------------------------------------------------------------"
-      - task: forward:all:tunnels
-
-  portal:image:build:
-    desc: Build the portal Docker image
-    cmds:
-      - docker build -t {{.PORTAL_IMAGE}} {{.PORTAL_DIR}}
-
-  portal:image:load:
-    desc: Load the portal image into kind
-    deps:
-      - portal:image:build
-    cmds:
-      - kind load docker-image {{.PORTAL_IMAGE}} --name {{.CLUSTER_NAME}}
-
-  portal:deploy:
-    desc: Deploy the portal to kind
-    deps:
-      - cluster:create
-    cmds:
-      - task: portal:apply
-
-  portal:apply:
-    internal: true
-    cmds:
-      - task: portal:image:load
-      - task: keycloak:apply
-      - |
-        if [ "{{.KEYCLOAK_MODE}}" != "local" ]; then
-          kubectl create configmap platform-mesh-ca -n {{.PORTAL_NAMESPACE}} \
-            --from-literal=ca.crt="$(kubectl get secret domain-certificate -n platform-mesh-system -o jsonpath='{.data.ca\.crt}' | base64 -d)" \
-            --dry-run=client -o yaml | kubectl apply -f -
-        fi
-      - |
-        if [ "{{.KEYCLOAK_MODE}}" = "local" ]; then
-          AUTH_SERVER_URL="http://localhost:{{.KEYCLOAK_LOCAL_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
-          TOKEN_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
-          TRAEFIK_CLUSTER_IP="127.0.0.1"
-        else
-          AUTH_SERVER_URL="https://portal.localhost:8443/keycloak/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
-          TOKEN_URL="https://portal.localhost:8443/keycloak/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
-          TRAEFIK_CLUSTER_IP=$(kubectl get svc traefik -n default -o jsonpath='{.spec.clusterIP}' 2>/dev/null || echo "127.0.0.1")
-        fi
-        sed -e "s/__TRAEFIK_CLUSTER_IP__/${TRAEFIK_CLUSTER_IP}/" \
-            -e "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/g" \
-            -e "s|__AUTH_SERVER_URL_KEYCLOAK__|${AUTH_SERVER_URL}|" \
-            -e "s|__TOKEN_URL_KEYCLOAK__|${TOKEN_URL}|" \
-            {{.PORTAL_MANIFEST}} | kubectl apply -f -
-      - kubectl -n {{.PORTAL_NAMESPACE}} rollout status deploy/portal --timeout=180s
-      - kubectl -n {{.PORTAL_NAMESPACE}} get pods
-
-  portal:undeploy:
-    desc: Remove the portal from kind
-    cmds:
-      - kubectl delete -f {{.PORTAL_MANIFEST}} --ignore-not-found
-
-  portal:port-forward:
-    desc: Expose the portal on localhost:3000
-    cmds:
-      - kubectl -n {{.PORTAL_NAMESPACE}} port-forward {{.PORTAL_SERVICE}} {{.PORTAL_LOCAL_PORT}}:{{.PORTAL_REMOTE_PORT}}
-  
-   # Reusable "Macro" Tasks
-  _docker:build:
-    internal: true
-    cmds:
-      - docker build -t {{.IMAGE}} -f {{.DIR}}/Dockerfile ../../
       - task: forward:all:tunnels
 
   forward:all:tunnels:
