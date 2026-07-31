@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/naira-project/naira/plugins/pkg/pluginapi"
-	openfga "github.com/openfga/go-sdk"
 )
 
 var (
@@ -19,37 +17,13 @@ var (
 	ErrPluginNotFound    = errors.New("plugin not found")
 )
 
-// TupleWriter writes OpenFGA tuples.
-type TupleWriter interface {
-	WriteTuples(tuples []openfga.TupleKey) error
-}
-
-// defaultViewerRole is granted viewer access to every node synced from a
-// plugin, except for node kinds with a more specific entry in
-// viewerRoleByNodeKind.
-const defaultViewerRole = "role:ai-engineer#assignee"
-
-// viewerRoleByNodeKind overrides defaultViewerRole for specific node kinds.
-var viewerRoleByNodeKind = map[string]string{
-	pluginapi.NodeKindDeployment: "role:application-engineer#assignee",
-	pluginapi.NodeKindService:    "role:application-engineer#assignee",
-}
-
-func viewerRoleForNodeKind(kind string) string {
-	if role, ok := viewerRoleByNodeKind[kind]; ok {
-		return role
-	}
-	return defaultViewerRole
-}
-
 type Service struct {
 	store   Store
 	plugins map[string]Plugin
 	logger  *log.Logger
-	fga     TupleWriter
 }
 
-func NewService(store Store, plugins map[string]Plugin, logger *log.Logger, fga TupleWriter) *Service {
+func NewService(store Store, plugins map[string]Plugin, logger *log.Logger) *Service {
 	registeredPlugins := make(map[string]Plugin, len(plugins))
 	for name, plugin := range plugins {
 		if plugin == nil {
@@ -58,7 +32,7 @@ func NewService(store Store, plugins map[string]Plugin, logger *log.Logger, fga 
 		registeredPlugins[normalizePluginName(name)] = plugin
 	}
 
-	return &Service{store: store, plugins: registeredPlugins, logger: logger, fga: fga}
+	return &Service{store: store, plugins: registeredPlugins, logger: logger}
 }
 
 func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
@@ -82,22 +56,6 @@ func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
 	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, response.Nodes, response.Relations)
 	if err != nil {
 		return fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err)
-	}
-
-	if s.fga != nil && len(response.Nodes) > 0 {
-		tuples := make([]openfga.TupleKey, 0, len(response.Nodes))
-		for _, nodeClaim := range response.Nodes {
-			kind := nodeClaim.ID.Kind
-			tuples = append(tuples, openfga.TupleKey{
-				User:     viewerRoleForNodeKind(kind),
-				Relation: "viewer",
-				Object:   fmt.Sprintf("naira_io_model:%s/%s", kind, nodeClaim.ID.Path),
-			})
-		}
-
-		if err := s.fga.WriteTuples(tuples); err != nil {
-			return fmt.Errorf("granting default viewer role for plugin %q: %w", pluginName, err)
-		}
 	}
 
 	if s.logger != nil {

@@ -12,19 +12,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
-	"github.com/naira-project/naira/catalog/internal/auth/openfga"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
 type routeHandler func(http.ResponseWriter, *http.Request) error
 type listOptionsHandler func(http.ResponseWriter, *http.Request, listOptions) error
 
-const (
-	fgaModelType   = "naira_io_model"
-	fgaGetRelation = "get"
-)
-
-func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config, fgaClient openfga.Authorizer) http.Handler {
+func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config) http.Handler {
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
@@ -63,7 +57,7 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config,
 				if !matches {
 					continue
 				}
-				if err := fgaClient.AuthorizeNodeRead(r.Context(), catalogNode.ID, fgaModelType, fgaGetRelation); err != nil {
+				if err := authorizeNodeRead(r.Context(), catalogNode.ID.Kind); err != nil {
 					continue
 				}
 				nodes = append(nodes, node)
@@ -83,9 +77,9 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config,
 		r.Get("/nodes/{kind}/*", handle(func(w http.ResponseWriter, r *http.Request) error {
 			nodeID := catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")}
 
-			if err := fgaClient.AuthorizeNodeRead(r.Context(), nodeID, fgaModelType, fgaGetRelation); err != nil {
+			if err := authorizeNodeRead(r.Context(), nodeID.Kind); err != nil {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-				return fmt.Errorf("Status forbidden: %w", err)
+				return fmt.Errorf("status forbidden: %w", err)
 			}
 
 			node, err := service.GetNode(r.Context(), nodeID)
@@ -106,10 +100,10 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config,
 		r.Get("/relations", handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 			relations := make([]Relation, 0)
 			for _, relation := range service.ListRelations(r.Context()) {
-				if err := fgaClient.AuthorizeNodeRead(r.Context(), relation.From, fgaModelType, fgaGetRelation); err != nil {
+				if err := authorizeNodeRead(r.Context(), relation.From.Kind); err != nil {
 					continue
 				}
-				if err := fgaClient.AuthorizeNodeRead(r.Context(), relation.To, fgaModelType, fgaGetRelation); err != nil {
+				if err := authorizeNodeRead(r.Context(), relation.To.Kind); err != nil {
 					continue
 				}
 

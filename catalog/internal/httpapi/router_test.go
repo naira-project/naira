@@ -19,26 +19,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const testBearerToken = "test-token"
+const (
+	testBearerToken                = "test-token"
+	aiEngineerBearerToken          = "ai-engineer-token"
+	applicationEngineerBearerToken = "application-engineer-token"
+)
+
+var tokenRealmRoles = map[string][]string{
+	testBearerToken:                {realmRoleAIEngineer, realmRoleApplicationEngineer},
+	aiEngineerBearerToken:          {realmRoleAIEngineer},
+	applicationEngineerBearerToken: {realmRoleApplicationEngineer},
+}
 
 type stubTokenDecoder struct{}
 
 func (stubTokenDecoder) DecodeAccessToken(_ context.Context, accessToken, _ string) (*jwt.Token, *jwt.MapClaims, error) {
-	if accessToken != testBearerToken {
+	roles, ok := tokenRealmRoles[accessToken]
+	if !ok {
 		return nil, nil, errors.New("invalid token")
 	}
-	claims := jwt.MapClaims{"sub": "test-user", "preferred_username": "test-user"}
+
+	rawRoles := make([]interface{}, len(roles))
+	for i, role := range roles {
+		rawRoles[i] = role
+	}
+
+	claims := jwt.MapClaims{
+		"sub":                "test-user",
+		"preferred_username": "test-user",
+		"realm_access":       map[string]interface{}{"roles": rawRoles},
+	}
 	return nil, &claims, nil
 }
 
-type allowAllAuthorizer struct{}
-
-func (allowAllAuthorizer) AuthorizeNodeRead(context.Context, catalog.NodeID, string, string) error {
-	return nil
-}
-
-func withAuth(req *http.Request) *http.Request {
-	req.Header.Set("Authorization", "Bearer "+testBearerToken)
+func withAuth(req *http.Request, bearerToken string) *http.Request {
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
 	return req
 }
 
@@ -94,8 +109,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 		store,
 		map[string]catalog.Plugin{"seed": stubPlugin{}},
 		log.New(io.Discard, "", 0),
-		nil,
-	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
+	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
 
 	tests := []struct {
 		name               string
@@ -222,7 +236,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := withAuth(httptest.NewRequest(tt.method, tt.path, nil))
+			req := withAuth(httptest.NewRequest(tt.method, tt.path, nil), testBearerToken)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -240,10 +254,9 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 		catalog.NewMemoryStore(),
 		map[string]catalog.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}},
 		log.New(io.Discard, "", 0),
-		nil,
-	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}}, allowAllAuthorizer{})
+	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
 
-	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil))
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -262,4 +275,94 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 		},
 	}
 	assert.Equal(t, expected, payload)
+}
+
+func TestRouterAuthorizesNodesByKeycloakRealmRole(t *testing.T) {
+	store := catalog.NewMemoryStore()
+	applyPluginSnapshot(t, store,
+		[]catalog.NodeClaim{
+			{ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"}},
+			{ID: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"}},
+		},
+		nil,
+	)
+
+	router := NewRouter(catalog.NewService(
+		store,
+		nil,
+		log.New(io.Discard, "", 0),
+	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
+
+	tests := []struct {
+		name               string
+		bearerToken        string
+		path               string
+		expectedStatusCode int
+	}{
+		{
+			name:               "ai engineer can read a model node",
+			bearerToken:        aiEngineerBearerToken,
+			path:               "/v1/nodes/model/mlflow/fraud-detector",
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "ai engineer cannot read an application node",
+			bearerToken:        aiEngineerBearerToken,
+			path:               "/v1/nodes/application/litellm/fraud-assistant",
+			expectedStatusCode: http.StatusForbidden,
+		},
+		{
+			name:               "application engineer can read an application node",
+			bearerToken:        applicationEngineerBearerToken,
+			path:               "/v1/nodes/application/litellm/fraud-assistant",
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:               "application engineer cannot read a model node",
+			bearerToken:        applicationEngineerBearerToken,
+			path:               "/v1/nodes/model/mlflow/fraud-detector",
+			expectedStatusCode: http.StatusForbidden,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := withAuth(httptest.NewRequest(http.MethodGet, tt.path, nil), tt.bearerToken)
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatusCode, rec.Code)
+		})
+	}
+}
+
+func TestRouterFiltersNodeListByKeycloakRealmRole(t *testing.T) {
+	store := catalog.NewMemoryStore()
+	applyPluginSnapshot(t, store,
+		[]catalog.NodeClaim{
+			{ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"}},
+			{ID: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"}},
+		},
+		nil,
+	)
+
+	router := NewRouter(catalog.NewService(
+		store,
+		nil,
+		log.New(io.Discard, "", 0),
+	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
+
+	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/nodes", nil), aiEngineerBearerToken)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var payload ListNodesResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+
+	require.Len(t, payload.Nodes, 1)
+	assert.Equal(t, "model", payload.Nodes[0].Kind)
 }

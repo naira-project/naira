@@ -16,8 +16,6 @@ type config struct {
 	PluginConnectionTimeout time.Duration
 	KeycloakBaseURL         string
 	KeycloakRealm           string
-	OpenfgaBaseURL          string
-	OpenfgaStoreName        string
 }
 
 type envConfig struct {
@@ -28,8 +26,6 @@ type envConfig struct {
 	PluginConnectionTimeout time.Duration `env:"PLUGIN_CONNECTION_TIMEOUT" default:"10s"`
 	KeycloakBaseURL         string        `env:"KEYCLOAK_BASE_URL"`
 	KeycloakRealm           string        `env:"KEYCLOAK_REALM"`
-	OpenfgaBaseURL          string        `env:"FGA_API_URL"`
-	OpenfgaStoreName        string        `env:"FGA_STORE_NAME"`
 }
 
 func loadConfig() (config, error) {
@@ -54,8 +50,6 @@ func loadConfig() (config, error) {
 		PluginConnectionTimeout: raw.PluginConnectionTimeout,
 		KeycloakBaseURL:         raw.KeycloakBaseURL,
 		KeycloakRealm:           raw.KeycloakRealm,
-		OpenfgaBaseURL:          raw.OpenfgaBaseURL,
-		OpenfgaStoreName:        raw.OpenfgaStoreName,
 	}
 
 	return cfg, nil
