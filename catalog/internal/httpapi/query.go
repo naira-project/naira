@@ -118,13 +118,12 @@ func parseFilterSyntax(filter string) (*equalityFilter, error) {
 		return nil, nil
 	}
 
-	parts := strings.SplitN(trimmed, "=", 2)
-	if len(parts) != 2 {
+	field, value, ok := strings.Cut(trimmed, "=")
+	if !ok {
 		return nil, fmt.Errorf(`%w: expected field="value"`, errInvalidFilter)
 	}
-
-	field := strings.TrimSpace(parts[0])
-	value := strings.TrimSpace(parts[1])
+	field = strings.TrimSpace(field)
+	value = strings.TrimSpace(value)
 	if field == "" || len(value) < 2 || value[0] != '"' || value[len(value)-1] != '"' {
 		return nil, fmt.Errorf(`%w: expected field="value"`, errInvalidFilter)
 	}

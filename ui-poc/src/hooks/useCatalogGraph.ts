@@ -1,40 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
 import { buildCatalogGraphSlice, type CatalogGraphResponse, type CatalogGraphRoot } from '../lib/catalogGraph';
 import { useOpenMFPContext } from './useOpenMFPContext';
+import { useAsyncData } from './useAsyncData';
 
 export type { CatalogGraphEdge, CatalogGraphNode, CatalogGraphRoot, CatalogGraphResponse } from '../lib/catalogGraph';
 
+const EMPTY_GRAPH: CatalogGraphResponse = { nodes: [], edges: [] };
+
 export function useCatalogGraph(root: CatalogGraphRoot | null, depth: number) {
-  const { token, isReady } = useOpenMFPContext();
-  const [graph, setGraph] = useState<CatalogGraphResponse>({ nodes: [], edges: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { token } = useOpenMFPContext();
 
-  const loadGraph = useCallback(() => {
-    if (!root || !isReady) {
-      setGraph({ nodes: [], edges: [] });
-      setLoading(!isReady);
-      setError(null);
-      return;
-    }
+  const { data: graph, loading, error } = useAsyncData<CatalogGraphResponse>(
+    () => (root ? buildCatalogGraphSlice(token, root, depth) : Promise.resolve(EMPTY_GRAPH)),
+    [root, depth, token],
+    EMPTY_GRAPH,
+    'Failed to load graph'
+  );
 
-    setLoading(true);
-    setError(null);
-
-    buildCatalogGraphSlice(token, root, depth)
-      .then((nextGraph) => {
-        setGraph(nextGraph);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError('Failed to load graph');
-        setLoading(false);
-      });
-  }, [depth, root, token, isReady]);
-
-  useEffect(() => {
-    loadGraph();
-  }, [loadGraph]);
-
-  return { graph, loading, error, reload: loadGraph };
+  return { graph, loading, error };
 }

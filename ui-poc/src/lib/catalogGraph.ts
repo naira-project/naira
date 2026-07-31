@@ -1,8 +1,7 @@
-import { buildEqualityFilter, fetchNodeByName, fetchRelations, NodeResource, RelationResource } from './catalogApi';
+import { buildEqualityFilter, fetchNodeByName, fetchRelations, nodeProps, NodeResource, RelationResource } from './catalogApi';
 
 export interface CatalogGraphRoot {
 	name: string;
-	label: string;
 }
 
 export interface CatalogGraphNode {
@@ -49,7 +48,7 @@ function toGraphNode(node: NodeResource, depth: number, isRoot = false): Catalog
 		label: nameFromPath(node.path),
 		depth,
 		isRoot,
-		properties: node.props ?? {},
+		properties: nodeProps(node),
 	};
 }
 
@@ -109,7 +108,7 @@ export async function buildCatalogGraphSlice(token: string | null, root: Catalog
 
 	nodes.set(rootResource.name, {
 		...toGraphNode(rootResource, 0, true),
-		label: root.label || nameFromPath(rootResource.path),
+		label: nameFromPath(rootResource.path),
 	});
 
 	let frontier: FrontierNode[] = [

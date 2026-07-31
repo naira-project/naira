@@ -68,12 +68,12 @@ func parsePluginAddresses(raw []string) (map[string]string, error) {
 		if entry == "" {
 			continue
 		}
-		parts := strings.SplitN(entry, "=", 2)
-		if len(parts) != 2 {
+		name, addr, ok := strings.Cut(entry, "=")
+		if !ok {
 			return nil, fmt.Errorf("invalid plugin address entry %q: must be in name=address format", entry)
 		}
-		name := strings.TrimSpace(parts[0])
-		addr := strings.TrimSpace(parts[1])
+		name = strings.TrimSpace(name)
+		addr = strings.TrimSpace(addr)
 		if name == "" || addr == "" {
 			return nil, fmt.Errorf("invalid plugin address entry %q: name and address must not be empty", entry)
 		}

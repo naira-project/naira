@@ -1,13 +1,23 @@
-import React, { useMemo, useState } from 'react';
-import { ArrowRight, GitBranch, Network, RefreshCw, Share2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
+import {
+  ArrowRight,
+  Focus,
+  GitBranch,
+  Network,
+  Share2,
+} from 'lucide-react';
 import {
   Background,
   Controls,
   MarkerType,
   MiniMap,
   ReactFlow,
+  useEdgesState,
+  useNodesState,
   type Edge,
   type Node,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -16,45 +26,90 @@ import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Separator } from '../components/ui/separator';
 import { useCatalogGraph, type CatalogGraphEdge, type CatalogGraphNode, type CatalogGraphRoot } from '../hooks/useCatalogGraph';
+import PropertiesPanel from '../components/PropertiesPanel';
 
+// TODO: how to make in a way that is not hardcoded?
 const typePalette: Record<string, { fill: string; stroke: string }> = {
   application: { fill: '#dff4ff', stroke: '#0b6fa4' },
   model: { fill: '#fff1d6', stroke: '#b36b00' },
   dataset: { fill: '#def7e5', stroke: '#13795b' },
+  deployment: { fill: '#f3e8ff', stroke: '#6b21a8' },
+  service: { fill: '#fce7f3', stroke: '#9d174d' },
+  'Kustomization.fluxcd': { fill: '#e0f2fe', stroke: '#0369a1' },
+  'HelmChart.fluxcd': { fill: '#fef3c7', stroke: '#b45309' },
+  git_repository: { fill: '#e0e7ff', stroke: '#3730a3' },
 };
 
 function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
-function toFlowNode(node: CatalogGraphNode, position: { x: number; y: number }): Node {
-  const palette = typePalette[node.kind] ?? { fill: '#eceff3', stroke: '#516170' };
+
+function toFlowNode(
+  node: CatalogGraphNode,
+  position: { x: number; y: number },
+  onFocus: (node: CatalogGraphNode) => void,
+): Node {
+  const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
+
+  const displayLabel = (
+    <div className="flex gap-2 text-left h-full">
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span 
+            className="text-[10px] font-bold uppercase tracking-wider truncate" 
+            style={{ color: palette.stroke }}
+          >
+            {node.kind}
+          </span>
+          {!node.isRoot && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onFocus(node);
+              }}
+              title="Set as root"
+              className="cursor-pointer rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors shrink-0"
+            >
+              <Focus size={13} />
+            </button>
+          )}
+        </div>
+        <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
+          {node.label}
+        </span>
+      </div>
+    </div>
+  );
 
   return {
     id: graphNodeId(node),
     position,
     data: {
-      label: node.label,
+      label: displayLabel,
       path: node.path,
       nodeKind: node.kind,
       depth: node.depth,
       isRoot: node.isRoot,
     },
-    draggable: false,
+    draggable: true,
     selectable: true,
     style: {
       width: 220,
-      borderRadius: 18,
-      border: `2px solid ${palette.stroke}`,
-      background: node.isRoot ? '#eef6ff' : palette.fill,
-      boxShadow: node.isRoot ? '0 20px 40px rgba(15, 23, 42, 0.12)' : '0 12px 28px rgba(15, 23, 42, 0.06)',
-      padding: 16,
+      borderRadius: 10,
+      border: '1px solid #e2e8f0',
+      borderLeft: `6px solid ${palette.stroke}`,
+      background: node.isRoot ? '#f0faf4' : '#ffffff',
+      boxShadow: node.isRoot
+        ? '0 20px 40px rgba(15, 23, 42, 0.12)'
+        : '0 12px 28px rgba(15, 23, 42, 0.06)',
+      padding: '14px 14px 14px 14px',
       color: '#17324d',
     },
   };
 }
 
-function layoutNodes(nodes: CatalogGraphNode[]): Node[] {
+function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode) => void): Node[] {
   const grouped = new Map<number, CatalogGraphNode[]>();
   const sortedDepths = Array.from(new Set(nodes.map((node) => node.depth))).sort((left, right) => left - right);
   const depthOffsets = new Map(sortedDepths.map((depth, index) => [depth, index]));
@@ -81,7 +136,7 @@ function layoutNodes(nodes: CatalogGraphNode[]): Node[] {
         positioned.push(toFlowNode(node, {
           x: (depthOffsets.get(depth) ?? 0) * 300,
           y: index * 150,
-        }));
+        }, onFocus));
       });
     });
 
@@ -117,93 +172,95 @@ function toFlowEdge(edge: CatalogGraphEdge): Edge {
   };
 }
 
-function StatCard({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
-  return (
-    <Card className="min-w-36 border-gray-200 dark:border-gray-700">
-      <CardContent className="flex items-start gap-3 py-3.5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          {icon}
-        </div>
-        <div>
-          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
-            {label}
-          </p>
-          <p className="mt-1 text-3xl font-bold text-foreground dark:text-foreground-dark-default">
-            {value}
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 type CatalogGraphProps = {
   rootNode: CatalogGraphRoot;
 };
 
 export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
+  const navigate = useNavigate();
   const [depth, setDepth] = useState(1);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const { graph, loading, error, reload } = useCatalogGraph(rootNode, depth);
+  const { graph, loading, error } = useCatalogGraph(rootNode, depth);
 
-  const flowNodes = useMemo(() => layoutNodes(graph.nodes), [graph.nodes]);
-  const flowEdges = useMemo(() => graph.edges.map(toFlowEdge), [graph.edges]);
+  // The state of nodes/edges is controlled by React Flow, allowing the
+  // user to drag them. The layout is recalculated from scratch on every
+  // data change from the hook (e.g., after a depth change).
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<Node>([]);
+  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const instanceRef = useRef<ReactFlowInstance | null>(null);
+
+  useEffect(() => {
+    setFlowNodes(layoutNodes(graph.nodes, handleFocusNode));
+    setFlowEdges(graph.edges.map(toFlowEdge));
+  }, [graph, setFlowNodes, setFlowEdges]);
+
+  // Auto-fit view after each layout change (e.g., depth change).
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      instanceRef.current?.fitView({
+        maxZoom: 1,   // Prevents from zooming in too much in default view
+      });
+    });
+  }, [graph]);
+
   const selectedNode = graph.nodes.find((node) => graphNodeId(node) === selectedNodeId) ?? graph.nodes[0] ?? null;
   const incomingCount = graph.edges.filter((edge) => edge.direction === 'incoming').length;
   const outgoingCount = graph.edges.filter((edge) => edge.direction === 'outgoing').length;
 
+  const handleNodeClick = (_: React.MouseEvent, node: Node) => {
+    setSelectedNodeId(node.id);
+  };
+
+  const handleFocusNode = (graphNode: CatalogGraphNode) => {
+    navigate(`/catalog/${encodeURIComponent(graphNode.kind)}/${encodeURIComponent(graphNode.path)}`);
+  };
+
   return (
-    <div className="space-y-4">
-      <Card className="border-gray-200 dark:border-gray-700">
-        <CardContent className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
-              Root Node
-            </p>
-            <h2 className="mt-1 text-xl font-semibold text-foreground dark:text-foreground-dark-default">
-              {rootNode.label}
-            </h2>
-            <p className="mt-1 font-mono text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-              {rootNode.name}
-            </p>
-          </div>
+    <div className="flex flex-col gap-3">
+      {/* Compact toolbar: depth controls + inline stats */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <label className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary">
+            Depth
+          </label>
+          <Input
+            type="number"
+            min={1}
+            value={depth}
+            onChange={(event) => setDepth(Math.max(1, Number(event.target.value) || 1))}
+            className="w-16 h-8"
+          />
+        </div>
 
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="mb-1 block text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
-                Depth
-              </label>
-              <Input
-                type="number"
-                min={1}
-                value={depth}
-                onChange={(event) => setDepth(Math.max(1, Number(event.target.value) || 1))}
-                className="w-24"
-              />
-            </div>
+        <div className="flex-1 min-w-4" />
 
-            <button
-              onClick={reload}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-dark"
-            >
-              <RefreshCw size={16} />
-              Reload
-            </button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-wrap gap-4">
-        <StatCard label="Nodes" value={graph.nodes.length} icon={<Network size={18} />} />
-        <StatCard label="Edges" value={graph.edges.length} icon={<Share2 size={18} />} />
-        <StatCard label="Incoming" value={incomingCount} icon={<ArrowRight size={18} />} />
-        <StatCard label="Outgoing" value={outgoingCount} icon={<ArrowRight size={18} />} />
-        <StatCard label="Depth" value={depth} icon={<GitBranch size={18} />} />
+        <div className="flex items-center gap-3 text-xs text-foreground-secondary">
+          <span className="inline-flex items-center gap-1">
+            <Network size={14} className="text-primary" />
+            <strong className="text-foreground">{graph.nodes.length}</strong> nodes
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Share2 size={14} className="text-primary" />
+            <strong className="text-foreground">{graph.edges.length}</strong> edges
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ArrowRight size={14} className="text-[#7b4bb3]" />
+            <strong className="text-foreground">{incomingCount}</strong> in
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <ArrowRight size={14} className="text-[#3b6a8a]" />
+            <strong className="text-foreground">{outgoingCount}</strong> out
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <GitBranch size={14} className="text-primary" />
+            <strong className="text-foreground">{depth}</strong> depth
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="min-h-0 overflow-hidden rounded-[20px] border-gray-200 dark:border-gray-700">
-          <div className="relative h-[520px]">
+          <div className="relative h-[580px]">
             {loading && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/85 dark:bg-background-dark-paper/85">
                 <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">Loading graph...</p>
@@ -219,9 +276,14 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
             <ReactFlow
               nodes={flowNodes}
               edges={flowEdges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onInit={(instance) => {
+                instanceRef.current = instance;
+              }}
               fitView
-              onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-              nodesDraggable={false}
+              onNodeClick={handleNodeClick}
+              nodesDraggable
               nodesConnectable={false}
               elementsSelectable
               proOptions={{ hideAttribution: true }}
@@ -232,7 +294,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
                 zoomable
                 nodeColor={(node) => {
                   const typedNode = graph.nodes.find((item) => graphNodeId(item) === node.id);
-                  const palette = typePalette[typedNode?.kind ?? ''] ?? { fill: '#ced6de', stroke: '#516170' };
+                  const palette = typePalette[typedNode?.kind ?? ''] ?? { fill: '#ced6de', stroke: '#94a3b8' };
                   return typedNode?.isRoot ? '#0f5c61' : palette.stroke;
                 }}
               />
@@ -243,25 +305,6 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
         </Card>
 
         <div className="space-y-4">
-          <Card className="rounded-[20px] border-gray-200 dark:border-gray-700">
-            <CardContent>
-              <h2 className="text-base font-semibold text-foreground dark:text-foreground-dark-default">
-                Graph Scope
-              </h2>
-              <p className="mt-2 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-                This view combines incoming and outgoing relations around the current root node.
-              </p>
-              <div className="mt-4 flex items-center gap-2 rounded-xl bg-gray-50 px-3 py-3 dark:bg-white/5">
-                <span className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">Incoming</span>
-                <ArrowRight size={16} className="rotate-180 text-[#7b4bb3]" />
-                <Badge variant="default">Root</Badge>
-                <span className="truncate text-sm text-foreground dark:text-foreground-dark-default">{rootNode.label}</span>
-                <ArrowRight size={16} className="text-[#3b6a8a]" />
-                <span className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">Outgoing</span>
-              </div>
-            </CardContent>
-          </Card>
-
           <Card className="rounded-[20px] border-gray-200 dark:border-gray-700">
             <CardContent>
               <h2 className="text-base font-semibold text-foreground dark:text-foreground-dark-default">
@@ -312,6 +355,13 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
                       {selectedNode.path}
                     </p>
                   </div>
+
+                  {/* Render abstracted properties section */}
+                  <PropertiesPanel
+                    props={selectedNode.properties ?? {}}
+                    title="Properties"
+                    layout="stacked"
+                  />
                 </div>
               )}
             </CardContent>
