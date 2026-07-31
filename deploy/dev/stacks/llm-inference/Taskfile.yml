@@ -7,9 +7,6 @@ includes:
   litellm:
     taskfile: ./tasks/litellm.yml
     dir: .
-  vllm:
-    taskfile: ./tasks/vllm.yml
-    dir: .
   llama:
     taskfile: ./tasks/llama.yml
     dir: .
@@ -19,11 +16,10 @@ includes:
 
 tasks:
   deploy:
-    desc: Deploy the full LLM Inference stack (postgres + litellm + vllm + llama + monitoring)
+    desc: Deploy the LLM Inference stack (postgres + litellm + llama + monitoring)
     cmds:
       - task: postgres:deploy
       - task: litellm:deploy
-      - task: vllm:deploy
       - task: llama:deploy
       - task: monitoring:deploy
 
@@ -38,7 +34,6 @@ tasks:
     cmds:
       - task: monitoring:undeploy
       - task: llama:undeploy
-      - task: vllm:undeploy
       - task: litellm:undeploy
       - task: postgres:undeploy
 

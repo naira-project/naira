@@ -12,11 +12,13 @@ vars:
 
 tasks:
   image:build:
+    internal: true
     desc: Build the UI Docker image
     cmds:
       - docker build -t {{.UI_IMAGE}} {{.UI_DIR}}
 
   image:load:
+    internal: true
     desc: Load the UI image into kind
     deps: [image:build]
     cmds:

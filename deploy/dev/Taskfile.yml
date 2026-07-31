@@ -34,10 +34,7 @@ tasks:
     desc: Deploy core + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
     cmds:
       - task: core:deploy
-      - task: llm-inference:postgres:deploy
-      - task: llm-inference:litellm:deploy
-      - task: llm-inference:llama:deploy
-      - task: llm-inference:monitoring:deploy
+      - task: llm-inference:deploy
 
   platform:undeploy:
     desc: Remove the full platform from kind
@@ -96,11 +93,10 @@ tasks:
       - mlops:openmetadata:port-forward
 
   forward:llm-inference:
-    desc: Port-forward LLM Inference services (litellm, llama, vllm, monitoring)
+    desc: Port-forward LLM Inference services (litellm, llama, monitoring)
     deps:
       - llm-inference:litellm:port-forward
       - llm-inference:llama:port-forward
-      - llm-inference:vllm:port-forward
       - llm-inference:monitoring:port-forward
 
   # Seeding sample data

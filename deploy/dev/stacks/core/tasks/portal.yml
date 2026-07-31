@@ -12,11 +12,13 @@ vars:
 
 tasks:
   image:build:
+    internal: true
     desc: Build the portal Docker image
     cmds:
       - docker build -t {{.PORTAL_IMAGE}} {{.PORTAL_DIR}}
 
   image:load:
+    internal: true
     desc: Load the portal image into kind
     deps: [image:build]
     cmds:

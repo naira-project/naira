@@ -16,7 +16,7 @@ tasks:
   # Full platform
 
   platform:deploy:
-    desc: Deploy core + LLM Inference stack (llama.cpp, litellm, monitoring) to kind  [RAM: ~4 GiB]
+    desc: Deploy core + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:deploy
 
@@ -25,59 +25,12 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:undeploy
 
-  # Individual stacks
-
-  core:deploy:
-    desc: Deploy only the core stack (cluster, catalog, portal, ui)  [RAM: ~2 GiB]
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} core:deploy
-
-  core:undeploy:
-    desc: Remove only the core stack from kind
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} core:undeploy
-
-  mlops:deploy:
-    desc: Deploy only the MLOps stack (mlflow, openmetadata)  [RAM: ~3.5 GiB]
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} mlops:deploy
-
-  mlops:undeploy:
-    desc: Remove only the MLOps stack from kind
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} mlops:undeploy
-
-  llm-inference:deploy:
-    desc: Deploy only the LLM Inference stack (postgres, litellm, vllm, monitoring)  [RAM: ~3 GiB]
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} llm-inference:deploy
-
-  llm-inference:undeploy:
-    desc: Remove only the LLM Inference stack from kind
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} llm-inference:undeploy
-
   # Port-forwarding
 
   forward:all:
     desc: Port-forward all developer-facing services
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} forward:all
-
-  forward:core:
-    desc: Port-forward core services (catalog, portal, ui)
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} forward:core
-
-  forward:mlops:
-    desc: Port-forward MLOps services (mlflow, openmetadata)
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} forward:mlops
-
-  forward:llm-inference:
-    desc: Port-forward LLM Inference services (litellm, inference, monitoring)
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} forward:llm-inference
 
   # Cluster management
 

@@ -9,11 +9,6 @@ includes:
     dir: .
 
 tasks:
-  default:
-    desc: Show available MLOps stack tasks
-    cmds:
-      - task --list
-
   deploy:
     desc: Deploy the MLOps stack (mlflow + openmetadata)
     cmds:
