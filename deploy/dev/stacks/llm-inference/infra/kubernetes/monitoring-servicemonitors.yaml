@@ -1,5 +1,5 @@
 # ── ServiceMonitors for Prometheus auto-discovery ────────────────────────────
-# Each block tells Prometheus which services to scrape and how to label the data.
+# Each block tells Prometheus which services to scrape
 ---
 # Selects any service in the 'inference' namespace with a port named 'http'.
 apiVersion: monitoring.coreos.com/v1

@@ -13,21 +13,17 @@ tasks:
   deploy:
     desc: Deploy Prometheus stack (kube-prometheus-stack) + ServiceMonitors to kind
     cmds:
-      # 1. Add the Helm repo if not already present
       - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
       - helm repo update prometheus-community 2>/dev/null
 
-      # 2. Install or upgrade the kube-prometheus-stack chart
       - |
         helm upgrade --install {{.PROMETHEUS_RELEASE}} {{.PROMETHEUS_CHART}} \
           --namespace {{.MONITORING_NAMESPACE}} --create-namespace \
           --values {{.PROMETHEUS_VALUES}} \
           --wait --timeout 10m
 
-      # 3. Apply ServiceMonitors for vLLM, LiteLLM, etc.
       - kubectl apply -f {{.SERVICEMONITOR_MANIFEST}}
 
-      # 4. Show status
       - kubectl -n {{.MONITORING_NAMESPACE}} get pods
 
   undeploy:
@@ -46,11 +42,9 @@ tasks:
   port-forward-prometheus:
     internal: true
     cmds:
-      # Prometheus: service 'prometheus-operated' is created by the operator
       - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/prometheus-operated {{.PROMETHEUS_LOCAL_PORT}}:9090
 
   port-forward-grafana:
     internal: true
     cmds:
-      # Grafana: service 'prometheus-grafana' is created by the Helm chart
       - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/{{.PROMETHEUS_RELEASE}}-grafana {{.GRAFANA_LOCAL_PORT}}:80

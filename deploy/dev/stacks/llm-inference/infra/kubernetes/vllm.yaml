@@ -1,3 +1,4 @@
+# llama.cpu starts up faster than vLLM, which is why vLLM isn't in the llm-inference taskfiles
 apiVersion: v1
 kind: Namespace
 metadata:

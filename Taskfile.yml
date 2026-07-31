@@ -13,10 +13,8 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} check
 
-  # Full platform
-
   platform:deploy:
-    desc: Deploy core + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
+    desc: Deploy core (catalog, plugins, ui) + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:deploy
 
@@ -25,21 +23,15 @@ tasks:
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:undeploy
 
-  # Port-forwarding
-
   forward:all:
     desc: Port-forward all developer-facing services
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} forward:all
 
-  # Cluster management
-
   cluster:delete:
     desc: Remove the cluster
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} cluster:delete
-
-  # Proto
 
   proto:generate:
     desc: Generate protobuf stubs of pluginapi
@@ -50,8 +42,6 @@ tasks:
     desc: Lint proto of pluginapi
     cmds:
       - cd {{.PROTO_DIR}} && buf lint
-
-  # Catalog
 
   catalog:test:
     desc: Run catalog unit tests
