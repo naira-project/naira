@@ -26,9 +26,9 @@ const (
 )
 
 var tokenRealmRoles = map[string][]string{
-	testBearerToken:                {realmRoleAIEngineer, realmRoleApplicationEngineer},
-	aiEngineerBearerToken:          {realmRoleAIEngineer},
-	applicationEngineerBearerToken: {realmRoleApplicationEngineer},
+	testBearerToken:                {keycloak.RealmRoleAIEngineer, keycloak.RealmRoleApplicationEngineer},
+	aiEngineerBearerToken:          {keycloak.RealmRoleAIEngineer},
+	applicationEngineerBearerToken: {keycloak.RealmRoleApplicationEngineer},
 }
 
 type stubTokenDecoder struct{}

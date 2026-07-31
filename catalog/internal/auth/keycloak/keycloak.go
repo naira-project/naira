@@ -60,7 +60,7 @@ func NewAuthMiddleware(kc Config) func(http.Handler) http.Handler {
 	}
 }
 
-func ClaimsFromContext(ctx context.Context) (TokenClaims, bool) {
+func claimsFromContext(ctx context.Context) (TokenClaims, bool) {
 	tc, ok := ctx.Value(claimsKey).(TokenClaims)
 	return tc, ok
 }

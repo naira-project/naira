@@ -1,34 +1,32 @@
-package httpapi
+package keycloak
 
 import (
 	"context"
 	"fmt"
-
-	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
 const (
-	realmRoleAIEngineer          = "ai-engineer"
-	realmRoleApplicationEngineer = "application-engineer"
+	RealmRoleAIEngineer          = "ai-engineer"
+	RealmRoleApplicationEngineer = "application-engineer"
 )
 
 var realmRoleByNodeKind = map[string]string{
-	pluginapi.NodeKindModel:   realmRoleAIEngineer,
-	pluginapi.NodeKindDataset: realmRoleAIEngineer,
+	pluginapi.NodeKindModel:   RealmRoleAIEngineer,
+	pluginapi.NodeKindDataset: RealmRoleAIEngineer,
 }
 
 func requiredRealmRoleForNodeKind(kind string) string {
 	if role, ok := realmRoleByNodeKind[kind]; ok {
 		return role
 	}
-	return realmRoleApplicationEngineer
+	return RealmRoleApplicationEngineer
 }
 
-// authorizeNodeRead checks that the authenticated caller's Keycloak realm
+// AuthorizeNodeRead checks that the authenticated caller's Keycloak realm
 // roles grant them access to nodes of the given kind.
-func authorizeNodeRead(ctx context.Context, kind string) error {
-	claims, ok := keycloak.ClaimsFromContext(ctx)
+func AuthorizeNodeRead(ctx context.Context, kind string) error {
+	claims, ok := claimsFromContext(ctx)
 	if !ok || claims.UserID == "" {
 		return fmt.Errorf("no authenticated user in request context")
 	}
