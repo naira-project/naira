@@ -4,7 +4,7 @@ includes:
   postgres:
     taskfile: ./tasks/postgres.yml
     dir: .
-  litellm:
+  litellm-svc:
     taskfile: ./tasks/litellm.yml
     dir: .
   llama:
@@ -18,16 +18,9 @@ tasks:
   deploy:
     desc: Deploy the LLM Inference stack (postgres + litellm + llama + monitoring)
     cmds:
-      - task: postgres:deploy
       - task: litellm:deploy
       - task: llama:deploy
       - task: monitoring:deploy
-
-  deploy:litellm:
-    desc: Deploy only LiteLLM (postgres + litellm)
-    cmds:
-      - task: postgres:deploy
-      - task: litellm:deploy
 
   undeploy:
     desc: Remove the full LLM Inference stack from kind
@@ -35,10 +28,20 @@ tasks:
       - task: monitoring:undeploy
       - task: llama:undeploy
       - task: litellm:undeploy
-      - task: postgres:undeploy
 
-  undeploy:litellm:
+  litellm:deploy:
+    desc: Deploy only LiteLLM (postgres + litellm)
+    cmds:
+      - task: postgres:deploy
+      - task: litellm-svc:deploy
+
+  litellm:undeploy:
     desc: Remove only LiteLLM and its database
     cmds:
-      - task: litellm:undeploy
+      - task: litellm-svc:undeploy
       - task: postgres:undeploy
+
+  litellm:port-forward:
+    desc: Expose LiteLLM on localhost:4000
+    cmds:
+      - task: litellm-svc:port-forward

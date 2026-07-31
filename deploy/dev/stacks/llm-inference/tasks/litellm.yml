@@ -23,6 +23,7 @@ tasks:
       - kubectl delete -f {{.LITELLM_MANIFEST}} --ignore-not-found
 
   port-forward:
+    internal: true
     desc: Expose LiteLLM on localhost:4000
     cmds:
       - kubectl -n {{.LITELLM_NAMESPACE}} port-forward {{.LITELLM_SERVICE}} {{.LITELLM_LOCAL_PORT}}:{{.LITELLM_REMOTE_PORT}}
