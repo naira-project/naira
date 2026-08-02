@@ -9,7 +9,6 @@ vars:
   CATALOG_SERVICE: svc/catalog
   CATALOG_LOCAL_PORT: '8090'
   CATALOG_REMOTE_PORT: '8090'
-  KEYCLOAK_MODE: local # or platform-mesh if you want to work with the shared cluster (or your local Platform Mesh cluster)
   KEYCLOAK_REALM: naira
   KEYCLOAK_NAMESPACE: keycloak
   KEYCLOAK_REMOTE_PORT: '8080'
@@ -35,11 +34,7 @@ tasks:
       - task: :plugins:image:load
       - task: :keycloak:deploy
       - |
-        if [ "{{.KEYCLOAK_MODE}}" = "local" ]; then
-          KEYCLOAK_BASE_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}"
-        else
-          KEYCLOAK_BASE_URL="http://keycloak.platform-mesh-system.svc.cluster.local:80/keycloak"
-        fi
+        KEYCLOAK_BASE_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}"
         sed -e "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" \
             -e "s|__KEYCLOAK_BASE_URL__|${KEYCLOAK_BASE_URL}|" \
             {{.CATALOG_MANIFEST}} | kubectl apply -f -

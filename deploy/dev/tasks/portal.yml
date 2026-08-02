@@ -9,7 +9,6 @@ vars:
   PORTAL_SERVICE: svc/portal
   PORTAL_LOCAL_PORT: '3000'
   PORTAL_REMOTE_PORT: '3000'
-  KEYCLOAK_MODE: local # or platform-mesh if you want to work with the shared cluster (or your local Platform Mesh cluster)
   KEYCLOAK_REALM: naira
   KEYCLOAK_NAMESPACE: keycloak
   KEYCLOAK_LOCAL_PORT: '8080'
@@ -33,19 +32,8 @@ tasks:
       - task: image:load
       - task: :keycloak:deploy
       - |
-        if [ "{{.KEYCLOAK_MODE}}" != "local" ]; then
-          kubectl create configmap platform-mesh-ca -n {{.PORTAL_NAMESPACE}} \
-            --from-literal=ca.crt="$(kubectl get secret domain-certificate -n platform-mesh-system -o jsonpath='{.data.ca\.crt}' | base64 -d)" \
-            --dry-run=client -o yaml | kubectl apply -f -
-        fi
-      - |
-        if [ "{{.KEYCLOAK_MODE}}" = "local" ]; then
-          AUTH_SERVER_URL="http://localhost:{{.KEYCLOAK_LOCAL_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
-          TOKEN_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
-        else
-          AUTH_SERVER_URL="https://portal.localhost:8443/keycloak/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
-          TOKEN_URL="https://portal.localhost:8443/keycloak/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
-        fi
+        AUTH_SERVER_URL="http://localhost:{{.KEYCLOAK_LOCAL_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
+        TOKEN_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
         sed -e "s|__AUTH_SERVER_URL_KEYCLOAK__|${AUTH_SERVER_URL}|" \
             -e "s|__TOKEN_URL_KEYCLOAK__|${TOKEN_URL}|" \
             {{.PORTAL_MANIFEST}} | kubectl apply -f -

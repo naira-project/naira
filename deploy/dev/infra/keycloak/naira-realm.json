@@ -37,6 +37,18 @@
         { "type": "password", "value": "testpass", "temporary": false }
       ],
       "realmRoles": ["ai-engineer", "offline_access", "uma_authorization"]
+    },
+    {
+      "username": "testuser-appeng",
+      "enabled": true,
+      "email": "test-appeng@test.com",
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "ApplicationEngineer",
+      "credentials": [
+        { "type": "password", "value": "testpass", "temporary": false }
+      ],
+      "realmRoles": ["application-engineer", "offline_access", "uma_authorization"]
     }
   ]
 }

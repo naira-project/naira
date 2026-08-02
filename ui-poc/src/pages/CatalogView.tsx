@@ -7,6 +7,7 @@ import { useKinds } from '../hooks/useKinds';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { useRelationSummaries } from '../hooks/useRelationSummaries';
 import { useCatalogSync } from '../hooks/useCatalogSync';
+import { useOpenMFPContext } from '../hooks/useOpenMFPContext';
 import { NodeResource } from '../lib/catalogApi';
 import KindSelector from '../components/KindSelector';
 import GenericTable from '../components/GenericTable';
@@ -19,6 +20,7 @@ import GenericTable from '../components/GenericTable';
 export default function CatalogView() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const { token } = useOpenMFPContext();
 
   // Kind discovery & selection
   const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds} = useKinds();
@@ -30,7 +32,7 @@ export default function CatalogView() {
   const { relationSummaries } = useRelationSummaries(nodes);
 
   // Catalog sync — triggers plugin execution
-  const { syncing, syncMessage, syncError, handleSync } = useCatalogSync(refreshKinds);
+  const { syncing, syncMessage, syncError, handleSync } = useCatalogSync(token, refreshKinds);
 
   // Filter kinds by search
   const filteredKinds = kinds.filter((k) =>

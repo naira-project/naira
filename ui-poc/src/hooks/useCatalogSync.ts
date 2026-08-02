@@ -14,7 +14,7 @@ interface UseCatalogSyncResult {
  * - Exposes loading state, success message, and error message
  * - Calls `onSuccess` callback when sync completes successfully
  */
-export function useCatalogSync(onSuccess?: () => void): UseCatalogSyncResult {
+export function useCatalogSync(token: string | null, onSuccess?: () => void): UseCatalogSyncResult {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -25,7 +25,10 @@ export function useCatalogSync(onSuccess?: () => void): UseCatalogSyncResult {
     setSyncError(null);
 
     try {
-      const response = await fetch('/v1/plugins:run', { method: 'POST' });
+      const response = await fetch('/v1/plugins:run', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const payload = await response.json();
 
       if (!response.ok) {
@@ -52,7 +55,7 @@ export function useCatalogSync(onSuccess?: () => void): UseCatalogSyncResult {
     } finally {
       setSyncing(false);
     }
-  }, [onSuccess]);
+  }, [token, onSuccess]);
 
   return { syncing, syncMessage, syncError, handleSync };
 }

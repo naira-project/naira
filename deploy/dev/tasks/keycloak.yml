@@ -1,7 +1,6 @@
 version: '3'
 
 vars:
-  KEYCLOAK_MODE: local # or platform-mesh if you want to work with the shared cluster (or your local Platform Mesh cluster)
   KEYCLOAK_REALM: naira
   KEYCLOAK_NAMESPACE: keycloak
   KEYCLOAK_MANIFEST: infra/kubernetes/keycloak.yaml
@@ -12,7 +11,7 @@ vars:
 
 tasks:
   deploy:
-    desc: Deploy a local Keycloak (KEYCLOAK_MODE=local) to kind. The realm configuration is seeded from infra/keycloak/naira-realm.json
+    desc: Deploy a local Keycloak to kind. The realm configuration is seeded from infra/keycloak/naira-realm.json
     cmds:
       - task: apply
 
@@ -20,10 +19,6 @@ tasks:
     internal: true
     cmds:
       - |
-        if [ "{{.KEYCLOAK_MODE}}" != "local" ]; then
-          echo "KEYCLOAK_MODE={{.KEYCLOAK_MODE}}, skipping local Keycloak deployment"
-          exit 0
-        fi
         kubectl create namespace {{.KEYCLOAK_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
         kubectl create configmap keycloak-realm-import -n {{.KEYCLOAK_NAMESPACE}} \
           --from-file=naira-realm.json={{.KEYCLOAK_REALM_IMPORT}} \

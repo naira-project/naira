@@ -25,7 +25,6 @@ export function useOpenMFPContext(): OpenMFPContext {
         isReady: true,
       });
     };
-
     LuigiClient.addInitListener(update);
     LuigiClient.addContextUpdateListener(update);
     

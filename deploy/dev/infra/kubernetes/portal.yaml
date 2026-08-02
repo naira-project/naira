@@ -26,8 +26,6 @@ spec:
               value: keycloak
             - name: BASE_DOMAINS_KEYCLOAK
               value: localhost
-            # KEYCLOAK_REALM, AUTH_SERVER_URL_KEYCLOAK and TOKEN_URL_KEYCLOAK are templated
-            # in Taskfile.yaml in /deploy/dev based on KEYCLOAK_MODE
             - name: AUTH_SERVER_URL_KEYCLOAK
               value: __AUTH_SERVER_URL_KEYCLOAK__
             - name: TOKEN_URL_KEYCLOAK
