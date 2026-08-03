@@ -33,7 +33,7 @@ const (
 )
 
 type config struct {
-	PathPrefix string `env:"PATH_PREFIX"`
+	PathPrefix string `env:"PATH_PREFIX,required"`
 	Kubeconfig string `env:"KUBECONFIG"`
 }
 

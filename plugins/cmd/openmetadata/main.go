@@ -30,7 +30,7 @@ const (
 )
 
 type config struct {
-	PathPrefix  string        `env:"PATH_PREFIX"`
+	PathPrefix  string        `env:"PATH_PREFIX,required"`
 	BaseURL     string        `env:"OPENMETADATA_BASE_URL" default:"http://127.0.0.1:8585"`
 	Email       string        `env:"OPENMETADATA_ADMIN_EMAIL"`
 	Password    string        `env:"OPENMETADATA_ADMIN_PASSWORD"`

@@ -58,7 +58,7 @@ import (
 )
 
 type config struct {
-	PathPrefix   string        `env:"PATH_PREFIX"`
+	PathPrefix   string        `env:"PATH_PREFIX,required"`
 	Kubeconfig   string        `env:"DEPL_USES_LITELLM_KUBECONFIG"`
 	NamedHosts   []namedHost   `env:"DEPL_USES_LITELLM_NAMED_HOSTS" usage:"comma-separated list of named LiteLLM base URLs, e.g. 'host1=https://litellm.example.com,host2=http://litellm2.example.com:1234/base/'"`
 	APIKeyRegexp string        `env:"DEPL_USES_LITELLM_APIKEY_REGEXP" default:"^sk-.{22}$"` // optional custom regexp to match API keys; defaults to current (May 2026) LiteLLM format

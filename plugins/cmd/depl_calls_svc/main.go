@@ -31,7 +31,7 @@ var (
 )
 
 type config struct {
-	PathPrefix string `env:"PATH_PREFIX"`
+	PathPrefix string `env:"PATH_PREFIX,required,required"`
 	Kubeconfig string `env:"DEPL_CALLS_SVC_KUBECONFIG"`
 }
 
