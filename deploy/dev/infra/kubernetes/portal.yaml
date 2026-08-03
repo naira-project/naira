@@ -33,7 +33,10 @@ spec:
             - name: OIDC_CLIENT_ID_KEYCLOAK
               value: naira-portal
             - name: OIDC_CLIENT_SECRET_KEYCLOAK
-              value: naira-local-dev-secret
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secret
+                  key: client-secret
           ports:
             - containerPort: 3000
               name: http

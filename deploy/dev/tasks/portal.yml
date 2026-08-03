@@ -13,6 +13,7 @@ vars:
   KEYCLOAK_NAMESPACE: keycloak
   KEYCLOAK_LOCAL_PORT: '8080'
   KEYCLOAK_REMOTE_PORT: '8080'
+  KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET | default "naira-local-dev-secret"}}'
 
 tasks:
   image:build:
@@ -32,6 +33,10 @@ tasks:
       - task: image:load
       - task: :keycloak:deploy
       - |
+        kubectl create namespace {{.PORTAL_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic keycloak-client-secret -n {{.PORTAL_NAMESPACE}} \
+          --from-literal=client-secret="{{.KEYCLOAK_CLIENT_SECRET}}" \
+          --dry-run=client -o yaml | kubectl apply -f -
         AUTH_SERVER_URL="http://localhost:{{.KEYCLOAK_LOCAL_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
         TOKEN_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
         sed -e "s|__AUTH_SERVER_URL_KEYCLOAK__|${AUTH_SERVER_URL}|" \
@@ -44,6 +49,7 @@ tasks:
     desc: Remove the portal from kind
     cmds:
       - kubectl delete -f {{.PORTAL_MANIFEST}} --ignore-not-found
+      - kubectl delete secret keycloak-client-secret -n {{.PORTAL_NAMESPACE}} --ignore-not-found
 
   port-forward:
     desc: Expose the portal on localhost:3000
