@@ -38,6 +38,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 	tests := []struct {
 		name       string
 		namespaces []string
+		pathPrefix string
 		objs       []runtime.Object
 		reactor    func(*fake.FakeDynamicClient)
 		want       []deploymentWithSecret
@@ -45,6 +46,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 		{
 			name:       "Various Secret locations are detected",
 			namespaces: []string{"team-a"},
+			pathPrefix: "path-prefix",
 			objs: []runtime.Object{
 				namespace("team-a"),
 				deployment("team-a", "app",
@@ -87,6 +89,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 		{
 			name:       "Secret with no matching value produces no result",
 			namespaces: []string{"team-a"},
+			pathPrefix: "path-prefix",
 			objs: []runtime.Object{
 				namespace("team-a"),
 				secret("team-a", "secret-1", stringmap{"DB_PASS": "not-a-litellm-key"}),
@@ -97,6 +100,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 		{
 			name:       "Deployment with no secret references produces no result",
 			namespaces: []string{"team-a"},
+			pathPrefix: "path-prefix",
 			objs: []runtime.Object{
 				namespace("team-a"),
 				deployment("team-a", "app"),
@@ -107,6 +111,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 		{
 			name:       "Scanning multiple namespaces",
 			namespaces: []string{"ns-a", "ns-b"},
+			pathPrefix: "path-prefix",
 			objs: []runtime.Object{
 				namespace("ns-a"),
 				deployment("ns-a", "app-a", withEnvFrom(0, "secret")),
@@ -123,6 +128,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 		{
 			name:       "Same API key found in two secrets of one deployment produces one finding (deduplicated)",
 			namespaces: []string{"team-a"},
+			pathPrefix: "path-prefix",
 			objs: []runtime.Object{
 				namespace("team-a"),
 				secret("team-a", "secret-1", stringmap{"KEY": "sk-AAA"}),
@@ -136,6 +142,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 		{
 			name:       "Error listing deployments in one namespace: other namespaces still processed",
 			namespaces: []string{"restricted", "team-b"},
+			pathPrefix: "path-prefix",
 			objs: []runtime.Object{
 				namespace("restricted"),
 				secret("restricted", "secret", stringmap{"KEY": "sk-AAA"}),
@@ -159,6 +166,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 		{
 			name:       "On error reading a secret, that Deployment skipped, others in namespace still processed",
 			namespaces: []string{"team-a"},
+			pathPrefix: "path-prefix",
 			objs: []runtime.Object{
 				namespace("team-a"),
 				secret("team-a", "bad-secret", stringmap{"KEY": "sk-AAA"}),
@@ -181,6 +189,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 		{
 			name:       "Two Deployments reference the same secret, both are reported",
 			namespaces: []string{"team-a"},
+			pathPrefix: "path-prefix",
 			objs: []runtime.Object{
 				namespace("team-a"),
 				secret("team-a", "shared-secret", stringmap{"KEY": "sk-AAA"}),
@@ -200,7 +209,7 @@ func TestFindDeploymentsWithMatchingSecrets(t *testing.T) {
 			if tt.reactor != nil {
 				tt.reactor(client)
 			}
-			result, err := findDeploymentsWithMatchingSecrets(context.Background(), client, tt.namespaces, testKeyRegexp)
+			result, err := findDeploymentsWithMatchingSecrets(context.Background(), client, tt.namespaces, testKeyRegexp, tt.pathPrefix)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, sortedDeplsWithSecrets(result))
 		})

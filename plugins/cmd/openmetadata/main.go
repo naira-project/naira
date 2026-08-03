@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	pluginName = "openmetadata"
-
 	propertyKeySource             = "source"
 	propertyKeyDescription        = "description"
 	propertyKeyFullyQualifiedName = "fully_qualified_name"
@@ -32,6 +30,7 @@ const (
 )
 
 type config struct {
+	PathPrefix  string        `env:"PATH_PREFIX"`
 	BaseURL     string        `env:"OPENMETADATA_BASE_URL" default:"http://127.0.0.1:8585"`
 	Email       string        `env:"OPENMETADATA_ADMIN_EMAIL"`
 	Password    string        `env:"OPENMETADATA_ADMIN_PASSWORD"`
@@ -93,7 +92,7 @@ func (p *Plugin) collectNodes(tables []tableItem) ([]pluginapi.NodeClaim, map[st
 		}
 
 		properties := pluginapi.PropertyMap{
-			propertyKeySource:             pluginName,
+			propertyKeySource:             p.config.PathPrefix,
 			propertyKeyDescription:        table.Description,
 			propertyKeyFullyQualifiedName: table.FullyQualifiedName,
 			propertyKeySourceURL:          p.tableURL(table.FullyQualifiedName),
@@ -115,7 +114,7 @@ func (p *Plugin) collectNodes(tables []tableItem) ([]pluginapi.NodeClaim, map[st
 			properties[propertyKeyColumns] = columnsJSON
 		}
 
-		nodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindDataset, Path: pluginName + "/" + table.ID}
+		nodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindDataset, Path: p.config.PathPrefix + "/" + table.ID}
 		nodes = append(nodes, pluginapi.NodeClaim{ID: nodeID, Properties: properties})
 		nodeByEntityID[table.ID] = nodeID
 	}
@@ -240,7 +239,7 @@ func (p *Plugin) login(ctx context.Context) (string, error) {
 		return "", nil
 	}
 	if email == "" || password == "" {
-		return "", errors.New("both OPENMETADATA_ADMIN_EMAIL and OPENMETADATA_ADMIN_PASSWORD must be set, or neither")
+		return "", errors.New("both ADMIN_EMAIL and ADMIN_PASSWORD must be set, or neither")
 	}
 
 	body, err := json.Marshal(map[string]string{

@@ -17,8 +17,6 @@ import (
 )
 
 const (
-	pluginName = "litellm"
-
 	propertyKeyDiscoveredVia     = "discovered_via"
 	propertyKeyOwnedBy           = "owned_by"
 	propertyKeyLiteLLMVirtualKey = "litellm_virtual_key"
@@ -29,6 +27,7 @@ const (
 )
 
 type config struct {
+	PathPrefix  string        `env:"PATH_PREFIX"`
 	BaseURL     string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
 	APIKey      string        `env:"LITELLM_API_KEY"`
 	HTTPTimeout time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`
@@ -72,7 +71,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 	for _, model := range models {
 		node := pluginapi.NodeClaim{
-			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: pluginName + "/" + model.ID},
+			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + model.ID},
 			Properties: pluginapi.PropertyMap{
 				propertyKeyOwnedBy: model.OwnedBy,
 			},
@@ -95,7 +94,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 	for _, app := range apps {
 		appNode := pluginapi.NodeClaim{
-			ID: applicationNodeID(app),
+			ID: applicationNodeID(app, p.config.PathPrefix),
 			Properties: pluginapi.PropertyMap{
 				propertyKeyNamespace:         app.Namespace,
 				propertyKeyTeam:              app.Team,
@@ -122,7 +121,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 			if _, ok := modelKeys[modelName]; !ok {
 				node := pluginapi.NodeClaim{
-					ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: pluginName + "/" + modelName},
+					ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + modelName},
 					Properties: pluginapi.PropertyMap{
 						propertyKeyDiscoveredVia: propertyValueKeyInfo,
 					},
@@ -232,12 +231,12 @@ func newAppIdentityProvider(logger *log.Logger) AppIdentityProvider {
 	return NewKubernetesAppIdentityProvider(dynamicClient)
 }
 
-func applicationNodeID(app AppIdentity) pluginapi.NodeID {
+func applicationNodeID(app AppIdentity, pathPrefix string) pluginapi.NodeID {
 	if strings.TrimSpace(app.Namespace) == "" {
-		return pluginapi.NodeID{Kind: pluginapi.NodeKindApplication, Path: pluginName + "/" + app.Name}
+		return pluginapi.NodeID{Kind: pluginapi.NodeKindApplication, Path: pathPrefix + "/" + app.Name}
 	}
 
-	return pluginapi.NodeID{Kind: pluginapi.NodeKindApplication, Path: pluginName + "/" + app.Namespace + "/" + app.Name}
+	return pluginapi.NodeID{Kind: pluginapi.NodeKindApplication, Path: pathPrefix + "/" + app.Namespace + "/" + app.Name}
 }
 
 func dedupeNodes(nodes []pluginapi.NodeClaim) []pluginapi.NodeClaim {

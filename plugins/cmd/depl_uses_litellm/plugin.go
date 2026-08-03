@@ -57,9 +57,8 @@ import (
 	"k8s.io/client-go/dynamic"
 )
 
-const pluginName = "depl_uses_litellm"
-
 type config struct {
+	PathPrefix   string        `env:"PATH_PREFIX"`
 	Kubeconfig   string        `env:"DEPL_USES_LITELLM_KUBECONFIG"`
 	NamedHosts   []namedHost   `env:"DEPL_USES_LITELLM_NAMED_HOSTS" usage:"comma-separated list of named LiteLLM base URLs, e.g. 'host1=https://litellm.example.com,host2=http://litellm2.example.com:1234/base/'"`
 	APIKeyRegexp string        `env:"DEPL_USES_LITELLM_APIKEY_REGEXP" default:"^sk-.{22}$"` // optional custom regexp to match API keys; defaults to current (May 2026) LiteLLM format
@@ -107,7 +106,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces and cluster ID: %w", err)
 	}
 
-	deplsWithAPIKeys, err := findDeploymentsWithMatchingSecrets(ctx, dyn, namespaces, p.apiKeyRegexp)
+	deplsWithAPIKeys, err := findDeploymentsWithMatchingSecrets(ctx, dyn, namespaces, p.apiKeyRegexp, p.config.PathPrefix)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("scanning deployments: %w", err)
 	}
@@ -123,7 +122,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 			models, err := fetchModels(ctx, p.httpClient, nh.baseURL, d.secret)
 			if err != nil {
 				log.Printf("%s: WARN: fetching models from %s=%s (key ...%s): %v",
-					pluginName, nh.name, nh.baseURL, d.secret[len(d.secret)-4:], err)
+					p.config.PathPrefix, nh.name, nh.baseURL, d.secret[len(d.secret)-4:], err)
 				continue
 			}
 			if len(models) > 0 {
@@ -216,14 +215,14 @@ var (
 
 // findDeploymentsWithMatchingSecrets scans all Deployments in the given namespaces, returning a list of those that
 // use Secrets with values matching given pattern.
-func findDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interface, namespaces []string, pattern *regexp.Regexp) ([]deploymentWithSecret, error) {
+func findDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interface, namespaces []string, pattern *regexp.Regexp, pathPrefix string) ([]deploymentWithSecret, error) {
 	var result []deploymentWithSecret
 	type nameWithNs struct{ name, ns string }
 	secretsCache := make(map[nameWithNs]*unstructured.Unstructured)
 	for _, ns := range namespaces {
 		depls, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
-			log.Printf("%s: WARN: listing deployments in namespace %q: %v", pluginName, ns, err)
+			log.Printf("%s: WARN: listing deployments in namespace %q: %v", pathPrefix, ns, err)
 			continue
 		}
 		for _, depl := range depls.Items {
@@ -237,7 +236,7 @@ func findDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interfa
 					secret, err = dyn.Resource(gvrSecrets).Namespace(ns).Get(ctx, secretName, metav1.GetOptions{})
 					if err != nil {
 						log.Printf("%s: WARN: %s/%s: cannot read secret %q: %v",
-							pluginName, ns, name, secretName, err)
+							pathPrefix, ns, name, secretName, err)
 						continue
 					}
 					secretsCache[nameWithNs] = secret
@@ -247,7 +246,7 @@ func findDeploymentsWithMatchingSecrets(ctx context.Context, dyn dynamic.Interfa
 				for _, encoded := range dataMap {
 					decoded, err := base64.StdEncoding.DecodeString(encoded)
 					if err != nil {
-						log.Printf("%s: WARN: %s/%s: secret %q: cannot base64-decode", pluginName, ns, name, secretName)
+						log.Printf("%s: WARN: %s/%s: secret %q: cannot base64-decode", pathPrefix, ns, name, secretName)
 						continue
 					}
 					val := strings.TrimSpace(string(decoded))

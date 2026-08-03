@@ -23,8 +23,6 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
-const pluginName = "fluxcd"
-
 var gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 
 const (
@@ -35,6 +33,7 @@ const (
 )
 
 type config struct {
+	PathPrefix string `env:"PATH_PREFIX"`
 	Kubeconfig string `env:"KUBECONFIG"`
 }
 
@@ -67,22 +66,22 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	}
 	_, resourceAPIs, err := disc.ServerGroupsAndResources()
 	if err != nil {
-		log.Printf("%s: WARN: listing resource APIs: %v", pluginName, err)
+		log.Printf("%s: WARN: listing resource APIs: %v", p.config.PathPrefix, err)
 		// NOTE: ServerGroupsAndResources godoc says:
 		// "The returned group and resource lists might be non-nil with partial results even in the
 		// case of non-nil error."
 		// Thus, we don't return an error, but continue trying to scan what we can.
 	}
 
-	kusts, err := listGroupKind(ctx, resourceAPIs, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", namespaces)
+	kusts, err := listGroupKind(ctx, resourceAPIs, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", namespaces, p.config.PathPrefix)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing Kustomizations: %w", err)
 	}
-	helms, err := listGroupKind(ctx, resourceAPIs, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", namespaces)
+	helms, err := listGroupKind(ctx, resourceAPIs, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", namespaces, p.config.PathPrefix)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing HelmReleases: %w", err)
 	}
-	repos, err := listGroupKind(ctx, resourceAPIs, dyn, "source.toolkit.fluxcd.io", "GitRepository", namespaces)
+	repos, err := listGroupKind(ctx, resourceAPIs, dyn, "source.toolkit.fluxcd.io", "GitRepository", namespaces, p.config.PathPrefix)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing GitRepositories: %w", err)
 	}
@@ -91,7 +90,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		// TODO[PERF]: try scanning `.Namespace(metav1.NamespaceAll)` first, only fall back to per-namespace if that fails due to RBAC.
 		nsDeplList, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
-			log.Printf("%s: WARN: listing Deployments in namespace %q: %v", pluginName, ns, err)
+			log.Printf("%s: WARN: listing Deployments in namespace %q: %v", p.config.PathPrefix, ns, err)
 		} else {
 			depls = append(depls, nsDeplList.Items...)
 		}
@@ -257,11 +256,11 @@ func repoFromHelm(helm unstructured.Unstructured, repos map[string]pluginapi.Nod
 // listGroupKind returns all resources of the given API group + kind across all
 // provided namespaces.
 // Returns an empty slice (not an error) when the CRD is not installed in the cluster.
-func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
+func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn dynamic.Interface, group, kind string, namespaces []string, pathPrefix string) ([]unstructured.Unstructured, error) {
 	for _, apiList := range apiLists {
 		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
 		if err != nil {
-			log.Printf("%s: WARN: skipping API group %q due to parsing error: %v", pluginName, apiList.GroupVersion, err)
+			log.Printf("%s: WARN: skipping API group %q due to parsing error: %v", pathPrefix, apiList.GroupVersion, err)
 			continue
 		}
 		if gv.Group != group {
@@ -280,7 +279,7 @@ func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn 
 				// TODO[PERF]: try scanning `.Namespace(metav1.NamespaceAll)` first, only fall back to per-namespace if that fails due to RBAC.
 				list, err := dyn.Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
 				if err != nil {
-					log.Printf("%s: WARN: listing %s/%s in namespace %q: %v", pluginName, group, kind, ns, err)
+					log.Printf("%s: WARN: listing %s/%s in namespace %q: %v", pathPrefix, group, kind, ns, err)
 					continue
 				}
 				items = append(items, list.Items...)

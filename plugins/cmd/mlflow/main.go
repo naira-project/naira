@@ -15,8 +15,6 @@ import (
 )
 
 const (
-	pluginName = "mlflow"
-
 	propertyKeyDigest      = "digest"
 	propertyKeyRunID       = "run_id"
 	propertyKeySourceType  = "source_type"
@@ -24,6 +22,7 @@ const (
 )
 
 type config struct {
+	PathPrefix  string        `env:"PATH_PREFIX"`
 	BaseURL     string        `env:"MLFLOW_BASE_URL" default:"http://127.0.0.1:5000"`
 	BearerToken string        `env:"MLFLOW_BEARER_TOKEN"`
 	HTTPTimeout time.Duration `env:"MLFLOW_HTTP_TIMEOUT" default:"5s"`
@@ -43,9 +42,7 @@ func New(config config) *Plugin {
 
 func main() {
 	app := pluginmain.New[config]()
-
 	p := New(app.PluginConfig)
-
 	app.Serve(p)
 }
 
@@ -62,7 +59,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 	for _, item := range registeredModels {
 		modelNode := pluginapi.NodeClaim{
-			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: pluginName + "/" + item.Name},
+			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + item.Name},
 			Properties: pluginapi.PropertyMap{
 				propertyKeyDescription: item.Description,
 			},
@@ -86,7 +83,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 					continue
 				}
 
-				datasetPath := pluginName + "/" + datasetName
+				datasetPath := p.config.PathPrefix + "/" + datasetName
 				datasetKey := pluginapi.NodeKindDataset + ":" + datasetPath
 				if _, ok := seenDatasets[datasetKey]; !ok {
 					seenDatasets[datasetKey] = pluginapi.NodeClaim{
