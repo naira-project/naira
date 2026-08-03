@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import * as LuigiClient from "@luigi-project/client";
+import { useSyncExternalStore } from 'react';
+import * as LuigiClient from '@luigi-project/client';
 
 export interface OpenMFPContext {
   token: string | null;
@@ -8,37 +8,63 @@ export interface OpenMFPContext {
   isReady: boolean;
 }
 
+const READY_TIMEOUT_MS = 500;
+
+let state: OpenMFPContext = {
+  token: null,
+  userId: null,
+  userEmail: null,
+  isReady: false,
+};
+
+const subscribers = new Set<() => void>();
+let started = false;
+
+function notify() {
+  subscribers.forEach((listener) => listener());
+}
+
+function update(context: Record<string, string>) {
+  state = {
+    token: context.token ?? null,
+    userId: context.userId ?? null,
+    userEmail: context.userEmail ?? null,
+    isReady: true,
+  };
+  notify();
+}
+
+// Luigi's listeners are process-wide, so they must be registered exactly once
+// regardless of how many components subscribe to this store.
+function ensureStarted() {
+  if (started) {
+    return;
+  }
+  started = true;
+
+  LuigiClient.addInitListener(update);
+  LuigiClient.addContextUpdateListener(update);
+
+  setTimeout(() => {
+    if (!state.isReady) {
+      state = { ...state, isReady: true };
+      notify();
+    }
+  }, READY_TIMEOUT_MS);
+}
+
+function subscribe(listener: () => void): () => void {
+  ensureStarted();
+  subscribers.add(listener);
+  return () => {
+    subscribers.delete(listener);
+  };
+}
+
+function getSnapshot(): OpenMFPContext {
+  return state;
+}
+
 export function useOpenMFPContext(): OpenMFPContext {
-  const [ctx, setCtx] = useState<OpenMFPContext>({
-    token: null,
-    userId: null,
-    userEmail: null,
-    isReady: false,
-  });
-
-  useEffect(() => {
-    const update = (context: Record<string, string>) => {
-      setCtx({
-        token: context.token ?? null,
-        userId: context.userId ?? null,
-        userEmail: context.userEmail ?? null,
-        isReady: true,
-      });
-    };
-    LuigiClient.addInitListener(update);
-    LuigiClient.addContextUpdateListener(update);
-    
-    const timeout = setTimeout(() => {
-      setCtx((prev) => {
-        if (prev.isReady) {
-          return prev;
-        }
-        return { ...prev, isReady: true };
-      });
-    }, 500);
-
-    return () => clearTimeout(timeout);
-  }, []);
-
-  return ctx;
+  return useSyncExternalStore(subscribe, getSnapshot);
 }
