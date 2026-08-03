@@ -48,7 +48,7 @@ func NewAuthMiddleware(kc Config) func(http.Handler) http.Handler {
 			tokenString := strings.TrimSpace(after)
 
 			_, rawClaims, err := kc.Client.DecodeAccessToken(r.Context(), tokenString, kc.Realm)
-			if err != nil {
+			if err != nil || rawClaims == nil {
 				http.Error(w, fmt.Sprintf("invalid token"), http.StatusUnauthorized)
 				return
 			}
