@@ -30,10 +30,75 @@ func NewRouter(service *catalog.Service, logger *log.Logger) http.Handler {
 	})
 
 	router.Route("/v1", func(r chi.Router) {
+		// POST /v1/plugins:run asynchronously runs all registered plugins and
+		// returns the tracking operations (AIP-151).
 		r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
-			response := service.RunAllPlugins(r.Context())
+			operations := service.RunAllPluginsAsync(r.Context())
 
-			writeJSON(w, http.StatusAccepted, runPluginsResponseFromResult(response))
+			writeJSON(w, http.StatusAccepted, RunPluginsResponse{Operations: toOperationResources(operations)})
+			return nil
+		}))
+
+		// GET /v1/plugins lists the names of all registered plugins.
+		r.Get("/plugins", handle(func(w http.ResponseWriter, r *http.Request) error {
+			writeJSON(w, http.StatusOK, map[string][]string{"plugins": service.ListPlugins()})
+			return nil
+		}))
+
+		// POST /v1/{plugin}:run asynchronously runs a single plugin and
+		// returns the tracking operation (AIP-151).
+		r.Post("/{plugin}:run", handle(func(w http.ResponseWriter, r *http.Request) error {
+			plugin := chi.URLParam(r, "plugin")
+			op, err := service.RunPluginAsync(r.Context(), plugin)
+			if err != nil {
+				return fmt.Errorf("running plugin %q: %w", plugin, err)
+			}
+
+			writeJSON(w, http.StatusAccepted, operationFromCatalogOperation(op))
+			return nil
+		}))
+
+		// GET /v1/operations lists plugin run operations.
+		// Supported query params:
+		// - pageSize
+		// - pageToken
+		// - filter: only field="value" equality filters
+		// Supported operation filter fields: plugin, state.
+		r.Get("/operations", handleWithListOptions(operationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
+			listed, err := service.ListOperations(r.Context(), catalog.OperationFilter{})
+			if err != nil {
+				return fmt.Errorf("listing operations: %w", err)
+			}
+
+			operations := make([]OperationResource, 0)
+			for _, op := range listed {
+				resource := operationFromCatalogOperation(op)
+				matches, err := matchOperationFilter(resource, options.filter)
+				if err != nil {
+					return fmt.Errorf("matching operation filter: %w", err)
+				}
+				if matches {
+					operations = append(operations, resource)
+				}
+			}
+
+			page, nextPageToken, totalSize, err := paginate(operations, options.pageSize, options.offset, "operations", logger)
+			if err != nil {
+				return fmt.Errorf("paginating operations: %w", err)
+			}
+
+			writeJSON(w, http.StatusOK, ListOperationsResponse{Operations: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
+			return nil
+		}))
+
+		// GET /v1/operations/{operationId} returns a single operation.
+		r.Get("/operations/{operationId}", handle(func(w http.ResponseWriter, r *http.Request) error {
+			op, err := service.GetOperation(r.Context(), chi.URLParam(r, "operationId"))
+			if err != nil {
+				return fmt.Errorf("getting operation: %w", err)
+			}
+
+			writeJSON(w, http.StatusOK, operationFromCatalogOperation(op))
 			return nil
 		}))
 
@@ -158,8 +223,13 @@ func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	message := err.Error()
 	switch {
-	case errors.Is(err, catalog.ErrNodeNotFound):
+	case errors.Is(err, catalog.ErrNodeNotFound), errors.Is(err, catalog.ErrOperationNotFound):
 		status = http.StatusNotFound
+	case errors.Is(err, catalog.ErrPluginAlreadyRunning):
+		// AIP-151 parallel operations: reject a run while one is in flight.
+		status = http.StatusConflict
+	case errors.Is(err, catalog.ErrInvalidPluginName), errors.Is(err, catalog.ErrPluginNotFound):
+		status = http.StatusBadRequest
 	case isClientRequestError(err):
 		status = http.StatusBadRequest
 	case errors.Is(err, errPageTokenEncoding):

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
@@ -45,13 +46,34 @@ type ListRelationsResponse struct {
 	TotalSize     int32      `json:"totalSize"`
 }
 
-type RunPluginResult struct {
-	Plugin string `json:"plugin"`
-	Error  string `json:"error"`
+// StatusErrorResource is an AIP-193 compliant error representation carried
+// by failed operations.
+type StatusErrorResource struct {
+	Code    int32  `json:"code"`
+	Message string `json:"message"`
+}
+
+// OperationResource is the JSON representation of an AIP-151 operation.
+type OperationResource struct {
+	Name              string               `json:"name"`
+	Plugin            string               `json:"plugin"`
+	State             string               `json:"state"`
+	StartTime         time.Time            `json:"startTime"`
+	EndTime           *time.Time           `json:"endTime,omitempty"`
+	Error             *StatusErrorResource `json:"error,omitempty"`
+	NodesUpserted     int                  `json:"nodesUpserted"`
+	RelationsUpserted int                  `json:"relationsUpserted"`
+	CreatedAt         time.Time            `json:"createdAt"`
+}
+
+type ListOperationsResponse struct {
+	Operations    []OperationResource `json:"operations"`
+	NextPageToken string              `json:"nextPageToken,omitempty"`
+	TotalSize     int32               `json:"totalSize"`
 }
 
 type RunPluginsResponse struct {
-	Results []RunPluginResult `json:"results"`
+	Operations []OperationResource `json:"operations"`
 }
 
 func nodeFromCatalogNode(node catalog.Node) Node {
@@ -73,19 +95,34 @@ func relationFromCatalogRelation(relation catalog.Relation) Relation {
 	}
 }
 
-func runPluginsResponseFromResult(result catalog.RunPluginsResult) RunPluginsResponse {
-	response := RunPluginsResponse{
-		Results: make([]RunPluginResult, 0, len(result.Results)),
+func toOperationResources(operations []catalog.Operation) []OperationResource {
+	result := make([]OperationResource, 0, len(operations))
+	for _, op := range operations {
+		result = append(result, operationFromCatalogOperation(op))
+	}
+	return result
+}
+
+func operationFromCatalogOperation(op catalog.Operation) OperationResource {
+	var statusErr *StatusErrorResource
+	if op.Error != nil {
+		statusErr = &StatusErrorResource{
+			Code:    op.Error.Code,
+			Message: op.Error.Message,
+		}
 	}
 
-	for _, item := range result.Results {
-		response.Results = append(response.Results, RunPluginResult{
-			Plugin: item.Plugin,
-			Error:  item.Error,
-		})
+	return OperationResource{
+		Name:              op.Name,
+		Plugin:            op.Plugin,
+		State:             string(op.State),
+		StartTime:         op.StartTime,
+		EndTime:           op.EndTime,
+		Error:             statusErr,
+		NodesUpserted:     op.NodesUpserted,
+		RelationsUpserted: op.RelationsUpserted,
+		CreatedAt:         op.CreatedAt,
 	}
-
-	return response
 }
 
 func matchNodeFilter(node Node, filter *equalityFilter) (bool, error) {
@@ -123,6 +160,23 @@ func matchRelationFilter(relation Relation, filter *equalityFilter) (bool, error
 var relationListOptionsSpec = listOptionsSpec{
 	scope:         "relations",
 	allowedFields: map[string]bool{"name": true, "kind": true, "fromNode": true, "toNode": true},
+}
+
+func matchOperationFilter(operation OperationResource, filter *equalityFilter) (bool, error) {
+	matches, err := filter.matchesResource(map[string]string{
+		"plugin": operation.Plugin,
+		"state":  operation.State,
+	}, "operation")
+	if err != nil {
+		return false, fmt.Errorf("matching resource filter: %w", err)
+	}
+
+	return matches, nil
+}
+
+var operationListOptionsSpec = listOptionsSpec{
+	scope:         "operations",
+	allowedFields: map[string]bool{"plugin": true, "state": true},
 }
 
 func sortNodes(nodes []Node) {

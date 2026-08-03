@@ -59,4 +59,8 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Printf("error during server shutdown: %v", err)
 	}
+
+	// Wait for any in-flight plugin runs to finish before exiting.
+	service.Wait()
+	logger.Println("catalog service stopped")
 }
