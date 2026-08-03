@@ -119,7 +119,7 @@ func (s *Service) RunPluginAsync(ctx context.Context, pluginName string) (Operat
 	}
 
 	op := Operation{
-		Name:      "operations/plugin-run-" + uuid.NewString(),
+		Name:      "plugin-run-" + uuid.NewString(),
 		Plugin:    pluginName,
 		State:     OperationStatePending,
 		CreatedAt: time.Now(),
