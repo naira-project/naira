@@ -239,7 +239,7 @@ func (p *Plugin) login(ctx context.Context) (string, error) {
 		return "", nil
 	}
 	if email == "" || password == "" {
-		return "", errors.New("both ADMIN_EMAIL and ADMIN_PASSWORD must be set, or neither")
+		return "", errors.New("both OPENMETADATA_ADMIN_EMAIL and OPENMETADATA_ADMIN_PASSWORD must be set, or neither")
 	}
 
 	body, err := json.Marshal(map[string]string{
