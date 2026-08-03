@@ -9,6 +9,8 @@ vars:
   KEYCLOAK_LOCAL_PORT: '8080'
   KEYCLOAK_REMOTE_PORT: '8080'
   KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET | default "naira-local-dev-secret"}}'
+  KEYCLOAK_ADMIN_USER: '{{.KEYCLOAK_ADMIN_USER | default "admin"}}'
+  KEYCLOAK_ADMIN_PASSWORD: '{{.KEYCLOAK_ADMIN_PASSWORD | default "admin"}}'
 
 tasks:
   deploy:
@@ -27,6 +29,10 @@ tasks:
           --from-file=naira-realm.json=/tmp/naira-realm.json \
           --dry-run=client -o yaml | kubectl apply -f -
         rm -f /tmp/naira-realm.json
+        kubectl create secret generic keycloak-admin -n {{.KEYCLOAK_NAMESPACE}} \
+          --from-literal=username="{{.KEYCLOAK_ADMIN_USER}}" \
+          --from-literal=password="{{.KEYCLOAK_ADMIN_PASSWORD}}" \
+          --dry-run=client -o yaml | kubectl apply -f -
         kubectl apply -f {{.KEYCLOAK_MANIFEST}}
         kubectl -n {{.KEYCLOAK_NAMESPACE}} rollout restart deploy/keycloak
         kubectl -n {{.KEYCLOAK_NAMESPACE}} rollout status deploy/keycloak --timeout=180s
@@ -37,6 +43,7 @@ tasks:
     cmds:
       - kubectl delete -f {{.KEYCLOAK_MANIFEST}} --ignore-not-found
       - kubectl delete configmap keycloak-realm-import -n {{.KEYCLOAK_NAMESPACE}} --ignore-not-found
+      - kubectl delete secret keycloak-admin -n {{.KEYCLOAK_NAMESPACE}} --ignore-not-found
 
   port-forward:
     desc: Expose the local Keycloak on localhost:8080

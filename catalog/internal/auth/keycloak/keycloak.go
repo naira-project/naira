@@ -2,6 +2,7 @@ package keycloak
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -33,30 +34,46 @@ type TokenClaims struct {
 func NewAuthMiddleware(kc Config) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if kc.Client == nil {
+				writeJSONError(w, http.StatusInternalServerError, "auth is not configured")
+				return
+			}
+
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				http.Error(w, "missing authorization header", http.StatusUnauthorized)
+				writeJSONError(w, http.StatusUnauthorized, "missing authorization header")
 				return
 			}
 
 			before, after, found := strings.Cut(authHeader, " ")
 			if !found || !strings.EqualFold(before, "Bearer") {
-				http.Error(w, "authorization header must be Bearer {token}", http.StatusUnauthorized)
+				writeJSONError(w, http.StatusUnauthorized, "authorization header must be Bearer {token}")
 				return
 			}
 			tokenString := strings.TrimSpace(after)
 
 			_, rawClaims, err := kc.Client.DecodeAccessToken(r.Context(), tokenString, kc.Realm)
 			if err != nil || rawClaims == nil {
-				http.Error(w, "invalid token", http.StatusUnauthorized)
+				writeJSONError(w, http.StatusUnauthorized, "invalid token")
 				return
 			}
 
 			tc := parseTokenClaims(rawClaims)
+			if tc.UserID == "" {
+				writeJSONError(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
+
 			ctx := context.WithValue(r.Context(), claimsKey, tc)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 func claimsFromContext(ctx context.Context) (TokenClaims, bool) {
