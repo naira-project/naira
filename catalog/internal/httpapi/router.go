@@ -78,7 +78,10 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config)
 			nodeID := catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")}
 
 			if err := keycloak.AuthorizeNodeRead(r.Context(), nodeID.Kind); err != nil {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+				if logger != nil {
+					logger.Printf("authorization denied for %s %s: %v", r.Method, r.URL.Path, err)
+				}
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return nil
 			}
 

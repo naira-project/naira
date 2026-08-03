@@ -2,7 +2,6 @@ package keycloak
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -49,7 +48,7 @@ func NewAuthMiddleware(kc Config) func(http.Handler) http.Handler {
 
 			_, rawClaims, err := kc.Client.DecodeAccessToken(r.Context(), tokenString, kc.Realm)
 			if err != nil || rawClaims == nil {
-				http.Error(w, fmt.Sprintf("invalid token"), http.StatusUnauthorized)
+				http.Error(w, "invalid token", http.StatusUnauthorized)
 				return
 			}
 

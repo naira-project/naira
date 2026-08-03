@@ -24,11 +24,15 @@ function notify() {
   subscribers.forEach((listener) => listener());
 }
 
-function update(context: Record<string, string>) {
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function update(context: Record<string, unknown>) {
   state = {
-    token: context.token ?? null,
-    userId: context.userId ?? null,
-    userEmail: context.userEmail ?? null,
+    token: stringOrNull(context.token),
+    userId: stringOrNull(context.userId),
+    userEmail: stringOrNull(context.userEmail),
     isReady: true,
   };
   notify();

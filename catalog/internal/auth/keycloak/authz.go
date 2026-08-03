@@ -39,5 +39,5 @@ func AuthorizeNodeRead(ctx context.Context, kind string) error {
 		}
 	}
 
-	return fmt.Errorf("user %q is missing required realm role %q", claims.UserID, role)
+	return fmt.Errorf("missing required realm role %q", role)
 }
