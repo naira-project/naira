@@ -79,7 +79,7 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config)
 
 			if err := keycloak.AuthorizeNodeRead(r.Context(), nodeID.Kind); err != nil {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
-				return fmt.Errorf("status forbidden: %w", err)
+				return nil
 			}
 
 			node, err := service.GetNode(r.Context(), nodeID)

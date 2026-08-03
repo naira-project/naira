@@ -45,11 +45,11 @@ func NewAuthMiddleware(kc Config) func(http.Handler) http.Handler {
 				http.Error(w, "authorization header must be Bearer {token}", http.StatusUnauthorized)
 				return
 			}
-			tokenString := after
+			tokenString := strings.TrimSpace(after)
 
 			_, rawClaims, err := kc.Client.DecodeAccessToken(r.Context(), tokenString, kc.Realm)
 			if err != nil {
-				http.Error(w, fmt.Sprintf("invalid token: %v", err), http.StatusUnauthorized)
+				http.Error(w, fmt.Sprintf("invalid token"), http.StatusUnauthorized)
 				return
 			}
 
