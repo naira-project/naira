@@ -154,7 +154,7 @@ spec:
                   name: catalog-secrets
                   key: LITELLM_API_KEY
             - name: PATH_PREFIX
-              value: litellm-path-prefix
+              value: litellm
           resources:
             requests:
               cpu: 50m
@@ -172,7 +172,7 @@ spec:
             - name: MLFLOW_BASE_URL
               value: http://mlflow.mlflow.svc.cluster.local:5000
             - name: PATH_PREFIX
-              value: mlflow-path-prefix
+              value: mlflow
           resources:
             requests:
               cpu: 50m
@@ -190,7 +190,7 @@ spec:
             - name: DEPL_CALLS_SVC_KUBECONFIG
               value: ""
             - name: PATH_PREFIX
-              value: depl-calls-svc-path-prefix
+              value: depl-calls-svc
           resources:
             requests:
               cpu: 50m
@@ -210,7 +210,7 @@ spec:
             - name: DEPL_USES_LITELLM_NAMED_HOSTS
               value: "litellm=http://litellm.litellm:4000"
             - name: PATH_PREFIX
-              value: depl-uses-litellm-path-prefix
+              value: depl-uses-litellm
           resources:
             requests:
               cpu: 50m
@@ -226,7 +226,7 @@ spec:
             - name: PORT
               value: "50055"
             - name: PATH_PREFIX
-              value: fluxcd-path-prefix
+              value: fluxcd
           resources:
             requests:
               cpu: 50m
@@ -251,7 +251,7 @@ spec:
                   name: catalog-secrets
                   key: OPENMETADATA_ADMIN_PASSWORD
             - name: PATH_PREFIX
-              value: openmetadata-path-prefix
+              value: openmetadata
           resources:
             requests:
               cpu: 50m
