@@ -25,13 +25,14 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
+const pluginName = "depl_calls_svc"
+
 var (
 	gvrDeployments = schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"}
 	gvrServices    = schema.GroupVersionResource{Group: "", Version: "v1", Resource: "services"}
 )
 
 type config struct {
-	PathPrefix string `env:"PATH_PREFIX,required"`
 	Kubeconfig string `env:"DEPL_CALLS_SVC_KUBECONFIG"`
 }
 
@@ -65,7 +66,7 @@ func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.
 	}
 
 	// Build per-namespace service index and precompile patterns.
-	svcsByNs, err := collectServicesByNamespace(ctx, dyn, namespaces, clusterID, p.config.PathPrefix)
+	svcsByNs, err := collectServicesByNamespace(ctx, dyn, namespaces, clusterID)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("collecting services: %w", err)
 	}
@@ -83,7 +84,7 @@ func (p *Plugin) collect(ctx context.Context, dyn dynamic.Interface) (pluginapi.
 	for _, ns := range namespaces {
 		deplsInNs, err := dyn.Resource(gvrDeployments).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
-			log.Printf("%s: WARN: listing deployments in namespace %q: %v", p.config.PathPrefix, ns, err)
+			log.Printf("%s: WARN: listing deployments in namespace %q: %v", pluginName, ns, err)
 			continue
 		}
 		depls = append(depls, deplsInNs.Items...)
@@ -145,12 +146,12 @@ type serviceDetails struct {
 	clusterPattern *regexp.Regexp // clusterPattern matches the service name in the form "${serviceName}.${namespace}"
 }
 
-func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, namespaces []string, clusterID string, pathPrefix string) (map[string][]serviceDetails, error) {
+func collectServicesByNamespace(ctx context.Context, dyn dynamic.Interface, namespaces []string, clusterID string) (map[string][]serviceDetails, error) {
 	svcsByNs := make(map[string][]serviceDetails) // ns -> services
 	for _, ns := range namespaces {
 		svcs, err := dyn.Resource(gvrServices).Namespace(ns).List(ctx, metav1.ListOptions{})
 		if err != nil {
-			log.Printf("%s: WARN: listing services in namespace %q: %v", pathPrefix, ns, err)
+			log.Printf("%s: WARN: listing services in namespace %q: %v", pluginName, ns, err)
 			continue
 		}
 		for _, svc := range svcs.Items {

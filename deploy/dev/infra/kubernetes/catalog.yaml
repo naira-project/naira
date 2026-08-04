@@ -189,8 +189,6 @@ spec:
               value: "50053"
             - name: DEPL_CALLS_SVC_KUBECONFIG
               value: ""
-            - name: PATH_PREFIX
-              value: depl-calls-svc
           resources:
             requests:
               cpu: 50m
@@ -209,8 +207,6 @@ spec:
               value: ""
             - name: DEPL_USES_LITELLM_NAMED_HOSTS
               value: "litellm=http://litellm.litellm:4000"
-            - name: PATH_PREFIX
-              value: depl-uses-litellm
           resources:
             requests:
               cpu: 50m
@@ -225,8 +221,6 @@ spec:
           env:
             - name: PORT
               value: "50055"
-            - name: PATH_PREFIX
-              value: fluxcd
           resources:
             requests:
               cpu: 50m
