@@ -1,11 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { X, Play, RefreshCw } from 'lucide-react';
-import {
-  usePluginOperations,
-  useAllPluginsRun,
-  useRunPluginAction,
-} from '../hooks/usePluginOperations';
-import { OperationResource, fetchPlugins } from '../lib/catalogApi';
+import { usePluginsStatus } from '../hooks/usePluginOperations';
+import { OperationResource } from '../lib/catalogApi';
 import { PluginStatusBadge } from './PluginStatusBadge';
 import { PluginErrorLog } from './PluginErrorLog';
 import { PluginRunHistory } from './PluginRunHistory';
@@ -27,28 +23,20 @@ type Tab = 'status' | 'history';
  */
 export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: PluginsManagerDialogProps) {
   const [tab, setTab] = useState<Tab>('status');
-  const [plugins, setPlugins] = useState<string[]>([]);
 
-  const { operations, loading: opsLoading, refresh: refreshOps } = usePluginOperations();
-  const { running: allRunning, trigger: triggerAll } = useAllPluginsRun();
-  const { runningPlugin, error: runError, trigger: triggerSingle } = useRunPluginAction();
+  const { plugins, operations, loading, runningKey, runError, refresh, runOne, runAll } =
+    usePluginsStatus();
 
-  // Fetch available plugins when the dialog opens.
-  useEffect(() => {
-    if (!open) return;
-    fetchPlugins().then(setPlugins).catch(() => {});
-  }, [open]);
+  const anyRunning = runningKey !== null;
 
   const handleRunAll = async () => {
-    await triggerAll();
+    await runAll(); // resolves only once every triggered operation is terminal (or timed out)
     onRunsCompleted();
-    refreshOps();
   };
 
   const handleRunSingle = async (pluginName: string) => {
-    await triggerSingle(pluginName);
+    await runOne(pluginName);
     onRunsCompleted();
-    refreshOps();
   };
 
   if (!open) return null;
@@ -95,11 +83,11 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
           </div>
           <button
             onClick={handleRunAll}
-            disabled={allRunning}
+            disabled={anyRunning}
             className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw size={14} className={allRunning ? 'animate-spin' : ''} />
-            {allRunning ? 'Running All…' : 'Run All Plugins'}
+            <RefreshCw size={14} className={runningKey === 'all' ? 'animate-spin' : ''} />
+            {runningKey === 'all' ? 'Running All…' : 'Run All Plugins'}
           </button>
         </div>
 
@@ -115,12 +103,12 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
             <StatusTab
               plugins={plugins}
               operations={operations}
-              loading={opsLoading}
-              runningPlugin={runningPlugin}
+              loading={loading}
+              runningKey={runningKey}
               onRun={handleRunSingle}
             />
           ) : (
-            <PluginRunHistory operations={operations} loading={opsLoading} onRefresh={refreshOps} />
+            <PluginRunHistory operations={operations} loading={loading} onRefresh={refresh} />
           )}
         </div>
       </div>
@@ -155,16 +143,17 @@ function StatusTab({
   plugins,
   operations,
   loading,
-  runningPlugin,
+  runningKey,
   onRun,
 }: {
   plugins: string[];
   operations: OperationResource[];
   loading: boolean;
-  runningPlugin: string | null;
+  runningKey: string | 'all' | null;
   onRun: (plugin: string) => void;
 }) {
   const latestByPlugin = latestOperationPerPlugin(operations);
+  const anyRunning = runningKey !== null;
 
   if (plugins.length === 0 && !loading) {
     return (
@@ -188,7 +177,7 @@ function StatusTab({
       <tbody>
         {plugins.map((plugin) => {
           const op = latestByPlugin.get(plugin);
-          const running = runningPlugin === plugin;
+          const running = runningKey === plugin;
 
           return (
             <tr key={plugin} className="border-b border-gray-100 last:border-0 dark:border-gray-800">
@@ -215,7 +204,7 @@ function StatusTab({
               <td className="py-3 text-right">
                 <button
                   onClick={() => onRun(plugin)}
-                  disabled={running || runningPlugin !== null}
+                  disabled={anyRunning}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   title={`Run ${plugin} plugin`}
                 >
@@ -232,12 +221,16 @@ function StatusTab({
 }
 
 /**
- * Returns a map of plugin name → most recent operation, given an operation
- * list ordered by creation time descending (as returned by the API).
+ * Returns a map of plugin name → most recent operation. Sorts defensively
+ * by createdAt rather than assuming API ordering, since the UI's
+ * correctness would otherwise silently depend on an unenforced API contract.
  */
 function latestOperationPerPlugin(operations: OperationResource[]): Map<string, OperationResource> {
+  const sorted = [...operations].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
   const latest = new Map<string, OperationResource>();
-  for (const op of operations) {
+  for (const op of sorted) {
     if (!latest.has(op.plugin)) {
       latest.set(op.plugin, op);
     }
