@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { useKinds } from '../hooks/useKinds';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { useRelationSummaries } from '../hooks/useRelationSummaries';
-import { usePluginOperations } from '../hooks/usePluginOperations';
+import { usePluginsStatus } from '../hooks/usePluginOperations';
 import { NodeResource } from '../lib/catalogApi';
 import KindSelector from '../components/KindSelector';
 import GenericTable from '../components/GenericTable';
@@ -31,7 +31,7 @@ export default function CatalogView() {
   const { relationSummaries } = useRelationSummaries(nodes);
 
   // Plugin run operations (used only for the compact "last sync" indicator)
-  const { operations, refresh: refreshOps } = usePluginOperations();
+  const { operations, refresh: refreshOps } = usePluginsStatus();
 
   // Keep kinds fresh whenever the plugin dialog reports completed runs.
   const handleRunsCompleted = () => {
