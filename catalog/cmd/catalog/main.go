@@ -28,16 +28,16 @@ func main() {
 	}
 	defer cleanup()
 
-	service := catalog.NewService(catalog.NewMemoryStore(), registeredPlugins, logger)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	service := catalog.NewService(ctx, catalog.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
 	router := httpapi.NewRouter(service, logger)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           router,
 		ReadHeaderTimeout: config.ReadHeadersTimeout,
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)

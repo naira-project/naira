@@ -22,16 +22,19 @@ var (
 )
 
 type Service struct {
-	store      Store
-	operations OperationStore
-	plugins    map[string]Plugin
-	logger     *log.Logger
-	wg         sync.WaitGroup
+	store         Store
+	operations    OperationStore
+	plugins       map[string]Plugin
+	logger        *log.Logger
+	wg            sync.WaitGroup
+	appCtx        context.Context
+	pluginTimeout time.Duration
 }
 
 // NewService creates a Service. If no operation store is provided, a default
-// in-memory store is created.
-func NewService(store Store, plugins map[string]Plugin, logger *log.Logger, operationStores ...OperationStore) *Service {
+// in-memory store is created. The appCtx is used as the parent context for
+// asynchronous plugin runs; it should be cancelled on application shutdown.
+func NewService(appCtx context.Context, store Store, plugins map[string]Plugin, pluginTimeout time.Duration, logger *log.Logger, operationStores ...OperationStore) *Service {
 	registeredPlugins := make(map[string]Plugin, len(plugins))
 	for name, plugin := range plugins {
 		if plugin == nil {
@@ -45,7 +48,14 @@ func NewService(store Store, plugins map[string]Plugin, logger *log.Logger, oper
 		operationStore = operationStores[0]
 	}
 
-	return &Service{store: store, operations: operationStore, plugins: registeredPlugins, logger: logger}
+	return &Service{
+		appCtx:        appCtx,
+		store:         store,
+		operations:    operationStore,
+		plugins:       registeredPlugins,
+		pluginTimeout: pluginTimeout,
+		logger:        logger,
+	}
 }
 
 func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
@@ -128,11 +138,9 @@ func (s *Service) RunPluginAsync(ctx context.Context, pluginName string) (Operat
 		return Operation{}, fmt.Errorf("creating operation for plugin %q: %w", pluginName, err)
 	}
 
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
+	s.wg.Go(func() {
 		s.executePluginRun(ctx, op.Name, pluginName)
-	}()
+	})
 
 	return op, nil
 }
@@ -196,7 +204,10 @@ func (s *Service) Wait() {
 }
 
 // executePluginRun runs a single plugin and updates the operation outcome.
-func (s *Service) executePluginRun(ctx context.Context, operationName, pluginName string) {
+// The ctx parameter from the caller is intentionally unused — async operations
+// derive their lifecycle from s.appCtx (application shutdown) and
+// s.pluginTimeout (per-plugin deadline), not from the triggering request.
+func (s *Service) executePluginRun(_ context.Context, operationName, pluginName string) {
 	if err := s.operations.UpdateState(operationName, OperationStateRunning, nil, 0, 0); err != nil {
 		if s.logger != nil {
 			s.logger.Printf("marking operation %q as running: %v", operationName, err)
@@ -210,7 +221,10 @@ func (s *Service) executePluginRun(ctx context.Context, operationName, pluginNam
 		return
 	}
 
-	response, err := plugin.Collect(ctx)
+	runCtx, cancel := context.WithTimeout(s.appCtx, s.pluginTimeout)
+	defer cancel()
+
+	response, err := plugin.Collect(runCtx)
 	if err != nil {
 		s.failOperation(operationName, pluginName, fmt.Errorf("collecting response from plugin %q: %w", pluginName, err))
 		return
