@@ -1,27 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, RefreshCw, Layers, Play } from 'lucide-react';
+import { Search, Layers, Plug } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { useKinds } from '../hooks/useKinds';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { useRelationSummaries } from '../hooks/useRelationSummaries';
-import { usePluginOperations, useAllPluginsRun } from '../hooks/usePluginOperations';
-import { NodeResource, fetchPlugins } from '../lib/catalogApi';
+import { usePluginOperations } from '../hooks/usePluginOperations';
+import { NodeResource } from '../lib/catalogApi';
 import KindSelector from '../components/KindSelector';
 import GenericTable from '../components/GenericTable';
-import { PluginRunButton } from '../components/PluginRunButton';
-import { PluginRunHistory } from '../components/PluginRunHistory';
+import { PluginsManagerDialog } from '../components/PluginsManagerDialog';
 
 /**
  * Unified catalog view.
- * Shows a kind selector at the top and, when a kind is selected,
- * displays all nodes of that kind in a dynamic table below.
- * Includes plugin run controls and execution history.
+ * Focuses on browsing the catalog: kind selector + resource table.
+ * Plugin management (run, history, status) lives in a dedicated dialog.
  */
 export default function CatalogView() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [plugins, setPlugins] = useState<string[]>([]);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
 
   // Kind discovery & selection
   const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } = useKinds();
@@ -32,26 +30,26 @@ export default function CatalogView() {
   // Relation summaries — computed whenever nodes change
   const { relationSummaries } = useRelationSummaries(nodes);
 
-  // Plugin run operations
-  const { operations: pluginOps, loading: opsLoading, refresh: refreshOps } = usePluginOperations();
-  const { running: allRunning, trigger: triggerAll } = useAllPluginsRun();
+  // Plugin run operations (used only for the compact "last sync" indicator)
+  const { operations, refresh: refreshOps } = usePluginOperations();
 
-  // Fetch available plugins on mount
-  useEffect(() => {
-    fetchPlugins().then(setPlugins).catch(() => {});
-  }, []);
-
-  // Refresh kinds after plugin runs complete
-  const handleRunAll = async () => {
-    await triggerAll();
+  // Keep kinds fresh whenever the plugin dialog reports completed runs.
+  const handleRunsCompleted = () => {
     refreshKinds();
     refreshOps();
   };
+
+  // Refresh kinds on mount so data appears without manual interaction.
+  useEffect(() => {
+    refreshKinds();
+  }, [refreshKinds]);
 
   // Filter kinds by search
   const filteredKinds = kinds.filter((k) =>
     k.toLowerCase().includes(search.toLowerCase())
   );
+
+  const lastSync = useMemo(() => latestOperation(operations), [operations]);
 
   const handleSelect = (node: NodeResource) => {
     navigate(`/catalog/${encodeURIComponent(activeKind!)}/${encodeURIComponent(node.path)}`);
@@ -70,23 +68,35 @@ export default function CatalogView() {
             className="max-w-[320px]"
           />
 
-          {/* Plugin toolbar */}
-          <div className="flex items-center gap-2">
-            {/* Run All button */}
-            <button
-              onClick={handleRunAll}
-              disabled={allRunning}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={16} className={allRunning ? 'animate-spin' : ''} />
-              {allRunning ? 'Running All…' : 'Run All Plugins'}
-            </button>
+          <div className="flex-1" />
 
-            {/* Per-plugin run buttons */}
-            {plugins.map((plugin) => (
-              <PluginRunButton key={plugin} pluginName={plugin} running={false} onRun={() => {}} />
-            ))}
-          </div>
+          {/* Compact last-sync indicator */}
+          {lastSync && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  lastSync.state === 'FAILED'
+                    ? 'bg-red-500'
+                    : lastSync.state === 'RUNNING' || lastSync.state === 'PENDING'
+                      ? 'bg-orange-400'
+                      : 'bg-green-500'
+                }`}
+              />
+              <span>
+                Last sync: {formatRelativeTime(lastSync.createdAt)}
+                {lastSync.state === 'FAILED' ? ' (failed)' : ''}
+              </span>
+            </div>
+          )}
+
+          {/* Plugins & Ingestion button */}
+          <button
+            onClick={() => setPluginsOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <Plug size={16} />
+            Plugins & Ingestion
+          </button>
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -113,7 +123,7 @@ export default function CatalogView() {
                 <Layers size={32} className="opacity-40" />
                 <p className="text-sm">
                   {kinds.length === 0
-                    ? 'No kinds found. Run plugins to populate the catalog.'
+                    ? 'No kinds found. Run plugins from "Plugins & Ingestion" first.'
                     : 'No kinds match your search.'}
                 </p>
               </div>
@@ -124,15 +134,6 @@ export default function CatalogView() {
               activeKind={activeKind}
               onSelect={setActiveKind}
               loading={kindsLoading}
-            />
-          </div>
-
-          {/* Plugin run history */}
-          <div className="mb-6">
-            <PluginRunHistory
-              operations={pluginOps}
-              loading={opsLoading}
-              onRefresh={refreshOps}
             />
           </div>
 
@@ -171,6 +172,33 @@ export default function CatalogView() {
           )}
         </div>
       </div>
+
+      {/* Plugin management dialog */}
+      <PluginsManagerDialog
+        open={pluginsOpen}
+        onClose={() => setPluginsOpen(false)}
+        onRunsCompleted={handleRunsCompleted}
+      />
     </div>
   );
+}
+
+/**
+ * Returns the most recent operation (operations arrive newest-first).
+ */
+function latestOperation(operations: { createdAt: string; state: string }[]) {
+  return operations.length > 0 ? operations[0] : null;
+}
+
+function formatRelativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }

@@ -108,6 +108,62 @@ export function usePluginRun(pluginName: string): UsePluginRunResult {
 }
 
 // ---------------------------------------------------------------------------
+// useRunPluginAction — trigger a single plugin by name and poll until done.
+// Unlike usePluginRun, the plugin name is supplied at trigger time, so this
+// can be used for a dynamic list of plugins (e.g. a table row per plugin).
+// ---------------------------------------------------------------------------
+
+interface UseRunPluginActionResult {
+  runningPlugin: string | null;
+  error: string | null;
+  trigger: (pluginName: string) => Promise<void>;
+}
+
+export function useRunPluginAction(onComplete?: () => void): UseRunPluginActionResult {
+  const [runningPlugin, setRunningPlugin] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
+
+  const trigger = useCallback(
+    async (pluginName: string) => {
+      setRunningPlugin(pluginName);
+      setError(null);
+
+      try {
+        const op = await apiRunPlugin(pluginName);
+
+        // Poll until the operation reaches a terminal state.
+        while (!cancelledRef.current) {
+          const updated = await fetchOperation(op.name);
+          if (updated.state === 'SUCCEEDED' || updated.state === 'FAILED') {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+
+        onComplete?.();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to trigger plugin run');
+      } finally {
+        if (!cancelledRef.current) {
+          setRunningPlugin(null);
+        }
+      }
+    },
+    [onComplete]
+  );
+
+  // Mark cancelled on unmount so in-flight polling does not update state.
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, []);
+
+  return { runningPlugin, error, trigger };
+}
+
+// ---------------------------------------------------------------------------
 // useAllPluginsRun — trigger all plugins and poll until all are done
 // ---------------------------------------------------------------------------
 
