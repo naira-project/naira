@@ -24,10 +24,10 @@ type Tab = 'status' | 'history';
 export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: PluginsManagerDialogProps) {
   const [tab, setTab] = useState<Tab>('status');
 
-  const { plugins, operations, loading, runningKey, runError, refresh, runOne, runAll } =
+  const { plugins, operations, loading, runningPlugins, runAllActive, runError, refresh, runOne, runAll } =
     usePluginsStatus();
 
-  const anyRunning = runningKey !== null;
+  const anyRunning = runningPlugins.size > 0 || runAllActive;
 
   const handleRunAll = async () => {
     await runAll(); // resolves only once every triggered operation is terminal (or timed out)
@@ -86,8 +86,8 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
             disabled={anyRunning}
             className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw size={14} className={runningKey === 'all' ? 'animate-spin' : ''} />
-            {runningKey === 'all' ? 'Running All…' : 'Run All Plugins'}
+            <RefreshCw size={14} className={runAllActive ? 'animate-spin' : ''} />
+            {runAllActive ? 'Running All…' : 'Run All Plugins'}
           </button>
         </div>
 
@@ -104,7 +104,8 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
               plugins={plugins}
               operations={operations}
               loading={loading}
-              runningKey={runningKey}
+              runningPlugins={runningPlugins}
+              anyRunning={anyRunning}
               onRun={handleRunSingle}
             />
           ) : (
@@ -143,17 +144,18 @@ function StatusTab({
   plugins,
   operations,
   loading,
-  runningKey,
+  runningPlugins,
+  anyRunning,
   onRun,
 }: {
   plugins: string[];
   operations: OperationResource[];
   loading: boolean;
-  runningKey: string | 'all' | null;
+  runningPlugins: Set<string>;
+  anyRunning: boolean;
   onRun: (plugin: string) => void;
 }) {
   const latestByPlugin = latestOperationPerPlugin(operations);
-  const anyRunning = runningKey !== null;
 
   if (plugins.length === 0 && !loading) {
     return (
@@ -179,8 +181,9 @@ function StatusTab({
           const op = latestByPlugin.get(plugin);
           // Running via its own button, or swept up in "Run All" — either way
           // the previous status/result is stale and shouldn't be shown next
-          // to a spinning Run button.
-          const running = runningKey === plugin || runningKey === 'all';
+          // to a spinning Run button. Cleared per-plugin as soon as *that*
+          // plugin's own run settles, independent of any others still going.
+          const running = runningPlugins.has(plugin);
 
           return (
             <tr key={plugin} className="border-b border-gray-100 last:border-0 dark:border-gray-800">
