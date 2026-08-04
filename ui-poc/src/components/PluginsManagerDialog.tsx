@@ -177,7 +177,10 @@ function StatusTab({
       <tbody>
         {plugins.map((plugin) => {
           const op = latestByPlugin.get(plugin);
-          const running = runningKey === plugin;
+          // Running via its own button, or swept up in "Run All" — either way
+          // the previous status/result is stale and shouldn't be shown next
+          // to a spinning Run button.
+          const running = runningKey === plugin || runningKey === 'all';
 
           return (
             <tr key={plugin} className="border-b border-gray-100 last:border-0 dark:border-gray-800">
@@ -186,20 +189,24 @@ function StatusTab({
                 {op ? formatRelativeTime(op.createdAt) : 'Never'}
               </td>
               <td className="py-3 pr-4">
-                {op ? (
+                {running ? (
+                  <span className="text-xs text-gray-400">—</span>
+                ) : op ? (
                   <PluginStatusBadge state={op.state} />
                 ) : (
                   <span className="text-xs text-gray-400">Not run yet</span>
                 )}
               </td>
               <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">
-                {op && op.state === 'SUCCEEDED'
-                  ? `${op.nodesUpserted} node(s), ${op.relationsUpserted} relation(s)`
-                  : op && op.state === 'FAILED' && op.error ? (
-                      <PluginErrorLog error={op.error} />
-                    ) : (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
+                {running ? (
+                  <span className="text-xs text-gray-400">—</span>
+                ) : op && op.state === 'SUCCEEDED' ? (
+                  `${op.nodesUpserted} node(s), ${op.relationsUpserted} relation(s)`
+                ) : op && op.state === 'FAILED' && op.error ? (
+                  <PluginErrorLog error={op.error} />
+                ) : (
+                  <span className="text-xs text-gray-400">—</span>
+                )}
               </td>
               <td className="py-3 text-right">
                 <button
