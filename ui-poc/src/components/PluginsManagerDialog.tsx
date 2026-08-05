@@ -209,6 +209,15 @@ function StatusTab({
               <td className="py-3 pr-4">
                 {running ? (
                   <span className="text-xs text-gray-400">—</span>
+                ) : op && op.state === 'FAILED' && op.error ? (
+                  <button
+                    onClick={() => onViewError(plugin, op.error!)}
+                    className="inline-flex items-center gap-1.5 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:bg-red-950/80 dark:text-red-400 dark:hover:bg-red-900"
+                  >
+                    <AlertCircle size={13} />
+                    <span>Failed</span>
+                    <span className="underline ml-0.5">Details</span>
+                  </button>
                 ) : op ? (
                   <PluginStatusBadge state={op.state} />
                 ) : (
@@ -220,15 +229,8 @@ function StatusTab({
                   <span className="text-xs text-gray-400">—</span>
                 ) : op && op.state === 'SUCCEEDED' ? (
                   `${op.nodesUpserted} node(s), ${op.relationsUpserted} relation(s)`
-                ) : op && op.state === 'FAILED' && op.error ? (
-                  <button
-                    onClick={() => onViewError(plugin, op.error!)}
-                    className="inline-flex items-center gap-1.5 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:bg-red-950/80 dark:text-red-400 dark:hover:bg-red-900"
-                  >
-                    <AlertCircle size={13} />
-                    <span>Failed</span>
-                    <span className="underline ml-0.5">Details</span>
-                  </button>
+                ) : op && op.state === 'FAILED' ? (
+                  <span className="text-xs text-gray-400">—</span>
                 ) : (
                   <span className="text-xs text-gray-400">—</span>
                 )}
