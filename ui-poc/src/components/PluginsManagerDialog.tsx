@@ -161,6 +161,7 @@ function StatusTab({
         <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
           <th className="py-2 pr-4 font-medium">Plugin</th>
           <th className="py-2 pr-4 font-medium">Last run</th>
+          <th className="py-2 pr-4 font-medium">Duration</th>
           <th className="py-2 pr-4 font-medium">Status</th>
           <th className="py-2 pr-4 font-medium">Result</th>
           <th className="py-2 text-right font-medium">Action</th>
@@ -181,6 +182,15 @@ function StatusTab({
               <td className="py-3 pr-4 font-medium text-gray-900 dark:text-gray-100">{plugin}</td>
               <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">
                 {op ? formatRelativeTime(op.createdAt) : 'Never'}
+              </td>
+              <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">
+                {running ? (
+                  <span className="text-xs text-gray-400">—</span>
+                ) : op?.startTime && op?.endTime ? (
+                  formatDuration(op.startTime, op.endTime)
+                ) : (
+                  <span className="text-xs text-gray-400">—</span>
+                )}
               </td>
               <td className="py-3 pr-4">
                 {running ? (
@@ -251,4 +261,31 @@ function formatRelativeTime(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+/**
+ * Formats the elapsed time between two ISO timestamps into a human-readable
+ * duration string (e.g. "1s", "1m 45s", "2h 12m").
+ */
+function formatDuration(startIso: string, endIso: string): string {
+  const diffMs = new Date(endIso).getTime() - new Date(startIso).getTime();
+  if (diffMs < 0) return '—';
+  if (diffMs === 0) return '0s';
+
+  const totalSeconds = Math.max(1, Math.round(diffMs / 1000));
+
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes < 60) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
