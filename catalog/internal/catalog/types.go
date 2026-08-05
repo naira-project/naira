@@ -29,10 +29,8 @@ const (
 )
 
 // StatusError is an AIP-193 compliant error representation carried by failed
-// operations. Code uses gRPC-style status codes; Message is a human-readable
-// description of the problem.
+// operations. Message is a human-readable description of the problem.
 type StatusError struct {
-	Code    int32  `json:"code"`
 	Message string `json:"message"`
 }
 

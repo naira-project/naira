@@ -49,7 +49,6 @@ type ListRelationsResponse struct {
 // StatusErrorResource is an AIP-193 compliant error representation carried
 // by failed operations.
 type StatusErrorResource struct {
-	Code    int32  `json:"code"`
 	Message string `json:"message"`
 }
 
@@ -107,7 +106,6 @@ func operationFromCatalogOperation(op catalog.Operation) OperationResource {
 	var statusErr *StatusErrorResource
 	if op.Error != nil {
 		statusErr = &StatusErrorResource{
-			Code:    op.Error.Code,
 			Message: op.Error.Message,
 		}
 	}

@@ -159,7 +159,6 @@ export async function fetchPlugins(): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 export interface StatusErrorResource {
-	code: number;
 	message: string;
 }
 

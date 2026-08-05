@@ -83,7 +83,7 @@ func TestMemoryOperationStoreUpdateStateFailedSetsError(t *testing.T) {
 	op := newTestOperation("operations/plugin-run-1", "mlflow", time.Now())
 	require.NoError(t, store.Create(op))
 
-	statusErr := &StatusError{Code: 13, Message: "boom"}
+	statusErr := &StatusError{Message: "boom"}
 	require.NoError(t, store.UpdateState(op.Name, OperationStateFailed, statusErr, 0, 0))
 
 	got, err := store.Get(op.Name)

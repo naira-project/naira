@@ -531,7 +531,6 @@ func TestRunPluginAsyncFails(t *testing.T) {
 
 	completed := waitForState(t, opStore, op.Name, OperationStateFailed)
 	require.NotNil(t, completed.Error)
-	assert.Equal(t, int32(13), completed.Error.Code)
 	assert.Contains(t, completed.Error.Message, "connection refused")
 	assert.NotNil(t, completed.EndTime)
 }

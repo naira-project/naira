@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/codes"
 )
 
 var (
@@ -250,7 +249,7 @@ func (s *Service) executePluginRun(_ context.Context, operationName, pluginName 
 
 // failOperation marks an operation as FAILED with an AIP-193 style error.
 func (s *Service) failOperation(operationName, pluginName string, err error) {
-	statusErr := &StatusError{Code: int32(codes.Internal), Message: err.Error()}
+	statusErr := &StatusError{Message: err.Error()}
 
 	if s.logger != nil {
 		s.logger.Printf("plugin %q run failed: %v", pluginName, err)

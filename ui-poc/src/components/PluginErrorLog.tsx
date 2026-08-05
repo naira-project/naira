@@ -21,7 +21,7 @@ export function PluginErrorLog({ error }: PluginErrorLogProps) {
       >
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <AlertTriangle size={14} />
-        <span className="font-medium">Error (code {error.code})</span>
+        <span className="font-medium">Error</span>
       </button>
       {expanded && (
         <pre className="overflow-x-auto px-3 pb-2 pt-1 font-mono text-xs text-red-600 dark:text-red-300">
