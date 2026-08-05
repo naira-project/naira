@@ -1,10 +1,8 @@
-import { useState } from 'react';
 import { X, Play, RefreshCw } from 'lucide-react';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
 import { OperationResource } from '../lib/catalogApi';
 import { PluginStatusBadge } from './PluginStatusBadge';
 import { PluginErrorLog } from './PluginErrorLog';
-import { PluginRunHistory } from './PluginRunHistory';
 
 interface PluginsManagerDialogProps {
   open: boolean;
@@ -12,22 +10,15 @@ interface PluginsManagerDialogProps {
   onRunsCompleted: () => void;
 }
 
-type Tab = 'status' | 'history';
-
 /**
  * Modal dialog for managing plugin ingestion.
  *
- * - "Status" tab: one row per plugin with its latest run state
- * - "Full History" tab: complete execution history
- * - "Run All Plugins" button at the top
- *
- * Every "Run" button — including "Run All" — is independent: triggering one
- * plugin never disables another plugin's button, and "Run All" neither
- * blocks nor is blocked by anything triggered individually.
+ * Shows one row per plugin with its latest run state and a "Run All Plugins"
+ * button at the top. Every "Run" button — including "Run All" — is independent:
+ * triggering one plugin never disables another plugin's button, and "Run All"
+ * neither blocks nor is blocked by anything triggered individually.
  */
 export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: PluginsManagerDialogProps) {
-  const [tab, setTab] = useState<Tab>('status');
-
   const {
     plugins,
     operations,
@@ -83,16 +74,8 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
           </button>
         </div>
 
-        {/* Toolbar: tabs + Run All + manual refresh */}
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-6 py-3 dark:border-gray-700">
-          <div className="flex gap-1">
-            <TabButton active={tab === 'status'} onClick={() => setTab('status')}>
-              Status
-            </TabButton>
-            <TabButton active={tab === 'history'} onClick={() => setTab('history')}>
-              Full History
-            </TabButton>
-          </div>
+        {/* Toolbar: Run All + manual refresh */}
+        <div className="flex shrink-0 items-center justify-end border-b border-gray-200 px-6 py-3 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <button
               onClick={() => refresh()}
@@ -136,43 +119,16 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
             </div>
           )}
 
-          {tab === 'status' ? (
-            <StatusTab
-              plugins={plugins}
-              operations={operations}
-              loading={loading}
-              runningPlugins={runningPlugins}
-              onRun={handleRunSingle}
-            />
-          ) : (
-            <PluginRunHistory operations={operations} loading={loading} onRefresh={refresh} />
-          )}
+          <StatusTab
+            plugins={plugins}
+            operations={operations}
+            loading={loading}
+            runningPlugins={runningPlugins}
+            onRun={handleRunSingle}
+          />
         </div>
       </div>
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-        active
-          ? 'bg-primary/10 text-primary dark:bg-primary/20'
-          : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -288,7 +244,7 @@ function formatRelativeTime(iso: string): string {
   const diffMs = Date.now() - then;
   const seconds = Math.max(0, Math.floor(diffMs / 1000));
 
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 60) return `just now`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
