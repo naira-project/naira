@@ -20,17 +20,29 @@ type Tab = 'status' | 'history';
  * - "Status" tab: one row per plugin with its latest run state
  * - "Full History" tab: complete execution history
  * - "Run All Plugins" button at the top
+ *
+ * Every "Run" button — including "Run All" — is independent: triggering one
+ * plugin never disables another plugin's button, and "Run All" neither
+ * blocks nor is blocked by anything triggered individually.
  */
 export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: PluginsManagerDialogProps) {
   const [tab, setTab] = useState<Tab>('status');
 
-  const { plugins, operations, loading, runningPlugins, runAllActive, runError, refresh, runOne, runAll } =
-    usePluginsStatus();
-
-  const anyRunning = runningPlugins.size > 0 || runAllActive;
+  const {
+    plugins,
+    operations,
+    loading,
+    runningPlugins,
+    runAllActive,
+    runErrors,
+    dismissError,
+    refresh,
+    runOne,
+    runAll,
+  } = usePluginsStatus();
 
   const handleRunAll = async () => {
-    await runAll(); // resolves only once every triggered operation is terminal (or timed out)
+    await runAll();
     onRunsCompleted();
   };
 
@@ -71,7 +83,7 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
           </button>
         </div>
 
-        {/* Toolbar: tabs + Run All */}
+        {/* Toolbar: tabs + Run All + manual refresh */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-6 py-3 dark:border-gray-700">
           <div className="flex gap-1">
             <TabButton active={tab === 'status'} onClick={() => setTab('status')}>
@@ -81,21 +93,46 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
               Full History
             </TabButton>
           </div>
-          <button
-            onClick={handleRunAll}
-            disabled={anyRunning}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw size={14} className={runAllActive ? 'animate-spin' : ''} />
-            {runAllActive ? 'Running All…' : 'Run All Plugins'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => refresh()}
+              disabled={loading}
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
+              title="Refresh status (e.g. picks up runs triggered elsewhere)"
+              aria-label="Refresh status"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              onClick={handleRunAll}
+              disabled={runAllActive}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw size={14} className={runAllActive ? 'animate-spin' : ''} />
+              {runAllActive ? 'Running All…' : 'Run All Plugins'}
+            </button>
+          </div>
         </div>
 
         {/* Body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          {runError && (
-            <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
-              {runError}
+          {runErrors.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {runErrors.map((err) => (
+                <div
+                  key={err.id}
+                  className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400"
+                >
+                  <span>{err.message}</span>
+                  <button
+                    onClick={() => dismissError(err.id)}
+                    className="shrink-0 rounded p-0.5 text-red-500 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900"
+                    aria-label="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
@@ -105,7 +142,6 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
               operations={operations}
               loading={loading}
               runningPlugins={runningPlugins}
-              anyRunning={anyRunning}
               onRun={handleRunSingle}
             />
           ) : (
@@ -145,14 +181,12 @@ function StatusTab({
   operations,
   loading,
   runningPlugins,
-  anyRunning,
   onRun,
 }: {
   plugins: string[];
   operations: OperationResource[];
   loading: boolean;
   runningPlugins: Set<string>;
-  anyRunning: boolean;
   onRun: (plugin: string) => void;
 }) {
   const latestByPlugin = latestOperationPerPlugin(operations);
@@ -181,8 +215,9 @@ function StatusTab({
           const op = latestByPlugin.get(plugin);
           // Running via its own button, or swept up in "Run All" — either way
           // the previous status/result is stale and shouldn't be shown next
-          // to a spinning Run button. Cleared per-plugin as soon as *that*
-          // plugin's own run settles, independent of any others still going.
+          // to a spinning Run button. Cleared per-plugin as soon as *all* of
+          // that plugin's own in-flight runs settle, independent of any
+          // other plugin — including whatever "Run All" is still doing.
           const running = runningPlugins.has(plugin);
 
           return (
@@ -214,7 +249,7 @@ function StatusTab({
               <td className="py-3 text-right">
                 <button
                   onClick={() => onRun(plugin)}
-                  disabled={anyRunning}
+                  disabled={running}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                   title={`Run ${plugin} plugin`}
                 >
