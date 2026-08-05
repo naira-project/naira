@@ -27,7 +27,7 @@ const (
 )
 
 type config struct {
-	PathPrefix  string        `env:"PATH_PREFIX,required"`
+	PathPrefix  string        `env:"PATH_PREFIX" default:"litellm"`
 	BaseURL     string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
 	APIKey      string        `env:"LITELLM_API_KEY"`
 	HTTPTimeout time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`

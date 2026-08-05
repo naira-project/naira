@@ -22,7 +22,7 @@ const (
 )
 
 type config struct {
-	PathPrefix  string        `env:"PATH_PREFIX,required"`
+	PathPrefix  string        `env:"PATH_PREFIX" default:"mlflow"`
 	BaseURL     string        `env:"MLFLOW_BASE_URL" default:"http://127.0.0.1:5000"`
 	BearerToken string        `env:"MLFLOW_BEARER_TOKEN"`
 	HTTPTimeout time.Duration `env:"MLFLOW_HTTP_TIMEOUT" default:"5s"`
