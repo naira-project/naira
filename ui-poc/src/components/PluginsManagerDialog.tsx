@@ -170,7 +170,15 @@ function StatusTab({
   }
 
   return (
-    <table className="w-full text-left text-sm">
+    <table className="w-full table-fixed text-left text-sm">
+      <colgroup>
+        <col className="w-[22%]" />
+        <col className="w-[15%]" />
+        <col className="w-[12%]" />
+        <col className="w-[17%]" />
+        <col className="w-[23%]" />
+        <col className="w-[11%]" />
+      </colgroup>
       <thead>
         <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
           <th className="py-2 pr-4 font-medium">Plugin</th>
