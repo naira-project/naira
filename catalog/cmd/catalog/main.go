@@ -11,7 +11,9 @@ import (
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
+	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginmanager"
+	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
 
 func main() {
@@ -31,8 +33,11 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	service := catalog.NewService(ctx, catalog.NewMemoryStore(), catalog.NewMemoryOperationStore(), registeredPlugins, config.PluginTimeout, logger)
-	router := httpapi.NewRouter(service, logger)
+	store := catalog.NewMemoryStore()
+	catalogService := catalog.NewService(store)
+	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
+
+	router := httpapi.NewRouter(catalogService, runner, logger)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           router,
@@ -61,6 +66,6 @@ func main() {
 	}
 
 	// Wait for any in-flight plugin runs to finish before exiting.
-	service.Wait()
+	runner.Wait()
 	logger.Println("catalog service stopped")
 }
