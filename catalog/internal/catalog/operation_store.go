@@ -37,7 +37,7 @@ func (s *MemoryOperationStore) Create(op Operation) error {
 	defer s.mu.Unlock()
 
 	if _, exists := s.operations[op.Name]; exists {
-		return fmt.Errorf("operation %q: %w", op.Name, ErrOperationNotFound)
+		return fmt.Errorf("operation %q: %w", op.Name, ErrOperationAlreadyExists)
 	}
 
 	s.evictOldestForPluginLocked(op.Plugin)

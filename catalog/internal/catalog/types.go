@@ -78,9 +78,9 @@ type OperationFilter struct {
 	State  OperationState
 }
 
-// Sentinel errors.
 var (
-	ErrOperationNotFound = NewOperationError("operation not found")
+	ErrOperationNotFound      = NewOperationError("operation not found")
+	ErrOperationAlreadyExists = NewOperationError("operation already exists")
 )
 
 // NewOperationError is a helper for creating operation-related sentinel errors.

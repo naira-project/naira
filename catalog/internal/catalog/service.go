@@ -30,21 +30,22 @@ type Service struct {
 	pluginTimeout time.Duration
 }
 
-// NewService creates a Service. If no operation store is provided, a default
-// in-memory store is created. The appCtx is used as the parent context for
-// asynchronous plugin runs; it should be cancelled on application shutdown.
-func NewService(appCtx context.Context, store Store, plugins map[string]Plugin, pluginTimeout time.Duration, logger *log.Logger, operationStores ...OperationStore) *Service {
+func NewService(
+	// The appCtx is used as the parent context for asynchronous plugin runs;
+	// it should be cancelled on application shutdown.
+	appCtx context.Context,
+	store Store,
+	operationStore OperationStore,
+	plugins map[string]Plugin,
+	pluginTimeout time.Duration,
+	logger *log.Logger,
+) *Service {
 	registeredPlugins := make(map[string]Plugin, len(plugins))
 	for name, plugin := range plugins {
 		if plugin == nil {
 			continue
 		}
 		registeredPlugins[normalizePluginName(name)] = plugin
-	}
-
-	operationStore := OperationStore(NewMemoryOperationStore())
-	if len(operationStores) > 0 && operationStores[0] != nil {
-		operationStore = operationStores[0]
 	}
 
 	return &Service{
@@ -59,7 +60,7 @@ func NewService(appCtx context.Context, store Store, plugins map[string]Plugin, 
 
 // RunPluginAsync starts an asynchronous plugin run and returns the operation
 // that tracks its progress.
-func (s *Service) RunPluginAsync(ctx context.Context, pluginName string) (Operation, error) {
+func (s *Service) RunPluginAsync(_ context.Context, pluginName string) (Operation, error) {
 	pluginName = normalizePluginName(pluginName)
 	if pluginName == "" {
 		return Operation{}, fmt.Errorf("normalize plugin name: %w", ErrInvalidPluginName)
@@ -84,7 +85,7 @@ func (s *Service) RunPluginAsync(ctx context.Context, pluginName string) (Operat
 	}
 
 	s.wg.Go(func() {
-		s.executePluginRun(ctx, op.Name, pluginName)
+		s.executePluginRun(op.Name, pluginName)
 	})
 
 	return op, nil
@@ -145,7 +146,7 @@ func (s *Service) Wait() {
 }
 
 // executePluginRun runs a single plugin and updates the operation outcome.
-func (s *Service) executePluginRun(_ context.Context, operationName, pluginName string) {
+func (s *Service) executePluginRun(operationName, pluginName string) {
 	if err := s.operations.UpdateState(operationName, OperationStateRunning, nil, 0, 0); err != nil {
 		s.logf("marking operation %q as running: %v", operationName, err)
 		return

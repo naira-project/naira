@@ -31,7 +31,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	service := catalog.NewService(ctx, catalog.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
+	service := catalog.NewService(ctx, catalog.NewMemoryStore(), catalog.NewMemoryOperationStore(), registeredPlugins, config.PluginTimeout, logger)
 	router := httpapi.NewRouter(service, logger)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),

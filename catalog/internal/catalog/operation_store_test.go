@@ -44,7 +44,7 @@ func TestMemoryOperationStoreCreateDuplicateName(t *testing.T) {
 	require.NoError(t, store.Create(op))
 	err := store.Create(op)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrOperationNotFound))
+	assert.True(t, errors.Is(err, ErrOperationAlreadyExists))
 }
 
 func TestMemoryOperationStoreUpdateStateSetsRunningStartTime(t *testing.T) {

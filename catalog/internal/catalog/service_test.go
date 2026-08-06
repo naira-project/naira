@@ -84,7 +84,7 @@ func TestListNodesProjectsStoredNode(t *testing.T) {
 		},
 	}}, nil)
 
-	response := NewService(t.Context(), store, nil, 5*time.Minute, nil).ListNodes(t.Context())
+	response := NewService(t.Context(), store, nil, nil, 5*time.Minute, nil).ListNodes(t.Context())
 
 	assert.Equal(t, []Node{
 		{
@@ -142,12 +142,12 @@ func TestGetNodeReturnsStoredNode(t *testing.T) {
 		},
 	)
 
-	response, err := NewService(t.Context(), store, nil, 5*time.Minute, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
+	response, err := NewService(t.Context(), store, nil, nil, 5*time.Minute, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
 	require.NoError(t, err)
 	assert.Equal(t, "model", response.ID.Kind)
 	assert.Equal(t, "mlflow/fraud-detector", response.ID.Path)
 
-	_, err = NewService(t.Context(), store, nil, 5*time.Minute, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
+	_, err = NewService(t.Context(), store, nil, nil, 5*time.Minute, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
 	assert.True(t, errors.Is(err, ErrNodeNotFound))
 }
 
@@ -187,7 +187,7 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 		},
 	)
 
-	response := NewService(t.Context(), store, nil, 5*time.Minute, nil).ListRelations(t.Context())
+	response := NewService(t.Context(), store, nil, nil, 5*time.Minute, nil).ListRelations(t.Context())
 
 	assert.Equal(t, []Relation{
 		{
@@ -454,9 +454,9 @@ func TestRunPluginAsyncCreatesPendingOperation(t *testing.T) {
 	store := NewMemoryStore()
 	opStore := NewMemoryOperationStore()
 	block := make(chan struct{})
-	service := NewService(t.Context(), store, map[string]Plugin{
+	service := NewService(t.Context(), store, opStore, map[string]Plugin{
 		"mlflow": blockingStubPlugin{block: block},
-	}, 5*time.Minute, nil, opStore)
+	}, 5*time.Minute, nil)
 
 	op, err := service.RunPluginAsync(t.Context(), "mlflow")
 	require.NoError(t, err)
@@ -477,14 +477,14 @@ func TestRunPluginAsyncCreatesPendingOperation(t *testing.T) {
 func TestRunPluginAsyncSucceeds(t *testing.T) {
 	store := NewMemoryStore()
 	opStore := NewMemoryOperationStore()
-	service := NewService(t.Context(), store, map[string]Plugin{
+	service := NewService(t.Context(), store, opStore, map[string]Plugin{
 		"mlflow": stubPlugin{response: CollectResponse{
 			Nodes: []NodeClaim{{
 				ID:         NodeID{Kind: "model", Path: "mlflow/demo-model"},
 				Properties: PropertyMap{"source": "mlflow"},
 			}},
 		}},
-	}, 5*time.Minute, nil, opStore)
+	}, 5*time.Minute, nil)
 
 	op, err := service.RunPluginAsync(t.Context(), "mlflow")
 	require.NoError(t, err)
@@ -499,9 +499,9 @@ func TestRunPluginAsyncSucceeds(t *testing.T) {
 func TestRunPluginAsyncFails(t *testing.T) {
 	store := NewMemoryStore()
 	opStore := NewMemoryOperationStore()
-	service := NewService(t.Context(), store, map[string]Plugin{
+	service := NewService(t.Context(), store, opStore, map[string]Plugin{
 		"mlflow": stubPlugin{err: errors.New("connection refused")},
-	}, 5*time.Minute, nil, opStore)
+	}, 5*time.Minute, nil)
 
 	op, err := service.RunPluginAsync(t.Context(), "mlflow")
 	require.NoError(t, err)
@@ -513,7 +513,7 @@ func TestRunPluginAsyncFails(t *testing.T) {
 }
 
 func TestRunPluginAsyncRejectsUnknownPlugin(t *testing.T) {
-	service := NewService(t.Context(), NewMemoryStore(), nil, 5*time.Minute, nil)
+	service := NewService(t.Context(), NewMemoryStore(), nil, nil, 5*time.Minute, nil)
 
 	_, err := service.RunPluginAsync(t.Context(), "missing")
 	require.Error(t, err)
@@ -524,9 +524,9 @@ func TestRunPluginAsyncRejectsParallelRun(t *testing.T) {
 	store := NewMemoryStore()
 	opStore := NewMemoryOperationStore()
 	block := make(chan struct{})
-	service := NewService(t.Context(), store, map[string]Plugin{
+	service := NewService(t.Context(), store, opStore, map[string]Plugin{
 		"mlflow": blockingStubPlugin{block: block},
-	}, 5*time.Minute, nil, opStore)
+	}, 5*time.Minute, nil)
 
 	first, err := service.RunPluginAsync(t.Context(), "mlflow")
 	require.NoError(t, err)
@@ -545,10 +545,10 @@ func TestRunPluginAsyncRejectsParallelRun(t *testing.T) {
 func TestRunAllPluginsAsyncReturnsOperations(t *testing.T) {
 	store := NewMemoryStore()
 	opStore := NewMemoryOperationStore()
-	service := NewService(t.Context(), store, map[string]Plugin{
+	service := NewService(t.Context(), store, opStore, map[string]Plugin{
 		"mlflow":  stubPlugin{},
 		"litellm": stubPlugin{},
-	}, 5*time.Minute, nil, opStore)
+	}, 5*time.Minute, nil)
 
 	ops := service.RunAllPluginsAsync(t.Context())
 	require.Len(t, ops, 2)
@@ -558,7 +558,7 @@ func TestRunAllPluginsAsyncReturnsOperations(t *testing.T) {
 }
 
 func TestListPluginsReturnsSortedNames(t *testing.T) {
-	service := NewService(t.Context(), NewMemoryStore(), map[string]Plugin{
+	service := NewService(t.Context(), NewMemoryStore(), nil, map[string]Plugin{
 		"mlflow":  stubPlugin{},
 		"litellm": stubPlugin{},
 		"fluxcd":  stubPlugin{},
@@ -568,7 +568,7 @@ func TestListPluginsReturnsSortedNames(t *testing.T) {
 }
 
 func TestGetOperationNotFound(t *testing.T) {
-	service := NewService(t.Context(), NewMemoryStore(), nil, 5*time.Minute, nil)
+	service := NewService(t.Context(), NewMemoryStore(), NewMemoryOperationStore(), nil, 5*time.Minute, nil)
 
 	_, err := service.GetOperation(t.Context(), "operations/missing")
 	require.Error(t, err)

@@ -108,6 +108,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 	router := NewRouter(catalog.NewService(
 		t.Context(),
 		store,
+		nil,
 		map[string]catalog.Plugin{"seed": stubPlugin{}},
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
@@ -239,10 +240,10 @@ func TestRunAllPluginsAsyncReturnsOperations(t *testing.T) {
 	service := catalog.NewService(
 		t.Context(),
 		catalog.NewMemoryStore(),
+		opStore,
 		map[string]catalog.Plugin{"seed": stubPlugin{}},
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
-		opStore,
 	)
 	router := NewRouter(service, log.New(io.Discard, "", 0))
 
@@ -271,10 +272,10 @@ func TestRunAllPluginsAsyncReturnsPluginErrors(t *testing.T) {
 	service := catalog.NewService(
 		t.Context(),
 		catalog.NewMemoryStore(),
+		opStore,
 		map[string]catalog.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}},
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
-		opStore,
 	)
 	router := NewRouter(service, log.New(io.Discard, "", 0))
 
@@ -304,10 +305,10 @@ func TestRunPluginAsyncEndpoint(t *testing.T) {
 	service := catalog.NewService(
 		t.Context(),
 		catalog.NewMemoryStore(),
+		opStore,
 		map[string]catalog.Plugin{"mlflow": stubPlugin{}},
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
-		opStore,
 	)
 	router := NewRouter(service, log.New(io.Discard, "", 0))
 
@@ -329,7 +330,7 @@ func TestRunPluginAsyncEndpoint(t *testing.T) {
 }
 
 func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
-	service := catalog.NewService(t.Context(), catalog.NewMemoryStore(), nil, 5*time.Minute, log.New(io.Discard, "", 0))
+	service := catalog.NewService(t.Context(), catalog.NewMemoryStore(), nil, nil, 5*time.Minute, log.New(io.Discard, "", 0))
 	router := NewRouter(service, log.New(io.Discard, "", 0))
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/missing:run", nil)
@@ -346,10 +347,10 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	service := catalog.NewService(
 		t.Context(),
 		catalog.NewMemoryStore(),
+		opStore,
 		map[string]catalog.Plugin{"mlflow": blockingStubPlugin{block: block}},
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
-		opStore,
 	)
 	router := NewRouter(service, log.New(io.Discard, "", 0))
 
@@ -379,10 +380,10 @@ func TestGetOperationsEndpoint(t *testing.T) {
 	service := catalog.NewService(
 		t.Context(),
 		catalog.NewMemoryStore(),
+		opStore,
 		map[string]catalog.Plugin{"seed": stubPlugin{}},
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
-		opStore,
 	)
 	router := NewRouter(service, log.New(io.Discard, "", 0))
 
@@ -420,10 +421,10 @@ func TestGetOperationByIDEndpoint(t *testing.T) {
 	service := catalog.NewService(
 		t.Context(),
 		catalog.NewMemoryStore(),
+		opStore,
 		map[string]catalog.Plugin{"seed": stubPlugin{}},
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
-		opStore,
 	)
 	router := NewRouter(service, log.New(io.Discard, "", 0))
 
@@ -455,7 +456,7 @@ func TestGetOperationByIDEndpoint(t *testing.T) {
 }
 
 func TestGetOperationByIDNotFound(t *testing.T) {
-	service := catalog.NewService(t.Context(), catalog.NewMemoryStore(), nil, 5*time.Minute, log.New(io.Discard, "", 0))
+	service := catalog.NewService(t.Context(), catalog.NewMemoryStore(), nil, nil, 5*time.Minute, log.New(io.Discard, "", 0))
 	router := NewRouter(service, log.New(io.Discard, "", 0))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/operations/operations/missing", nil)
@@ -470,6 +471,7 @@ func TestListPluginsEndpoint(t *testing.T) {
 	service := catalog.NewService(
 		t.Context(),
 		catalog.NewMemoryStore(),
+		nil,
 		map[string]catalog.Plugin{
 			"mlflow":  stubPlugin{},
 			"litellm": stubPlugin{},
