@@ -105,6 +105,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   const runningPlugins = useMemo(() => new Set(runningCounts.keys()), [runningCounts]);
 
   useEffect(() => {
+    cancelledRef.current = false; 
     return () => {
       cancelledRef.current = true;
     };
