@@ -10,6 +10,7 @@ import { NodeResource } from '../lib/catalogApi';
 import KindSelector from '../components/KindSelector';
 import GenericTable from '../components/GenericTable';
 import { PluginsManagerDialog } from '../components/PluginsManagerDialog';
+import { formatRelativeTime } from '../lib/utils';
 
 /**
  * Unified catalog view.
@@ -73,18 +74,8 @@ export default function CatalogView() {
           {/* Compact last-sync indicator */}
           {lastSync && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  lastSync.state === 'FAILED'
-                    ? 'bg-red-500'
-                    : lastSync.state === 'RUNNING' || lastSync.state === 'PENDING'
-                      ? 'bg-orange-400'
-                      : 'bg-green-500'
-                }`}
-              />
               <span>
                 Last sync: {formatRelativeTime(lastSync.createdAt)}
-                {lastSync.state === 'FAILED' ? ' (failed)' : ''}
               </span>
             </div>
           )}
@@ -188,17 +179,4 @@ export default function CatalogView() {
  */
 function latestOperation(operations: { createdAt: string; state: string }[]) {
   return operations.length > 0 ? operations[0] : null;
-}
-
-function formatRelativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
-
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
