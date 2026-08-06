@@ -215,29 +215,6 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 	}, response)
 }
 
-func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
-	store := NewMemoryStore()
-	service := NewService(t.Context(), store, map[string]Plugin{
-		"mlflow": stubPlugin{
-			response: CollectResponse{
-				Nodes: []NodeClaim{{
-					ID:         NodeID{Kind: "model", Path: "mlflow/demo-model"},
-					Properties: PropertyMap{"source": "mlflow"},
-				}},
-			},
-		},
-	}, 5*time.Minute, nil)
-
-	response := service.RunAllPlugins(t.Context())
-	require.Len(t, response.Results, 1)
-	assert.Equal(t, "mlflow", response.Results[0].Plugin)
-	assert.Empty(t, response.Results[0].Error)
-
-	nodes := service.ListNodes(t.Context())
-	require.Len(t, nodes, 1)
-	assert.Equal(t, "mlflow/demo-model", nodes[0].ID.Path)
-}
-
 func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	store := NewMemoryStore()
 

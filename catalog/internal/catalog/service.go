@@ -57,62 +57,8 @@ func NewService(appCtx context.Context, store Store, plugins map[string]Plugin, 
 	}
 }
 
-func (s *Service) RunPlugin(ctx context.Context, pluginName string) error {
-	pluginName = normalizePluginName(pluginName)
-	if pluginName == "" {
-		return fmt.Errorf("normalize plugin name: %w", ErrInvalidPluginName)
-	}
-
-	plugin, ok := s.plugins[pluginName]
-	if !ok {
-		return fmt.Errorf("looking up plugin %q: %w", pluginName, ErrPluginNotFound)
-	}
-
-	response, err := plugin.Collect(ctx)
-	if err != nil {
-		return fmt.Errorf("collecting response from plugin %q: %w", pluginName, err)
-	}
-
-	snapshotID := uuid.New()
-
-	upsertedNodes, upsertedRelations, err := s.store.ApplyPluginSnapshot(pluginName, snapshotID, response.Nodes, response.Relations)
-	if err != nil {
-		return fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err)
-	}
-
-	if s.logger != nil {
-		s.logger.Printf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
-	}
-
-	return nil
-}
-
-func (s *Service) RunAllPlugins(ctx context.Context) RunPluginsResult {
-	pluginNames := make([]string, 0, len(s.plugins))
-	for name := range s.plugins {
-		pluginNames = append(pluginNames, name)
-	}
-	sort.Strings(pluginNames)
-
-	response := RunPluginsResult{
-		Results: make([]RunPluginResult, 0, len(pluginNames)),
-	}
-
-	for _, pluginName := range pluginNames {
-		err := s.RunPlugin(ctx, pluginName)
-		if err != nil {
-			response.Results = append(response.Results, RunPluginResult{Plugin: pluginName, Error: err.Error()})
-			continue
-		}
-		response.Results = append(response.Results, RunPluginResult{Plugin: pluginName})
-	}
-
-	return response
-}
-
 // RunPluginAsync starts an asynchronous plugin run and returns the operation
-// that tracks its progress. It returns ErrPluginAlreadyRunning if the plugin
-// already has a PENDING or RUNNING operation.
+// that tracks its progress.
 func (s *Service) RunPluginAsync(ctx context.Context, pluginName string) (Operation, error) {
 	pluginName = normalizePluginName(pluginName)
 	if pluginName == "" {
@@ -157,9 +103,7 @@ func (s *Service) RunAllPluginsAsync(ctx context.Context) []Operation {
 	for _, pluginName := range pluginNames {
 		op, err := s.RunPluginAsync(ctx, pluginName)
 		if err != nil {
-			if s.logger != nil {
-				s.logger.Printf("skipping async run for plugin %q: %v", pluginName, err)
-			}
+			s.logf("skipping async run for plugin %q: %v", pluginName, err)
 			continue
 		}
 		operations = append(operations, op)
@@ -168,7 +112,6 @@ func (s *Service) RunAllPluginsAsync(ctx context.Context) []Operation {
 	return operations
 }
 
-// GetOperation retrieves a single operation by name.
 func (s *Service) GetOperation(_ context.Context, name string) (Operation, error) {
 	op, err := s.operations.Get(name)
 	if err != nil {
@@ -177,7 +120,6 @@ func (s *Service) GetOperation(_ context.Context, name string) (Operation, error
 	return op, nil
 }
 
-// ListPlugins returns the names of all registered plugins.
 func (s *Service) ListPlugins() []string {
 	names := make([]string, 0, len(s.plugins))
 	for name := range s.plugins {
@@ -203,14 +145,9 @@ func (s *Service) Wait() {
 }
 
 // executePluginRun runs a single plugin and updates the operation outcome.
-// The ctx parameter from the caller is intentionally unused — async operations
-// derive their lifecycle from s.appCtx (application shutdown) and
-// s.pluginTimeout (per-plugin deadline), not from the triggering request.
 func (s *Service) executePluginRun(_ context.Context, operationName, pluginName string) {
 	if err := s.operations.UpdateState(operationName, OperationStateRunning, nil, 0, 0); err != nil {
-		if s.logger != nil {
-			s.logger.Printf("marking operation %q as running: %v", operationName, err)
-		}
+		s.logf("marking operation %q as running: %v", operationName, err)
 		return
 	}
 
@@ -236,14 +173,10 @@ func (s *Service) executePluginRun(_ context.Context, operationName, pluginName 
 		return
 	}
 
-	if s.logger != nil {
-		s.logger.Printf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
-	}
+	s.logf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
 
 	if err := s.operations.UpdateState(operationName, OperationStateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
-		if s.logger != nil {
-			s.logger.Printf("marking operation %q as succeeded: %v", operationName, err)
-		}
+		s.logf("marking operation %q as succeeded: %v", operationName, err)
 	}
 }
 
@@ -251,25 +184,17 @@ func (s *Service) executePluginRun(_ context.Context, operationName, pluginName 
 func (s *Service) failOperation(operationName, pluginName string, err error) {
 	statusErr := &StatusError{Message: err.Error()}
 
-	if s.logger != nil {
-		s.logger.Printf("plugin %q run failed: %v", pluginName, err)
-	}
+	s.logf("plugin %q run failed: %v", pluginName, err)
 
 	if updateErr := s.operations.UpdateState(operationName, OperationStateFailed, statusErr, 0, 0); updateErr != nil {
-		if s.logger != nil {
-			s.logger.Printf("marking operation %q as failed: %v", operationName, updateErr)
-		}
+		s.logf("marking operation %q as failed: %v", operationName, updateErr)
 	}
 }
 
-// hasActiveOperation reports whether the plugin has a PENDING or RUNNING
-// operation (i.e. a run already in flight for that plugin).
 func (s *Service) hasActiveOperation(pluginName string) bool {
 	operations, err := s.operations.List(OperationFilter{Plugin: pluginName})
 	if err != nil {
-		if s.logger != nil {
-			s.logger.Printf("listing operations for plugin %q: %v", pluginName, err)
-		}
+		s.logf("listing operations for plugin %q: %v", pluginName, err)
 		return false
 	}
 
@@ -295,4 +220,10 @@ func (s *Service) ListRelations(_ context.Context) []Relation {
 
 func normalizePluginName(pluginName string) string {
 	return strings.TrimSpace(strings.ToLower(pluginName))
+}
+
+func (s *Service) logf(format string, v ...any) {
+	if s.logger != nil {
+		s.logger.Printf(format, v...)
+	}
 }

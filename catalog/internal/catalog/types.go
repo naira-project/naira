@@ -94,14 +94,3 @@ func NewOperationError(msg string) error {
 type operationError struct{ msg string }
 
 func (e *operationError) Error() string { return e.msg }
-
-// RunPluginResult is retained for backward compatibility with existing tests.
-type RunPluginResult struct {
-	Plugin string
-	Error  string
-}
-
-// RunPluginsResult is retained for backward compatibility with existing tests.
-type RunPluginsResult struct {
-	Results []RunPluginResult
-}
