@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -18,7 +19,11 @@ const (
 	operationTTL = 3 * 24 * time.Hour
 )
 
-// MemoryOperationStore is an in-memory implementation of OperationStore.
+var (
+	ErrOperationNotFound      = errors.New("operation not found")
+	ErrOperationAlreadyExists = errors.New("operation already exists")
+)
+
 // Operations are stored in a map keyed by operation name and protected by
 // a read-write mutex.
 type MemoryOperationStore struct {
@@ -40,7 +45,7 @@ func (s *MemoryOperationStore) Create(op Operation) error {
 		return fmt.Errorf("operation %q: %w", op.Name, ErrOperationAlreadyExists)
 	}
 
-	s.evictOldestForPluginLocked(op.Plugin)
+	s.evictOldestForPlugin(op.Plugin)
 	s.operations[op.Name] = op
 	return nil
 }
@@ -56,7 +61,7 @@ func (s *MemoryOperationStore) Get(name string) (Operation, error) {
 		return Operation{}, fmt.Errorf("operation %q: %w", name, ErrOperationNotFound)
 	}
 
-	if s.isExpiredLocked(op) {
+	if s.isExpired(op) {
 		delete(s.operations, name)
 		return Operation{}, fmt.Errorf("operation %q: %w", name, ErrOperationNotFound)
 	}
@@ -71,7 +76,7 @@ func (s *MemoryOperationStore) List(filter OperationFilter) ([]Operation, error)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.pruneExpiredLocked()
+	s.pruneExpired()
 
 	result := make([]Operation, 0, len(s.operations))
 	for _, op := range s.operations {
@@ -91,10 +96,6 @@ func (s *MemoryOperationStore) List(filter OperationFilter) ([]Operation, error)
 	return result, nil
 }
 
-// UpdateState atomically transitions an operation to a new state and applies
-// the associated outcome: the error for FAILED, the upserted result counts
-// for SUCCEEDED, and the start time for RUNNING. If the operation does not
-// exist it returns ErrOperationNotFound.
 func (s *MemoryOperationStore) UpdateState(name string, state OperationState, err *StatusError, nodesUpserted, relationsUpserted int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -125,10 +126,9 @@ func (s *MemoryOperationStore) UpdateState(name string, state OperationState, er
 	return nil
 }
 
-// evictOldestForPluginLocked removes the oldest operation for the given
-// plugin if the per-plugin cap has been reached. Must be called with the
-// write lock held.
-func (s *MemoryOperationStore) evictOldestForPluginLocked(plugin string) {
+// evictOldestForPlugin removes the oldest operation for the given
+// plugin if the per-plugin cap has been reached.
+func (s *MemoryOperationStore) evictOldestForPlugin(plugin string) {
 	var oldestOp Operation
 	var oldestName string
 	count := 0
@@ -149,17 +149,13 @@ func (s *MemoryOperationStore) evictOldestForPluginLocked(plugin string) {
 	}
 }
 
-// isExpiredLocked returns true if the operation is older than the TTL.
-// Must be called with at least a read lock held.
-func (s *MemoryOperationStore) isExpiredLocked(op Operation) bool {
+func (s *MemoryOperationStore) isExpired(op Operation) bool {
 	return time.Since(op.CreatedAt) > operationTTL
 }
 
-// pruneExpiredLocked removes all operations that have exceeded the TTL.
-// Must be called with the write lock held.
-func (s *MemoryOperationStore) pruneExpiredLocked() {
+func (s *MemoryOperationStore) pruneExpired() {
 	for name, op := range s.operations {
-		if s.isExpiredLocked(op) {
+		if s.isExpired(op) {
 			delete(s.operations, name)
 		}
 	}

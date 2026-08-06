@@ -181,7 +181,6 @@ func (s *Service) executePluginRun(operationName, pluginName string) {
 	}
 }
 
-// failOperation marks an operation as FAILED with an AIP-193 style error.
 func (s *Service) failOperation(operationName, pluginName string, err error) {
 	statusErr := &StatusError{Message: err.Error()}
 
