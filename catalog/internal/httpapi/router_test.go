@@ -19,35 +19,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	testBearerToken                = "test-token"
-	aiEngineerBearerToken          = "ai-engineer-token"
-	applicationEngineerBearerToken = "application-engineer-token"
-)
-
-var tokenRealmRoles = map[string][]string{
-	testBearerToken:                {keycloak.RealmRoleAIEngineer, keycloak.RealmRoleApplicationEngineer},
-	aiEngineerBearerToken:          {keycloak.RealmRoleAIEngineer},
-	applicationEngineerBearerToken: {keycloak.RealmRoleApplicationEngineer},
-}
+const testBearerToken = "test-token"
 
 type stubTokenDecoder struct{}
 
 func (stubTokenDecoder) DecodeAccessToken(_ context.Context, accessToken, _ string) (*jwt.Token, *jwt.MapClaims, error) {
-	roles, ok := tokenRealmRoles[accessToken]
-	if !ok {
+	if accessToken != testBearerToken {
 		return nil, nil, errors.New("invalid token")
-	}
-
-	rawRoles := make([]interface{}, len(roles))
-	for i, role := range roles {
-		rawRoles[i] = role
 	}
 
 	claims := jwt.MapClaims{
 		"sub":                "test-user",
 		"preferred_username": "test-user",
-		"realm_access":       map[string]interface{}{"roles": rawRoles},
 	}
 	return nil, &claims, nil
 }
@@ -277,92 +260,3 @@ func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 	assert.Equal(t, expected, payload)
 }
 
-func TestRouterAuthorizesNodesByKeycloakRealmRole(t *testing.T) {
-	store := catalog.NewMemoryStore()
-	applyPluginSnapshot(t, store,
-		[]catalog.NodeClaim{
-			{ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"}},
-			{ID: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"}},
-		},
-		nil,
-	)
-
-	router := NewRouter(catalog.NewService(
-		store,
-		nil,
-		log.New(io.Discard, "", 0),
-	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
-
-	tests := []struct {
-		name               string
-		bearerToken        string
-		path               string
-		expectedStatusCode int
-	}{
-		{
-			name:               "ai engineer can read a model node",
-			bearerToken:        aiEngineerBearerToken,
-			path:               "/v1/nodes/model/mlflow/fraud-detector",
-			expectedStatusCode: http.StatusOK,
-		},
-		{
-			name:               "ai engineer cannot read an application node",
-			bearerToken:        aiEngineerBearerToken,
-			path:               "/v1/nodes/application/litellm/fraud-assistant",
-			expectedStatusCode: http.StatusForbidden,
-		},
-		{
-			name:               "application engineer can read an application node",
-			bearerToken:        applicationEngineerBearerToken,
-			path:               "/v1/nodes/application/litellm/fraud-assistant",
-			expectedStatusCode: http.StatusOK,
-		},
-		{
-			name:               "application engineer cannot read a model node",
-			bearerToken:        applicationEngineerBearerToken,
-			path:               "/v1/nodes/model/mlflow/fraud-detector",
-			expectedStatusCode: http.StatusForbidden,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := withAuth(httptest.NewRequest(http.MethodGet, tt.path, nil), tt.bearerToken)
-			rec := httptest.NewRecorder()
-
-			router.ServeHTTP(rec, req)
-
-			assert.Equal(t, tt.expectedStatusCode, rec.Code)
-		})
-	}
-}
-
-func TestRouterFiltersNodeListByKeycloakRealmRole(t *testing.T) {
-	store := catalog.NewMemoryStore()
-	applyPluginSnapshot(t, store,
-		[]catalog.NodeClaim{
-			{ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"}},
-			{ID: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"}},
-		},
-		nil,
-	)
-
-	router := NewRouter(catalog.NewService(
-		store,
-		nil,
-		log.New(io.Discard, "", 0),
-	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
-
-	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/nodes", nil), aiEngineerBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var payload ListNodesResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-
-	require.Len(t, payload.Nodes, 1)
-	assert.Equal(t, "model", payload.Nodes[0].Kind)
-}

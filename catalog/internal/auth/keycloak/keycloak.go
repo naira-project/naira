@@ -27,18 +27,16 @@ type Config struct {
 type TokenClaims struct {
 	UserID     string
 	Email      string
-	Username   string
-	RealmRoles []string
+	PreferredUsername   string
 }
 
-func NewAuthMiddleware(kc Config) func(http.Handler) http.Handler {
+func NewAuthMiddleware(cfg Config) func(http.Handler) http.Handler {
+	if cfg.Client == nil {
+		panic("keycloak: NewAuthMiddleware requires a non-nil Config.Client")
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if kc.Client == nil {
-				writeJSONError(w, http.StatusInternalServerError, "auth is not configured")
-				return
-			}
-
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
 				writeJSONError(w, http.StatusUnauthorized, "missing authorization header")
@@ -52,7 +50,7 @@ func NewAuthMiddleware(kc Config) func(http.Handler) http.Handler {
 			}
 			tokenString := strings.TrimSpace(after)
 
-			_, rawClaims, err := kc.Client.DecodeAccessToken(r.Context(), tokenString, kc.Realm)
+			_, rawClaims, err := cfg.Client.DecodeAccessToken(r.Context(), tokenString, cfg.Realm)
 			if err != nil || rawClaims == nil {
 				writeJSONError(w, http.StatusUnauthorized, "invalid token")
 				return
@@ -86,17 +84,7 @@ func parseTokenClaims(rawClaims *jwt.MapClaims) TokenClaims {
 	tc := TokenClaims{
 		UserID:   stringClaim(claims, "sub"),
 		Email:    stringClaim(claims, "email"),
-		Username: stringClaim(claims, "preferred_username"),
-	}
-
-	if ra, ok := claims["realm_access"].(map[string]interface{}); ok {
-		if roles, ok := ra["roles"].([]interface{}); ok {
-			for _, r := range roles {
-				if s, ok := r.(string); ok {
-					tc.RealmRoles = append(tc.RealmRoles, s)
-				}
-			}
-		}
+		PreferredUsername: stringClaim(claims, "preferred_username"),
 	}
 
 	return tc

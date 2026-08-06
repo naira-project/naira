@@ -57,9 +57,6 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config)
 				if !matches {
 					continue
 				}
-				if err := keycloak.AuthorizeNodeRead(r.Context(), catalogNode.ID.Kind); err != nil {
-					continue
-				}
 				nodes = append(nodes, node)
 			}
 
@@ -76,14 +73,6 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config)
 
 		r.Get("/nodes/{kind}/*", handle(func(w http.ResponseWriter, r *http.Request) error {
 			nodeID := catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")}
-
-			if err := keycloak.AuthorizeNodeRead(r.Context(), nodeID.Kind); err != nil {
-				if logger != nil {
-					logger.Printf("authorization denied for %s %s: %v", r.Method, r.URL.Path, err)
-				}
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-				return nil
-			}
 
 			node, err := service.GetNode(r.Context(), nodeID)
 			if err != nil {
@@ -103,12 +92,6 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config)
 		r.Get("/relations", handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 			relations := make([]Relation, 0)
 			for _, relation := range service.ListRelations(r.Context()) {
-				if err := keycloak.AuthorizeNodeRead(r.Context(), relation.From.Kind); err != nil {
-					continue
-				}
-				if err := keycloak.AuthorizeNodeRead(r.Context(), relation.To.Kind); err != nil {
-					continue
-				}
 
 				resource := relationFromCatalogRelation(relation)
 				matches, err := matchRelationFilter(resource, options.filter)

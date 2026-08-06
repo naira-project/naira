@@ -3,12 +3,6 @@
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": true,
-  "roles": {
-    "realm": [
-      { "name": "ai-engineer", "description": "AI Engineer" },
-      { "name": "application-engineer", "description": "Application Engineer"}
-    ]
-  },
   "clients": [
     {
       "clientId": "naira-portal",
@@ -51,7 +45,7 @@
       "credentials": [
         { "type": "password", "value": "testpass", "temporary": false }
       ],
-      "realmRoles": ["ai-engineer", "offline_access", "uma_authorization"]
+      "realmRoles": ["offline_access", "uma_authorization"]
     },
     {
       "username": "testuser-appeng",
@@ -63,7 +57,7 @@
       "credentials": [
         { "type": "password", "value": "testpass", "temporary": false }
       ],
-      "realmRoles": ["application-engineer", "offline_access", "uma_authorization"]
+      "realmRoles": ["offline_access", "uma_authorization"]
     }
   ]
 }
