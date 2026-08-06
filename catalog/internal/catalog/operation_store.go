@@ -129,22 +129,24 @@ func (s *MemoryOperationStore) UpdateState(name string, state OperationState, er
 // plugin if the per-plugin cap has been reached. Must be called with the
 // write lock held.
 func (s *MemoryOperationStore) evictOldestForPluginLocked(plugin string) {
-	var pluginOps []Operation
-	for _, op := range s.operations {
-		if op.Plugin == plugin {
-			pluginOps = append(pluginOps, op)
+	var oldestOp Operation
+	var oldestName string
+	count := 0
+
+	for name, op := range s.operations {
+		if op.Plugin != plugin {
+			continue
+		}
+		count++
+		if oldestName == "" || op.CreatedAt.Before(oldestOp.CreatedAt) {
+			oldestOp = op
+			oldestName = name
 		}
 	}
 
-	if len(pluginOps) < maxOperationsPerPlugin {
-		return
+	if count >= maxOperationsPerPlugin && oldestName != "" {
+		delete(s.operations, oldestName)
 	}
-
-	sort.Slice(pluginOps, func(i, j int) bool {
-		return pluginOps[i].CreatedAt.Before(pluginOps[j].CreatedAt)
-	})
-
-	delete(s.operations, pluginOps[0].Name)
 }
 
 // isExpiredLocked returns true if the operation is older than the TTL.
