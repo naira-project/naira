@@ -65,8 +65,17 @@ func (filter *equalityFilter) matchesResource(fields map[string]string, resource
 }
 
 func listOptionsFromRequest(r *http.Request, spec listOptionsSpec) (listOptions, error) {
+	return listOptionsFromParams(
+		r.URL.Query().Get("pageSize"),
+		r.URL.Query().Get("filter"),
+		r.URL.Query().Get("pageToken"),
+		spec,
+	)
+}
+
+func listOptionsFromParams(rawPageSize, rawFilter, rawPageToken string, spec listOptionsSpec) (listOptions, error) {
 	pageSize := int32(0)
-	if rawPageSize := strings.TrimSpace(r.URL.Query().Get("pageSize")); rawPageSize != "" {
+	if rawPageSize = strings.TrimSpace(rawPageSize); rawPageSize != "" {
 		parsed, err := strconv.ParseInt(rawPageSize, 10, 32)
 		if err != nil {
 			return listOptions{}, fmt.Errorf("%w: %w", errInvalidPageSize, err)
@@ -85,7 +94,7 @@ func listOptionsFromRequest(r *http.Request, spec listOptionsSpec) (listOptions,
 		resolvedPageSize = maxPageSize
 	}
 
-	filter, err := parseFilterSyntax(r.URL.Query().Get("filter"))
+	filter, err := parseFilterSyntax(rawFilter)
 	if err != nil {
 		return listOptions{}, fmt.Errorf("parsing filter: %w", err)
 	}
@@ -94,7 +103,7 @@ func listOptionsFromRequest(r *http.Request, spec listOptionsSpec) (listOptions,
 		return listOptions{}, fmt.Errorf("%w: unsupported %s filter field %q", errInvalidFilter, spec.scope, filter.field)
 	}
 
-	offset, err := decodePageToken(r.URL.Query().Get("pageToken"), spec.scope)
+	offset, err := decodePageToken(rawPageToken, spec.scope)
 	if err != nil {
 		return listOptions{}, fmt.Errorf("decoding page token: %w", err)
 	}

@@ -163,6 +163,24 @@ func toSortedSlice(claims map[string]catalog.PluginClaim) []PluginClaim {
 	return result
 }
 
+var catalogKinds = []string{
+	"application",
+	"dataset",
+	"model",
+	"deployment",
+	"service",
+	"Kustomization.fluxcd",
+	"HelmChart.fluxcd",
+	"git_repository",
+	"trained_on",
+	"uses_model",
+	"calls",
+	"sourced_from",
+	"describes",
+	"deployed_from",
+	"derived_from",
+}
+
 func int32FromCount(value int, logger *log.Logger) int32 {
 	if value > math.MaxInt32 {
 		logger.Printf("count %d exceeds int32 range", value)
