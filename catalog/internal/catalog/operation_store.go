@@ -26,15 +26,12 @@ type MemoryOperationStore struct {
 	operations map[string]Operation
 }
 
-// NewMemoryOperationStore creates an empty MemoryOperationStore.
 func NewMemoryOperationStore() *MemoryOperationStore {
 	return &MemoryOperationStore{
 		operations: make(map[string]Operation),
 	}
 }
 
-// Create persists a new operation. If the per-plugin cap is reached the
-// oldest operation for that plugin is evicted first.
 func (s *MemoryOperationStore) Create(op Operation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -125,19 +122,6 @@ func (s *MemoryOperationStore) UpdateState(name string, state OperationState, er
 	}
 
 	s.operations[name] = op
-	return nil
-}
-
-// Delete removes an operation by name.
-func (s *MemoryOperationStore) Delete(name string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, ok := s.operations[name]; !ok {
-		return fmt.Errorf("operation %q: %w", name, ErrOperationNotFound)
-	}
-
-	delete(s.operations, name)
 	return nil
 }
 

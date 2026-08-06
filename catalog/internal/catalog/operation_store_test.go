@@ -170,22 +170,3 @@ func TestMemoryOperationStoreEvictsOldestPerPlugin(t *testing.T) {
 	_, err = store.Get("operations/plugin-run-a")
 	assert.True(t, errors.Is(err, ErrOperationNotFound))
 }
-
-func TestMemoryOperationStoreDelete(t *testing.T) {
-	store := NewMemoryOperationStore()
-	op := newTestOperation("operations/plugin-run-1", "mlflow", time.Now())
-	require.NoError(t, store.Create(op))
-
-	require.NoError(t, store.Delete(op.Name))
-
-	_, err := store.Get(op.Name)
-	assert.True(t, errors.Is(err, ErrOperationNotFound))
-}
-
-func TestMemoryOperationStoreDeleteNotFound(t *testing.T) {
-	store := NewMemoryOperationStore()
-
-	err := store.Delete("operations/missing")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrOperationNotFound))
-}

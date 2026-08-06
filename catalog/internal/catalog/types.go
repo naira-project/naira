@@ -70,9 +70,6 @@ type OperationStore interface {
 	// applies the associated outcome: the error for FAILED, the upserted
 	// result counts for SUCCEEDED, and the start time for RUNNING.
 	UpdateState(name string, state OperationState, err *StatusError, nodesUpserted, relationsUpserted int) error
-
-	// Delete removes an operation by name.
-	Delete(name string) error
 }
 
 // OperationFilter carries optional filter criteria for ListOperations.
