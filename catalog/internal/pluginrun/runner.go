@@ -28,9 +28,6 @@ var (
 	ErrPluginAlreadyRunning = errors.New("plugin already has a running operation")
 )
 
-// Runner runs registered plugins asynchronously, tracking each run as an
-// operations.Operation and persisting successful results into a
-// catalog.Store
 type Runner struct {
 	store         catalog.Store
 	operations    operations.Store
