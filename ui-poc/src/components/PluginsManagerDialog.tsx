@@ -4,7 +4,7 @@ import { usePluginsStatus } from '../hooks/usePluginOperations';
 import { OperationResource, StatusErrorResource } from '../lib/catalogApi';
 import { PluginStatusBadge } from './PluginStatusBadge';
 import { PluginErrorModal } from './PluginErrorModal';
-import { formatRelativeTime } from '../lib/utils';
+import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 
 interface PluginsManagerDialogProps {
   open: boolean;
@@ -261,49 +261,4 @@ function StatusTab({
       </tbody>
     </table>
   );
-}
-
-/**
- * Returns a map of plugin name → most recent operation. Sorts defensively
- * by createdAt rather than assuming API ordering, since the UI's
- * correctness would otherwise silently depend on an unenforced API contract.
- */
-function latestOperationPerPlugin(operations: OperationResource[]): Map<string, OperationResource> {
-  const sorted = [...operations].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  const latest = new Map<string, OperationResource>();
-  for (const op of sorted) {
-    if (!latest.has(op.plugin)) {
-      latest.set(op.plugin, op);
-    }
-  }
-  return latest;
-}
-
-/**
- * Formats the elapsed time between two ISO timestamps into a human-readable
- * duration string (e.g. "1s", "1m 45s", "2h 12m").
- */
-function formatDuration(startIso: string, endIso: string): string {
-  const diffMs = new Date(endIso).getTime() - new Date(startIso).getTime();
-  if (diffMs < 0) return '—';
-  if (diffMs === 0) return '0s';
-
-  const totalSeconds = Math.max(1, Math.round(diffMs / 1000));
-
-  if (totalSeconds < 60) {
-    return `${totalSeconds}s`;
-  }
-
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes < 60) {
-    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }

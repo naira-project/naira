@@ -10,7 +10,7 @@ import { NodeResource } from '../lib/catalogApi';
 import KindSelector from '../components/KindSelector';
 import GenericTable from '../components/GenericTable';
 import { PluginsManagerDialog } from '../components/PluginsManagerDialog';
-import { formatRelativeTime } from '../lib/utils';
+import { formatRelativeTime, latestOperation } from '../lib/utils';
 
 /**
  * Unified catalog view.
@@ -172,11 +172,4 @@ export default function CatalogView() {
       />
     </div>
   );
-}
-
-/**
- * Returns the most recent operation (operations arrive newest-first).
- */
-function latestOperation(operations: { createdAt: string; state: string }[]) {
-  return operations.length > 0 ? operations[0] : null;
 }
