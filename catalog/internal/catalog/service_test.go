@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -27,45 +26,6 @@ func (p stubPlugin) Collect(context.Context) (CollectResponse, error) {
 	return p.response, p.err
 }
 
-// blockingStubPlugin blocks Collect until the block channel is closed,
-// allowing tests to deterministically hold a plugin run in the RUNNING state.
-type blockingStubPlugin struct {
-	block    chan struct{}
-	response CollectResponse
-	err      error
-}
-
-func (p blockingStubPlugin) Collect(ctx context.Context) (CollectResponse, error) {
-	select {
-	case <-p.block:
-	case <-ctx.Done():
-		return CollectResponse{}, ctx.Err()
-	}
-	return p.response, p.err
-}
-
-// waitForState polls the operation store until op reaches the given state or
-// the timeout elapses.
-func waitForState(t *testing.T, store OperationStore, name string, state OperationState) Operation {
-	t.Helper()
-
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		op, err := store.Get(name)
-		if err == nil && op.State == state {
-			return op
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	op, err := store.Get(name)
-	if err != nil {
-		t.Fatalf("operation %q: %v", name, err)
-	}
-	t.Fatalf("operation %q state = %s, want %s", name, op.State, state)
-	return Operation{}
-}
-
 func applyPluginSnapshot(t *testing.T, store *MemoryStore, nodes []NodeClaim, relations []RelationClaim) {
 	t.Helper()
 
@@ -84,7 +44,7 @@ func TestListNodesProjectsStoredNode(t *testing.T) {
 		},
 	}}, nil)
 
-	response := NewService(t.Context(), store, nil, nil, 5*time.Minute, nil).ListNodes(t.Context())
+	response := NewService(store, nil, nil).ListNodes(t.Context())
 
 	assert.Equal(t, []Node{
 		{
@@ -142,12 +102,12 @@ func TestGetNodeReturnsStoredNode(t *testing.T) {
 		},
 	)
 
-	response, err := NewService(t.Context(), store, nil, nil, 5*time.Minute, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
+	response, err := NewService(store, nil, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
 	require.NoError(t, err)
 	assert.Equal(t, "model", response.ID.Kind)
 	assert.Equal(t, "mlflow/fraud-detector", response.ID.Path)
 
-	_, err = NewService(t.Context(), store, nil, nil, 5*time.Minute, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
+	_, err = NewService(store, nil, nil).GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
 	assert.True(t, errors.Is(err, ErrNodeNotFound))
 }
 
@@ -187,7 +147,7 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 		},
 	)
 
-	response := NewService(t.Context(), store, nil, nil, 5*time.Minute, nil).ListRelations(t.Context())
+	response := NewService(store, nil, nil).ListRelations(t.Context())
 
 	assert.Equal(t, []Relation{
 		{
@@ -213,6 +173,29 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 			},
 		},
 	}, response)
+}
+
+func TestRunAllPluginsUpsertsCollectedGraph(t *testing.T) {
+	store := NewMemoryStore()
+	service := NewService(store, map[string]Plugin{
+		"mlflow": stubPlugin{
+			response: CollectResponse{
+				Nodes: []NodeClaim{{
+					ID:         NodeID{Kind: "model", Path: "mlflow/demo-model"},
+					Properties: PropertyMap{"source": "mlflow"},
+				}},
+			},
+		},
+	}, nil)
+
+	response := service.RunAllPlugins(t.Context())
+	require.Len(t, response.Results, 1)
+	assert.Equal(t, "mlflow", response.Results[0].Plugin)
+	assert.Empty(t, response.Results[0].Error)
+
+	nodes := service.ListNodes(t.Context())
+	require.Len(t, nodes, 1)
+	assert.Equal(t, "mlflow/demo-model", nodes[0].ID.Path)
 }
 
 func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
@@ -448,129 +431,4 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 
 	// 6. Relation is gone now
 	assert.Empty(t, store.ListRelations())
-}
-
-func TestRunPluginAsyncCreatesPendingOperation(t *testing.T) {
-	store := NewMemoryStore()
-	opStore := NewMemoryOperationStore()
-	block := make(chan struct{})
-	service := NewService(t.Context(), store, opStore, map[string]Plugin{
-		"mlflow": blockingStubPlugin{block: block},
-	}, 5*time.Minute, nil)
-
-	op, err := service.RunPluginAsync(t.Context(), "mlflow")
-	require.NoError(t, err)
-	assert.Equal(t, OperationStatePending, op.State)
-	assert.Equal(t, "mlflow", op.Plugin)
-	assert.NotEmpty(t, op.Name)
-
-	// The operation must be immediately retrievable from the store.
-	got, err := opStore.Get(op.Name)
-	require.NoError(t, err)
-	assert.Equal(t, OperationStatePending, got.State)
-
-	// Unblock and wait so the goroutine does not leak.
-	close(block)
-	service.Wait()
-}
-
-func TestRunPluginAsyncSucceeds(t *testing.T) {
-	store := NewMemoryStore()
-	opStore := NewMemoryOperationStore()
-	service := NewService(t.Context(), store, opStore, map[string]Plugin{
-		"mlflow": stubPlugin{response: CollectResponse{
-			Nodes: []NodeClaim{{
-				ID:         NodeID{Kind: "model", Path: "mlflow/demo-model"},
-				Properties: PropertyMap{"source": "mlflow"},
-			}},
-		}},
-	}, 5*time.Minute, nil)
-
-	op, err := service.RunPluginAsync(t.Context(), "mlflow")
-	require.NoError(t, err)
-
-	completed := waitForState(t, opStore, op.Name, OperationStateSucceeded)
-	assert.NotNil(t, completed.EndTime)
-	assert.Nil(t, completed.Error)
-	assert.Equal(t, 1, completed.NodesUpserted)
-	assert.Equal(t, 0, completed.RelationsUpserted)
-}
-
-func TestRunPluginAsyncFails(t *testing.T) {
-	store := NewMemoryStore()
-	opStore := NewMemoryOperationStore()
-	service := NewService(t.Context(), store, opStore, map[string]Plugin{
-		"mlflow": stubPlugin{err: errors.New("connection refused")},
-	}, 5*time.Minute, nil)
-
-	op, err := service.RunPluginAsync(t.Context(), "mlflow")
-	require.NoError(t, err)
-
-	completed := waitForState(t, opStore, op.Name, OperationStateFailed)
-	require.NotNil(t, completed.Error)
-	assert.Contains(t, completed.Error.Message, "connection refused")
-	assert.NotNil(t, completed.EndTime)
-}
-
-func TestRunPluginAsyncRejectsUnknownPlugin(t *testing.T) {
-	service := NewService(t.Context(), NewMemoryStore(), nil, nil, 5*time.Minute, nil)
-
-	_, err := service.RunPluginAsync(t.Context(), "missing")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrPluginNotFound))
-}
-
-func TestRunPluginAsyncRejectsParallelRun(t *testing.T) {
-	store := NewMemoryStore()
-	opStore := NewMemoryOperationStore()
-	block := make(chan struct{})
-	service := NewService(t.Context(), store, opStore, map[string]Plugin{
-		"mlflow": blockingStubPlugin{block: block},
-	}, 5*time.Minute, nil)
-
-	first, err := service.RunPluginAsync(t.Context(), "mlflow")
-	require.NoError(t, err)
-
-	// Wait until the first run is in flight (RUNNING), then try again.
-	waitForState(t, opStore, first.Name, OperationStateRunning)
-
-	_, err = service.RunPluginAsync(t.Context(), "mlflow")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrPluginAlreadyRunning))
-
-	close(block)
-	service.Wait()
-}
-
-func TestRunAllPluginsAsyncReturnsOperations(t *testing.T) {
-	store := NewMemoryStore()
-	opStore := NewMemoryOperationStore()
-	service := NewService(t.Context(), store, opStore, map[string]Plugin{
-		"mlflow":  stubPlugin{},
-		"litellm": stubPlugin{},
-	}, 5*time.Minute, nil)
-
-	ops := service.RunAllPluginsAsync(t.Context())
-	require.Len(t, ops, 2)
-	assert.Equal(t, []string{"litellm", "mlflow"}, []string{ops[0].Plugin, ops[1].Plugin})
-
-	service.Wait()
-}
-
-func TestListPluginsReturnsSortedNames(t *testing.T) {
-	service := NewService(t.Context(), NewMemoryStore(), nil, map[string]Plugin{
-		"mlflow":  stubPlugin{},
-		"litellm": stubPlugin{},
-		"fluxcd":  stubPlugin{},
-	}, 5*time.Minute, nil)
-
-	assert.Equal(t, []string{"fluxcd", "litellm", "mlflow"}, service.ListPlugins())
-}
-
-func TestGetOperationNotFound(t *testing.T) {
-	service := NewService(t.Context(), NewMemoryStore(), NewMemoryOperationStore(), nil, 5*time.Minute, nil)
-
-	_, err := service.GetOperation(t.Context(), "operations/missing")
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrOperationNotFound))
 }

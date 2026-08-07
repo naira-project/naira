@@ -11,9 +11,7 @@ import (
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
-	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginmanager"
-	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
 
 func main() {
@@ -30,19 +28,16 @@ func main() {
 	}
 	defer cleanup()
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	store := catalog.NewMemoryStore()
-	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
-
-	router := httpapi.NewRouter(catalogService, runner, logger)
+	service := catalog.NewService(catalog.NewMemoryStore(), registeredPlugins, logger)
+	router := httpapi.NewRouter(service, logger)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           router,
 		ReadHeaderTimeout: config.ReadHeadersTimeout,
 	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
@@ -64,8 +59,4 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Printf("error during server shutdown: %v", err)
 	}
-
-	// Wait for any in-flight plugin runs to finish before exiting.
-	runner.Wait()
-	logger.Println("catalog service stopped")
 }
