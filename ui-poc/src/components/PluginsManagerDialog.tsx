@@ -83,7 +83,7 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
           <div className="flex shrink-0 items-center justify-end border-b border-gray-200 px-6 py-3 dark:border-gray-700">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => refresh()}
+                onClick={refresh}
                 disabled={loading}
                 className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
                 title="Refresh status"

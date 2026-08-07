@@ -23,7 +23,7 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
       >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-          <div className="flex items-center gap-2.5 text-red-600 dark:text-red-400">
+          <div className="flex items-center gap-2.5 dark:text-red-400">
             <h3 className="text-base font-semibold text-foreground dark:text-foreground-dark-default">
               Execution Error: <span className="font-mono text-sm font-normal">{pluginName}</span>
             </h3>
@@ -50,7 +50,7 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 justify-end border-b border-gray-200 bg-gray-50 px-5 py-3 dark:border-gray-700 dark:bg-gray-900/30">
+        <div className="flex shrink-0 justify-end border-t border-gray-200 bg-gray-50 px-5 py-3 dark:border-gray-700 dark:bg-gray-900/30">
           <button
             onClick={onClose}
             className="rounded-md bg-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
