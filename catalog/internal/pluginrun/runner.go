@@ -68,6 +68,11 @@ func NewRunner(
 
 // RunPluginAsync starts an asynchronous plugin run and returns the operation
 // that tracks its progress.
+//
+// NOTE: The check for active operations (hasActiveOperation) and operation creation
+// are not atomic. This creates a possible race where two concurrent requests for
+// the same plugin could both pass the check before either creates the operation.
+// The ErrPluginAlreadyRunning error is therefore "best effort" rather than a strict guarantee.
 func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operations.Operation, error) {
 	pluginName = normalizePluginName(pluginName)
 	if pluginName == "" {
@@ -101,6 +106,10 @@ func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operation
 
 // RunAllPluginsAsync starts an asynchronous run for every registered plugin
 // and returns the operations that track their progress.
+//
+// NOTE: The ctx parameter is accepted for signature consistency but is not used.
+// Plugin runs use the runner's appCtx and live beyond the lifetime of individual
+// HTTP requests. Canceling ctx will not interrupt in-progress plugin executions.
 func (r *Runner) RunAllPluginsAsync(ctx context.Context) []operations.Operation {
 	pluginNames := make([]string, 0, len(r.plugins))
 	for name := range r.plugins {

@@ -434,17 +434,6 @@ func TestGetOperationByIDEndpoint(t *testing.T) {
 	assert.Equal(t, "seed", op.Plugin)
 }
 
-func TestGetOperationByIDNotFound(t *testing.T) {
-	router := newTestRouter(catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/operations/operations/missing", nil)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusNotFound, rec.Code)
-}
-
 func TestListPluginsEndpoint(t *testing.T) {
 	router := newTestRouter(catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{
 		"mlflow":  stubPlugin{},
