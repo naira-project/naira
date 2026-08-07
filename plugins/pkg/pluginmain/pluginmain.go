@@ -47,7 +47,11 @@ func New[C any]() *App[C] {
 }
 
 func (a *App[C]) Serve(p pluginapi.Plugin) {
-	mermaidFlag := flag.Bool("mermaid", false, "Return the collect result in Mermaid format and terminate")
+	var (
+		mermaidFlag = flag.Bool("mermaid", false, "Return the collect result in Mermaid format and terminate")
+		neo4jPrefix = flag.String("neo4j", "", "Return the collect result as Neo4j Cypher with the given property prefix and terminate")
+		neo4jURL    = flag.String("neo4j-url", "", "Push the collect result to the given Neo4j URL instead of printing (requires -neo4j)")
+	)
 	flag.Parse()
 
 	if *mermaidFlag {
@@ -56,6 +60,21 @@ func (a *App[C]) Serve(p pluginapi.Plugin) {
 			a.Logger.Fatalf("failed to collect: %v", err)
 		}
 		printMermaid(res, a.Logger)
+		return
+	}
+
+	if *neo4jPrefix != "" {
+		res, err := p.Collect(context.Background())
+		if err != nil {
+			a.Logger.Fatalf("failed to collect: %v", err)
+		}
+		if *neo4jURL == "" {
+			printNeo4j(res, *neo4jPrefix, a.Logger)
+			return
+		}
+		if err := pushNeo4j(context.Background(), res, *neo4jPrefix, *neo4jURL, a.Logger); err != nil {
+			a.Logger.Fatalf("failed to push to neo4j: %v", err)
+		}
 		return
 	}
 
