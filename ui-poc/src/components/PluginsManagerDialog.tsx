@@ -193,11 +193,8 @@ function StatusTab({
       <tbody>
         {plugins.map((plugin) => {
           const op = latestByPlugin.get(plugin);
-          // Running via its own button, or swept up in "Run All" — either way
-          // the previous status/result is stale and shouldn't be shown next
-          // to a spinning Run button. Cleared per-plugin as soon as *all* of
-          // that plugin's own in-flight runs settle, independent of any
-          // other plugin — including whatever "Run All" is still doing.
+          // Hide previous status/result while running to avoid displaying stale data
+          // next to an active spinner. Resets as soon as the plugin completes.
           const running = runningPlugins.has(plugin);
 
           return (

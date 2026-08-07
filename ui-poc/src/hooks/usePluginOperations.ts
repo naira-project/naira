@@ -94,18 +94,13 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   const [plugins, setPlugins] = useState<string[]>([]);
   const [operations, setOperations] = useState<OperationResource[]>([]);
   const [loading, setLoading] = useState(false);
-  // Refcounted per plugin: a plugin can end up with two in-flight operations
-  // at once (e.g. clicked individually, then swept into a "Run All") and
-  // should only look "done" once *all* of its in-flight runs have settled.
-  const [runningCounts, setRunningCounts] = useState<Map<string, number>>(new Map());
+  const [runningPlugins, setRunningPlugins] = useState<Set<string>>(new Set());
   const [runAllActive, setRunAllActive] = useState(false);
   const [runErrors, setRunErrors] = useState<RunErrorEntry[]>([]);
   const cancelledRef = useRef(false);
 
-  const runningPlugins = useMemo(() => new Set(runningCounts.keys()), [runningCounts]);
-
   useEffect(() => {
-    cancelledRef.current = false; 
+    cancelledRef.current = false;
     return () => {
       cancelledRef.current = true;
     };
@@ -142,33 +137,16 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     refresh();
   }, [refresh]);
 
-  const incRunning = (name: string) =>
-    setRunningCounts((prev) => {
-      const next = new Map(prev);
-      next.set(name, (next.get(name) ?? 0) + 1);
+  const markRunning = (name: string) =>
+    setRunningPlugins((prev) => new Set(prev).add(name));
+
+  const markStopped = (name: string) =>
+    setRunningPlugins((prev) => {
+      const next = new Set(prev);
+      next.delete(name);
       return next;
     });
 
-  const decRunning = (name: string) =>
-    setRunningCounts((prev) => {
-      const count = prev.get(name) ?? 0;
-      if (count <= 1) {
-        if (!prev.has(name)) return prev;
-        const next = new Map(prev);
-        next.delete(name);
-        return next;
-      }
-      const next = new Map(prev);
-      next.set(name, count - 1);
-      return next;
-    });
-
-  /**
-   * Triggers a single operation and, once it settles, merges just that
-   * operation's result into `operations` and decrements that plugin's
-   * running count — independent of anything else that may still be
-   * running, for that plugin or any other.
-   */
   const settleOne = useCallback(
     async (op: OperationResource) => {
       const { operation, timedOut } = await pollSingle(op, cancelledRef);
@@ -179,21 +157,21 @@ export function usePluginsStatus(): UsePluginsStatusResult {
       } else {
         setOperations((prev) => mergeOperation(prev, operation));
       }
-      decRunning(op.plugin);
+      markStopped(op.plugin);
     },
     [addError]
   );
 
   const runOne = useCallback(
     async (pluginName: string) => {
-      incRunning(pluginName);
+      markRunning(pluginName);
       try {
         const op = await apiRunPlugin(pluginName);
         await settleOne(op);
       } catch (err) {
         if (!cancelledRef.current) {
           addError(err instanceof Error ? err.message : `Failed to run "${pluginName}"`);
-          decRunning(pluginName);
+          markStopped(pluginName);
         }
       }
     },
@@ -204,12 +182,8 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     setRunAllActive(true);
     try {
       const ops = await apiRunAllPlugins();
-      ops.forEach((op) => incRunning(op.plugin));
+      ops.forEach((op) => markRunning(op.plugin));
 
-      // Each operation is settled independently: a plugin that finishes in
-      // 1s flips its row back to Run/status immediately, without waiting
-      // for a slower one still running a minute later. "Run All" itself
-      // isn't blocked by, and doesn't block, anything triggered per-plugin.
       await Promise.all(ops.map((op) => settleOne(op)));
     } catch (err) {
       if (!cancelledRef.current) {
