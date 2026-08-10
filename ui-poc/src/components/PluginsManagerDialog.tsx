@@ -235,8 +235,6 @@ function StatusTab({
                   <span className="text-xs text-gray-400">—</span>
                 ) : op && op.state === 'SUCCEEDED' ? (
                   `${op.nodesUpserted} node(s), ${op.relationsUpserted} relation(s)`
-                ) : op && op.state === 'FAILED' ? (
-                  <span className="text-xs text-gray-400">—</span>
                 ) : (
                   <span className="text-xs text-gray-400">—</span>
                 )}
