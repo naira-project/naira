@@ -403,6 +403,8 @@ data:
         address: localhost:50057
       mcp-servers:
         address: localhost:50058
+      openai-api-models:
+        address: localhost:50059
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -568,6 +570,29 @@ spec:
             - name: tech-radar-config
               mountPath: /etc/naira/techradar
               readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-openai-api-models
+          image: openai-api-models:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50059"
+            - name: OPENAI_API_MODELS_BASE_URL
+              value: http://litellm.litellm.svc.cluster.local:4000
+            - name: OPENAI_API_MODELS_NODE_PREFIX
+              value: openai_litellm
+            - name: OPENAI_API_MODELS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: LITELLM_API_KEY
           resources:
             requests:
               cpu: 50m
