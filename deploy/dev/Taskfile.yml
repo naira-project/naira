@@ -96,7 +96,7 @@ tasks:
     desc: Port-forward LLM Inference services (litellm, llama, monitoring)
     deps:
       - llm-inference:litellm:port-forward
-      - llm-inference:llama:port-forward
+      - llm-inference:llamacpp:port-forward
       - llm-inference:monitoring:port-forward
 
   # Seeding sample data
