@@ -1,15 +1,15 @@
-# llama.cpu starts up faster than vLLM, which is why vLLM isn't in the llm-inference taskfiles
+# llama.cpp starts up faster than vLLM, which is why vLLM isn't in the llm-inference taskfiles
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: inference
+  name: vllm
 ---
 # ── Chat template for opt-125m (base model, no default chat template) ───────
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: vllm-chat-template
-  namespace: inference
+  namespace: vllm
 data:
   chat-template.jinja: |
     {% for message in messages %}
@@ -25,7 +25,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vllm-opt125m
-  namespace: inference
+  namespace: vllm
 spec:
   replicas: 1
   selector:
@@ -43,7 +43,7 @@ spec:
           name: vllm-chat-template
       containers:
       - name: vllm
-        image: vllm/vllm-openai-cpu:latest-arm64
+        image: vllm/vllm-openai-cpu:latest
         args:
         - facebook/opt-125m
         - --served-model-name
@@ -87,7 +87,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: vllm-opt125m
-  namespace: inference
+  namespace: vllm
 spec:
   selector:
     app: vllm-opt125m

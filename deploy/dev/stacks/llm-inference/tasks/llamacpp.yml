@@ -1,17 +1,17 @@
 version: '3'
 
 vars:
-  INFERENCE_NAMESPACE: inference
-  LLAMA_MANIFEST: ./infra/kubernetes/llama.yaml
+  LLAMA_NAMESPACE: llamacpp
+  LLAMA_MANIFEST: ./infra/kubernetes/llamacpp.yaml
 
 tasks:
   deploy:
     desc: Deploy llama.cpp inference services (2 CPU models) to kind
     cmds:
       - kubectl apply -f {{.LLAMA_MANIFEST}}
-      - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status "deploy/llama-qwen25-05b" --timeout=600s
-      - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status "deploy/llama-dummy-model" --timeout=600s
-      - kubectl -n {{.INFERENCE_NAMESPACE}} get pods
+      - kubectl -n {{.LLAMA_NAMESPACE}} rollout status "deploy/llama-qwen25-05b" --timeout=600s
+      - kubectl -n {{.LLAMA_NAMESPACE}} rollout status "deploy/llama-dummy-model" --timeout=600s
+      - kubectl -n {{.LLAMA_NAMESPACE}} get pods
 
   undeploy:
     desc: Remove llama.cpp inference services from kind
@@ -27,12 +27,12 @@ tasks:
   port-forward-qwen:
     internal: true
     cmds:
-      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-qwen25-05b 8083:8080
+      - kubectl -n {{.LLAMA_NAMESPACE}} port-forward svc/llama-qwen25-05b 8083:8080
 
   port-forward-dummy:
     internal: true
     cmds:
-      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/llama-dummy-model 8084:8080
+      - kubectl -n {{.LLAMA_NAMESPACE}} port-forward svc/llama-dummy-model 8084:8080
 
   test:
     desc: Send a dummy prompt to all llama-server models

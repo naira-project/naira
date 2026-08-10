@@ -5,13 +5,14 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: inference
+  name: llm-inference
   namespace: monitoring
 spec:
   selector: {}
   namespaceSelector:
     matchNames:
-      - inference
+      - vllm
+      - llamacpp
   endpoints:
     - port: http
       path: /metrics

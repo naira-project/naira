@@ -7,26 +7,29 @@ includes:
   litellm-svc:
     taskfile: ./tasks/litellm.yml
     dir: .
-  llama:
-    taskfile: ./tasks/llama.yml
+  llamacpp:
+    taskfile: ./tasks/llamacpp.yml
     dir: .
   monitoring:
     taskfile: ./tasks/monitoring.yml
     dir: .
+  vllm:
+    taskfile: ./tasks/vllm.yml
+    dir: .
 
 tasks:
   deploy:
-    desc: Deploy the LLM Inference stack (postgres + litellm + llama + monitoring)
+    desc: Deploy the LLM Inference stack (postgres + litellm + llamacpp + monitoring)
     cmds:
       - task: litellm:deploy
-      - task: llama:deploy
+      - task: llamacpp:deploy
       - task: monitoring:deploy
 
   undeploy:
     desc: Remove the full LLM Inference stack from kind
     cmds:
       - task: monitoring:undeploy
-      - task: llama:undeploy
+      - task: llamacpp:undeploy
       - task: litellm:undeploy
 
   litellm:deploy:

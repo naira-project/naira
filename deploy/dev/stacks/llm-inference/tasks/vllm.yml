@@ -1,7 +1,7 @@
 version: '3'
 
 vars:
-  INFERENCE_NAMESPACE: inference
+  VLLM_NAMESPACE: vllm
   VLLM_MANIFEST: ./infra/kubernetes/vllm.yaml
 
 tasks:
@@ -9,8 +9,8 @@ tasks:
     desc: Deploy vLLM inference services to kind
     cmds:
       - kubectl apply -f {{.VLLM_MANIFEST}}
-      - kubectl -n {{.INFERENCE_NAMESPACE}} rollout status deploy/vllm-opt125m --timeout=600s
-      - kubectl -n {{.INFERENCE_NAMESPACE}} get pods
+      - kubectl -n {{.VLLM_NAMESPACE}} rollout status deploy/vllm-opt125m --timeout=600s
+      - kubectl -n {{.VLLM_NAMESPACE}} get pods
 
   undeploy:
     desc: Remove vLLM inference services from kind
@@ -20,7 +20,7 @@ tasks:
   port-forward:
     desc: Expose vLLM inference services on localhost
     cmds:
-      - kubectl -n {{.INFERENCE_NAMESPACE}} port-forward svc/vllm-opt125m 8001:8001
+      - kubectl -n {{.VLLM_NAMESPACE}} port-forward svc/vllm-opt125m 8001:8001
 
   test:
     desc: Send a dummy prompt to the vLLM opt-125m model for inference
