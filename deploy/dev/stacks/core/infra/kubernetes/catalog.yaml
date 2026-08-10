@@ -171,7 +171,7 @@ spec:
               value: "50057"
             - name: OPENAI_API_MODELS_BASE_URL
               value: http://litellm.litellm.svc.cluster.local:4000
-            - name: OPENAI_API_MODELS_NODE_PREFIX
+            - name: PATH_PREFIX
               value: openai_litellm
             - name: OPENAI_API_MODELS_API_KEY
               valueFrom:

@@ -23,18 +23,18 @@ func TestNewValidatesConfig(t *testing.T) {
 	}{
 		{
 			name:    "missing base URL",
-			config:  config{NodePrefix: "litellm"},
+			config:  config{PathPrefix: "litellm"},
 			wantErr: "OPENAI_API_MODELS_BASE_URL is empty",
 		},
 		{
 			name:    "missing node prefix",
 			config:  config{BaseURL: "http://litellm.example.com"},
-			wantErr: "OPENAI_API_MODELS_NODE_PREFIX is empty",
+			wantErr: "PATH_PREFIX is empty",
 		},
 		{
 			name:    "node prefix of only slashes",
-			config:  config{BaseURL: "http://litellm.example.com", NodePrefix: "//"},
-			wantErr: "OPENAI_API_MODELS_NODE_PREFIX is empty",
+			config:  config{BaseURL: "http://litellm.example.com", PathPrefix: "//"},
+			wantErr: "PATH_PREFIX is empty",
 		},
 	}
 
@@ -49,7 +49,7 @@ func TestNewValidatesConfig(t *testing.T) {
 
 func TestNewNormalizesNodePrefix(t *testing.T) {
 	for _, prefix := range []string{"litellm", "litellm/", "/litellm/", " litellm "} {
-		p, err := New(config{BaseURL: "http://litellm.example.com", NodePrefix: prefix}, testLogger())
+		p, err := New(config{BaseURL: "http://litellm.example.com", PathPrefix: prefix}, testLogger())
 		require.NoError(t, err)
 		assert.Equal(t, "litellm", p.nodePrefix, "prefix %q", prefix)
 	}
@@ -73,7 +73,7 @@ func TestCollect(t *testing.T) {
 
 	p, err := New(config{
 		BaseURL:     mockServer.URL,
-		NodePrefix:  "thalamus/",
+		PathPrefix:  "vllm/",
 		APIKey:      testAPIKey,
 		HTTPTimeout: 5 * time.Second,
 	}, testLogger())
@@ -86,15 +86,15 @@ func TestCollect(t *testing.T) {
 	assert.Empty(t, res.Relations)
 	assert.Equal(t, []pluginapi.NodeClaim{
 		{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "thalamus/gpt-4o"},
+			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "vllm/gpt-4o"},
 			Properties: pluginapi.PropertyMap{propertyKeyOwnedBy: "openai"},
 		},
 		{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "thalamus/claude-sonnet-5"},
+			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "vllm/claude-sonnet-5"},
 			Properties: pluginapi.PropertyMap{propertyKeyOwnedBy: "anthropic"},
 		},
 		{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "thalamus/local-model"},
+			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "vllm/local-model"},
 			Properties: pluginapi.PropertyMap{},
 		},
 	}, res.Nodes)
@@ -106,7 +106,7 @@ func TestCollectPropagatesFetchError(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	p, err := New(config{BaseURL: mockServer.URL, NodePrefix: "litellm"}, testLogger())
+	p, err := New(config{BaseURL: mockServer.URL, PathPrefix: "litellm"}, testLogger())
 	require.NoError(t, err)
 	p.httpClient = mockServer.Client()
 
