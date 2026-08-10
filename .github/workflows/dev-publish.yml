@@ -77,6 +77,17 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  container-publish-plugin-openai-api-models:
+    name: Publish · Plugin OpenAI API Models
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-openai-api-models"
+      dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   container-publish-plugin-depl-calls-svc:
     name: Publish · Plugin Depl Calls Svc
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
@@ -130,6 +141,7 @@ jobs:
       - container-publish-portal
       - container-publish-plugin-mlflow
       - container-publish-plugin-litellm
+      - container-publish-plugin-openai-api-models
       - container-publish-plugin-depl-calls-svc
       - container-publish-plugin-fluxcd
       - container-publish-plugin-depl-uses-litellm
@@ -145,6 +157,7 @@ jobs:
             "${{ needs.container-publish-portal.result }}"
             "${{ needs.container-publish-plugin-mlflow.result }}"
             "${{ needs.container-publish-plugin-litellm.result }}"
+            "${{ needs.container-publish-plugin-openai-api-models.result }}"
             "${{ needs.container-publish-plugin-depl-calls-svc.result }}"
             "${{ needs.container-publish-plugin-fluxcd.result }}"
             "${{ needs.container-publish-plugin-depl-uses-litellm.result }}"

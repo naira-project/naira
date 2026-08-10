@@ -162,6 +162,29 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+        - name: plugin-openai-api-models
+          image: openai-api-models:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50057"
+            - name: OPENAI_API_MODELS_BASE_URL
+              value: http://litellm.litellm.svc.cluster.local:4000
+            - name: OPENAI_API_MODELS_NODE_PREFIX
+              value: openai_litellm
+            - name: OPENAI_API_MODELS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: LITELLM_API_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
         - name: plugin-mlflow
           image: mlflow:local
           restartPolicy: Always
@@ -261,7 +284,7 @@ spec:
             - name: PORT
               value: "8090"
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models=localhost:50057"
           ports:
             - containerPort: 8090
               name: http
