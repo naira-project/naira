@@ -6,9 +6,9 @@
 //     without the "/v1/models" suffix, e.g.: "https://litellm.example.com" or
 //     "http://gateway.example.com:1234/base/"
 //
-//   - OPENAI_API_MODELS_NODE_PREFIX - MANDATORY - prefix for the emitted model
-//     Node paths, e.g. "litellm" produces "litellm/gpt-4o". A trailing "/" is
-//     optional, so both "litellm" and "litellm/" work.
+//   - PATH_PREFIX - MANDATORY - prefix for the emitted model Node paths, e.g.
+//     "litellm" produces "litellm/gpt-4o". A trailing "/" is optional, so both
+//     "litellm" and "litellm/" work.
 //
 //   - OPENAI_API_MODELS_API_KEY (optional) - bearer token sent to the
 //     endpoint; if unset, the request is made unauthenticated.
@@ -33,8 +33,8 @@ import (
 const propertyKeyOwnedBy = "owned_by"
 
 type config struct {
+	PathPrefix  string        `env:"PATH_PREFIX" usage:"prefix for emitted model Node paths, e.g. 'litellm' yields 'litellm/gpt-4o'"`
 	BaseURL     string        `env:"OPENAI_API_MODELS_BASE_URL" usage:"base URL of the OpenAI API-compatible endpoint, e.g. 'https://litellm.example.com'"`
-	NodePrefix  string        `env:"OPENAI_API_MODELS_NODE_PREFIX" usage:"prefix for emitted model Node paths, e.g. 'litellm' yields 'litellm/gpt-4o'"`
 	APIKey      string        `env:"OPENAI_API_MODELS_API_KEY"`
 	HTTPTimeout time.Duration `env:"OPENAI_API_MODELS_HTTP_TIMEOUT" default:"5s"`
 }
@@ -51,9 +51,9 @@ func New(config config, logger *log.Logger) (*Plugin, error) {
 		return nil, fmt.Errorf("no endpoint configured: OPENAI_API_MODELS_BASE_URL is empty")
 	}
 	// The prefix is what keeps models of different endpoints apart
-	prefix := strings.Trim(strings.TrimSpace(config.NodePrefix), "/")
+	prefix := strings.Trim(strings.TrimSpace(config.PathPrefix), "/")
 	if prefix == "" {
-		return nil, fmt.Errorf("no node prefix configured: OPENAI_API_MODELS_NODE_PREFIX is empty")
+		return nil, fmt.Errorf("no node prefix configured: PATH_PREFIX is empty")
 	}
 
 	return &Plugin{
