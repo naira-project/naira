@@ -149,15 +149,18 @@ export function usePluginsStatus(): UsePluginsStatusResult {
 
   const settleOne = useCallback(
     async (op: OperationResource) => {
-      const { operation, timedOut } = await pollSingle(op, cancelledRef);
-      if (cancelledRef.current) return;
+      try {
+        const { operation, timedOut } = await pollSingle(op, cancelledRef);
+        if (cancelledRef.current) return;
 
-      if (timedOut) {
-        addError(`"${op.plugin}" is taking longer than expected — check back shortly.`);
-      } else {
-        setOperations((prev) => mergeOperation(prev, operation));
+        if (timedOut) {
+          addError(`"${op.plugin}" is taking longer than expected — check back shortly.`);
+        } else {
+          setOperations((prev) => mergeOperation(prev, operation));
+        }
+      } finally {
+        markStopped(op.plugin);
       }
-      markStopped(op.plugin);
     },
     [addError]
   );
