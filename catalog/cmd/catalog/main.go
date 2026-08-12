@@ -32,10 +32,13 @@ func main() {
 
 	keycloakClient := gocloak.NewClient(config.KeycloakBaseURL)
 	service := catalog.NewService(catalog.NewMemoryStore(), registeredPlugins, logger)
-	router := httpapi.NewRouter(service, logger, keycloak.Config{
+	router, err := httpapi.NewRouter(service, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 	})
+	if err != nil {
+		logger.Fatalf("failed to create router: %v", err)
+	}
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           router,

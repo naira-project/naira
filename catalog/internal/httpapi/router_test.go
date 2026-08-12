@@ -88,11 +88,12 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			}},
 	)
 
-	router := NewRouter(catalog.NewService(
+	router, err := NewRouter(catalog.NewService(
 		store,
 		map[string]catalog.Plugin{"seed": stubPlugin{}},
 		log.New(io.Discard, "", 0),
 	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
+	require.NoError(t, err)
 
 	tests := []struct {
 		name               string
@@ -233,11 +234,12 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 }
 
 func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
-	router := NewRouter(catalog.NewService(
+	router, err := NewRouter(catalog.NewService(
 		catalog.NewMemoryStore(),
 		map[string]catalog.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}},
 		log.New(io.Discard, "", 0),
 	), log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
+	require.NoError(t, err)
 
 	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()

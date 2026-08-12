@@ -18,7 +18,12 @@ import (
 type routeHandler func(http.ResponseWriter, *http.Request) error
 type listOptionsHandler func(http.ResponseWriter, *http.Request, listOptions) error
 
-func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config) http.Handler {
+func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
+	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
+	if err != nil {
+		return nil, fmt.Errorf("creating auth middleware: %w", err)
+	}
+
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
@@ -31,7 +36,7 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config)
 	})
 
 	router.Route("/v1", func(r chi.Router) {
-		r.Use(keycloak.NewAuthMiddleware(kc))
+		r.Use(authMiddleware)
 
 		r.Post("/plugins:run", handle(func(w http.ResponseWriter, r *http.Request) error {
 			response := service.RunAllPlugins(r.Context())
@@ -115,7 +120,7 @@ func NewRouter(service *catalog.Service, logger *log.Logger, kc keycloak.Config)
 		}))
 	})
 
-	return router
+	return router, nil
 }
 
 func handle(next routeHandler) http.HandlerFunc {

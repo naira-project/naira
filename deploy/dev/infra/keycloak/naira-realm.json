@@ -16,22 +16,7 @@
         "http://localhost:3000/*",
         "http://localhost:3001/*"
       ],
-      "webOrigins": ["+"],
-      "protocolMappers": [
-        {
-          "name": "realm-roles-to-id-token",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "consentRequired": false,
-          "config": {
-            "access.token.claim": "true",
-            "id.token.claim": "true",
-            "claim.name": "realm_access.roles",
-            "jsonType.label": "String",
-            "multivalued": "true"
-          }
-        }
-      ]
+      "webOrigins": ["+"]
     }
   ],
   "users": [
@@ -42,18 +27,6 @@
       "emailVerified": true,
       "firstName": "Test",
       "lastName": "User",
-      "credentials": [
-        { "type": "password", "value": "testpass", "temporary": false }
-      ],
-      "realmRoles": ["offline_access", "uma_authorization"]
-    },
-    {
-      "username": "testuser-appeng",
-      "enabled": true,
-      "email": "test-appeng@test.com",
-      "emailVerified": true,
-      "firstName": "Test",
-      "lastName": "ApplicationEngineer",
       "credentials": [
         { "type": "password", "value": "testpass", "temporary": false }
       ],

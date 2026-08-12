@@ -3,6 +3,7 @@ package keycloak
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -30,12 +31,12 @@ type TokenClaims struct {
 	PreferredUsername   string
 }
 
-func NewAuthMiddleware(cfg Config) func(http.Handler) http.Handler {
+func NewAuthMiddleware(cfg Config) (func(http.Handler) http.Handler, error) {
 	if cfg.Client == nil {
-		panic("keycloak: NewAuthMiddleware requires a non-nil Config.Client")
+		return nil, errors.New("keycloak: Config.Client must not be nil")
 	}
 
-	return func(next http.Handler) http.Handler {
+	middleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
@@ -56,16 +57,18 @@ func NewAuthMiddleware(cfg Config) func(http.Handler) http.Handler {
 				return
 			}
 
-			tc := parseTokenClaims(rawClaims)
-			if tc.UserID == "" {
+			claims := parseTokenClaims(rawClaims)
+			if claims.UserID == "" {
 				writeJSONError(w, http.StatusUnauthorized, "invalid token")
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), claimsKey, tc)
+			ctx := context.WithValue(r.Context(), claimsKey, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+
+	return middleware, nil
 }
 
 func writeJSONError(w http.ResponseWriter, status int, message string) {
@@ -75,8 +78,8 @@ func writeJSONError(w http.ResponseWriter, status int, message string) {
 }
 
 func claimsFromContext(ctx context.Context) (TokenClaims, bool) {
-	tc, ok := ctx.Value(claimsKey).(TokenClaims)
-	return tc, ok
+	claims, ok := ctx.Value(claimsKey).(TokenClaims)
+	return claims, ok
 }
 
 func parseTokenClaims(rawClaims *jwt.MapClaims) TokenClaims {
