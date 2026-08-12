@@ -49,55 +49,69 @@ tasks:
     cmds:
       - task: core:cluster:delete
 
-  # Port-forwarding 
+  # Port-forwarding
   forward:all:
     desc: Port-forward all services
     silent: true
-    vars:
-      PORTAL_LOCAL_PORT: '3000'
-      UI_LOCAL_PORT: '3001'
-      MLFLOW_LOCAL_PORT: '5000'
-      LITELLM_LOCAL_PORT: '4000'
-      OPENMETADATA_LOCAL_PORT: '8585'
-      CATALOG_LOCAL_PORT: '8090'
-      PROMETHEUS_LOCAL_PORT: '9090'
-      GRAFANA_LOCAL_PORT: '3002'
-    cmds:
-      - |
-        echo "Port-forwarding all services..."
-        echo "----------------------------------------------------------------"
-        echo "Portal:         http://localhost:{{.PORTAL_LOCAL_PORT}}"
-        echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
-        echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
-        echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
-        echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
-        echo "Catalog:        http://localhost:{{.CATALOG_LOCAL_PORT}}"
-        echo "Prometheus:     http://localhost:{{.PROMETHEUS_LOCAL_PORT}}"
-        echo "Grafana:        http://localhost:{{.GRAFANA_LOCAL_PORT}}  (admin/admin)"
-        echo "----------------------------------------------------------------"
-      - task: forward:core
-      - task: forward:mlops
-      - task: forward:llm-inference
+    deps:
+      - forward:core
+      - forward:mlops
+      - forward:llm-inference
 
   forward:core:
     desc: Port-forward core services (catalog, portal, ui)
+    silent: true
     deps:
+      - forward:core:urls
       - core:catalog:port-forward
       - core:portal:port-forward
       - core:ui:port-forward
 
+  forward:core:urls:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        echo "Core service URLs:"
+        echo "  Portal:  http://localhost:3000"
+        echo "  UI:      http://localhost:3001"
+        echo "  Catalog: http://localhost:8090"
+
   forward:mlops:
     desc: Port-forward MLOps services (mlflow, openmetadata)
+    silent: true
     deps:
+      - forward:mlops:urls
       - mlops:mlflow:port-forward
       - mlops:openmetadata:port-forward
 
+  forward:mlops:urls:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        echo "MLOps service URLs:"
+        echo "  MLflow:       http://localhost:5000"
+        echo "  OpenMetadata: http://localhost:8585"
+
   forward:llm-inference:
     desc: Port-forward LLM Inference services (litellm, llama, monitoring)
+    silent: true
     deps:
+      - forward:llm-inference:urls
       - llm-inference:litellm:port-forward
       - llm-inference:llamacpp:port-forward
       - llm-inference:monitoring:port-forward
+
+  forward:llm-inference:urls:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        echo "LLM inference service URLs:"
+        echo "  LiteLLM:    http://localhost:4000"
+        echo "  Prometheus: http://localhost:9090"
+        echo "  Grafana:    http://localhost:3002  (admin/admin)"
 
   # Seeding sample data
   seed:all:

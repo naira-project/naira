@@ -126,7 +126,7 @@ metadata:
   name: llama-dummy-model
   namespace: llamacpp
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: llama-dummy-model
