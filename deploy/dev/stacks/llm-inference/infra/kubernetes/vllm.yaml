@@ -41,6 +41,11 @@ spec:
       - name: chat-template
         configMap:
           name: vllm-chat-template
+      # vLLM's needs >64Mi of /dev/shm (the K8s default)
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Gi
       containers:
       - name: vllm
         image: vllm/vllm-openai-cpu:latest
@@ -61,6 +66,8 @@ spec:
           mountPath: /etc/vllm/chat-template.jinja
           subPath: chat-template.jinja
           readOnly: true
+        - name: dshm
+          mountPath: /dev/shm
         readinessProbe:
           httpGet:
             path: /health
