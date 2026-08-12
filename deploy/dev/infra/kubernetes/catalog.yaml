@@ -153,6 +153,8 @@ spec:
                 secretKeyRef:
                   name: catalog-secrets
                   key: LITELLM_API_KEY
+            - name: PATH_PREFIX
+              value: litellm
           resources:
             requests:
               cpu: 50m
@@ -169,6 +171,8 @@ spec:
               value: "50052"
             - name: MLFLOW_BASE_URL
               value: http://mlflow.mlflow.svc.cluster.local:5000
+            - name: PATH_PREFIX
+              value: mlflow
           resources:
             requests:
               cpu: 50m
@@ -240,6 +244,8 @@ spec:
                 secretKeyRef:
                   name: catalog-secrets
                   key: OPENMETADATA_ADMIN_PASSWORD
+            - name: PATH_PREFIX
+              value: openmetadata
           resources:
             requests:
               cpu: 50m

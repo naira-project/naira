@@ -7,6 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
+	github.com/neo4j/neo4j-go-driver/v5 v5.28.4
 	github.com/stretchr/testify v1.11.1
 	go-simpler.org/env v0.12.0
 	google.golang.org/grpc v1.81.1
