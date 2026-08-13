@@ -1,5 +1,11 @@
 version: '3'
 
+vars:
+  KEYCLOAK_REALM: naira
+  KEYCLOAK_NAMESPACE: keycloak
+  KEYCLOAK_LOCAL_PORT: '8080'
+  KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET | default "naira-local-dev-secret"}}'
+
 includes:
   cluster:
     taskfile: ./tasks/cluster.yml
@@ -22,18 +28,32 @@ includes:
   catalog:
     taskfile: ./tasks/catalog.yml
     dir: .
+    vars:
+      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
+      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
+      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
   ui:
     taskfile: ./tasks/ui.yml
     dir: .
   portal:
     taskfile: ./tasks/portal.yml
     dir: .
+    vars:
+      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
+      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
+      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
+      KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET}}'
   openmetadata:
     taskfile: ./tasks/openmetadata.yml
     dir: .
   keycloak:
     taskfile: ./tasks/keycloak.yml
     dir: .
+    vars:
+      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
+      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
+      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
+      KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET}}'
 
 tasks:
   default:

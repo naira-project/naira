@@ -17,6 +17,7 @@ type config struct {
 	PluginTimeout           time.Duration
 	KeycloakBaseURL         string
 	KeycloakRealm           string
+	KeycloakIssuer          string
 }
 
 type envConfig struct {
@@ -28,6 +29,7 @@ type envConfig struct {
 	PluginTimeout           time.Duration `env:"PLUGIN_TIMEOUT" default:"5m"`
 	KeycloakBaseURL         string        `env:"KEYCLOAK_BASE_URL"`
 	KeycloakRealm           string        `env:"KEYCLOAK_REALM"`
+	KeycloakIssuer          string        `env:"KEYCLOAK_ISSUER"`
 }
 
 func loadConfig() (config, error) {
@@ -53,6 +55,7 @@ func loadConfig() (config, error) {
 		PluginTimeout:           raw.PluginTimeout,
 		KeycloakBaseURL:         raw.KeycloakBaseURL,
 		KeycloakRealm:           raw.KeycloakRealm,
+		KeycloakIssuer:          raw.KeycloakIssuer,
 	}
 
 	return cfg, nil

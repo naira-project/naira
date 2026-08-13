@@ -43,6 +43,7 @@ func main() {
 	router, err := httpapi.NewRouter(catalogService, runner, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
+		Issuer: config.KeycloakIssuer,
 	})
 	if err != nil {
 		logger.Fatalf("failed to create router: %v", err)

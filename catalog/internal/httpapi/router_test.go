@@ -25,6 +25,7 @@ import (
 )
 
 const testBearerToken = "test-token"
+const testIssuer = "http://localhost:8080/realms/naira"
 
 type stubTokenDecoder struct{}
 
@@ -36,6 +37,7 @@ func (stubTokenDecoder) DecodeAccessToken(_ context.Context, accessToken, _ stri
 	claims := jwt.MapClaims{
 		"sub":                "test-user",
 		"preferred_username": "test-user",
+		"iss":                testIssuer,
 	}
 	return nil, &claims, nil
 }
@@ -127,7 +129,7 @@ func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.
 
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
+	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 	return router
 }
@@ -350,7 +352,7 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}})
+	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 
 	// First request — starts the plugin run.

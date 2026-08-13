@@ -18,10 +18,15 @@ type TokenDecoder interface {
 	DecodeAccessToken(ctx context.Context, accessToken, realm string) (*jwt.Token, *jwt.MapClaims, error)
 }
 
-// Config holds the client and realm needed for token verification.
+// Config holds the client, realm, and expected issuer needed for token verification.
 type Config struct {
 	Client TokenDecoder
 	Realm  string
+	// Issuer is the expected "iss" claim on access tokens, e.g.
+	// "http://localhost:8080/realms/naira". It is independent of the URL
+	// used to reach Keycloak for JWKS retrieval (Client), since that URL
+	// may differ between in-cluster and browser-facing access.
+	Issuer string
 }
 
 // TokenClaims holds the user identity extracted from a verified Keycloak JWT.
@@ -34,6 +39,9 @@ type TokenClaims struct {
 func NewAuthMiddleware(cfg Config) (func(http.Handler) http.Handler, error) {
 	if cfg.Client == nil {
 		return nil, errors.New("keycloak: Config.Client must not be nil")
+	}
+	if cfg.Issuer == "" {
+		return nil, errors.New("keycloak: Config.Issuer must not be empty")
 	}
 
 	middleware := func(next http.Handler) http.Handler {
@@ -53,6 +61,11 @@ func NewAuthMiddleware(cfg Config) (func(http.Handler) http.Handler, error) {
 
 			_, rawClaims, err := cfg.Client.DecodeAccessToken(r.Context(), tokenString, cfg.Realm)
 			if err != nil || rawClaims == nil {
+				writeJSONError(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
+
+			if stringClaim(*rawClaims, "iss") != cfg.Issuer {
 				writeJSONError(w, http.StatusUnauthorized, "invalid token")
 				return
 			}

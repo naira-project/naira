@@ -9,11 +9,7 @@ vars:
   PORTAL_SERVICE: svc/portal
   PORTAL_LOCAL_PORT: '3000'
   PORTAL_REMOTE_PORT: '3000'
-  KEYCLOAK_REALM: naira
-  KEYCLOAK_NAMESPACE: keycloak
-  KEYCLOAK_LOCAL_PORT: '8080'
   KEYCLOAK_REMOTE_PORT: '8080'
-  KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET | default "naira-local-dev-secret"}}'
 
 tasks:
   image:build:
