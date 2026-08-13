@@ -1,4 +1,4 @@
-# llama.cpp starts up faster than vLLM, which is why vLLM isn't in the llm-inference taskfiles
+# llama.cpp uses less RAM than vLLM, which is why vLLM isn't in the llm-inference taskfiles
 apiVersion: v1
 kind: Namespace
 metadata:

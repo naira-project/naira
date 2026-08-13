@@ -102,6 +102,7 @@ tasks:
       - llm-inference:litellm:port-forward
       - llm-inference:llamacpp:port-forward
       - llm-inference:monitoring:port-forward
+      - llm-inference:vllm:port-forward
 
   forward:llm-inference:urls:
     internal: true
