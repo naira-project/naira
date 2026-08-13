@@ -61,7 +61,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface) (pluginapi.CollectResponse, error) {
-	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterIDDynamic(ctx, dyn)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces: %w", err)
 	}

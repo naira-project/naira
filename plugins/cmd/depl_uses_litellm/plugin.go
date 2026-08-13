@@ -102,7 +102,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		return pluginapi.CollectResponse{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
 
-	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterIDDynamic(ctx, dyn)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces and cluster ID: %w", err)
 	}
