@@ -22,18 +22,14 @@ type TokenDecoder interface {
 type Config struct {
 	Client TokenDecoder
 	Realm  string
-	// Issuer is the expected "iss" claim on access tokens, e.g.
-	// "http://localhost:8080/realms/naira". It is independent of the URL
-	// used to reach Keycloak for JWKS retrieval (Client), since that URL
-	// may differ between in-cluster and browser-facing access.
 	Issuer string
 }
 
 // TokenClaims holds the user identity extracted from a verified Keycloak JWT.
 type TokenClaims struct {
-	UserID     string
-	Email      string
-	PreferredUsername   string
+	UserID            string
+	Email             string
+	PreferredUsername string
 }
 
 func NewAuthMiddleware(cfg Config) (func(http.Handler) http.Handler, error) {
@@ -98,8 +94,8 @@ func claimsFromContext(ctx context.Context) (TokenClaims, bool) {
 func parseTokenClaims(rawClaims *jwt.MapClaims) TokenClaims {
 	claims := *rawClaims
 	tc := TokenClaims{
-		UserID:   stringClaim(claims, "sub"),
-		Email:    stringClaim(claims, "email"),
+		UserID:            stringClaim(claims, "sub"),
+		Email:             stringClaim(claims, "email"),
 		PreferredUsername: stringClaim(claims, "preferred_username"),
 	}
 
