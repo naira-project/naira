@@ -77,6 +77,7 @@ tasks:
       - core:catalog:port-forward
       - core:portal:port-forward
       - core:ui:port-forward
+      - core:keycloak:port-forward
 
   forward:core:urls:
     internal: true
@@ -87,6 +88,7 @@ tasks:
         echo "  Portal:  http://localhost:3000"
         echo "  UI:      http://localhost:3001"
         echo "  Catalog: http://localhost:8090"
+        echo "  Keycloak: http://localhost:8080"
 
   forward:mlops:
     desc: Port-forward MLOps services (mlflow, openmetadata)
