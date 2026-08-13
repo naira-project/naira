@@ -1,0 +1,22 @@
+version: '3'
+
+vars:
+  CLUSTER_NAME: naira-idp
+  KIND_CONFIG: infra/kind/kind-config.yaml
+
+tasks:
+  create:
+    desc: Create the local kind cluster
+    cmds:
+      - |
+        if kind get clusters | grep -qx '{{.CLUSTER_NAME}}'; then
+          echo 'kind cluster {{.CLUSTER_NAME}} already exists'
+        else
+          kind delete cluster --name {{.CLUSTER_NAME}} >/dev/null 2>&1 || true
+          kind create cluster --name {{.CLUSTER_NAME}} --config {{.KIND_CONFIG}}
+        fi
+
+  delete:
+    desc: Delete the local kind cluster
+    cmds:
+      - kind delete cluster --name {{.CLUSTER_NAME}}
