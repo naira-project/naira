@@ -198,11 +198,13 @@ func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]plugina
 	return nodes, relations, nil
 }
 
-// gitRepositoryNodeID builds a cluster-independent NodeID for a GitHub repository.
 func gitRepositoryNodeID(owner, name string) pluginapi.NodeID {
 	return pluginapi.NodeID{
 		Kind: pluginapi.NodeKindGitRepository,
-		Path: fmt.Sprintf("github.com/%s/%s", owner, name),
+		Path: repositorydiscovery.CanonicalPathFromRepo(repositorydiscovery.Repository{
+			Owner: owner,
+			Name:  name,
+		}),
 	}
 }
 

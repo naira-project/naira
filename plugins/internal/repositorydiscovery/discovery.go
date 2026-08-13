@@ -178,12 +178,13 @@ func InferRepository(image string) string {
 
 func CanonicalPathFromRepo(repo Repository) string {
 	if repo.Owner != "" && repo.Name != "" {
-		return strings.ToLower(repo.Owner + "/" + repo.Name)
+		return githubCanonicalPath(repo.Owner, repo.Name)
 	}
 	return CanonicalPath(repo.URL)
 }
 
-// CanonicalPath returns the stable owner/repository path for common Git URLs.
+// CanonicalPath returns the canonical NodeID path for a GitHub repository URL.
+// URLs for other Git hosts are not supported and return an empty path.
 func CanonicalPath(rawURL string) string {
 	owner, name, ok := ParseGitHubRepository(rawURL)
 	if !ok {
@@ -191,7 +192,11 @@ func CanonicalPath(rawURL string) string {
 		return ""
 	}
 
-	return strings.ToLower(owner + "/" + name)
+	return githubCanonicalPath(owner, name)
+}
+
+func githubCanonicalPath(owner, name string) string {
+	return "github.com/" + strings.ToLower(owner+"/"+name)
 }
 
 // ParseGitHubRepository returns the owner and repository name from a GitHub URL.
