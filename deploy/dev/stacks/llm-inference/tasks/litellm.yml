@@ -2,13 +2,14 @@ version: '3'
 
 vars:
   LITELLM_NAMESPACE: litellm
-  LITELLM_MANIFEST: infra/kubernetes/litellm.yaml
+  LITELLM_MANIFEST: ./infra/kubernetes/litellm.yaml
   LITELLM_SERVICE: svc/litellm
   LITELLM_LOCAL_PORT: '4000'
   LITELLM_REMOTE_PORT: '4000'
 
 tasks:
   deploy:
+    internal: true
     desc: Deploy LiteLLM to kind
     cmds:
       - kubectl apply -f {{.LITELLM_MANIFEST}}
@@ -16,11 +17,13 @@ tasks:
       - kubectl -n {{.LITELLM_NAMESPACE}} get pods
 
   undeploy:
+    internal: true
     desc: Remove LiteLLM from kind
     cmds:
       - kubectl delete -f {{.LITELLM_MANIFEST}} --ignore-not-found
 
   port-forward:
+    internal: true
     desc: Expose LiteLLM on localhost:4000
     cmds:
       - kubectl -n {{.LITELLM_NAMESPACE}} port-forward {{.LITELLM_SERVICE}} {{.LITELLM_LOCAL_PORT}}:{{.LITELLM_REMOTE_PORT}}

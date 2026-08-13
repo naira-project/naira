@@ -1,0 +1,39 @@
+# ── ServiceMonitors for Prometheus auto-discovery ────────────────────────────
+# Each block tells Prometheus which services to scrape
+---
+# Selects any service in the 'inference' namespace with a port named 'http'.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: llm-inference
+  namespace: monitoring
+spec:
+  selector: {}
+  namespaceSelector:
+    matchNames:
+      - vllm
+      - llamacpp
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+
+---
+# ── LiteLLM proxy ────────────────────────────────────────────────────────────
+# LiteLLM also exposes Prometheus metrics at /metrics on its HTTP port.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: litellm-proxy
+  namespace: monitoring
+spec:
+  selector: {}
+  namespaceSelector:
+    matchNames:
+      - litellm
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

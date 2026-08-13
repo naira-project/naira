@@ -2,22 +2,24 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
-  CATALOG_DIR: ../../catalog
+  CATALOG_DIR: ../../../../catalog
   CATALOG_IMAGE: catalog:local
   CATALOG_NAMESPACE: idp-system
-  CATALOG_MANIFEST: infra/kubernetes/catalog.yaml
+  CATALOG_MANIFEST: ./infra/kubernetes/catalog.yaml
   CATALOG_SERVICE: svc/catalog
   CATALOG_LOCAL_PORT: '8090'
   CATALOG_REMOTE_PORT: '8090'
 
 tasks:
   image:build:
+    internal: true
     desc: Build the catalog Docker image
     cmds:
       - task: :docker:build
         vars: { IMAGE: '{{.CATALOG_IMAGE}}', DIR: '{{.CATALOG_DIR}}' }
 
   image:load:
+    internal: true
     desc: Load the catalog image into kind
     deps: [image:build]
     cmds:

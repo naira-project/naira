@@ -2,21 +2,23 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
-  UI_DIR: ../../ui-poc
+  UI_DIR: ../../../../ui-poc
   UI_IMAGE: ui:local
   UI_NAMESPACE: idp-system
-  UI_MANIFEST: infra/kubernetes/ui.yaml
+  UI_MANIFEST: ./infra/kubernetes/ui.yaml
   UI_SERVICE: svc/ui
   UI_LOCAL_PORT: '3001'
   UI_REMOTE_PORT: '80'
 
 tasks:
   image:build:
+    internal: true
     desc: Build the UI Docker image
     cmds:
       - docker build -t {{.UI_IMAGE}} {{.UI_DIR}}
 
   image:load:
+    internal: true
     desc: Load the UI image into kind
     deps: [image:build]
     cmds:

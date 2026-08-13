@@ -1,0 +1,50 @@
+version: '3'
+
+vars:
+  MONITORING_NAMESPACE: monitoring
+  PROMETHEUS_RELEASE: prometheus
+  PROMETHEUS_CHART: prometheus-community/kube-prometheus-stack
+  PROMETHEUS_VALUES: ./infra/helm/prometheus-values.yaml
+  SERVICEMONITOR_MANIFEST: ./infra/kubernetes/monitoring-servicemonitors.yaml
+  PROMETHEUS_LOCAL_PORT: '9090'
+  GRAFANA_LOCAL_PORT: '3002'
+
+tasks:
+  deploy:
+    desc: Deploy Prometheus stack (kube-prometheus-stack) + ServiceMonitors to kind
+    cmds:
+      - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
+      - helm repo update prometheus-community 2>/dev/null
+
+      - |
+        helm upgrade --install {{.PROMETHEUS_RELEASE}} {{.PROMETHEUS_CHART}} \
+          --namespace {{.MONITORING_NAMESPACE}} --create-namespace \
+          --values {{.PROMETHEUS_VALUES}} \
+          --wait --timeout 10m
+
+      - kubectl apply -f {{.SERVICEMONITOR_MANIFEST}}
+
+      - kubectl -n {{.MONITORING_NAMESPACE}} get pods
+
+  undeploy:
+    desc: Remove Prometheus stack and ServiceMonitors from kind
+    cmds:
+      - kubectl delete -f {{.SERVICEMONITOR_MANIFEST}} --ignore-not-found
+      - helm uninstall {{.PROMETHEUS_RELEASE}} --namespace {{.MONITORING_NAMESPACE}} --ignore-not-found
+      - kubectl delete namespace {{.MONITORING_NAMESPACE}} --ignore-not-found
+
+  port-forward:
+    desc: Expose Prometheus and Grafana UIs on localhost
+    deps:
+      - port-forward-prometheus
+      - port-forward-grafana
+
+  port-forward-prometheus:
+    internal: true
+    cmds:
+      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/prometheus-operated {{.PROMETHEUS_LOCAL_PORT}}:9090
+
+  port-forward-grafana:
+    internal: true
+    cmds:
+      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/{{.PROMETHEUS_RELEASE}}-grafana {{.GRAFANA_LOCAL_PORT}}:80

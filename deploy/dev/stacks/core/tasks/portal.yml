@@ -2,21 +2,23 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
-  PORTAL_DIR: ../../naira-openmfp-portal
+  PORTAL_DIR: ../../../../naira-openmfp-portal
   PORTAL_IMAGE: portal:local
   PORTAL_NAMESPACE: idp-system
-  PORTAL_MANIFEST: infra/kubernetes/portal.yaml
+  PORTAL_MANIFEST: ./infra/kubernetes/portal.yaml
   PORTAL_SERVICE: svc/portal
   PORTAL_LOCAL_PORT: '3000'
   PORTAL_REMOTE_PORT: '3000'
 
 tasks:
   image:build:
+    internal: true
     desc: Build the portal Docker image
     cmds:
       - docker build -t {{.PORTAL_IMAGE}} {{.PORTAL_DIR}}
 
   image:load:
+    internal: true
     desc: Load the portal image into kind
     deps: [image:build]
     cmds:
