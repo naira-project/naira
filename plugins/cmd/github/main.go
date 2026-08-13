@@ -45,10 +45,9 @@ type config struct {
 }
 
 type Plugin struct {
-	github    *githubClient
-	k8sClient kubernetes.Interface
-	logger    *log.Logger
-	config    config
+	github *githubClient
+	logger *log.Logger
+	config config
 }
 
 func New(config config, logger *log.Logger) *Plugin {
@@ -105,11 +104,7 @@ type repoRef struct {
 // resolveRepos figures out which GitHub repos to collect by running repository discovery
 // and filtering by GitHub host and p.config.GitHubOrg if set.
 func (p *Plugin) resolveRepos(ctx context.Context, k8sClient kubernetes.Interface) ([]repoRef, error) {
-	if p.k8sClient == nil {
-		return nil, nil
-	}
-
-	discovered, err := repositorydiscovery.Discover(ctx, p.k8sClient, p.logger)
+	discovered, err := repositorydiscovery.Discover(ctx, k8sClient, p.logger)
 	if err != nil {
 		return nil, fmt.Errorf("discovering repositories from deployments: %w", err)
 	}

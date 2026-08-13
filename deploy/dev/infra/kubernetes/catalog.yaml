@@ -253,6 +253,34 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+        - name: plugin-github
+          image: github:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50057"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-depl-from-repo
+          image: depl-from-repo:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50058"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
       containers:
         - name: catalog
           image: catalog:local
@@ -261,7 +289,7 @@ spec:
             - name: PORT
               value: "8090"
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,github=localhost:50057,depl-from-repo=localhost:50058"
           ports:
             - containerPort: 8090
               name: http
