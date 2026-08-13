@@ -10,6 +10,11 @@ includes:
   core:
     taskfile: ./stacks/core/Taskfile.yml
     dir: ./stacks/core
+    vars:
+      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
+      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
+      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
+      KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET}}'
   llm-inference:
     taskfile: ./stacks/llm-inference/Taskfile.yml
     dir: ./stacks/llm-inference
