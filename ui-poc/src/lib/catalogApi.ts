@@ -151,8 +151,8 @@ interface ListPluginsResponse {
 /**
  * GET /v1/plugins — returns the list of registered plugin names.
  */
-export async function fetchPlugins(): Promise<string[]> {
-	const data = await fetchJson<ListPluginsResponse>('/v1/plugins');
+export async function fetchPlugins(token: string | null): Promise<string[]> {
+	const data = await fetchJson<ListPluginsResponse>('/v1/plugins', token);
 	return data.plugins ?? [];
 }
 
@@ -192,8 +192,11 @@ export function buildListOperationsUrl(options: ListRequest = {}) {
  * POST /v1/plugins:run — triggers all registered plugins asynchronously.
  * Returns the list of tracking operations.
  */
-export async function runAllPlugins(): Promise<OperationResource[]> {
-	const response = await fetch('/v1/plugins:run', { method: 'POST' });
+export async function runAllPlugins(token: string | null): Promise<OperationResource[]> {
+	const response = await fetch('/v1/plugins:run', {
+		method: 'POST',
+		headers: token ? { Authorization: `Bearer ${token}` } : {},
+	});
 	if (!response.ok) {
 		const payload = await response.json().catch(() => ({}));
 		throw new Error(payload.error ?? 'Failed to trigger plugin run');
@@ -207,8 +210,11 @@ export async function runAllPlugins(): Promise<OperationResource[]> {
  * POST /v1/{plugin}:run — triggers a single plugin asynchronously.
  * Returns the tracking operation.
  */
-export async function runPlugin(plugin: string): Promise<OperationResource> {
-	const response = await fetch(`/v1/${encodeURIComponent(plugin)}:run`, { method: 'POST' });
+export async function runPlugin(token: string | null, plugin: string): Promise<OperationResource> {
+	const response = await fetch(`/v1/${encodeURIComponent(plugin)}:run`, {
+		method: 'POST',
+		headers: token ? { Authorization: `Bearer ${token}` } : {},
+	});
 	if (!response.ok) {
 		const payload = await response.json().catch(() => ({}));
 		throw new Error(payload.error ?? `Failed to trigger plugin "${plugin}"`);
@@ -220,14 +226,14 @@ export async function runPlugin(plugin: string): Promise<OperationResource> {
 /**
  * GET /v1/operations/{operationId} — fetches a single operation by name.
  */
-export async function fetchOperation(operationId: string): Promise<OperationResource> {
-	return fetchJson<OperationResource>(`/v1/operations/${encodeURIComponent(operationId)}`);
+export async function fetchOperation(token: string | null, operationId: string): Promise<OperationResource> {
+	return fetchJson<OperationResource>(`/v1/operations/${encodeURIComponent(operationId)}`, token);
 }
 
 /**
  * GET /v1/operations — lists operations with optional filter.
  */
-export async function fetchOperations(options: ListRequest = {}): Promise<OperationResource[]> {
-	const data = await fetchJson<ListOperationsResponse>(buildListOperationsUrl(options));
+export async function fetchOperations(token: string | null, options: ListRequest = {}): Promise<OperationResource[]> {
+	const data = await fetchJson<ListOperationsResponse>(buildListOperationsUrl(options), token);
 	return data.operations ?? [];
 }
