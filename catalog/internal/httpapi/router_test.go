@@ -289,6 +289,33 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 	}
 }
 
+func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
+	store := catalog.NewMemoryStore()
+	applyPluginSnapshot(t, store, []catalog.NodeClaim{{
+		ID: catalog.NodeID{Kind: "owner", Path: "@naira-project/dev"},
+	}}, nil)
+
+	router := newTestRouter(t, store, operations.NewMemoryStore(), nil)
+	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/nodes/owner/%40naira-project/dev", nil), testBearerToken)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	var response Node
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, Node{
+		Name: "nodes/owner/@naira-project/dev",
+		Kind: "owner",
+		Path: "@naira-project/dev",
+		PluginClaims: []PluginClaim{{
+			Plugin: "test-plugin",
+			Props:  map[string]string{},
+		}},
+	}, response)
+}
+
 func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 	opStore := operations.NewMemoryStore()
 	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}})
