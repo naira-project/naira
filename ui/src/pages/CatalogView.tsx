@@ -1,27 +1,29 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, RefreshCw, Layers } from 'lucide-react';
+import { Search, Layers, Plug } from 'lucide-react';
 import { Input } from '../components/ui/input';
-import { Badge } from '../components/ui/badge';
 import { useKinds } from '../hooks/useKinds';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { useRelationSummaries } from '../hooks/useRelationSummaries';
-import { useCatalogSync } from '../hooks/useCatalogSync';
+import { usePluginsStatus } from '../hooks/usePluginOperations';
 import { NodeResource } from '../lib/catalogApi';
 import KindSelector from '../components/KindSelector';
 import GenericTable from '../components/GenericTable';
+import { PluginsManagerDialog } from '../components/PluginsManagerDialog';
+import { formatRelativeTime, latestOperation } from '../lib/utils';
 
 /**
  * Unified catalog view.
- * Shows a kind selector at the top and, when a kind is selected,
- * displays all nodes of that kind in a dynamic table below.
+ * Focuses on browsing the catalog: kind selector + resource table.
+ * Plugin management (run, history, status) lives in a dedicated dialog.
  */
 export default function CatalogView() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
+  const [pluginsOpen, setPluginsOpen] = useState(false);
 
   // Kind discovery & selection
-  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds} = useKinds();
+  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } = useKinds();
 
   // Fetch nodes for the active kind
   const { nodes, loading: nodesLoading, error: nodesError } = useCatalogNodes(activeKind ?? '');
@@ -29,13 +31,26 @@ export default function CatalogView() {
   // Relation summaries — computed whenever nodes change
   const { relationSummaries } = useRelationSummaries(nodes);
 
-  // Catalog sync — triggers plugin execution
-  const { syncing, syncMessage, syncError, handleSync } = useCatalogSync(refreshKinds);
+  // Plugin run operations (used only for the compact "last sync" indicator)
+  const { operations, refresh: refreshOps } = usePluginsStatus();
+
+  // Keep kinds fresh whenever the plugin dialog reports completed runs.
+  const handleRunsCompleted = () => {
+    refreshKinds();
+    refreshOps();
+  };
+
+  // Refresh kinds on mount so data appears without manual interaction.
+  useEffect(() => {
+    refreshKinds();
+  }, [refreshKinds]);
 
   // Filter kinds by search
   const filteredKinds = kinds.filter((k) =>
     k.toLowerCase().includes(search.toLowerCase())
   );
+
+  const lastSync = useMemo(() => latestOperation(operations), [operations]);
 
   const handleSelect = (node: NodeResource) => {
     navigate(`/catalog/${encodeURIComponent(activeKind!)}/${encodeURIComponent(node.path)}`);
@@ -53,16 +68,26 @@ export default function CatalogView() {
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-[320px]"
           />
+
+          <div className="flex-1" />
+
+          {/* Compact last-sync indicator */}
+          {lastSync && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <span>
+                Last sync: {formatRelativeTime(lastSync.createdAt)}
+              </span>
+            </div>
+          )}
+
+          {/* Plugins & Ingestion button */}
           <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => setPluginsOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
-            <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Synchronizing…' : 'Synchronize Data'}
+            <Plug size={16} />
+            Plugins & Ingestion
           </button>
-          {syncMessage && <Badge variant="success">{syncMessage}</Badge>}
-          {syncError && <Badge variant="error">{syncError}</Badge>}
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -89,7 +114,7 @@ export default function CatalogView() {
                 <Layers size={32} className="opacity-40" />
                 <p className="text-sm">
                   {kinds.length === 0
-                    ? 'No kinds found. Synchronize data from the Dashboard first.'
+                    ? 'No kinds found. Run plugins from "Plugins & Ingestion" first.'
                     : 'No kinds match your search.'}
                 </p>
               </div>
@@ -138,6 +163,13 @@ export default function CatalogView() {
           )}
         </div>
       </div>
+
+      {/* Plugin management dialog */}
+      <PluginsManagerDialog
+        open={pluginsOpen}
+        onClose={() => setPluginsOpen(false)}
+        onRunsCompleted={handleRunsCompleted}
+      />
     </div>
   );
 }

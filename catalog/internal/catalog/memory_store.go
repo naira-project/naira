@@ -12,6 +12,7 @@ import (
 
 var (
 	ErrInvalidIngestion = errors.New("invalid ingestion payload")
+	ErrNodeNotFound     = errors.New("node not found")
 )
 
 type Store interface {
