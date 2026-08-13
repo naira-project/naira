@@ -6,16 +6,16 @@ vars:
   OPENMETADATA_HELM_REPO_URL: https://helm.open-metadata.org/
   OPENMETADATA_DEPS_RELEASE: openmetadata-dependencies
   OPENMETADATA_DEPS_CHART: open-metadata/openmetadata-dependencies
-  OPENMETADATA_DEPS_VALUES: infra/helm/openmetadata-deps-values.yaml
+  OPENMETADATA_DEPS_VALUES: ./infra/helm/openmetadata-deps-values.yaml
   OPENMETADATA_RELEASE: openmetadata
   OPENMETADATA_CHART: open-metadata/openmetadata
-  OPENMETADATA_VALUES: infra/helm/openmetadata-values.yaml
-  OPENMETADATA_SECRETS_MANIFEST: infra/kubernetes/openmetadata-secrets.yaml
+  OPENMETADATA_VALUES: ./infra/helm/openmetadata-values.yaml
+  OPENMETADATA_SECRETS_MANIFEST: ./infra/kubernetes/openmetadata-secrets.yaml
   OPENMETADATA_SERVICE: svc/openmetadata
   OPENMETADATA_LOCAL_PORT: '8585'
   OPENMETADATA_REMOTE_PORT: '8585'
-  LOCAL_WORK_DIR: ../../.local
-  OPENMETADATA_TOOL_DIR: tools/openmetadata
+  LOCAL_WORK_DIR: ../../../../.local
+  OPENMETADATA_TOOL_DIR: ./tools/openmetadata
   OPENMETADATA_SEED_SCRIPT: '{{.OPENMETADATA_TOOL_DIR}}/seed_sample_tables.py'
   OPENMETADATA_REQUIREMENTS: '{{.OPENMETADATA_TOOL_DIR}}/requirements.txt'
   OPENMETADATA_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/openmetadata-seed'

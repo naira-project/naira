@@ -4,7 +4,7 @@ tasks:
   build:
     internal: true
     cmds:
-      - docker build -t {{.IMAGE}} -f {{.DIR}}/Dockerfile ../../
+      - docker build -t {{.IMAGE}} -f {{.DIR}}/Dockerfile ../../../../
 
   load:
     internal: true

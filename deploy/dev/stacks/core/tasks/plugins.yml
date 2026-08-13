@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
-  PLUGINS_BASE: ../../plugins/cmd
+  PLUGINS_BASE: ../../../../plugins/cmd
   PLUGINS:
     - name: mlflow
       dir: '{{.PLUGINS_BASE}}/mlflow'
@@ -25,6 +25,7 @@ vars:
 
 tasks:
   image:build:
+    internal: true
     desc: Build all catalog plugin images
     cmds:
       - for: { var: PLUGINS }
@@ -32,6 +33,7 @@ tasks:
         vars: { IMAGE: '{{.ITEM.image}}', DIR: '{{.ITEM.dir}}' }
 
   image:load:
+    internal: true
     desc: Load all catalog plugin images into kind
     deps: [image:build]
     cmds:
