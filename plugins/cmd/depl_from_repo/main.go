@@ -18,7 +18,7 @@ import (
 const (
 	propertyKeyNamespace = "namespace"
 	propertyKeyImage     = "image"
-	propertyKeyRepoURL   = "repo_url"
+	propertyKeyRepoURL   = "url"
 	propertyKeyDetection = "detection_method"
 )
 
