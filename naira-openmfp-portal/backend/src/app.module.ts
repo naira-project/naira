@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
-import { PortalModule, PortalModuleOptions } from '@openmfp/portal-server-lib';
+import {
+  EnvAuthConfigService,
+  PortalModule,
+  PortalModuleOptions,
+} from '@openmfp/portal-server-lib';
 import { config } from 'dotenv';
 import * as path from 'node:path';
 import { ServiceProviderServiceImpl } from './service-provider.js';
@@ -16,6 +20,7 @@ const portalOptions: PortalModuleOptions = {
     'frontend/dist/frontend/browser',
   ),
   serviceProviderService: ServiceProviderServiceImpl,
+  authConfigProvider: EnvAuthConfigService,
 };
 
 @Module({

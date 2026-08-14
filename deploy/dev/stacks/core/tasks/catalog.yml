@@ -9,6 +9,7 @@ vars:
   CATALOG_SERVICE: svc/catalog
   CATALOG_LOCAL_PORT: '8090'
   CATALOG_REMOTE_PORT: '8090'
+  KEYCLOAK_REMOTE_PORT: '8080'
 
 tasks:
   image:build:
@@ -31,7 +32,14 @@ tasks:
     cmds:
       - task: image:load
       - task: :plugins:image:load
-      - kubectl apply -f {{.CATALOG_MANIFEST}}
+      - task: :keycloak:deploy
+      - |
+        KEYCLOAK_BASE_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}"
+        KEYCLOAK_ISSUER="http://localhost:{{.KEYCLOAK_LOCAL_PORT}}/realms/{{.KEYCLOAK_REALM}}"
+        sed -e "s/__KEYCLOAK_REALM__/{{.KEYCLOAK_REALM}}/" \
+            -e "s|__KEYCLOAK_BASE_URL__|${KEYCLOAK_BASE_URL}|" \
+            -e "s|__KEYCLOAK_ISSUER__|${KEYCLOAK_ISSUER}|" \
+            {{.CATALOG_MANIFEST}} | kubectl apply -f -
       - kubectl -n {{.CATALOG_NAMESPACE}} rollout status deploy/catalog --timeout=180s
       - kubectl -n {{.CATALOG_NAMESPACE}} get pods
 

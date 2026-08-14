@@ -9,6 +9,7 @@ vars:
   PORTAL_SERVICE: svc/portal
   PORTAL_LOCAL_PORT: '3000'
   PORTAL_REMOTE_PORT: '3000'
+  KEYCLOAK_REMOTE_PORT: '8080'
 
 tasks:
   image:build:
@@ -28,7 +29,17 @@ tasks:
     desc: Deploy the portal to kind
     cmds:
       - task: image:load
-      - kubectl apply -f {{.PORTAL_MANIFEST}}
+      - task: :keycloak:deploy
+      - |
+        kubectl create namespace {{.PORTAL_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret generic keycloak-client-secret -n {{.PORTAL_NAMESPACE}} \
+          --from-literal=client-secret="{{.KEYCLOAK_CLIENT_SECRET}}" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        AUTH_SERVER_URL="http://localhost:{{.KEYCLOAK_LOCAL_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/auth"
+        TOKEN_URL="http://keycloak.{{.KEYCLOAK_NAMESPACE}}.svc.cluster.local:{{.KEYCLOAK_REMOTE_PORT}}/realms/{{.KEYCLOAK_REALM}}/protocol/openid-connect/token"
+        sed -e "s|__AUTH_SERVER_URL_KEYCLOAK__|${AUTH_SERVER_URL}|" \
+            -e "s|__TOKEN_URL_KEYCLOAK__|${TOKEN_URL}|" \
+            {{.PORTAL_MANIFEST}} | kubectl apply -f -
       - kubectl -n {{.PORTAL_NAMESPACE}} rollout status deploy/portal --timeout=180s
       - kubectl -n {{.PORTAL_NAMESPACE}} get pods
 
@@ -36,6 +47,7 @@ tasks:
     desc: Remove the portal from kind
     cmds:
       - kubectl delete -f {{.PORTAL_MANIFEST}} --ignore-not-found
+      - kubectl delete secret keycloak-client-secret -n {{.PORTAL_NAMESPACE}} --ignore-not-found
 
   port-forward:
     desc: Expose the portal on localhost:3000

@@ -23,8 +23,8 @@ export function parsePath(path: string): { name: string; namespace?: string } {
  * Fetches a large page of nodes and deduplicates their `kind` values.
  */
 // TODO(#105): add API endpoint to fetch kinds directly, instead of fetching nodes and deduplicating
-export async function discoverKinds(): Promise<string[]> {
-  const nodes = await fetchNodes({ pageSize: 1000 });
+export async function discoverKinds(token: string | null): Promise<string[]> {
+  const nodes = await fetchNodes(token, { pageSize: 1000 });
   const kinds = new Set(nodes.map((n) => n.kind).filter(Boolean));
   return Array.from(kinds).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
@@ -115,6 +115,7 @@ export function isUrlValue(value: unknown): value is string {
  * Returns a Map keyed by node name.
  */
 export async function computeRelationSummaries(
+  token: string | null,
   nodes: NodeResource[]
 ): Promise<Map<string, RelationSummary>> {
   if (nodes.length === 0) {
@@ -122,7 +123,7 @@ export async function computeRelationSummaries(
   }
 
   const nodeNames = new Set(nodes.map((n) => n.name));
-  const relations = await fetchRelations({ pageSize: 1000 });
+  const relations = await fetchRelations(token, { pageSize: 1000 });
   const summaries = new Map<string, RelationSummary>();
 
   for (const rel of relations) {

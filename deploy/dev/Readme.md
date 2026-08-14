@@ -2,7 +2,7 @@
 
 ### Prerequisites & Order of Execution
 
-Always run `task core:deploy` **first** before deploying any other stacks. The core module includes the Naira catalog, plugins, UI, and cluster definitions.
+Always run `task core:deploy` **first** before deploying any other stacks. The core module includes the Naira catalog, plugins, UI, Keycloak and cluster definitions.
 
 If you prefer to deploy a stack without the core module, you must ensure a cluster already exists by running:
 `task core:cluster:create`
