@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/Nerzal/gocloak/v13"
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
 	"github.com/naira-project/naira/catalog/internal/operations"
@@ -30,6 +32,7 @@ func main() {
 	}
 	defer cleanup()
 
+	keycloakClient := gocloak.NewClient(config.KeycloakBaseURL)
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -37,7 +40,14 @@ func main() {
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
 
-	router := httpapi.NewRouter(catalogService, runner, logger)
+	router, err := httpapi.NewRouter(catalogService, runner, logger, keycloak.Config{
+		Client: keycloakClient,
+		Realm:  config.KeycloakRealm,
+		Issuer: config.KeycloakIssuer,
+	})
+	if err != nil {
+		logger.Fatalf("failed to create router: %v", err)
+	}
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", config.Port),
 		Handler:           router,
