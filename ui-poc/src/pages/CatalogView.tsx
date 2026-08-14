@@ -14,18 +14,24 @@ import GenericTable from '../components/GenericTable';
 import { PluginsManagerDialog } from '../components/PluginsManagerDialog';
 import { formatRelativeTime, latestOperation } from '../lib/utils';
 
+
+interface CatalogViewProps {
+  allowedKinds?: string[];
+  heading?: string;
+  subheading?: string;
+}
 /**
  * Unified catalog view.
  * Focuses on browsing the catalog: kind selector + resource table.
  * Plugin management (run, history, status) lives in a dedicated dialog.
  */
-export default function CatalogView() {
+export default function CatalogView({ allowedKinds, heading, subheading}: CatalogViewProps) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [pluginsOpen, setPluginsOpen] = useState(false);
 
   // Kind discovery & selection
-  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } = useKinds();
+  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } = useKinds(allowedKinds);
 
   // Fetch nodes for the active kind
   const { nodes, loading: nodesLoading, error: nodesError } = useCatalogNodes(activeKind ?? '');
@@ -111,10 +117,10 @@ export default function CatalogView() {
           {/* Kind selector area */}
           <div className="mb-6">
             <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">
-              Catalog Explorer
+              {heading ?? 'Catalog Explorer'}
             </h1>
             <p className="mt-1 mb-4 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-              Select a resource kind to browse its entries.
+              {subheading ?? 'Select a resource kind to browse its entries.'}
             </p>
 
             {kindsError && (
@@ -136,13 +142,14 @@ export default function CatalogView() {
                 </p>
               </div>
             )}
-
+            {(!allowedKinds || allowedKinds.length > 1) && (
             <KindSelector
               kinds={filteredKinds}
               activeKind={activeKind}
               onSelect={setActiveKind}
               loading={kindsLoading}
             />
+            )}
           </div>
 
           {/* Node table area */}

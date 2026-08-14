@@ -11,6 +11,26 @@ function App() {
         <Routes>
           <Route path="/" element={<CatalogView />} />
           <Route path="/catalog" element={<CatalogView />} />
+          <Route
+            path="/catalog/software_catalog"
+            element={
+              <CatalogView
+                allowedKinds={["deployment", "service"]}
+                heading="Software Catalog"
+                subheading="Deployments and services running in the cluster."                
+                />
+            }
+          />
+          <Route 
+            path="/catalog/model"
+            element={
+              <CatalogView 
+                allowedKinds={["model"]}
+                heading="Model"
+                subheading="Models registered in the catalog."
+              />
+            }
+          />
           <Route path="/catalog/kinds/:kind" element={<CatalogKindView />} />
           <Route path="/catalog/:kind/*" element={<CatalogDetail />} />
         </Routes>
