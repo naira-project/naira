@@ -86,11 +86,6 @@ func writeJSONError(w http.ResponseWriter, status int, message string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
-func claimsFromContext(ctx context.Context) (TokenClaims, bool) {
-	claims, ok := ctx.Value(claimsKey).(TokenClaims)
-	return claims, ok
-}
-
 func parseTokenClaims(rawClaims *jwt.MapClaims) TokenClaims {
 	claims := *rawClaims
 	tc := TokenClaims{
