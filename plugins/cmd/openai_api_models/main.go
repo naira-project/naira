@@ -73,6 +73,17 @@ func main() {
 	app.Serve(p)
 }
 
+// modelName reduces a model id to a single path segment, since a Node path is
+// "<prefix>/<name>" and ids may carry slashes ("/models/qwen.gguf").
+func modelName(id string) string {
+	trimmed := strings.TrimSpace(id)
+	if idx := strings.LastIndex(trimmed, "/"); idx >= 0 {
+		return strings.TrimSpace(trimmed[idx+1:])
+	}
+
+	return trimmed
+}
+
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	models, err := openaiutil.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey)
 	if err != nil {
@@ -82,13 +93,14 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	nodes := make([]pluginapi.NodeClaim, 0, len(models))
 	seen := make(map[string]struct{}, len(models))
 	for _, model := range models {
-		id := strings.TrimSpace(model.ID)
+		id := modelName(model.ID)
 		if id == "" {
 			p.logger.Printf("WARN: skipping model with empty id reported by %q", p.config.BaseURL)
 			continue
 		}
 		path := p.nodePrefix + "/" + id
 		if _, dup := seen[path]; dup {
+			p.logger.Printf("WARN: skipping model %q reported by %q: path %q already claimed", model.ID, p.config.BaseURL, path)
 			continue
 		}
 		seen[path] = struct{}{}

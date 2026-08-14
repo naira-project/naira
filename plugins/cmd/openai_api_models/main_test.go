@@ -100,6 +100,63 @@ func TestCollect(t *testing.T) {
 	}, res.Nodes)
 }
 
+func TestCollectFlattensModelIDsToOneSegment(t *testing.T) {
+	mockServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"data":[
+			{"id":"/models/qwen2.5-0.5b-instruct-q4_k_m.gguf"},
+			{"id":"anthropic/claude-3.5-sonnet"},
+			{"id":"/models/"},
+			{"id":"/"}
+		]}`)
+	}))
+	defer mockServer.Close()
+
+	p, err := New(config{BaseURL: mockServer.URL, PathPrefix: "openai_llamacpp"}, testLogger())
+	require.NoError(t, err)
+	p.httpClient = mockServer.Client()
+
+	res, err := p.Collect(context.Background())
+	require.NoError(t, err)
+
+	// Ids that collapse to nothing are skipped, and no path gains a second segment
+	// - the UI reads the second-to-last segment as the source.
+	assert.Equal(t, []pluginapi.NodeClaim{
+		{
+			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "openai_llamacpp/qwen2.5-0.5b-instruct-q4_k_m.gguf"},
+			Properties: pluginapi.PropertyMap{},
+		},
+		{
+			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "openai_llamacpp/claude-3.5-sonnet"},
+			Properties: pluginapi.PropertyMap{},
+		},
+	}, res.Nodes)
+}
+
+func TestCollectSkipsModelsCollidingAfterFlattening(t *testing.T) {
+	mockServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"data":[
+			{"id":"openai/gpt-4o","owned_by":"openai"},
+			{"id":"azure/gpt-4o","owned_by":"azure"}
+		]}`)
+	}))
+	defer mockServer.Close()
+
+	p, err := New(config{BaseURL: mockServer.URL, PathPrefix: "litellm"}, testLogger())
+	require.NoError(t, err)
+	p.httpClient = mockServer.Client()
+
+	res, err := p.Collect(context.Background())
+	require.NoError(t, err)
+
+	// Distinct ids sharing a basename collapse onto one path; the first claim wins.
+	assert.Equal(t, []pluginapi.NodeClaim{
+		{
+			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "litellm/gpt-4o"},
+			Properties: pluginapi.PropertyMap{propertyKeyOwnedBy: "openai"},
+		},
+	}, res.Nodes)
+}
+
 func TestCollectPropagatesFetchError(t *testing.T) {
 	mockServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
