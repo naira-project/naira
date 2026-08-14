@@ -1,17 +1,21 @@
+import { useQuery } from '@tanstack/react-query';
 import { buildCatalogGraphSlice, type CatalogGraphResponse, type CatalogGraphRoot } from '../lib/catalogGraph';
-import { useAsyncData } from './useAsyncData';
+import { queryKeys } from '../lib/queryKeys';
 
 export type { CatalogGraphEdge, CatalogGraphNode, CatalogGraphRoot, CatalogGraphResponse } from '../lib/catalogGraph';
 
 const EMPTY_GRAPH: CatalogGraphResponse = { nodes: [], edges: [] };
 
 export function useCatalogGraph(root: CatalogGraphRoot | null, depth: number) {
-  const { data: graph, loading, error } = useAsyncData<CatalogGraphResponse>(
-    () => (root ? buildCatalogGraphSlice(root, depth) : Promise.resolve(EMPTY_GRAPH)),
-    [root, depth],
-    EMPTY_GRAPH,
-    'Failed to load graph'
-  );
+  const {
+    data: graph = EMPTY_GRAPH,
+    isLoading: loading,
+    error,
+  } = useQuery({
+    queryKey: queryKeys.graph(root?.name ?? null, depth),
+    queryFn: () => buildCatalogGraphSlice(root as CatalogGraphRoot, depth),
+    enabled: root !== null,
+  });
 
-  return { graph, loading, error };
+  return { graph, loading, error: error ? 'Failed to load graph' : null };
 }

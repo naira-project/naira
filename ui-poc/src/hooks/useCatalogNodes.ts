@@ -1,9 +1,10 @@
+import { useQuery } from '@tanstack/react-query';
 import {
   buildEqualityFilter,
   fetchNodes,
   NodeResource,
 } from '../lib/catalogApi';
-import { useAsyncData } from './useAsyncData';
+import { queryKeys } from '../lib/queryKeys';
 
 interface CatalogNodesResult {
   nodes: NodeResource[];
@@ -13,15 +14,24 @@ interface CatalogNodesResult {
 
 /**
  * Generic hook to fetch all catalog nodes of a given kind.
- * Re-fetches when `kind` changes.
+ * Cached per-kind, so switching between kinds and back doesn't refetch
+ * within staleTime, and any other component reading the same kind shares
+ * the request.
  */
-export function useCatalogNodes(kind: string) {
-  const { data: nodes, loading, error } = useAsyncData<NodeResource[]>(
-    () => fetchNodes({ filter: buildEqualityFilter('kind', kind), pageSize: 1000 }),
-    [kind],
-    [],
-    `Failed to load nodes of kind "${kind}"`
-  );
+export function useCatalogNodes(kind: string): CatalogNodesResult {
+  const {
+    data: nodes = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: queryKeys.nodes(kind),
+    queryFn: () => fetchNodes({ filter: buildEqualityFilter('kind', kind), pageSize: 1000 }),
+    enabled: kind.length > 0,
+  });
 
-  return { nodes, loading, error };
+  return {
+    nodes,
+    loading: isLoading,
+    error: error ? `Failed to load nodes of kind "${kind}"` : null,
+  };
 }

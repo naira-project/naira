@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { discoverKinds } from '../lib/kindUtils';
+import { queryKeys } from '../lib/queryKeys';
 
 interface UseKindsResult {
   kinds: string[];
@@ -14,40 +16,38 @@ interface UseKindsResult {
  * Encapsulates kind discovery, loading/error state, active kind selection,
  * and a refresh mechanism.
  *
- * Automatically discovers kinds on mount and selects the first kind by default.
+ * `kinds` itself is server state (react-query). `activeKind` is pure UI
+ * selection state, so it stays local and is auto-populated once the first
+ * page of kinds arrives.
  */
 export function useKinds(): UseKindsResult {
-  const [kinds, setKinds] = useState<string[]>([]);
-  const [kindsLoading, setKindsLoading] = useState(true);
-  const [kindsError, setKindsError] = useState<string | null>(null);
   const [activeKind, setActiveKind] = useState<string | null>(null);
 
-  const loadKinds = useCallback(() => {
-    setKindsLoading(true);
-    setKindsError(null);
-    discoverKinds()
-      .then((result) => {
-        setKinds(result);
-        // Auto-select first kind if none selected
-        setActiveKind((prev) => (prev === null && result.length > 0 ? result[0] : prev));
-        setKindsLoading(false);
-      })
-      .catch(() => {
-        setKindsError('Failed to discover kinds');
-        setKindsLoading(false);
-      });
-  }, []);
+  const {
+    data: kinds = [],
+    isLoading: kindsLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.kinds,
+    queryFn: discoverKinds,
+  });
 
+  // Auto-select first kind if none selected yet.
   useEffect(() => {
-    loadKinds();
-  }, [loadKinds]);
+    setActiveKind((prev) => (prev === null && kinds.length > 0 ? kinds[0] : prev));
+  }, [kinds]);
+
+  const refreshKinds = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   return {
     kinds,
     kindsLoading,
-    kindsError,
+    kindsError: error ? 'Failed to discover kinds' : null,
     activeKind,
     setActiveKind,
-    refreshKinds: loadKinds,
+    refreshKinds,
   };
 }

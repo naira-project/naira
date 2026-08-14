@@ -1,4 +1,29 @@
-import { useState, useCallback } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../lib/queryKeys';
+
+interface SyncPayload {
+  results?: { error?: string }[];
+  error?: string;
+}
+
+async function triggerSync(): Promise<string> {
+  const response = await fetch('/v1/plugins:run', { method: 'POST' });
+  const payload = (await response.json()) as SyncPayload;
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? 'Failed to synchronize data');
+  }
+
+  const results = Array.isArray(payload.results) ? payload.results : [];
+  const errorCount = results.filter(
+    (result) => typeof result.error === 'string' && result.error.length > 0
+  ).length;
+  const successCount = results.length - errorCount;
+
+  return errorCount > 0
+    ? `Synced ${successCount} plugin(s), ${errorCount} error(s)`
+    : `Synced ${successCount} plugin(s)`;
+}
 
 interface UseCatalogSyncResult {
   syncing: boolean;
@@ -8,51 +33,36 @@ interface UseCatalogSyncResult {
 }
 
 /**
- * Manages the catalog synchronization workflow:
+ * Manages the catalog synchronization workflow via a mutation:
  * - POSTs to /v1/plugins:run to trigger plugin execution
- * - Parses the response for success/error counts
- * - Exposes loading state, success message, and error message
+ * - On success, invalidates operations + kinds so dependent queries refetch
  * - Calls `onSuccess` callback when sync completes successfully
  */
 export function useCatalogSync(onSuccess?: () => void): UseCatalogSyncResult {
-  const [syncing, setSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  const handleSync = useCallback(async () => {
-    setSyncing(true);
-    setSyncMessage(null);
-    setSyncError(null);
-
-    try {
-      const response = await fetch('/v1/plugins:run', { method: 'POST' });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to synchronize data');
-      }
-
-      const results = Array.isArray(payload.results) ? payload.results : [];
-      const errorCount = results.filter(
-        (result: { error?: string }) =>
-          typeof result.error === 'string' && result.error.length > 0
-      ).length;
-      const successCount = results.length - errorCount;
-      setSyncMessage(
-        errorCount > 0
-          ? `Synced ${successCount} plugin(s), ${errorCount} error(s)`
-          : `Synced ${successCount} plugin(s)`
-      );
-
+  const mutation = useMutation({
+    mutationFn: triggerSync,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.operations });
+      queryClient.invalidateQueries({ queryKey: queryKeys.kinds });
       onSuccess?.();
-    } catch (error) {
-      setSyncError(
-        error instanceof Error ? error.message : 'Failed to synchronize data'
-      );
-    } finally {
-      setSyncing(false);
-    }
-  }, [onSuccess]);
+    },
+  });
 
-  return { syncing, syncMessage, syncError, handleSync };
+  const handleSync = async () => {
+    await mutation.mutateAsync().catch(() => {});
+  };
+
+  return {
+    syncing: mutation.isPending,
+    syncMessage: mutation.data ?? null,
+    syncError:
+      mutation.error instanceof Error
+        ? mutation.error.message
+        : mutation.error
+        ? 'Failed to synchronize data'
+        : null,
+    handleSync,
+  };
 }
