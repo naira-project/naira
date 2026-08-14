@@ -5,21 +5,18 @@
  * invalidates.
  */
 export const queryKeys = {
-  kinds: ['kinds'] as const,
+  catalog: ['catalog'] as const,
+  kinds: ['catalog', 'kinds'] as const,
 
-  nodes: (kind: string) => ['nodes', kind] as const,
-  node: (kind: string, path: string) => ['node', kind, path] as const,
-  nodeByName: (name: string) => ['nodeByName', name] as const,
-
-  relatedNodes: (nodeName: string, relationKind?: string) =>
-    ['relatedNodes', nodeName, relationKind ?? null] as const,
+  nodes: (kind: string) => ['catalog', 'nodes', kind] as const,
+  node: (kind: string, path: string) => ['catalog', 'node', kind, path] as const,
 
   relationSummaries: (nodeNames: string[]) =>
-    ['relationSummaries', [...nodeNames].sort()] as const,
+    ['catalog', 'relationSummaries', [...nodeNames].sort()] as const,
 
-  graph: (rootName: string | null, depth: number) => ['graph', rootName, depth] as const,
+  graph: (rootName: string | null, depth: number) =>
+    ['catalog', 'graph', rootName, depth] as const,
 
   plugins: ['plugins'] as const,
   operations: ['operations'] as const,
-  operation: (name: string) => ['operation', name] as const,
 };

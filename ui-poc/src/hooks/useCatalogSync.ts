@@ -44,8 +44,8 @@ export function useCatalogSync(onSuccess?: () => void): UseCatalogSyncResult {
   const mutation = useMutation({
     mutationFn: triggerSync,
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.catalog });
       queryClient.invalidateQueries({ queryKey: queryKeys.operations });
-      queryClient.invalidateQueries({ queryKey: queryKeys.kinds });
       onSuccess?.();
     },
   });

@@ -10,6 +10,7 @@ import {
 import { queryKeys } from '../lib/queryKeys';
 
 const POLL_INTERVAL_MS = 2000;
+const EMPTY_OPERATIONS: OperationResource[] = [];
 // How long a non-terminal operation is given before we surface a
 // "taking longer than expected" notice. Mirrors the old
 // POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS (60 * 2s = 2 minutes), but is now
@@ -95,7 +96,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     },
   });
 
-  const operations = operationsQuery.data ?? [];
+  const operations = operationsQuery.data ?? EMPTY_OPERATIONS;
 
   const runningPlugins = useMemo(() => {
     const running = new Set(
