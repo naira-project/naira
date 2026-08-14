@@ -5,9 +5,10 @@ React-based frontend for the Naira. It includes a table listing all nodes and ca
 ## Tech Stack
 
 - React 19 + TypeScript
+- Vite 8 for development and production builds
+- Vitest + Testing Library for tests
 - Tailwind CSS 3
 - React Flow (xyflow) for graph visualization
-- Vite (via Create React App)
 
 ## Development
 
@@ -20,10 +21,11 @@ npm install
 ### Start
 
 ```bash
-npm start
+npm run dev
+# or: npm start
 ```
 
-The app runs on [http://localhost:3000](http://localhost:3000) and expects the Naira catalog API at `http://localhost:8090`.
+The app runs on [http://localhost:3000](http://localhost:3000). During development, Vite proxies `/v1/*` requests to `http://localhost:8090`.
 
 ### Build
 
@@ -31,7 +33,7 @@ The app runs on [http://localhost:3000](http://localhost:3000) and expects the N
 npm run build
 ```
 
-Produces a static build in `build/`.
+Produces a static build in `dist/`.
 
 ## Deployment
 
