@@ -32,6 +32,12 @@ type TokenClaims struct {
 	PreferredUsername string
 }
 
+// NewAuthMiddleware returns an HTTP middleware that validates the Bearer
+// token from each request's Authorization header against cfg.Issuer via
+// cfg.Client, rejecting the request with 401 if the header is missing, the
+// token is malformed or invalid, or the issuer does not match. It does not
+// perform any authorization/permission checks. On success, it parses the
+// token's claims into a TokenClaims and stores them on the request context.
 func NewAuthMiddleware(cfg Config) (func(http.Handler) http.Handler, error) {
 	if cfg.Client == nil {
 		return nil, errors.New("keycloak: Config.Client must not be nil")
