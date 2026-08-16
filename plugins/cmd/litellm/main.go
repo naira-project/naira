@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/naira-project/naira/plugins/internal/openaiutil"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	"k8s.io/client-go/dynamic"
@@ -58,7 +59,8 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	models, err := p.fetchModels(ctx)
+	// List models from openai compatible v1/models endpoint
+	models, err := openaiutil.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching LiteLLM models: %w", err)
 	}
@@ -155,32 +157,8 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	return response, nil
 }
 
-func (p *Plugin) fetchModels(ctx context.Context) ([]model, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/v1/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("building LiteLLM models request: %w", err)
-	}
-	p.addAuthorization(req)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("calling LiteLLM models endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("litellm /v1/models returned %s", resp.Status)
-	}
-
-	var payload modelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decoding LiteLLM models response: %w", err)
-	}
-
-	return payload.Data, nil
-}
-
 func (p *Plugin) fetchAllowedModels(ctx context.Context, key string) ([]string, error) {
+	// Extract littellm specific model information from /key/info endpoint
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/key/info", nil)
 	if err != nil {
 		return nil, fmt.Errorf("building LiteLLM key info request: %w", err)
@@ -251,15 +229,6 @@ func dedupeNodes(nodes []pluginapi.NodeClaim) []pluginapi.NodeClaim {
 	}
 
 	return result
-}
-
-type modelsResponse struct {
-	Data []model `json:"data"`
-}
-
-type model struct {
-	ID      string `json:"id"`
-	OwnedBy string `json:"owned_by"`
 }
 
 type keyInfoResponse struct {

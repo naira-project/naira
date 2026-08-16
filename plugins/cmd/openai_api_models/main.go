@@ -7,8 +7,7 @@
 //     "http://gateway.example.com:1234/base/"
 //
 //   - PATH_PREFIX - MANDATORY - prefix for the emitted model Node paths, e.g.
-//     "litellm" produces "litellm/gpt-4o". A trailing "/" is optional, so both
-//     "litellm" and "litellm/" work.
+//     "litellm" produces "litellm/gpt-4o".
 //
 //   - OPENAI_API_MODELS_API_KEY (optional) - bearer token sent to the
 //     endpoint; if unset, the request is made unauthenticated.
@@ -51,9 +50,12 @@ func New(config config, logger *log.Logger) (*Plugin, error) {
 		return nil, fmt.Errorf("no endpoint configured: OPENAI_API_MODELS_BASE_URL is empty")
 	}
 	// The prefix is what keeps models of different endpoints apart
-	prefix := strings.Trim(strings.TrimSpace(config.PathPrefix), "/")
+	prefix := strings.TrimSpace(config.PathPrefix)
 	if prefix == "" {
 		return nil, fmt.Errorf("no node prefix configured: PATH_PREFIX is empty")
+	}
+	if strings.Contains(prefix, "/") {
+		return nil, fmt.Errorf("invalid node prefix %q: PATH_PREFIX must not contain %q", prefix, "/")
 	}
 
 	return &Plugin{
@@ -73,17 +75,6 @@ func main() {
 	app.Serve(p)
 }
 
-// modelName reduces a model id to a single path segment, since a Node path is
-// "<prefix>/<name>" and ids may carry slashes ("/models/qwen.gguf").
-func modelName(id string) string {
-	trimmed := strings.TrimSpace(id)
-	if idx := strings.LastIndex(trimmed, "/"); idx >= 0 {
-		return strings.TrimSpace(trimmed[idx+1:])
-	}
-
-	return trimmed
-}
-
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	models, err := openaiutil.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey)
 	if err != nil {
@@ -93,11 +84,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	nodes := make([]pluginapi.NodeClaim, 0, len(models))
 	seen := make(map[string]struct{}, len(models))
 	for _, model := range models {
-		id := modelName(model.ID)
+		id := strings.TrimSpace(model.ID)
 		if id == "" {
 			p.logger.Printf("WARN: skipping model with empty id reported by %q", p.config.BaseURL)
 			continue
 		}
+
 		path := p.nodePrefix + "/" + id
 		if _, dup := seen[path]; dup {
 			p.logger.Printf("WARN: skipping model %q reported by %q: path %q already claimed", model.ID, p.config.BaseURL, path)
