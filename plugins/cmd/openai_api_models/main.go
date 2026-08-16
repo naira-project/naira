@@ -49,7 +49,6 @@ func New(config config, logger *log.Logger) (*Plugin, error) {
 	if strings.TrimSpace(config.BaseURL) == "" {
 		return nil, fmt.Errorf("no endpoint configured: OPENAI_API_MODELS_BASE_URL is empty")
 	}
-	// The prefix is what keeps models of different endpoints apart
 	prefix := strings.TrimSpace(config.PathPrefix)
 	if prefix == "" {
 		return nil, fmt.Errorf("no node prefix configured: PATH_PREFIX is empty")
