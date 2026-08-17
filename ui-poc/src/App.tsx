@@ -16,16 +16,18 @@ function App() {
             element={
               <CatalogView
                 allowedKinds={["deployment", "service"]}
+                allowedPlugins={["depl-calls-svc", "depl-uses-litellm", "fluxcd"]}
                 heading="Software Catalog"
-                subheading="Deployments and services running in the cluster."                
+                subheading="Deployments and services running in the cluster."
                 />
             }
           />
           <Route 
             path="/catalog/model"
             element={
-              <CatalogView 
+              <CatalogView
                 allowedKinds={["model"]}
+                allowedPlugins={["litellm", "mlflow"]}
                 heading="Model"
                 subheading="Models registered in the catalog."
               />

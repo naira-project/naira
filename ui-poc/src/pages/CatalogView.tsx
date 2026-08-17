@@ -19,13 +19,15 @@ interface CatalogViewProps {
   allowedKinds?: string[];
   heading?: string;
   subheading?: string;
+  /** Restrict the Plugins & Ingestion dialog to this subset of plugins. Omit to show every plugin. */
+  allowedPlugins?: string[];
 }
 /**
  * Unified catalog view.
  * Focuses on browsing the catalog: kind selector + resource table.
  * Plugin management (run, history, status) lives in a dedicated dialog.
  */
-export default function CatalogView({ allowedKinds, heading, subheading}: CatalogViewProps) {
+export default function CatalogView({ allowedKinds, heading, subheading, allowedPlugins }: CatalogViewProps) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [pluginsOpen, setPluginsOpen] = useState(false);
@@ -199,6 +201,7 @@ export default function CatalogView({ allowedKinds, heading, subheading}: Catalo
         open={pluginsOpen}
         onClose={() => setPluginsOpen(false)}
         onRunsCompleted={handleRunsCompleted}
+        allowedPlugins={allowedPlugins}
       />
     </div>
   );

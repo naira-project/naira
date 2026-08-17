@@ -10,6 +10,8 @@ interface PluginsManagerDialogProps {
   open: boolean;
   onClose: () => void;
   onRunsCompleted: () => void;
+  /** Restrict the dialog to this subset of plugins (e.g. the plugins relevant to the current viewpoint). Omit to show every plugin. */
+  allowedPlugins?: string[];
 }
 
 /**
@@ -20,7 +22,7 @@ interface PluginsManagerDialogProps {
  * triggering one plugin never disables another plugin's button, and "Run All"
  * neither blocks nor is blocked by anything triggered individually.
  */
-export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: PluginsManagerDialogProps) {
+export function PluginsManagerDialog({ open, onClose, onRunsCompleted, allowedPlugins }: PluginsManagerDialogProps) {
   const {
     plugins,
     operations,
@@ -32,12 +34,21 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
     refresh,
     runOne,
     runAll,
+    runSubset,
   } = usePluginsStatus();
+
+  const visiblePlugins = allowedPlugins
+    ? plugins.filter((p) => allowedPlugins.includes(p))
+    : plugins;
 
   const [selectedError, setSelectedError] = useState<{ plugin: string; error: StatusErrorResource } | null>(null);
 
-  const handleRunAll = async () => {
-    await runAll();
+  const handleRunVisible = async () => {
+    if (allowedPlugins) {
+      await runSubset(visiblePlugins);
+    } else {
+      await runAll();
+    }
     onRunsCompleted();
   };
 
@@ -92,12 +103,12 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
                 <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
               </button>
               <button
-                onClick={handleRunAll}
+                onClick={handleRunVisible}
                 disabled={runAllActive}
                 className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw size={14} className={runAllActive ? 'animate-spin' : ''} />
-                {runAllActive ? 'Running All…' : 'Run All Plugins'}
+                {runAllActive ? 'Running…' : allowedPlugins ? 'Run Shown Plugins' : 'Run All Plugins'}
               </button>
             </div>
           </div>
@@ -125,7 +136,7 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted }: Plugins
             )}
 
             <StatusTab
-              plugins={plugins}
+              plugins={visiblePlugins}
               operations={operations}
               loading={loading}
               runningPlugins={runningPlugins}

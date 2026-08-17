@@ -88,6 +88,7 @@ interface UsePluginsStatusResult {
   refresh: () => Promise<void>;
   runOne: (pluginName: string) => Promise<void>;
   runAll: () => Promise<void>;
+  runSubset: (pluginNames: string[]) => Promise<void>;
 }
 
 export function usePluginsStatus(): UsePluginsStatusResult {
@@ -197,6 +198,40 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     }
   }, [settleOne, addError]);
 
+  /**
+   * Like `runAll`, but scoped to a specific set of plugins — used by viewpoints
+   * (e.g. Model, Software Catalog) that only want to trigger the plugins they show,
+   * rather than every plugin the backend knows about.
+   */
+  const runSubset = useCallback(
+    async (pluginNames: string[]) => {
+      setRunAllActive(true);
+      try {
+        pluginNames.forEach(markRunning);
+        const results = await Promise.allSettled(pluginNames.map((name) => apiRunPlugin(name)));
+        await Promise.all(
+          results.map((result, i) => {
+            if (result.status === 'fulfilled') {
+              return settleOne(result.value);
+            }
+            if (!cancelledRef.current) {
+              addError(
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : `Failed to run "${pluginNames[i]}"`
+              );
+              markStopped(pluginNames[i]);
+            }
+            return undefined;
+          })
+        );
+      } finally {
+        if (!cancelledRef.current) setRunAllActive(false);
+      }
+    },
+    [settleOne, addError]
+  );
+
   return {
     plugins,
     operations,
@@ -208,5 +243,6 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     refresh,
     runOne,
     runAll,
+    runSubset,
   };
 }
