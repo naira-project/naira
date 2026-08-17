@@ -16,10 +16,6 @@ interface UseKindsResult {
 /**
  * Encapsulates kind discovery, loading/error state, active kind selection,
  * and a refresh mechanism.
- *
- * `kinds` itself is server state (react-query). `activeKind` is pure UI
- * selection state, so it stays local and is auto-populated once the first
- * page of kinds arrives.
  */
 export function useKinds(): UseKindsResult {
   const [activeKind, setActiveKind] = useState<string | null>(null);

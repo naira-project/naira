@@ -15,9 +15,6 @@ interface CatalogNodesResult {
 
 /**
  * Generic hook to fetch all catalog nodes of a given kind.
- * Cached per-kind, so switching between kinds and back doesn't refetch
- * within staleTime, and any other component reading the same kind shares
- * the request.
  */
 export function useCatalogNodes(kind: string): CatalogNodesResult {
   const { token } = useOpenMFPContext();
