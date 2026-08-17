@@ -49,6 +49,16 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
                 loadingIndicator: { enabled: false },
               },
               {
+                pathSegment: 'dataset',
+                label: 'Dataset Catalog',
+                order: 1,
+                category: { label: 'Catalogs', order: 1 },
+                entityType: 'naira',
+                hideFromNav: false,
+                url: `${UI_BASE_URL}/catalog/dataset`,
+                loadingIndicator: { enabled: false },
+              },
+              {
                 pathSegment: 'model',
                 label: 'Model Catalog',
                 order: 1,

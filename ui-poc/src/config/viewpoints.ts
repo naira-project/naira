@@ -17,6 +17,13 @@ export interface CatalogViewpoint {
 
 export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
   {
+    path: 'dataset',
+    heading: 'Dataset Catalog',
+    subheading: 'Datasets registered in the catalog.',
+    allowedKinds: ['dataset'],
+    allowedPlugins: ['openmetadata'],
+  },
+  {
     path: 'software_catalog',
     heading: 'Software Catalog',
     subheading: 'Deployments and services running in the cluster.',
