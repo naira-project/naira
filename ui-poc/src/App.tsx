@@ -1,7 +1,6 @@
 import { ThemeProvider } from './contexts/ThemeContext';
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
 import CatalogView from './pages/CatalogView';
-import CatalogKindView from './pages/CatalogKindView';
 import CatalogDetail from './pages/CatalogDetail';
 import { CATALOG_VIEWPOINTS } from './config/viewpoints';
 
@@ -26,7 +25,6 @@ function App() {
               }
             />
           ))}
-          <Route path="/catalog/kinds/:kind" element={<CatalogKindView />} />
           <Route path="/catalog/:kind/*" element={<CatalogDetail />} />
         </Routes>
     </Router>
