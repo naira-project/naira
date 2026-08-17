@@ -26,7 +26,22 @@ function isTerminal(op: OperationResource) {
 }
 
 function isStale(op: OperationResource) {
-  return !isTerminal(op) && Date.now() - new Date(op.startTime).getTime() > STALE_AFTER_MS;
+  if (isTerminal(op)) return false;
+
+  const startTime = new Date(op.startTime).getTime();
+  const createdTime = new Date(op.createdAt).getTime();
+  const referenceTime = Number.isFinite(startTime) && startTime > 0 ? startTime : createdTime;
+
+  return Number.isFinite(referenceTime) && Date.now() - referenceTime > STALE_AFTER_MS;
+}
+
+function mergeOperations(
+  current: OperationResource[] = [],
+  incoming: OperationResource[]
+): OperationResource[] {
+  const incomingByName = new Map(incoming.map((op) => [op.name, op]));
+  const existing = current.filter((op) => !incomingByName.has(op.name));
+  return [...incoming, ...existing];
 }
 
 export interface RunErrorEntry {
@@ -146,8 +161,10 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     onMutate: (pluginName: string) => {
       setPendingLocal((prev) => new Set(prev).add(pluginName));
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.operations });
+    onSuccess: (newOp) => {
+      queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
+        mergeOperations(oldOps, [newOp])
+      );
     },
     onError: (err, pluginName) => {
       addError(err instanceof Error ? err.message : `Failed to run "${pluginName}"`);
@@ -165,7 +182,9 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     mutationFn: () => apiRunAllPlugins(token),
     onSuccess: (ops) => {
       setPendingRunAllOps(new Set(ops.map((op) => op.name)));
-      queryClient.invalidateQueries({ queryKey: queryKeys.operations });
+      queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
+        mergeOperations(oldOps, ops)
+      );
     },
     onError: (err) => {
       addError(err instanceof Error ? err.message : 'Failed to trigger plugin run');
