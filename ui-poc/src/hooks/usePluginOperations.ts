@@ -139,9 +139,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
       return next.size === prev.size ? prev : next;
     });
   }, [operations, pendingRunAllOps]);
-
-  const runAllActive = pendingRunAllOps.size > 0;
-
+  
   const refresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.plugins }),
@@ -194,6 +192,8 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   const runAll = useCallback(async () => {
     await runAllMutation.mutateAsync().catch(() => {});
   }, [runAllMutation]);
+
+  const runAllActive = pendingRunAllOps.size > 0 || runAllMutation.isPending;
 
   return {
     plugins: pluginsQuery.data ?? [],

@@ -1,11 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import {
-  buildEqualityFilter,
-  fetchNode,
-  fetchNodeByName,
-  fetchRelations,
-  NodeResource,
-} from '../lib/catalogApi';
+import { fetchNode } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
 
