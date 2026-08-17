@@ -44,27 +44,23 @@ export interface RunErrorEntry {
   message: string;
 }
 
-// ---------------------------------------------------------------------------
-// usePluginsStatus — single source of truth for the plugins list and their
-// run operations. "Run" (per plugin) and "Run All" are fully independent:
-// each plugin's running state is derived from the operations list itself,
-// so triggering one plugin never disables the button for another.
-//
-// Polling is now handled by react-query's refetchInterval: as long as any
-// operation is non-terminal, /v1/operations is polled every 2s; it stops
-// automatically once everything settles. No manual per-operation polling
-// loop is needed any more.
-// ---------------------------------------------------------------------------
-
+/**
+ * Single source of truth for the plugins list and their run operations.
+ *
+ * Each plugin's running state is derived directly from the operations list,
+ * allowing single plugin runs and batch runs ("Run All") to operate independently.
+ * Polling for operations automatically activates every 2 seconds via React Query
+ * whenever non-terminal operations exist.
+ */
 interface UsePluginsStatusResult {
   plugins: string[];
   operations: OperationResource[];
   loading: boolean;
-  /** Plugin names with at least one in-flight run (via "Run", "Run All", or both). */
+  /** Set of plugin names currently executing or awaiting response. */
   runningPlugins: Set<string>;
-  /** True from the moment "Run All" is clicked until every operation it triggered has settled. */
+  /** Indicates whether a "Run All" execution is currently in progress. */
   runAllActive: boolean;
-  /** Trigger/timeout errors, most recent last. Distinct from a plugin's own FAILED result, which shows inline in its row. */
+  /** List of execution or timeout errors. */
   runErrors: RunErrorEntry[];
   dismissError: (id: string) => void;
   refresh: () => Promise<void>;
@@ -75,11 +71,13 @@ interface UsePluginsStatusResult {
 export function usePluginsStatus(): UsePluginsStatusResult {
   const queryClient = useQueryClient();
   const [runErrors, setRunErrors] = useState<RunErrorEntry[]>([]);
-  // Plugin names triggered locally whose POST hasn't resolved yet — covers
-  // the brief gap before the operations list has been refetched.
+  
+  // Tracks locally triggered plugins while waiting for the POST mutation response
   const [pendingLocal, setPendingLocal] = useState<Set<string>>(new Set());
-  // Operation names triggered by the most recent "Run All", still pending.
+  
+  // Tracks operation names triggered by "Run All" until they reach a terminal state
   const [pendingRunAllOps, setPendingRunAllOps] = useState<Set<string>>(new Set());
+  
   const warnedRef = useRef<Set<string>>(new Set());
   const { token } = useOpenMFPContext();
 
@@ -118,7 +116,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     return running;
   }, [operations, pendingLocal]);
 
-  // Surface a one-time notice for any operation that's been running too long.
+  // Emit a warning notice if an operation exceeds the stale threshold
   useEffect(() => {
     operations.filter(isStale).forEach((op) => {
       if (!warnedRef.current.has(op.name)) {
@@ -128,7 +126,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     });
   }, [operations, addError]);
 
-  // Clear "Run All" ops out of the pending set once they reach a terminal state.
+  // Remove settled operations from the "Run All" tracking set
   useEffect(() => {
     if (pendingRunAllOps.size === 0) return;
     setPendingRunAllOps((prev) => {
