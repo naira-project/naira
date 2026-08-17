@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
 import CatalogView from './pages/CatalogView';
 import CatalogKindView from './pages/CatalogKindView';
 import CatalogDetail from './pages/CatalogDetail';
+import { CATALOG_VIEWPOINTS } from './config/viewpoints';
 
 function App() {
   return (
@@ -11,28 +12,20 @@ function App() {
         <Routes>
           <Route path="/" element={<CatalogView />} />
           <Route path="/catalog" element={<CatalogView />} />
-          <Route
-            path="/catalog/software_catalog"
-            element={
-              <CatalogView
-                allowedKinds={["deployment", "service"]}
-                allowedPlugins={["depl-calls-svc", "depl-uses-litellm", "fluxcd"]}
-                heading="Software Catalog"
-                subheading="Deployments and services running in the cluster."
+          {CATALOG_VIEWPOINTS.map((viewpoint) => (
+            <Route
+              key={viewpoint.path}
+              path={`/catalog/${viewpoint.path}`}
+              element={
+                <CatalogView
+                  allowedKinds={viewpoint.allowedKinds}
+                  allowedPlugins={viewpoint.allowedPlugins}
+                  heading={viewpoint.heading}
+                  subheading={viewpoint.subheading}
                 />
-            }
-          />
-          <Route 
-            path="/catalog/model"
-            element={
-              <CatalogView
-                allowedKinds={["model"]}
-                allowedPlugins={["litellm", "mlflow"]}
-                heading="Model"
-                subheading="Models registered in the catalog."
-              />
-            }
-          />
+              }
+            />
+          ))}
           <Route path="/catalog/kinds/:kind" element={<CatalogKindView />} />
           <Route path="/catalog/:kind/*" element={<CatalogDetail />} />
         </Routes>
