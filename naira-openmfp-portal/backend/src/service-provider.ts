@@ -61,7 +61,7 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
               {
                 pathSegment: 'model',
                 label: 'Model Catalog',
-                order: 1,
+                order: 2,
                 category: { label: 'Catalogs', order: 1 },
                 entityType: 'naira',
                 hideFromNav: false,
@@ -71,7 +71,7 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
               {
                 pathSegment: 'software_catalog',
                 label: 'Software Catalog',
-                order: 2,
+                order: 3,
                 category: { label: 'Catalogs', order: 1 },
                 entityType: 'naira',
                 hideFromNav: false,

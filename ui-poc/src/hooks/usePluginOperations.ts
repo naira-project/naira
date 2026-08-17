@@ -211,7 +211,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
       setRunAllActive(true);
       try {
         pluginNames.forEach(markRunning);
-        const results = await Promise.allSettled(pluginNames.map((name) => apiRunPlugin(name)));
+        const results = await Promise.allSettled(pluginNames.map((name) => apiRunPlugin(token, name)));
         await Promise.all(
           results.map((result, i) => {
             if (result.status === 'fulfilled') {

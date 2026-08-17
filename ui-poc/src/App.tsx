@@ -17,6 +17,7 @@ function App() {
               path={`/catalog/${viewpoint.path}`}
               element={
                 <CatalogView
+                  key={viewpoint.path}
                   allowedKinds={viewpoint.allowedKinds}
                   allowedPlugins={viewpoint.allowedPlugins}
                   heading={viewpoint.heading}
