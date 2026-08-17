@@ -7,6 +7,7 @@ import {
   NodeResource,
 } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 /**
  * Generic hook to fetch a single catalog node by kind + path.
@@ -14,13 +15,14 @@ import { queryKeys } from '../lib/queryKeys';
  * (e.g. useCatalogGraph resolving the same node by name).
  */
 export function useCatalogDetail(kind: string, path: string) {
+  const { token } = useOpenMFPContext();
   const {
     data: node = null,
     isLoading: loading,
     error,
   } = useQuery({
     queryKey: queryKeys.node(kind, path),
-    queryFn: () => fetchNode(kind, path),
+    queryFn: () => fetchNode(token, kind, path),
     enabled: kind.length > 0 && path.length > 0,
   });
 
@@ -38,10 +40,11 @@ export function useCatalogDetail(kind: string, path: string) {
  * than being tied to a component's render lifecycle.
  */
 export async function fetchRelatedNodes(
+  token: string | null,
   nodeName: string,
   relationKind?: string
 ): Promise<NodeResource[]> {
-  const relations = await fetchRelations({
+  const relations = await fetchRelations(token, {
     filter: buildEqualityFilter('toNode', nodeName),
     pageSize: 1000,
   });
@@ -55,7 +58,7 @@ export async function fetchRelatedNodes(
   const nodes = await Promise.all(
     names.map(async (name) => {
       try {
-        return await fetchNodeByName(name);
+        return await fetchNodeByName(token, name);
       } catch {
         return null;
       }

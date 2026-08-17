@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -21,6 +23,29 @@ import (
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
+
+const testBearerToken = "test-token"
+const testIssuer = "http://localhost:8080/realms/naira"
+
+type stubTokenDecoder struct{}
+
+func (stubTokenDecoder) DecodeAccessToken(_ context.Context, accessToken, _ string) (*jwt.Token, *jwt.MapClaims, error) {
+	if accessToken != testBearerToken {
+		return nil, nil, errors.New("invalid token")
+	}
+
+	claims := jwt.MapClaims{
+		"sub":                "test-user",
+		"preferred_username": "test-user",
+		"iss":                testIssuer,
+	}
+	return nil, &claims, nil
+}
+
+func withAuth(req *http.Request, bearerToken string) *http.Request {
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	return req
+}
 
 type stubPlugin struct {
 	response catalog.CollectResponse
@@ -99,10 +124,14 @@ func waitForOperationState(t *testing.T, opStore operations.Store, name string, 
 
 // newTestRouter wires a fresh catalog.Service and pluginrun.Runner sharing a
 // single graph store, mirroring how main.go wires the real router.
-func newTestRouter(store *catalog.MemoryStore, opStore operations.Store, plugins map[string]pluginrun.Plugin) http.Handler {
+func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.Store, plugins map[string]pluginrun.Plugin) http.Handler {
+	t.Helper()
+
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
-	return NewRouter(catalogService, runner, log.New(io.Discard, "", 0))
+	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	require.NoError(t, err)
+	return router
 }
 
 func TestRouterServesCurrentEndpoints(t *testing.T) {
@@ -137,7 +166,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			}},
 	)
 
-	router := newTestRouter(store, operations.NewMemoryStore(), map[string]pluginrun.Plugin{"seed": stubPlugin{}})
+	router := newTestRouter(t, store, operations.NewMemoryStore(), map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
 	tests := []struct {
 		name               string
@@ -247,7 +276,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req := withAuth(httptest.NewRequest(tt.method, tt.path, nil), testBearerToken)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -266,8 +295,8 @@ func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 		ID: catalog.NodeID{Kind: "owner", Path: "@naira-project/dev"},
 	}}, nil)
 
-	router := newTestRouter(store, operations.NewMemoryStore(), nil)
-	req := httptest.NewRequest(http.MethodGet, "/v1/nodes/owner/%40naira-project/dev", nil)
+	router := newTestRouter(t, store, operations.NewMemoryStore(), nil)
+	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/nodes/owner/%40naira-project/dev", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -287,35 +316,11 @@ func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 	}, response)
 }
 
-func TestRunAllPluginsAsyncReturnsOperations(t *testing.T) {
+func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
 	opStore := operations.NewMemoryStore()
-	router := newTestRouter(catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
+	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusAccepted, rec.Code)
-
-	var payload RunPluginsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	require.Len(t, payload.Operations, 1)
-
-	op := payload.Operations[0]
-	assert.Equal(t, "seed", op.Plugin)
-	assert.Equal(t, "PENDING", op.State)
-
-	// Wait for the async run to complete.
-	completed := waitForOperation(t, opStore, op.Name)
-	assert.Equal(t, operations.StateSucceeded, completed.State)
-}
-
-func TestRunAllPluginsAsyncReturnsPluginErrors(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}})
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -338,9 +343,9 @@ func TestRunAllPluginsAsyncReturnsPluginErrors(t *testing.T) {
 
 func TestRunPluginAsyncEndpoint(t *testing.T) {
 	opStore := operations.NewMemoryStore()
-	router := newTestRouter(catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"mlflow": stubPlugin{}})
+	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"mlflow": stubPlugin{}})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil)
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -358,9 +363,9 @@ func TestRunPluginAsyncEndpoint(t *testing.T) {
 }
 
 func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
-	router := newTestRouter(catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
+	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/missing:run", nil)
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/missing:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -374,10 +379,11 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router := NewRouter(catalogService, runner, log.New(io.Discard, "", 0))
+	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	require.NoError(t, err)
 
 	// First request — starts the plugin run.
-	req1 := httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil)
+	req1 := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
 	rec1 := httptest.NewRecorder()
 	router.ServeHTTP(rec1, req1)
 	assert.Equal(t, http.StatusAccepted, rec1.Code)
@@ -388,7 +394,7 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	waitForOperationState(t, opStore, firstOp.Name, operations.StateRunning)
 
 	// Second request — should be rejected with 409.
-	req2 := httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil)
+	req2 := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
 	rec2 := httptest.NewRecorder()
 	router.ServeHTTP(rec2, req2)
 	assert.Equal(t, http.StatusConflict, rec2.Code)
@@ -399,10 +405,10 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 
 func TestGetOperationsEndpoint(t *testing.T) {
 	opStore := operations.NewMemoryStore()
-	router := newTestRouter(catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
+	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
 	// Trigger a run so we have an operation to list.
-	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusAccepted, rec.Code)
@@ -416,7 +422,7 @@ func TestGetOperationsEndpoint(t *testing.T) {
 	waitForOperation(t, opStore, opName)
 
 	// GET /v1/operations should list the operation.
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/operations", nil)
+	getReq := withAuth(httptest.NewRequest(http.MethodGet, "/v1/operations", nil), testBearerToken)
 	getRec := httptest.NewRecorder()
 	router.ServeHTTP(getRec, getReq)
 
@@ -432,10 +438,10 @@ func TestGetOperationsEndpoint(t *testing.T) {
 
 func TestGetOperationByIDEndpoint(t *testing.T) {
 	opStore := operations.NewMemoryStore()
-	router := newTestRouter(catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
+	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
 	// Trigger a run.
-	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusAccepted, rec.Code)
@@ -449,7 +455,7 @@ func TestGetOperationByIDEndpoint(t *testing.T) {
 	waitForOperation(t, opStore, opName)
 
 	// GET /v1/operations/{name} should return the operation.
-	getReq := httptest.NewRequest(http.MethodGet, "/v1/operations/"+url.PathEscape(opName), nil)
+	getReq := withAuth(httptest.NewRequest(http.MethodGet, "/v1/operations/"+url.PathEscape(opName), nil), testBearerToken)
 	getRec := httptest.NewRecorder()
 	router.ServeHTTP(getRec, getReq)
 
@@ -462,12 +468,12 @@ func TestGetOperationByIDEndpoint(t *testing.T) {
 }
 
 func TestListPluginsEndpoint(t *testing.T) {
-	router := newTestRouter(catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{
+	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{
 		"mlflow":  stubPlugin{},
 		"litellm": stubPlugin{},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/plugins", nil)
+	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/plugins", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -478,3 +484,4 @@ func TestListPluginsEndpoint(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
 	assert.Equal(t, []string{"litellm", "mlflow"}, payload["plugins"])
 }
+

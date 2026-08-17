@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { discoverKinds } from '../lib/kindUtils';
 import { queryKeys } from '../lib/queryKeys';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 interface UseKindsResult {
   kinds: string[];
@@ -22,6 +23,7 @@ interface UseKindsResult {
  */
 export function useKinds(): UseKindsResult {
   const [activeKind, setActiveKind] = useState<string | null>(null);
+  const { token } = useOpenMFPContext();
 
   const {
     data: kinds = [],
@@ -30,7 +32,7 @@ export function useKinds(): UseKindsResult {
     refetch,
   } = useQuery({
     queryKey: queryKeys.kinds,
-    queryFn: discoverKinds,
+    queryFn: () => discoverKinds(token),
   });
 
   // Auto-select first kind if none selected yet.

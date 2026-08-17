@@ -21,7 +21,22 @@ spec:
             - name: PORT
               value: "3000"
             - name: NAIRA_UI_BASE_URL
-              value: "http://localhost:3001"
+              value: http://localhost:3001
+            - name: IDP_NAMES
+              value: keycloak
+            - name: BASE_DOMAINS_KEYCLOAK
+              value: localhost
+            - name: AUTH_SERVER_URL_KEYCLOAK
+              value: __AUTH_SERVER_URL_KEYCLOAK__
+            - name: TOKEN_URL_KEYCLOAK
+              value: __TOKEN_URL_KEYCLOAK__
+            - name: OIDC_CLIENT_ID_KEYCLOAK
+              value: naira-portal
+            - name: OIDC_CLIENT_SECRET_KEYCLOAK
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secret
+                  key: client-secret
           ports:
             - containerPort: 3000
               name: http

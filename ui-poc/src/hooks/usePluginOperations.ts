@@ -8,6 +8,7 @@ import {
   fetchPlugins,
 } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 const POLL_INTERVAL_MS = 2000;
 const EMPTY_OPERATIONS: OperationResource[] = [];
@@ -26,7 +27,6 @@ function isTerminal(op: OperationResource) {
 
 function isStale(op: OperationResource) {
   return !isTerminal(op) && Date.now() - new Date(op.startTime).getTime() > STALE_AFTER_MS;
-}
 
 export interface RunErrorEntry {
   id: string;
@@ -70,6 +70,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   // Operation names triggered by the most recent "Run All", still pending.
   const [pendingRunAllOps, setPendingRunAllOps] = useState<Set<string>>(new Set());
   const warnedRef = useRef<Set<string>>(new Set());
+  const { token } = useOpenMFPContext();
 
   const addError = useCallback((message: string) => {
     setRunErrors((prev) => [
@@ -84,12 +85,12 @@ export function usePluginsStatus(): UsePluginsStatusResult {
 
   const pluginsQuery = useQuery({
     queryKey: queryKeys.plugins,
-    queryFn: fetchPlugins,
+    queryFn: () => fetchPlugins(token),
   });
 
   const operationsQuery = useQuery({
     queryKey: queryKeys.operations,
-    queryFn: fetchOperations,
+    queryFn: () => fetchOperations(token),
     refetchInterval: (query) => {
       const ops = query.state.data ?? [];
       return ops.some((op) => !isTerminal(op)) ? POLL_INTERVAL_MS : false;
@@ -140,7 +141,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   }, [queryClient]);
 
   const runOneMutation = useMutation({
-    mutationFn: (pluginName: string) => apiRunPlugin(pluginName),
+    mutationFn: (pluginName: string) => apiRunPlugin(token, pluginName),
     onMutate: (pluginName: string) => {
       setPendingLocal((prev) => new Set(prev).add(pluginName));
     },
@@ -160,7 +161,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   });
 
   const runAllMutation = useMutation({
-    mutationFn: apiRunAllPlugins,
+    mutationFn: () => apiRunAllPlugins(token),
     onSuccess: (ops) => {
       setPendingRunAllOps(new Set(ops.map((op) => op.name)));
       queryClient.invalidateQueries({ queryKey: queryKeys.operations });

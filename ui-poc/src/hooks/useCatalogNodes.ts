@@ -5,6 +5,7 @@ import {
   NodeResource,
 } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 interface CatalogNodesResult {
   nodes: NodeResource[];
@@ -19,13 +20,15 @@ interface CatalogNodesResult {
  * the request.
  */
 export function useCatalogNodes(kind: string): CatalogNodesResult {
+  const { token } = useOpenMFPContext();
+
   const {
     data: nodes = [],
     isLoading,
     error,
   } = useQuery({
     queryKey: queryKeys.nodes(kind),
-    queryFn: () => fetchNodes({ filter: buildEqualityFilter('kind', kind), pageSize: 1000 }),
+    queryFn: () => fetchNodes(token, { filter: buildEqualityFilter('kind', kind), pageSize: 1000 }),
     enabled: kind.length > 0,
   });
 
