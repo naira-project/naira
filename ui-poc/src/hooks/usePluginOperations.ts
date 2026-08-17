@@ -27,6 +27,7 @@ function isTerminal(op: OperationResource) {
 
 function isStale(op: OperationResource) {
   return !isTerminal(op) && Date.now() - new Date(op.startTime).getTime() > STALE_AFTER_MS;
+}
 
 export interface RunErrorEntry {
   id: string;
