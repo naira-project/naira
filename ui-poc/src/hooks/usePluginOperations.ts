@@ -7,6 +7,7 @@ import {
   fetchOperations,
   fetchPlugins,
 } from '../lib/catalogApi';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_MAX_ATTEMPTS = 60; // 60 * 2s = 2 minutes
@@ -28,6 +29,7 @@ function isTerminal(op: OperationResource) {
  * `cancelledRef` lets the caller stop updating state after unmount.
  */
 async function pollSingle(
+  token: string | null,
   op: OperationResource,
   cancelledRef: React.MutableRefObject<boolean>
 ): Promise<{ operation: OperationResource; timedOut: boolean }> {
@@ -43,7 +45,7 @@ async function pollSingle(
       return { operation: current, timedOut: false };
     }
 
-    current = await fetchOperation(current.name);
+    current = await fetchOperation(token, current.name);
   }
 
   return { operation: current, timedOut: !isTerminal(current) };
@@ -92,6 +94,7 @@ interface UsePluginsStatusResult {
 }
 
 export function usePluginsStatus(): UsePluginsStatusResult {
+  const { token } = useOpenMFPContext();
   const [plugins, setPlugins] = useState<string[]>([]);
   const [operations, setOperations] = useState<OperationResource[]>([]);
   const [loading, setLoading] = useState(false);
@@ -121,7 +124,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [pluginList, ops] = await Promise.all([fetchPlugins(), fetchOperations()]);
+      const [pluginList, ops] = await Promise.all([fetchPlugins(token), fetchOperations(token)]);
       if (cancelledRef.current) return;
       setPlugins(pluginList);
       setOperations(ops);
@@ -132,7 +135,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     } finally {
       if (!cancelledRef.current) setLoading(false);
     }
-  }, [addError]);
+  }, [addError, token]);
 
   useEffect(() => {
     refresh();
@@ -151,7 +154,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   const settleOne = useCallback(
     async (op: OperationResource) => {
       try {
-        const { operation, timedOut } = await pollSingle(op, cancelledRef);
+        const { operation, timedOut } = await pollSingle(token, op, cancelledRef);
         if (cancelledRef.current) return;
 
         if (timedOut) {
@@ -163,14 +166,14 @@ export function usePluginsStatus(): UsePluginsStatusResult {
         markStopped(op.plugin);
       }
     },
-    [addError]
+    [addError, token]
   );
 
   const runOne = useCallback(
     async (pluginName: string) => {
       markRunning(pluginName);
       try {
-        const op = await apiRunPlugin(pluginName);
+        const op = await apiRunPlugin(token, pluginName);
         await settleOne(op);
       } catch (err) {
         if (!cancelledRef.current) {
@@ -179,13 +182,13 @@ export function usePluginsStatus(): UsePluginsStatusResult {
         }
       }
     },
-    [settleOne, addError]
+    [settleOne, addError, token]
   );
 
   const runAll = useCallback(async () => {
     setRunAllActive(true);
     try {
-      const ops = await apiRunAllPlugins();
+      const ops = await apiRunAllPlugins(token);
       ops.forEach((op) => markRunning(op.plugin));
 
       await Promise.all(ops.map((op) => settleOne(op)));
@@ -196,7 +199,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     } finally {
       if (!cancelledRef.current) setRunAllActive(false);
     }
-  }, [settleOne, addError]);
+  }, [settleOne, addError, token]);
 
   /**
    * Like `runAll`, but scoped to a specific set of plugins — used by viewpoints

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/go-chi/chi/v5"
 
@@ -96,7 +97,15 @@ func newListNodesHandler(service *catalog.Service, logger *log.Logger) http.Hand
 // GET /v1/nodes/{kind}/* returns a single catalog node.
 func newGetNodeHandler(service *catalog.Service) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
-		node, err := service.GetNode(r.Context(), catalog.NodeID{Kind: chi.URLParam(r, "kind"), Path: chi.URLParam(r, "*")})
+		path, err := url.PathUnescape(chi.URLParam(r, "*"))
+		if err != nil {
+			return fmt.Errorf("unescaping node path: %w", err)
+		}
+
+		node, err := service.GetNode(r.Context(), catalog.NodeID{
+			Kind: chi.URLParam(r, "kind"),
+			Path: path,
+		})
 		if err != nil {
 			return fmt.Errorf("getting node: %w", err)
 		}

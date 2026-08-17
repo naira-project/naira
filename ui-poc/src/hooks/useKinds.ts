@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { discoverKinds } from '../lib/kindUtils';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 interface UseKindsResult {
   kinds: string[];
@@ -17,6 +18,7 @@ interface UseKindsResult {
  * Automatically discovers kinds on mount and selects the first kind by default.
  */
 export function useKinds(allowedKinds?: string[]): UseKindsResult {
+  const { token } = useOpenMFPContext();
   const [kinds, setKinds] = useState<string[]>([]);
   const [kindsLoading, setKindsLoading] = useState(true);
   const [kindsError, setKindsError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export function useKinds(allowedKinds?: string[]): UseKindsResult {
   const loadKinds = useCallback(() => {
     setKindsLoading(true);
     setKindsError(null);
-    discoverKinds()
+    discoverKinds(token)
       .then((discovered) => {
         const result = allowedKinds 
         ? allowedKinds.filter((k) => discovered.includes(k))
@@ -39,7 +41,7 @@ export function useKinds(allowedKinds?: string[]): UseKindsResult {
         setKindsError('Failed to discover kinds');
         setKindsLoading(false);
       });
-  }, [allowedKinds?.join(',')]);
+  }, [allowedKinds?.join(','), token]);
 
   useEffect(() => {
     loadKinds();

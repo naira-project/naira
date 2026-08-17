@@ -1,36 +1,26 @@
 version: '3'
 
+vars:
+  KEYCLOAK_REALM: naira
+  KEYCLOAK_NAMESPACE: keycloak
+  KEYCLOAK_LOCAL_PORT: '8080'
+  KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET | default "naira-local-dev-secret"}}'
+
 includes:
-  cluster:
-    taskfile: ./tasks/cluster.yml
-    dir: .
-  docker:
-    taskfile: ./tasks/docker.yml
-    dir: .
-  plugins:
-    taskfile: ./tasks/plugins.yml
-    dir: .
-  postgres:
-    taskfile: ./tasks/postgres.yml
-    dir: .
-  litellm:
-    taskfile: ./tasks/litellm.yml
-    dir: .
-  mlflow:
-    taskfile: ./tasks/mlflow.yml
-    dir: .
-  catalog:
-    taskfile: ./tasks/catalog.yml
-    dir: .
-  ui:
-    taskfile: ./tasks/ui.yml
-    dir: .
-  portal:
-    taskfile: ./tasks/portal.yml
-    dir: .
-  openmetadata:
-    taskfile: ./tasks/openmetadata.yml
-    dir: .
+  core:
+    taskfile: ./stacks/core/Taskfile.yml
+    dir: ./stacks/core
+    vars:
+      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
+      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
+      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
+      KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET}}'
+  llm-inference:
+    taskfile: ./stacks/llm-inference/Taskfile.yml
+    dir: ./stacks/llm-inference
+  mlops:
+    taskfile: ./stacks/mlops/Taskfile.yml
+    dir: ./stacks/mlops
 
 tasks:
   default:
@@ -50,64 +40,96 @@ tasks:
       - docker version
       - buf --version
 
+  # Platform deployment
   platform:deploy:
-    desc: Deploy MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal to kind
+    desc: Deploy core + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
     cmds:
-      - task: cluster:create
-      - task: mlflow:deploy
-      - task: postgres:deploy
-      - task: litellm:deploy
-      - task: openmetadata:deploy
-      - task: catalog:deploy
-      - task: ui:deploy
-      - task: portal:deploy
+      - task: core:deploy
+      - task: llm-inference:deploy
 
   platform:undeploy:
-    desc: Remove MLflow, LiteLLM, OpenMetadata, Catalog, UI, and Portal from kind
+    desc: Remove the full platform from kind
     cmds:
-      - task: portal:undeploy
-      - task: openmetadata:undeploy
-      - task: catalog:undeploy
-      - task: litellm:undeploy
-      - task: postgres:undeploy
-      - task: mlflow:undeploy
-      - task: ui:undeploy
+      - task: llm-inference:undeploy
+      - task: mlops:undeploy
+      - task: core:undeploy
 
+  # Cluster management
+  cluster:delete:
+    desc: Remove the kind cluster entirely
+    cmds:
+      - task: core:cluster:delete
+
+  # Port-forwarding
   forward:all:
-    desc: Port-forward all services (MLflow, LiteLLM, OpenMetadata, Catalog, UI, Portal)
+    desc: Port-forward all services
     silent: true
-    vars:
-      PORTAL_LOCAL_PORT: '3000'
-      UI_LOCAL_PORT: '3001'
-      MLFLOW_LOCAL_PORT: '5000'
-      LITELLM_LOCAL_PORT: '4000'
-      OPENMETADATA_LOCAL_PORT: '8585'
-      CATALOG_LOCAL_PORT: '8090'
+    deps:
+      - forward:core
+      - forward:mlops
+      - forward:llm-inference
+
+  forward:core:
+    desc: Port-forward core services (catalog, portal, ui)
+    silent: true
+    deps:
+      - forward:core:urls
+      - core:catalog:port-forward
+      - core:portal:port-forward
+      - core:ui:port-forward
+      - core:keycloak:port-forward
+
+  forward:core:urls:
+    internal: true
+    silent: true
     cmds:
       - |
-        echo "Port-forwarding all services..."
-        echo "----------------------------------------------------------------"
-        echo "Portal:         http://localhost:{{.PORTAL_LOCAL_PORT}}"
-        echo "UI:             http://localhost:{{.UI_LOCAL_PORT}}"
-        echo "MLflow:         http://localhost:{{.MLFLOW_LOCAL_PORT}}"
-        echo "LiteLLM:        http://localhost:{{.LITELLM_LOCAL_PORT}}"
-        echo "OpenMetadata:   http://localhost:{{.OPENMETADATA_LOCAL_PORT}}"
-        echo "Catalog:        http://localhost:{{.CATALOG_LOCAL_PORT}}"
-        echo "----------------------------------------------------------------"
-      - task: forward:all:tunnels
+        echo "Core service URLs:"
+        echo "  Portal:  http://localhost:3000"
+        echo "  UI:      http://localhost:3001"
+        echo "  Catalog: http://localhost:8090"
+        echo "  Keycloak: http://localhost:8080"
 
-  forward:all:tunnels:
+  forward:mlops:
+    desc: Port-forward MLOps services (mlflow, openmetadata)
+    silent: true
+    deps:
+      - forward:mlops:urls
+      - mlops:mlflow:port-forward
+      - mlops:openmetadata:port-forward
+
+  forward:mlops:urls:
     internal: true
-    deps: [mlflow:port-forward, litellm:port-forward, openmetadata:port-forward, catalog:port-forward, ui:port-forward, portal:port-forward]
-      
-   # Reusable "Macro" Tasks
-  _docker:build:
-    internal: true
+    silent: true
     cmds:
-      - docker build -t {{.IMAGE}} -f {{.DIR}}/Dockerfile ../../
+      - |
+        echo "MLOps service URLs:"
+        echo "  MLflow:       http://localhost:5000"
+        echo "  OpenMetadata: http://localhost:8585"
 
+  forward:llm-inference:
+    desc: Port-forward LLM Inference services (litellm, llama, monitoring)
+    silent: true
+    deps:
+      - forward:llm-inference:urls
+      - llm-inference:litellm:port-forward
+      - llm-inference:llamacpp:port-forward
+      - llm-inference:monitoring:port-forward
+      - llm-inference:vllm:port-forward
+
+  forward:llm-inference:urls:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        echo "LLM inference service URLs:"
+        echo "  LiteLLM:    http://localhost:4000"
+        echo "  Prometheus: http://localhost:9090"
+        echo "  Grafana:    http://localhost:3002  (admin/admin)"
+
+  # Seeding sample data
   seed:all:
     desc: Seed sample data in MLflow and OpenMetadata (requires port-forward)
     cmds:
-      - task: mlflow:seed
-      - task: openmetadata:seed
+      - task: mlops:mlflow:seed
+      - task: mlops:openmetadata:seed
