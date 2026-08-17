@@ -12,8 +12,6 @@ const EMPTY_SUMMARIES = new Map<string, RelationSummary>();
 
 /**
  * Given a list of catalog nodes, computes relation summaries for each node.
- * Keyed by the (sorted) set of node names, so the same set of nodes always
- * hits the same cache entry regardless of array identity.
  */
 export function useRelationSummaries(nodes: NodeResource[]): UseRelationSummariesResult {
   const { token } = useOpenMFPContext();
