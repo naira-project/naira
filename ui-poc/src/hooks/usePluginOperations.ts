@@ -12,11 +12,6 @@ import { useOpenMFPContext } from './useOpenMFPContext';
 
 const POLL_INTERVAL_MS = 2000;
 const EMPTY_OPERATIONS: OperationResource[] = [];
-// How long a non-terminal operation is given before we surface a
-// "taking longer than expected" notice. Mirrors the old
-// POLL_MAX_ATTEMPTS * POLL_INTERVAL_MS (60 * 2s = 2 minutes), but is now
-// evaluated against the operation's own startTime instead of a manual
-// client-side attempt counter.
 const STALE_AFTER_MS = 2 * 60 * 1000;
 
 const TERMINAL_STATES: OperationResource['state'][] = ['SUCCEEDED', 'FAILED'];
