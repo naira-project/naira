@@ -11,8 +11,6 @@ import { useOpenMFPContext } from './useOpenMFPContext';
 
 /**
  * Generic hook to fetch a single catalog node by kind + path.
- * Shares its cache entry with anything else that reads the same node
- * (e.g. useCatalogGraph resolving the same node by name).
  */
 export function useCatalogDetail(kind: string, path: string) {
   const { token } = useOpenMFPContext();
@@ -31,39 +29,4 @@ export function useCatalogDetail(kind: string, path: string) {
     loading,
     error: error ? `Failed to load ${kind} "${path}"` : null,
   };
-}
-
-/**
- * Fetch related "from" nodes for the given node name.
- * Used to resolve adopters / dependants. Kept as a plain async helper
- * (not a query hook) since it's invoked imperatively/on demand rather
- * than being tied to a component's render lifecycle.
- */
-export async function fetchRelatedNodes(
-  token: string | null,
-  nodeName: string,
-  relationKind?: string
-): Promise<NodeResource[]> {
-  const relations = await fetchRelations(token, {
-    filter: buildEqualityFilter('toNode', nodeName),
-    pageSize: 1000,
-  });
-
-  const filtered = relationKind
-    ? relations.filter((r) => r.kind === relationKind)
-    : relations;
-
-  const names = filtered.map((r) => r.fromNode).filter(Boolean) as string[];
-
-  const nodes = await Promise.all(
-    names.map(async (name) => {
-      try {
-        return await fetchNodeByName(token, name);
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  return nodes.filter((n): n is NodeResource => n !== null);
 }
