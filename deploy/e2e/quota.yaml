@@ -1,0 +1,40 @@
+# envsubst template — substituted variables: ${NAMESPACE}
+#
+# `full` profile numbers — see the SPEC's "Resource Cost" section for the
+# per-component breakdown these are summed from. OpenMetadata (server + MySQL +
+# OpenSearch) dominates; its figures are Helm chart defaults, not yet measured
+# against actual usage (see SPEC "Verification").
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: e2e-quota
+  namespace: ${NAMESPACE}
+spec:
+  hard:
+    requests.cpu: "3.5"
+    requests.memory: 8.5Gi
+    limits.cpu: "11"
+    limits.memory: 15Gi
+    pods: "25"
+    persistentvolumeclaims: "6"
+---
+# A ResourceQuota with compute limits requires every container in the
+# namespace — including init containers — to declare requests/limits, or the
+# pod is rejected outright. Third-party charts (e.g. OpenMetadata's opensearch
+# subchart init containers) don't always do this. A LimitRange auto-fills
+# defaults for any container that omits them, so those pods can still be
+# created; the ResourceQuota above still bounds the namespace total.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: e2e-limits
+  namespace: ${NAMESPACE}
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        cpu: 500m
+        memory: 512Mi
