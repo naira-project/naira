@@ -1,0 +1,128 @@
+# envsubst template — substituted variables: ${NAMESPACE}
+#
+# `full` profile only. The DATABASE_URL below points at the per-PR postgres
+# Service (deploy/e2e/postgres.yaml) in this same namespace — the dev manifest's
+# equivalent points cross-namespace at postgres.litellm-db, which does not apply
+# here since postgres is deployed per-PR alongside litellm, not shared.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-secrets
+  namespace: ${NAMESPACE}
+type: Opaque
+stringData:
+  LITELLM_MASTER_KEY: sk-local-litellm
+  OPENAI_API_KEY: change-me
+  ANTHROPIC_API_KEY: change-me
+  GEMINI_API_KEY: change-me
+  OPENROUTER_API_KEY: change-me
+  DATABASE_URL: postgresql://litellm:litellm-local-password@postgres.${NAMESPACE}.svc.cluster.local:5432/litellm
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: ${NAMESPACE}
+data:
+  config.yaml: |
+    model_list:
+      - model_name: idp-gpt-4o-mini
+        litellm_params:
+          model: openai/gpt-4o-mini
+          api_key: os.environ/OPENAI_API_KEY
+      - model_name: idp-claude-sonnet
+        litellm_params:
+          model: anthropic/claude-3-5-sonnet-latest
+          api_key: os.environ/ANTHROPIC_API_KEY
+      - model_name: idp-gemini-flash
+        litellm_params:
+          model: gemini/gemini-2.0-flash
+          api_key: os.environ/GEMINI_API_KEY
+      - model_name: idp-embedding-small
+        litellm_params:
+          model: openai/text-embedding-3-small
+          api_key: os.environ/OPENAI_API_KEY
+      - model_name: openrouter-gpt-3.5-turbo
+        litellm_params:
+          model: openrouter/openai/gpt-3.5-turbo
+          api_key: os.environ/OPENROUTER_API_KEY
+
+    litellm_settings:
+      callbacks:
+        - prometheus
+      prometheus_initialize_budget_metrics: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      containers:
+        - name: litellm
+          image: docker.litellm.ai/berriai/litellm:v1.82.3
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config
+            - /app/config.yaml
+            - --port
+            - "4000"
+            - --host
+            - 0.0.0.0
+          envFrom:
+            - secretRef:
+                name: litellm-secrets
+          ports:
+            - containerPort: 4000
+              name: http
+          volumeMounts:
+            - name: litellm-config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 2Gi
+      volumes:
+        - name: litellm-config
+          configMap:
+            name: litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+  type: ClusterIP

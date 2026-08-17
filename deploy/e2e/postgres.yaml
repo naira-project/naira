@@ -1,0 +1,97 @@
+# envsubst template — substituted variables: ${NAMESPACE}
+# `full` profile only — LiteLLM's backing store, deployed per-PR alongside it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secrets
+  namespace: ${NAMESPACE}
+type: Opaque
+stringData:
+  POSTGRES_DB: litellm
+  POSTGRES_USER: litellm
+  POSTGRES_PASSWORD: litellm-local-password
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: ${NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: postgres-secrets
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+              name: postgres
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+  type: ClusterIP
