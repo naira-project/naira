@@ -5,18 +5,8 @@ import (
 	"strings"
 )
 
-// parseCodeowners extracts owners from a CODEOWNERS file.
-//
-// We only care about the *default* owners for now (the "*" pattern), since
-// that's the one directly answerable question we want out of this: "who do
-// I contact about this repository as a whole?". Per-path ownership rules
-// exist in real CODEOWNERS files but modelling per-path ownership in the
-// catalog graph is a different (and much bigger) problem than what a
-// software-catalog overview needs, so it's intentionally out of scope here.
-//
-// CODEOWNERS syntax: lines are "<pattern> <owner> [<owner> ...]", '#'
-// starts a comment, blank lines are ignored. Owners are either
-// "@user", "@org/team", or an email address.
+// parseCodeowners extracts the default owners (the "*" pattern) from a CODEOWNERS file,
+// ignoring path-specific rules, inline comments, and duplicates.
 func parseCodeowners(content string) []string {
 	var defaultOwners []string
 

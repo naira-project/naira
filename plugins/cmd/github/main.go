@@ -16,18 +16,9 @@ import (
 )
 
 const (
-	propertyKeyDescription   = "description"
-	propertyKeyURL           = "url"
-	propertyKeyDefaultBranch = "default_branch"
-	propertyKeyLanguage      = "language"
-	propertyKeyArchived      = "archived"
-	propertyKeyFork          = "fork"
-	propertyKeyTopics        = "topics"
-	propertyKeyStars         = "stars"
-	propertyKeyHomepage      = "homepage"
-	propertyKeyLastCommitAt  = "last_commit_at"
-	propertyKeyLastReleaseAt = "last_release_at"
-	propertyKeyLastReleaseID = "last_release"
+	propertyKeyURL      = "url"
+	propertyKeyLanguage = "language"
+	propertyKeyHomepage = "homepage"
 )
 
 type config struct {
@@ -142,36 +133,13 @@ func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]plugina
 	repoNodeID := gitRepositoryNodeID(owner, name)
 
 	props := pluginapi.PropertyMap{
-		propertyKeyURL:           repo.HTMLURL,
-		propertyKeyDefaultBranch: repo.DefaultBranch,
-		propertyKeyArchived:      fmt.Sprintf("%t", repo.Archived),
-		propertyKeyFork:          fmt.Sprintf("%t", repo.Fork),
-	}
-	if repo.Description != "" {
-		props[propertyKeyDescription] = repo.Description
+		propertyKeyURL: repo.HTMLURL,
 	}
 	if repo.Language != "" {
 		props[propertyKeyLanguage] = repo.Language
 	}
 	if repo.Homepage != "" {
 		props[propertyKeyHomepage] = repo.Homepage
-	}
-	if len(repo.Topics) > 0 {
-		props[propertyKeyTopics] = strings.Join(repo.Topics, ",")
-	}
-	props[propertyKeyStars] = fmt.Sprintf("%d", repo.StargazersCount)
-
-	if lastCommitAt, found, err := p.github.GetLatestCommitDate(ctx, owner, name); err != nil {
-		return nil, nil, fmt.Errorf("fetching latest commit: %w", err)
-	} else if found {
-		props[propertyKeyLastCommitAt] = lastCommitAt
-	}
-
-	if release, found, err := p.github.GetLatestRelease(ctx, owner, name); err != nil {
-		return nil, nil, fmt.Errorf("fetching latest release: %w", err)
-	} else if found {
-		props[propertyKeyLastReleaseID] = release.TagName
-		props[propertyKeyLastReleaseAt] = release.PublishedAt
 	}
 
 	nodes := []pluginapi.NodeClaim{

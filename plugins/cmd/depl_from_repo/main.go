@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
@@ -29,10 +28,9 @@ type config struct {
 }
 
 type Plugin struct {
-	k8sClient     *kubernetes.Clientset
-	dynamicClient dynamic.Interface
-	logger        *log.Logger
-	config        config
+	k8sClient *kubernetes.Clientset
+	logger    *log.Logger
+	config    config
 }
 
 func New(cfg config, logger *log.Logger) (*Plugin, error) {

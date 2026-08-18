@@ -10,10 +10,6 @@ import (
 	"strings"
 )
 
-// githubClient is a deliberately small REST client — just enough to cover
-// what this plugin needs. Pulling in a full SDK (e.g. go-github) is more
-// than this warrants right now; if the plugin grows (GitLab, more
-// endpoints), revisit.
 type githubClient struct {
 	httpClient *http.Client
 	baseURL    string // e.g. https://api.github.com
@@ -21,31 +17,9 @@ type githubClient struct {
 }
 
 type ghRepo struct {
-	Name            string   `json:"name"`
-	FullName        string   `json:"full_name"` // "owner/repo"
-	Description     string   `json:"description"`
-	HTMLURL         string   `json:"html_url"`
-	DefaultBranch   string   `json:"default_branch"`
-	Language        string   `json:"language"`
-	Archived        bool     `json:"archived"`
-	Fork            bool     `json:"fork"`
-	Topics          []string `json:"topics"`
-	StargazersCount int      `json:"stargazers_count"`
-	Homepage        string   `json:"homepage"`
-}
-
-type ghCommit struct {
-	Commit struct {
-		Committer struct {
-			Date string `json:"date"`
-		} `json:"committer"`
-	} `json:"commit"`
-}
-
-type ghRelease struct {
-	TagName     string `json:"tag_name"`
-	PublishedAt string `json:"published_at"`
-	HTMLURL     string `json:"html_url"`
+	HTMLURL  string `json:"html_url"`
+	Language string `json:"language"`
+	Homepage string `json:"homepage"`
 }
 
 type ghContent struct {
@@ -111,29 +85,6 @@ func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo,
 	found, err := c.do(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &r)
 	if err != nil {
 		return ghRepo{}, false, fmt.Errorf("getting repo %s/%s: %w", owner, repo, err)
-	}
-	return r, found, nil
-}
-
-// GetLatestCommitDate returns the commit date of the most recent commit on
-// the repo's default branch, used as an activity/freshness signal.
-func (c *githubClient) GetLatestCommitDate(ctx context.Context, owner, repo string) (string, bool, error) {
-	var commits []ghCommit
-	found, err := c.do(ctx, fmt.Sprintf("/repos/%s/%s/commits?per_page=1", url.PathEscape(owner), url.PathEscape(repo)), &commits)
-	if err != nil {
-		return "", false, fmt.Errorf("getting latest commit for %s/%s: %w", owner, repo, err)
-	}
-	if !found || len(commits) == 0 {
-		return "", false, nil
-	}
-	return commits[0].Commit.Committer.Date, true, nil
-}
-
-func (c *githubClient) GetLatestRelease(ctx context.Context, owner, repo string) (ghRelease, bool, error) {
-	var r ghRelease
-	found, err := c.do(ctx, fmt.Sprintf("/repos/%s/%s/releases/latest", url.PathEscape(owner), url.PathEscape(repo)), &r)
-	if err != nil {
-		return ghRelease{}, false, fmt.Errorf("getting latest release for %s/%s: %w", owner, repo, err)
 	}
 	return r, found, nil
 }
