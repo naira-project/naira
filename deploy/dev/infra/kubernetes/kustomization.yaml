@@ -11,34 +11,34 @@ resources:
 images:
   - name: ui
     newName: ghcr.io/naira-project/naira-ui
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: catalog
     newName: ghcr.io/naira-project/naira-catalog
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: litellm
     newName: ghcr.io/naira-project/naira-plugin-litellm
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: mlflow
     newName: ghcr.io/naira-project/naira-plugin-mlflow
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: depl-calls-svc
     newName: ghcr.io/naira-project/naira-plugin-depl-calls-svc
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: depl-uses-litellm
     newName: ghcr.io/naira-project/naira-plugin-depl-uses-litellm
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: fluxcd
     newName: ghcr.io/naira-project/naira-plugin-fluxcd
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: openmetadata
     newName: ghcr.io/naira-project/naira-plugin-openmetadata
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: depl-from-repo
     newName: ghcr.io/naira-project/naira-plugin-depl-from-repo
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: github
     newName: ghcr.io/naira-project/naira-plugin-github
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
   - name: portal
     newName: ghcr.io/naira-project/naira-portal
-    newTag: sha-a076bce
+    newTag: sha-9381c5c
