@@ -185,42 +185,6 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
-        - name: plugin-openai-api-models-vllm
-          image: openai-api-models:local
-          restartPolicy: Always
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: PORT
-              value: "50058"
-            - name: OPENAI_API_MODELS_BASE_URL
-              value: http://vllm-opt125m.vllm.svc.cluster.local:8001
-            - name: PATH_PREFIX
-              value: openai_vllm
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
-        - name: plugin-openai-api-models-llamacpp
-          image: openai-api-models:local
-          restartPolicy: Always
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: PORT
-              value: "50059"
-            - name: OPENAI_API_MODELS_BASE_URL
-              value: http://llama-qwen25-05b.llamacpp.svc.cluster.local:8080
-            - name: PATH_PREFIX
-              value: openai_llamacpp
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
         - name: plugin-mlflow
           image: mlflow:local
           restartPolicy: Always
@@ -320,7 +284,7 @@ spec:
             - name: PORT
               value: "8090"
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models-litellm=localhost:50057,openai-api-models-vllm=localhost:50058,openai-api-models-llamacpp=localhost:50059"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models-litellm=localhost:50057"
           ports:
             - containerPort: 8090
               name: http
