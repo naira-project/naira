@@ -5,10 +5,6 @@ Keycloak, OpenMetadata — into one fresh, isolated Kubernetes namespace, seeds 
 with known data, and runs smoke tests against it. Used per-PR in CI; also
 runnable locally before pushing.
 
-For the concept and design rationale, see
-[RFC-Kubernetes-Test-Environments-for-PR-Based-E2E-Testing.md](../../RFC-Kubernetes-Test-Environments-for-PR-Based-E2E-Testing.md).
-For implementation detail (manifests, isolation scope, resource costs), see
-[SPEC-Kubernetes-Test-Environments-Implementation.md](../../SPEC-Kubernetes-Test-Environments-Implementation.md).
 
 ## Prerequisites
 
