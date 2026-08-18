@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
@@ -14,7 +16,12 @@ import (
 // NewRouter wires up the catalog HTTP API.
 // catalogService serves read-only graph queries (nodes/relations);
 // runner drives and reports on asynchronous plugin runs (plugins/operations).
-func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger *log.Logger) http.Handler {
+func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
+	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
+	if err != nil {
+		return nil, fmt.Errorf("creating auth middleware: %w", err)
+	}
+
 	router := chi.NewRouter()
 	router.Use(chimiddleware.RequestID)
 	router.Use(chimiddleware.Recoverer)
@@ -27,6 +34,8 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger
 	})
 
 	router.Route("/v1", func(r chi.Router) {
+		r.Use(authMiddleware)
+
 		r.Post("/plugins:run", newRunAllPluginsHandler(runner))
 		r.Get("/plugins", newListPluginsHandler(runner))
 		r.Post("/{plugin}:run", newRunPluginHandler(runner))
@@ -40,5 +49,5 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger
 		r.Get("/relations", newListRelationsHandler(catalogService, logger))
 	})
 
-	return router
+	return router, nil
 }

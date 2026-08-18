@@ -1,0 +1,56 @@
+version: '3'
+
+includes:
+  cluster:
+    taskfile: ./tasks/cluster.yml
+    dir: .
+  docker:
+    taskfile: ./tasks/docker.yml
+    dir: .
+  plugins:
+    taskfile: ./tasks/plugins.yml
+    dir: .
+  keycloak:
+    taskfile: ./tasks/keycloak.yml
+    dir: .
+    vars:
+      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
+      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
+      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
+      KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET}}'
+  catalog:
+    taskfile: ./tasks/catalog.yml
+    dir: .
+    vars:
+      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
+      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
+      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
+  portal:
+    taskfile: ./tasks/portal.yml
+    dir: .
+    vars:
+      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
+      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
+      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
+      KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET}}'
+  ui:
+    taskfile: ./tasks/ui.yml
+    dir: .
+
+tasks:
+  deploy:
+    desc: Deploy the core stack (cluster + keycloak + catalog + portal + ui)
+    cmds:
+      - task: cluster:create
+      - task: keycloak:deploy
+      - task: catalog:deploy
+      - task: portal:deploy
+      - task: ui:deploy
+
+  undeploy:
+    desc: Remove the core stack from kind
+    cmds:
+      - task: portal:undeploy
+      - task: catalog:undeploy
+      - task: ui:undeploy
+      - task: keycloak:undeploy

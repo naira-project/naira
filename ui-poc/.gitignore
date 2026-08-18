@@ -9,7 +9,10 @@
 /coverage
 
 # production
-/build
+/dist
+
+# TypeScript incremental build cache
+*.tsbuildinfo
 
 # misc
 .DS_Store

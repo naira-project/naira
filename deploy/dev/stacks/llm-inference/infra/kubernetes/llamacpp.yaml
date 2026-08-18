@@ -1,0 +1,212 @@
+# ── llama-server (llama.cpp) inference deployments ──────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: llamacpp
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# Shared Storage for Model Cache
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache-pvc
+  namespace: llamacpp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 3Gi
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# Qwen2.5-0.5B
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-qwen25-05b
+  namespace: llamacpp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-qwen25-05b
+  template:
+    metadata:
+      labels:
+        app: llama-qwen25-05b
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        - name: download-qwen
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              MODEL_PATH="/models/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+              if [ ! -f "$MODEL_PATH" ]; then
+                echo "Downloading Qwen2.5 model..."
+                curl -L -o "$MODEL_PATH" "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+              else
+                echo "Qwen2.5 model already cached."
+              fi
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server
+          args:
+            - "-m"
+            - "/models/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "--metrics"
+            - "--no-ui"
+            - "-c"
+            - "512"             # Ultra-small context size for dummy testing
+            - "--threads"
+            - "2"               # Fixed thread count to skip runtime CPU auto-detection
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 2   # Shortened probes since the model loads locally
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "300m"
+            limits:
+              memory: "1Gi"
+              cpu: "2"
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: model-cache-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-qwen25-05b
+  namespace: llamacpp
+  labels:
+    app: llama-qwen25-05b
+spec:
+  selector:
+    app: llama-qwen25-05b
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP
+---
+# ═══════════════════════════════════════════════════════════════════════════════
+# Dummy / Tiny Llama3
+# ═══════════════════════════════════════════════════════════════════════════════
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-dummy-model
+  namespace: llamacpp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-dummy-model
+  template:
+    metadata:
+      labels:
+        app: llama-dummy-model
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        - name: download-dummy
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              MODEL_PATH="/models/tiny-llama3-test-q2_k.gguf"
+              if [ ! -f "$MODEL_PATH" ]; then
+                echo "Downloading Tiny Llama3 model..."
+                curl -L -o "$MODEL_PATH" "https://huggingface.co/tensorblock/tiny-llama3-test-GGUF/resolve/main/tiny-llama3-test-Q2_K.gguf"
+              else
+                echo "Tiny Llama3 model already cached."
+              fi
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server
+          args:
+            - "-m"
+            - "/models/tiny-llama3-test-q2_k.gguf"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "--metrics"
+            - "--no-ui"
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: model-cache-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-dummy-model
+  namespace: llamacpp
+  labels:
+    app: llama-dummy-model
+spec:
+  selector:
+    app: llama-dummy-model
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP

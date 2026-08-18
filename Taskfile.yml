@@ -14,12 +14,17 @@ tasks:
       - task --taskfile {{.DEV_TASKFILE}} check
 
   platform:deploy:
-    desc: Deploy the platform to kind
+    desc: Deploy core (catalog, plugins, ui) + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} platform:deploy
 
+  platform:undeploy:
+    desc: Remove the full platform from kind
+    cmds:
+      - task --taskfile {{.DEV_TASKFILE}} platform:undeploy
+
   forward:all:
-    desc: Port-forward the main developer-facing services
+    desc: Port-forward all developer-facing services
     cmds:
       - task --taskfile {{.DEV_TASKFILE}} forward:all
 

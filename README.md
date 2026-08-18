@@ -44,7 +44,7 @@ Built with and for the cloud-native ecosystem, Naira is designed to integrate cl
 This project requires several local tools: (for example `kind`, `task`,`go`).
 
 **The Recommended Way (Using mise):**
-We use [mise](https://mise.jdx.dev/) to manage tools automatically. If you have `mise` installed and activated, simply run:
+We use [mise](https://mise.jdx.dev/) to manage tools automatically. If you have `mise` installed and activated (`eval "$(mise activate zsh)"` - [more info](https://mise.jdx.dev/getting-started.html#activate-mise)), simply run:
 ```bash
 mise install
 ```
