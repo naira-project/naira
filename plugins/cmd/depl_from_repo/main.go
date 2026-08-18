@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/dynamic"
@@ -17,7 +18,7 @@ import (
 
 const (
 	propertyKeyNamespace = "namespace"
-	propertyKeyImage     = "image"
+	propertyKeyImages    = "images"
 	propertyKeyRepoURL   = "url"
 	propertyKeyDetection = "detection_method"
 )
@@ -61,18 +62,34 @@ func (p *Plugin) collect(ctx context.Context, k8sClient *kubernetes.Clientset) (
 	var nodes []pluginapi.NodeClaim
 	var relations []pluginapi.RelationClaim
 
-	discoveredRepos, err := repositorydiscovery.DiscoverDeploymentRepositories(ctx, k8sClient, p.logger)
+	entries, err := repositorydiscovery.DiscoverDeployments(ctx, k8sClient, p.logger)
 	if err != nil {
-		return pluginapi.CollectResponse{}, fmt.Errorf("failed to discover deployment repositories: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("discovering deployments: %w", err)
 	}
 
 	seenRepos := make(map[string]bool)
 
-	for _, entry := range discoveredRepos {
+	for _, entry := range entries {
 		depPath := fmt.Sprintf("%s/%s/%s", entry.ClusterID, entry.Namespace, entry.Deployment)
 		depNodeID := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindDeployment,
 			Path: depPath,
+		}
+
+		// Always emit the deployment node with its images.
+		depProps := pluginapi.PropertyMap{
+			propertyKeyNamespace: entry.Namespace,
+			propertyKeyImages:    strings.Join(entry.Images, ", "),
+		}
+		nodes = append(nodes, pluginapi.NodeClaim{
+			ID:         depNodeID,
+			Properties: depProps,
+		})
+
+		// Repository linkage is optional — only create the git node + relation
+		// when a repository was successfully discovered for this deployment.
+		if entry.Repository.URL == "" {
+			continue
 		}
 
 		repoPath := repositorydiscovery.CanonicalPathFromRepo(entry.Repository)
@@ -96,21 +113,10 @@ func (p *Plugin) collect(ctx context.Context, k8sClient *kubernetes.Clientset) (
 			seenRepos[repoPath] = true
 		}
 
-		nodes = append(nodes, pluginapi.NodeClaim{
-			ID: depNodeID,
-			Properties: pluginapi.PropertyMap{
-				propertyKeyNamespace: entry.Namespace,
-				propertyKeyImage:     entry.Image,
-			},
-		})
-
 		relations = append(relations, pluginapi.RelationClaim{
 			Kind: pluginapi.RelationKindDeployedFrom,
 			From: depNodeID,
 			To:   gitNodeID,
-			Properties: pluginapi.PropertyMap{
-				propertyKeyImage: entry.Image,
-			},
 		})
 	}
 

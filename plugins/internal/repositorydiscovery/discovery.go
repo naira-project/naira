@@ -24,12 +24,14 @@ type Repository struct {
 	Method string
 }
 
-// DeploymentRepository associates a discovered repository with its Deployment details.
+// DeploymentRepository associates a Deployment with its container images and,
+// optionally, a discovered source repository. Repository may be zero-value
+// (empty struct) when no repository was discoverable for the deployment's images.
 type DeploymentRepository struct {
 	ClusterID  string
 	Namespace  string
 	Deployment string
-	Image      string
+	Images     []string
 	Repository Repository
 }
 
@@ -37,9 +39,11 @@ var sourceLabelKeys = []string{
 	"org.opencontainers.image.source",
 }
 
-// DiscoverDeploymentRepositories scans Deployments across target namespaces (or all namespaces)
-// and returns discovered repository associations for each deployment's first discoverable container.
-func DiscoverDeploymentRepositories(
+// DiscoverDeployments scans all Deployments across target namespaces and returns
+// every deployment with its container images. For the first container it also
+// attempts to discover the source repository via OCI labels or image-name inference;
+// the Repository field is populated only when discovery succeeds.
+func DiscoverDeployments(
 	ctx context.Context,
 	k8sClient kubernetes.Interface,
 	logger *log.Logger,
@@ -63,32 +67,38 @@ func DiscoverDeploymentRepositories(
 		}
 
 		for _, dep := range deployments.Items {
-			for _, container := range dep.Spec.Template.Spec.Containers {
-				repo, err := InspectImage(ctx, container.Image)
+			containers := dep.Spec.Template.Spec.Containers
+
+			entry := DeploymentRepository{
+				ClusterID:  clusterID,
+				Namespace:  ns,
+				Deployment: dep.GetName(),
+				Images:     make([]string, 0, len(containers)),
+			}
+
+			for _, container := range containers {
+				entry.Images = append(entry.Images, container.Image)
+			}
+
+			// Try to discover the source repository from the primary container.
+			// A failed or empty discovery is non-fatal — the deployment is still
+			// emitted without a Repository link.
+			if len(containers) > 0 {
+				repo, err := InspectImage(ctx, containers[0].Image)
 				if err != nil {
 					if logger != nil {
-						logger.Printf("WARN: failed to inspect image %q in deployment %s/%s: %v", container.Image, ns, dep.Name, err)
+						logger.Printf("WARN: failed to inspect image %q in deployment %s/%s: %v", containers[0].Image, ns, dep.Name, err)
 					}
-					continue
+				} else if repo.URL != "" {
+					if owner, name, ok := ParseGitHubRepository(repo.URL); ok {
+						repo.Owner = owner
+						repo.Name = name
+					}
+					entry.Repository = repo
 				}
-				if repo.URL == "" {
-					continue
-				}
-
-				if owner, name, ok := ParseGitHubRepository(repo.URL); ok {
-					repo.Owner = owner
-					repo.Name = name
-				}
-
-				results = append(results, DeploymentRepository{
-					ClusterID:  clusterID,
-					Namespace:  ns,
-					Deployment: dep.Name,
-					Image:      container.Image,
-					Repository: repo,
-				})
-				break // Stop after finding the first container with a valid repository
 			}
+
+			results = append(results, entry)
 		}
 	}
 
@@ -96,8 +106,9 @@ func DiscoverDeploymentRepositories(
 }
 
 // Discover returns unique repositories found in Deployments, including non-GitHub repositories.
+// It only returns entries where a repository was successfully discovered.
 func Discover(ctx context.Context, client kubernetes.Interface, logger *log.Logger) ([]Repository, error) {
-	entries, err := DiscoverDeploymentRepositories(ctx, client, logger)
+	entries, err := DiscoverDeployments(ctx, client, logger)
 	if err != nil {
 		return nil, fmt.Errorf("discovering deployment repositories: %w", err)
 	}
