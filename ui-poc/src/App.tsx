@@ -3,14 +3,15 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
 import CatalogView from './pages/CatalogView';
 import CatalogDetail from './pages/CatalogDetail';
 import { CATALOG_VIEWPOINTS } from './config/viewpoints';
+import Overview from './pages/Overview';
 
 function App() {
   return (
     <ThemeProvider>
       <Router>
         <Routes>
-          <Route path="/" element={<CatalogView />} />
-          <Route path="/catalog" element={<CatalogView />} />
+          <Route path="/" element={<Overview />} />
+          <Route path="/catalog" element={<Overview />} />
           {CATALOG_VIEWPOINTS.map((viewpoint) => (
             <Route
               key={viewpoint.path}
