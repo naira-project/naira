@@ -577,7 +577,7 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
-        - name: plugin-openai-api-models
+        - name: plugin-openai-api-models-litellm
           image: openai-api-models:local
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
@@ -624,8 +624,14 @@ spec:
               value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models=localhost:50057"
 =======
             - name: PLUGIN_ADDRESSES
+<<<<<<< HEAD
               value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models-litellm=localhost:50057,openai-api-models-vllm=localhost:50058,openai-api-models-llamacpp=localhost:50059"
 >>>>>>> 008e2aa (openai-api for vllm and llamacpp)
+||||||| parent of 717d2a1 (Remove llamacpp and vllm plugin sidecars)
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models-litellm=localhost:50057,openai-api-models-vllm=localhost:50058,openai-api-models-llamacpp=localhost:50059"
+=======
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models-litellm=localhost:50057"
+>>>>>>> 717d2a1 (Remove llamacpp and vllm plugin sidecars)
           ports:
             - containerPort: 8090
               name: http
