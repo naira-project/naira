@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { computeRelationSummaries, RelationSummary } from '../lib/kindUtils';
 import { NodeResource } from '../lib/catalogApi';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 interface UseRelationSummariesResult {
   relationSummaries: Map<string, RelationSummary>;
@@ -11,6 +12,7 @@ interface UseRelationSummariesResult {
  * Re-computes whenever the `nodes` array reference changes.
  */
 export function useRelationSummaries(nodes: NodeResource[]): UseRelationSummariesResult {
+  const { token } = useOpenMFPContext();
   const [relationSummaries, setRelationSummaries] = useState<Map<string, RelationSummary>>(new Map());
 
   useEffect(() => {
@@ -19,14 +21,14 @@ export function useRelationSummaries(nodes: NodeResource[]): UseRelationSummarie
       return;
     }
 
-    computeRelationSummaries(nodes)
+    computeRelationSummaries(token, nodes)
       .then((summaries) => {
         setRelationSummaries(summaries);
       })
       .catch(() => {
         setRelationSummaries(new Map());
       });
-  }, [nodes]);
+  }, [nodes, token]);
 
   return { relationSummaries };
 }

@@ -1,0 +1,39 @@
+version: '3'
+
+vars:
+  VLLM_NAMESPACE: vllm
+  VLLM_MANIFEST: ./infra/kubernetes/vllm.yaml
+
+tasks:
+  deploy:
+    desc: Deploy vLLM inference services to kind
+    cmds:
+      - kubectl apply -f {{.VLLM_MANIFEST}}
+      - kubectl -n {{.VLLM_NAMESPACE}} rollout status deploy/vllm-opt125m --timeout=600s
+      - kubectl -n {{.VLLM_NAMESPACE}} get pods
+
+  undeploy:
+    desc: Remove vLLM inference services from kind
+    cmds:
+      - kubectl delete -f {{.VLLM_MANIFEST}} --ignore-not-found
+
+  port-forward:
+    desc: Expose vLLM inference services on localhost
+    cmds:
+      - kubectl -n {{.VLLM_NAMESPACE}} port-forward svc/vllm-opt125m 8001:8001
+
+  test:
+    desc: Send a dummy prompt to the vLLM opt-125m model for inference
+    cmds:
+      - |
+        curl -s http://localhost:8001/v1/chat/completions \
+          -H "Content-Type: application/json" \
+          -d '{
+            "model": "opt-125m",
+            "messages": [
+              {"role": "user", "content": "What is the capital of France?"}
+            ],
+            "max_tokens": 50,
+            "temperature": 0.7
+          }' | python3 -m json.tool 2>/dev/null || cat
+        echo ""
