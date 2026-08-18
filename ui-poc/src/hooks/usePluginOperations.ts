@@ -211,13 +211,14 @@ export function usePluginsStatus(): UsePluginsStatusResult {
       setRunAllActive(true);
       try {
         pluginNames.forEach(markRunning);
-        const results = await Promise.allSettled(pluginNames.map((name) => apiRunPlugin(token, name)));
-        await Promise.all(
-          results.map((result, i) => {
-            if (result.status === 'fulfilled') {
-              return settleOne(result.value);
-            }
-            if (!cancelledRef.current) {
+        await Promise.allSettled(
+          pluginNames.map(async (name) => {
+            const op = await apiRunPlugin(token, name);
+            await settleOne(op);
+          })
+        ).then((results) => {
+          results.forEach((result, i) => {
+            if (result.status === 'rejected' && !cancelledRef.current) {
               addError(
                 result.reason instanceof Error
                   ? result.reason.message
@@ -225,9 +226,8 @@ export function usePluginsStatus(): UsePluginsStatusResult {
               );
               markStopped(pluginNames[i]);
             }
-            return undefined;
-          })
-        );
+          });
+        });
       } finally {
         if (!cancelledRef.current) setRunAllActive(false);
       }
