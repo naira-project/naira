@@ -1,0 +1,22 @@
+version: '3'
+
+includes:
+  mlflow:
+    taskfile: ./tasks/mlflow.yml
+    dir: .
+  openmetadata:
+    taskfile: ./tasks/openmetadata.yml
+    dir: .
+
+tasks:
+  deploy:
+    desc: Deploy the MLOps stack (mlflow + openmetadata)
+    cmds:
+      - task: mlflow:deploy
+      - task: openmetadata:deploy
+
+  undeploy:
+    desc: Remove the MLOps stack from kind
+    cmds:
+      - task: mlflow:undeploy
+      - task: openmetadata:undeploy

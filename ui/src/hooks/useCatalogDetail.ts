@@ -6,6 +6,7 @@ import {
   NodeResource,
 } from '../lib/catalogApi';
 import { useAsyncData } from './useAsyncData';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 interface CatalogDetailResult {
   node: NodeResource | null;
@@ -17,9 +18,11 @@ interface CatalogDetailResult {
  * Generic hook to fetch a single catalog node by kind + path.
  */
 export function useCatalogDetail(kind: string, path: string) {
+  const { token } = useOpenMFPContext();
+
   const { data: node, loading, error } = useAsyncData<NodeResource | null>(
-    () => fetchNode(kind, path),
-    [kind, path],
+    () => fetchNode(token, kind, path),
+    [kind, path, token],
     null,
     `Failed to load ${kind} "${path}"`
   );
@@ -32,10 +35,11 @@ export function useCatalogDetail(kind: string, path: string) {
  * Used to resolve adopters / dependants.
  */
 export async function fetchRelatedNodes(
+  token: string | null,
   nodeName: string,
   relationKind?: string
 ): Promise<NodeResource[]> {
-  const relations = await fetchRelations({
+  const relations = await fetchRelations(token, {
     filter: buildEqualityFilter('toNode', nodeName),
     pageSize: 1000,
   });
@@ -49,7 +53,7 @@ export async function fetchRelatedNodes(
   const nodes = await Promise.all(
     names.map(async (name) => {
       try {
-        return await fetchNodeByName(name);
+        return await fetchNodeByName(token, name);
       } catch {
         return null;
       }

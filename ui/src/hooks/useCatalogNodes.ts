@@ -4,6 +4,7 @@ import {
   NodeResource,
 } from '../lib/catalogApi';
 import { useAsyncData } from './useAsyncData';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 interface CatalogNodesResult {
   nodes: NodeResource[];
@@ -16,9 +17,11 @@ interface CatalogNodesResult {
  * Re-fetches when `kind` changes.
  */
 export function useCatalogNodes(kind: string) {
+  const { token } = useOpenMFPContext();
+
   const { data: nodes, loading, error } = useAsyncData<NodeResource[]>(
-    () => fetchNodes({ filter: buildEqualityFilter('kind', kind), pageSize: 1000 }),
-    [kind],
+    () => fetchNodes(token, { filter: buildEqualityFilter('kind', kind), pageSize: 1000 }),
+    [kind, token],
     [],
     `Failed to load nodes of kind "${kind}"`
   );
