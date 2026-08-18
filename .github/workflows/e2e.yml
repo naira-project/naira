@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Deploys the full platform into an isolated namespace on a throwaway kind
-# cluster and runs the E2E suite against it. See:
-#   RFC-Kubernetes-Test-Environments-for-PR-Based-E2E-Testing.md
-#   SPEC-Kubernetes-Test-Environments-Implementation.md
+# cluster and runs the E2E suite against it. 
 #
 # `workflow_dispatch`-only for now, deliberately: this is a new, unvalidated
 # ~7-13 minute job. Switch the `on:` block to `pull_request` once a run has
