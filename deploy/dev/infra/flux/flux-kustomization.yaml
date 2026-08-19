@@ -9,7 +9,7 @@ spec:
     kind: GitRepository
     name: naira
     namespace: flux-system
-  path: ./deploy/dev/infra/kubernetes
+  path: ./deploy/dev/stacks
   prune: true
   timeout: 2m
   wait: true
