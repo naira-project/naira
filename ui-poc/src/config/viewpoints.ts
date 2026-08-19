@@ -7,7 +7,6 @@
  * and Plugins & Ingestion dialog without touching App.tsx.
  */
 export interface CatalogViewpoint {
-  /** URL segment under /catalog, e.g. "model" -> /catalog/model */
   path: string;
   heading: string;
   subheading: string;
@@ -38,3 +37,12 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
     allowedPlugins: ['litellm', 'mlflow'],
   },
 ];
+
+/**
+ * Finds the viewpoint that owns a given node kind, e.g. "dataset" -> the
+ * Dataset Catalog viewpoint. Used to route back to a node's parent catalog
+ * page without relying on browser history.
+ */
+export function findViewpointForKind(kind: string): CatalogViewpoint | undefined {
+  return CATALOG_VIEWPOINTS.find((viewpoint) => viewpoint.allowedKinds.includes(kind));
+}
