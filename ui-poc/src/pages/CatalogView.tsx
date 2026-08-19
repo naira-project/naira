@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, Layers, Plug } from 'lucide-react';
+import { Search, Layers } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { useKinds } from '../hooks/useKinds';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
@@ -12,7 +12,6 @@ import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
 import GenericTable from '../components/GenericTable';
 import EmptyState from '../components/EmptyState';
-import { PluginsManagerDialog } from '../components/PluginsManagerDialog';
 import { formatRelativeTime, latestOperation } from '../lib/utils';
 
 
@@ -20,18 +19,17 @@ interface CatalogViewProps {
   allowedKinds?: string[];
   heading?: string;
   subheading?: string;
-  /** Restrict the Plugins & Ingestion dialog to this subset of plugins. Omit to show every plugin. */
+  /** Plugins relevant to this viewpoint; used for the empty-state message and its link to /plugins. */
   allowedPlugins?: string[];
 }
 /**
  * Unified catalog view.
  * Focuses on browsing the catalog: kind selector + resource table.
- * Plugin management (run, history, status) lives in a dedicated dialog.
+ * Plugin management (run, history, status) lives on its own dedicated page (see PluginsPage).
  */
 export default function CatalogView({ allowedKinds, heading, subheading, allowedPlugins }: CatalogViewProps) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  const [pluginsOpen, setPluginsOpen] = useState(false);
 
   // Kind discovery & selection
   const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } = useKinds(allowedKinds);
@@ -58,13 +56,7 @@ export default function CatalogView({ allowedKinds, heading, subheading, allowed
   const { relationSummaries } = useRelationSummaries(filteredNodes);
 
   // Plugin run operations (used only for the compact "last sync" indicator)
-  const { operations, refresh: refreshOps } = usePluginsStatus();
-
-  // Keep kinds fresh whenever the plugin dialog reports completed runs.
-  const handleRunsCompleted = () => {
-    refreshKinds();
-    refreshOps();
-  };
+  const { operations } = usePluginsStatus();
 
   // Filter kinds by search
   const filteredKinds = kinds.filter((k) =>
@@ -100,20 +92,11 @@ export default function CatalogView({ allowedKinds, heading, subheading, allowed
               </span>
             </div>
           )}
-
-          {/* Plugins & Ingestion button */}
-          <button
-            onClick={() => setPluginsOpen(true)}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            <Plug size={16} />
-            Plugins & Ingestion
-          </button>
         </header>
 
         <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4">
           {!kindsError && !kindsLoading && kinds.length === 0 ? (
-            <EmptyState />
+            <EmptyState pluginNames={allowedPlugins} />
           ) : (
             <div className="mb-6">
               <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">
@@ -190,14 +173,6 @@ export default function CatalogView({ allowedKinds, heading, subheading, allowed
           )}
         </div>
       </div>
-
-      {/* Plugin management dialog */}
-      <PluginsManagerDialog
-        open={pluginsOpen}
-        onClose={() => setPluginsOpen(false)}
-        onRunsCompleted={handleRunsCompleted}
-        allowedPlugins={allowedPlugins}
-      />
     </div>
   );
 }

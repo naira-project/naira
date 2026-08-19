@@ -1,28 +1,28 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { X, Play, RefreshCw, AlertCircle } from 'lucide-react';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
 import { OperationResource, StatusErrorResource } from '../lib/catalogApi';
-import { PluginStatusBadge } from './PluginStatusBadge';
-import { PluginErrorModal } from './PluginErrorModal';
+import { PluginStatusBadge } from '../components/PluginStatusBadge';
+import { PluginErrorModal } from '../components/PluginErrorModal';
 import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 
-interface PluginsManagerDialogProps {
-  open: boolean;
-  onClose: () => void;
-  onRunsCompleted: () => void;
-  /** Restrict the dialog to this subset of plugins (e.g. the plugins relevant to the current viewpoint). Omit to show every plugin. */
-  allowedPlugins?: string[];
-}
-
 /**
- * Modal dialog for managing plugin ingestion.
+ * Dedicated page for managing plugin ingestion.
  *
  * Shows one row per plugin with its latest run state and a "Run All Plugins"
  * button at the top. Every "Run" button — including "Run All" — is independent:
  * triggering one plugin never disables another plugin's button, and "Run All"
  * neither blocks nor is blocked by anything triggered individually.
+ *
+ * Supports an optional `?only=plugin1,plugin2` query param to scope the page
+ * to a subset of plugins, used by empty-state links from catalog viewpoints.
  */
-export function PluginsManagerDialog({ open, onClose, onRunsCompleted, allowedPlugins }: PluginsManagerDialogProps) {
+export default function PluginsPage() {
+  const [searchParams] = useSearchParams();
+  const only = searchParams.get('only');
+  const allowedPlugins = only ? only.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+
   const {
     plugins,
     operations,
@@ -49,101 +49,77 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted, allowedPl
     } else {
       await runAll();
     }
-    onRunsCompleted();
   };
 
   const handleRunSingle = async (pluginName: string) => {
     await runOne(pluginName);
-    onRunsCompleted();
   };
 
-  if (!open) return null;
-
   return (
-    <>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        onClick={onClose}
-        role="dialog"
-        aria-modal="true"
-      >
-        <div
-          className="flex max-h-[80vh] w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl dark:bg-background-dark-paper"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground dark:text-foreground-dark-default">
-                Plugins & Ingestion
-              </h2>
-              <p className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
-                Run individual plugins or all at once, and inspect their latest status.
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
+    <div className="flex h-screen overflow-hidden bg-background dark:bg-background-dark-default">
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Top bar */}
+        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-background-dark-paper">
+          <div>
+            <h1 className="text-lg font-semibold text-foreground dark:text-foreground-dark-default">
+              Plugins & Ingestion
+            </h1>
+            <p className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+              Run individual plugins or all at once, and inspect their latest status.
+            </p>
           </div>
 
-          {/* Toolbar */}
-          <div className="flex shrink-0 items-center justify-end border-b border-gray-200 px-6 py-3 dark:border-gray-700">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={refresh}
-                disabled={loading}
-                className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
-                title="Refresh status"
-                aria-label="Refresh status"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              </button>
-              <button
-                onClick={handleRunVisible}
-                disabled={runAllActive}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <RefreshCw size={14} className={runAllActive ? 'animate-spin' : ''} />
-                {runAllActive ? 'Running…' : allowedPlugins ? 'Run Shown Plugins' : 'Run All Plugins'}
-              </button>
-            </div>
-          </div>
+          <div className="flex-1" />
 
-          {/* Body */}
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-            {runErrors.length > 0 && (
-              <div className="mb-4 space-y-2">
-                {runErrors.map((err) => (
-                  <div
-                    key={err.id}
-                    className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400"
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
+            title="Refresh status"
+            aria-label="Refresh status"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            onClick={handleRunVisible}
+            disabled={runAllActive}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw size={14} className={runAllActive ? 'animate-spin' : ''} />
+            {runAllActive ? 'Running…' : allowedPlugins ? 'Run Shown Plugins' : 'Run All Plugins'}
+          </button>
+        </header>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {runErrors.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {runErrors.map((err) => (
+                <div
+                  key={err.id}
+                  className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400"
+                >
+                  <span>{err.message}</span>
+                  <button
+                    onClick={() => dismissError(err.id)}
+                    className="shrink-0 rounded p-0.5 text-red-500 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900"
+                    aria-label="Dismiss"
                   >
-                    <span>{err.message}</span>
-                    <button
-                      onClick={() => dismissError(err.id)}
-                      className="shrink-0 rounded p-0.5 text-red-500 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900"
-                      aria-label="Dismiss"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
-            <StatusTab
-              plugins={visiblePlugins}
-              operations={operations}
-              loading={loading}
-              runningPlugins={runningPlugins}
-              onRun={handleRunSingle}
-              onViewError={(plugin, error) => setSelectedError({ plugin, error })}
-            />
-          </div>
+          <StatusTab
+            plugins={visiblePlugins}
+            operations={operations}
+            loading={loading}
+            runningPlugins={runningPlugins}
+            onRun={handleRunSingle}
+            onViewError={(plugin, error) => setSelectedError({ plugin, error })}
+          />
         </div>
       </div>
 
@@ -152,7 +128,7 @@ export function PluginsManagerDialog({ open, onClose, onRunsCompleted, allowedPl
         error={selectedError?.error ?? null}
         onClose={() => setSelectedError(null)}
       />
-    </>
+    </div>
   );
 }
 

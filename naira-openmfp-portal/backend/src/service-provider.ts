@@ -77,6 +77,15 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
                 hideFromNav: false,
                 url: `${UI_BASE_URL}/catalog/software_catalog`,
                 loadingIndicator: { enabled: false },
+              },
+              {
+                pathSegment: 'plugins',
+                label: 'Plugins',
+                order: 4,
+                entityType: 'naira',
+                hideFromNav: false,
+                url: `${UI_BASE_URL}/plugins`,
+                loadingIndicator: { enabled: false },
               }
             ],
           },
