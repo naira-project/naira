@@ -1,7 +1,7 @@
 {
   "name": "naira-openmfp-portal",
   "version": "1.0.0",
-  "description": "OpenMFP Portal",
+  "description": "Naira",
   "engines": {
     "node": "25.9.0",
     "npm": "11.16.0"

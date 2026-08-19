@@ -33,7 +33,7 @@ export default function Overview() {
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="mb-6">
+          <div className="mb-6 text-center">
             <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">
               Overview
             </h1>
@@ -42,11 +42,10 @@ export default function Overview() {
             </p>
           </div>
 
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
+          <div className="ml-12 grid grid-cols-[repeat(auto-fill,16rem)] gap-4">
             {filteredViewpoints.map((viewpoint) => (
               <Card
                 key={viewpoint.path}
-                onClick={() => navigate(`/catalog/${viewpoint.path}`)}
                 className="cursor-pointer transition-shadow hover:shadow-md"
               >
                 <CardContent>
@@ -57,6 +56,14 @@ export default function Overview() {
                     {viewpoint.subheading}
                   </p>
                 </CardContent>
+                <div className="px-4 pb-4">
+                  <button
+                    onClick={() => navigate(`/catalog/${viewpoint.path}`)}
+                    className="flex w-full items-center justify-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                  >
+                    Browse
+                  </button>
+                </div>
               </Card>
             ))}
           </div>
