@@ -1,3 +1,26 @@
+// github enriches GitHub repositories discovered from Kubernetes Deployments
+// with repository metadata and CODEOWNERS ownership information.
+//
+// The plugin only collects repositories that are both referenced by a
+// Kubernetes Deployment and owned by the GitHub organization configured in
+// GITHUB_ORG. It does not enumerate or collect repositories outside that
+// organization. The organization restriction is applied using the GITHUB_ORG
+// environment variable.
+//
+// # Environment Variables
+//
+//   - GITHUB_ORG (mandatory) - limits collection to repositories owned by this
+//     GitHub organization.
+//   - GITHUB_TOKEN (optional) - GitHub API bearer token used to access the
+//     repositories and CODEOWNERS files.
+//   - GITHUB_BASE_URL (optional) - GitHub API base URL; defaults to
+//     "https://api.github.com". Set this for GitHub Enterprise.
+//   - GITHUB_HTTP_TIMEOUT (optional) - GitHub API request timeout; defaults to
+//     10s.
+//   - KUBECONFIG (optional) - path to a kubeconfig file; when unset, in-cluster
+//     configuration is used.
+//
+//go:generate bash -c "goreadme -use-stdlib-markdown -title 'github plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
 
 import (
@@ -25,12 +48,12 @@ type config struct {
 	PathPrefix string `env:"PATH_PREFIX" default:"git"`
 
 	// GitHubOrg limits collection to repositories used by Deployments and owned
-	// by this GitHub organization. It no longer means "list every repo".
-	GitHubOrg string `env:"GITHUB_ORG" default:"naira-project"`
+	// by this GitHub organization.
+	GitHubOrg string `env:"GITHUB_ORG"`
 
 	Kubeconfig string `env:"KUBECONFIG"`
 
-	GitHubToken   string        `env:"GITHUB_TOKEN" default:""`
+	GitHubToken   string        `env:"GITHUB_TOKEN"`
 	GitHubBaseURL string        `env:"GITHUB_BASE_URL" default:"https://api.github.com"`
 	HTTPTimeout   time.Duration `env:"GITHUB_HTTP_TIMEOUT" default:"10s"`
 }
@@ -51,6 +74,9 @@ func New(config config, logger *log.Logger) *Plugin {
 
 func main() {
 	app := pluginmain.New[config]()
+	if app.PluginConfig.GitHubOrg == "" {
+		app.Logger.Fatal("GITHUB_ORG is required")
+	}
 
 	p := New(app.PluginConfig, app.Logger)
 	app.Serve(p)

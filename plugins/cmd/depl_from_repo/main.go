@@ -1,3 +1,19 @@
+// depl_from_repo scans Kubernetes Deployments and links them to the Git
+// repositories from which they were deployed.
+//
+// For every discovered Deployment, the plugin emits a Deployment node with
+// container-image properties. When repository metadata can be
+// extracted from the Deployment, it emits a GitRepository node and a
+// deployed_from relation from the Deployment to that repository.
+//
+// # Environment Variables
+//
+//   - KUBECONFIG (optional) - path to a kubeconfig file; when unset, in-cluster
+//     configuration is used.
+//   - HTTP_TIMEOUT (optional) - HTTP timeout used by the plugin configuration;
+//     defaults to 10s.
+//
+//go:generate bash -c "goreadme -use-stdlib-markdown -title 'depl_from_repo plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
 
 import (
