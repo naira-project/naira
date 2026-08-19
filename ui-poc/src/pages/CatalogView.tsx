@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, Layers, Plug } from 'lucide-react';
 import { Input } from '../components/ui/input';
@@ -65,11 +65,6 @@ export default function CatalogView({ allowedKinds, heading, subheading, allowed
     refreshKinds();
     refreshOps();
   };
-
-  // Refresh kinds on mount so data appears without manual interaction.
-  useEffect(() => {
-    refreshKinds();
-  }, [refreshKinds]);
 
   // Filter kinds by search
   const filteredKinds = kinds.filter((k) =>

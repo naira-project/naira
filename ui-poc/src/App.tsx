@@ -1,5 +1,7 @@
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './lib/queryClient';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
+import { BrowserRouter as Router, Routes, Route } from "react-router";
 import CatalogView from './pages/CatalogView';
 import CatalogDetail from './pages/CatalogDetail';
 import { CATALOG_VIEWPOINTS } from './config/viewpoints';
@@ -7,6 +9,7 @@ import Overview from './pages/Overview';
 
 function App() {
   return (
+    <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <Router>
         <Routes>
@@ -31,6 +34,7 @@ function App() {
         </Routes>
     </Router>
     </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 export default App;

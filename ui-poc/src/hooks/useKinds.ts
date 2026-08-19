@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { discoverKinds } from '../lib/kindUtils';
+import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
 
 interface UseKindsResult {
@@ -14,45 +16,41 @@ interface UseKindsResult {
 /**
  * Encapsulates kind discovery, loading/error state, active kind selection,
  * and a refresh mechanism.
- *
- * Automatically discovers kinds on mount and selects the first kind by default.
  */
 export function useKinds(allowedKinds?: string[]): UseKindsResult {
-  const { token } = useOpenMFPContext();
-  const [kinds, setKinds] = useState<string[]>([]);
-  const [kindsLoading, setKindsLoading] = useState(true);
-  const [kindsError, setKindsError] = useState<string | null>(null);
   const [activeKind, setActiveKind] = useState<string | null>(null);
+  const { token } = useOpenMFPContext();
 
-  const loadKinds = useCallback(() => {
-    setKindsLoading(true);
-    setKindsError(null);
-    discoverKinds(token)
-      .then((discovered) => {
-        const result = allowedKinds 
-        ? allowedKinds.filter((k) => discovered.includes(k))
-        : discovered;
-        setKinds(result);
-        // Auto-select first kind if none selected
-        setActiveKind((prev) => (prev === null && result.length > 0 ? result[0] : prev));
-        setKindsLoading(false);
-      })
-      .catch(() => {
-        setKindsError('Failed to discover kinds');
-        setKindsLoading(false);
-      });
-  }, [allowedKinds?.join(','), token]);
+  const {
+    data: discoveredKinds = [],
+    isLoading: kindsLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.kinds,
+    queryFn: () => discoverKinds(token),
+  });
 
+  const kinds = useMemo(
+    () => (allowedKinds ? allowedKinds.filter((k) => discoveredKinds.includes(k)) : discoveredKinds),
+    [allowedKinds?.join(','), discoveredKinds],
+  );
+
+  // Auto-select first kind if none selected yet.
   useEffect(() => {
-    loadKinds();
-  }, [loadKinds]);
+    setActiveKind((prev) => (prev === null && kinds.length > 0 ? kinds[0] : prev));
+  }, [kinds]);
+
+  const refreshKinds = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   return {
     kinds,
     kindsLoading,
-    kindsError,
+    kindsError: error ? 'Failed to discover kinds' : null,
     activeKind,
     setActiveKind,
-    refreshKinds: loadKinds,
+    refreshKinds,
   };
 }

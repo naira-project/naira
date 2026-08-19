@@ -1,16 +1,18 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   OperationResource,
   runAllPlugins as apiRunAllPlugins,
   runPlugin as apiRunPlugin,
-  fetchOperation,
   fetchOperations,
   fetchPlugins,
 } from '../lib/catalogApi';
+import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
 
 const POLL_INTERVAL_MS = 2000;
-const POLL_MAX_ATTEMPTS = 60; // 60 * 2s = 2 minutes
+const EMPTY_OPERATIONS: OperationResource[] = [];
+const STALE_AFTER_MS = 2 * 60 * 1000;
 
 const TERMINAL_STATES: OperationResource['state'][] = ['SUCCEEDED', 'FAILED'];
 
@@ -18,49 +20,23 @@ function isTerminal(op: OperationResource) {
   return TERMINAL_STATES.includes(op.state);
 }
 
-/**
- * Polls a single operation until it reaches a terminal state, or until
- * POLL_MAX_ATTEMPTS is exceeded. Never hangs forever.
- *
- * Each operation is polled independently — callers running several of these
- * concurrently (e.g. "Run All") get each result as soon as *that* operation
- * finishes, instead of waiting for the slowest one.
- *
- * `cancelledRef` lets the caller stop updating state after unmount.
- */
-async function pollSingle(
-  token: string | null,
-  op: OperationResource,
-  cancelledRef: React.MutableRefObject<boolean>
-): Promise<{ operation: OperationResource; timedOut: boolean }> {
-  let current = op;
+function isStale(op: OperationResource) {
+  if (isTerminal(op)) return false;
 
-  for (let attempt = 0; attempt < POLL_MAX_ATTEMPTS; attempt++) {
-    if (isTerminal(current) || cancelledRef.current) {
-      return { operation: current, timedOut: false };
-    }
+  const startTime = new Date(op.startTime).getTime();
+  const createdTime = new Date(op.createdAt).getTime();
+  const referenceTime = Number.isFinite(startTime) && startTime > 0 ? startTime : createdTime;
 
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
-    if (cancelledRef.current) {
-      return { operation: current, timedOut: false };
-    }
-
-    current = await fetchOperation(token, current.name);
-  }
-
-  return { operation: current, timedOut: !isTerminal(current) };
+  return Number.isFinite(referenceTime) && Date.now() - referenceTime > STALE_AFTER_MS;
 }
 
-/**
- * Replaces the operation with the same name if present, otherwise prepends
- * it, keeping the most-recent-first ordering used elsewhere.
- */
-function mergeOperation(list: OperationResource[], updated: OperationResource): OperationResource[] {
-  const idx = list.findIndex((o) => o.name === updated.name);
-  if (idx === -1) return [updated, ...list];
-  const next = [...list];
-  next[idx] = updated;
-  return next;
+function mergeOperations(
+  current: OperationResource[] = [],
+  incoming: OperationResource[]
+): OperationResource[] {
+  const incomingByName = new Map(incoming.map((op) => [op.name, op]));
+  const existing = current.filter((op) => !incomingByName.has(op.name));
+  return [...incoming, ...existing];
 }
 
 export interface RunErrorEntry {
@@ -68,23 +44,23 @@ export interface RunErrorEntry {
   message: string;
 }
 
-// ---------------------------------------------------------------------------
-// usePluginsStatus — single source of truth for the plugins list and their
-// run operations. "Run" (per plugin) and "Run All" are fully independent:
-// each plugin tracks its own in-flight count, so triggering one plugin never
-// disables the button for another, and "Run All" never waits on — or is
-// blocked by — anything triggered individually.
-// ---------------------------------------------------------------------------
-
+/**
+ * Single source of truth for the plugins list and their run operations.
+ *
+ * Each plugin's running state is derived directly from the operations list,
+ * allowing single plugin runs and batch runs ("Run All") to operate independently.
+ * Polling for operations automatically activates every 2 seconds via React Query
+ * whenever non-terminal operations exist.
+ */
 interface UsePluginsStatusResult {
   plugins: string[];
   operations: OperationResource[];
   loading: boolean;
-  /** Plugin names with at least one in-flight run (via "Run", "Run All", or both). */
+  /** Set of plugin names currently executing or awaiting response. */
   runningPlugins: Set<string>;
-  /** True from the moment "Run All" is clicked until every operation it triggered has settled. */
+  /** Indicates whether a "Run All" execution is currently in progress. */
   runAllActive: boolean;
-  /** Trigger/timeout errors, most recent last. Distinct from a plugin's own FAILED result, which shows inline in its row. */
+  /** List of execution or timeout errors. */
   runErrors: RunErrorEntry[];
   dismissError: (id: string) => void;
   refresh: () => Promise<void>;
@@ -94,21 +70,20 @@ interface UsePluginsStatusResult {
 }
 
 export function usePluginsStatus(): UsePluginsStatusResult {
-  const { token } = useOpenMFPContext();
-  const [plugins, setPlugins] = useState<string[]>([]);
-  const [operations, setOperations] = useState<OperationResource[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [runningPlugins, setRunningPlugins] = useState<Set<string>>(new Set());
-  const [runAllActive, setRunAllActive] = useState(false);
+  const queryClient = useQueryClient();
   const [runErrors, setRunErrors] = useState<RunErrorEntry[]>([]);
-  const cancelledRef = useRef(false);
+  
+  // Tracks locally triggered plugins while waiting for the POST mutation response
+  const [pendingLocal, setPendingLocal] = useState<Set<string>>(new Set());
+  
+  // Tracks operation names triggered by "Run All" until they reach a terminal state
+  const [pendingRunAllOps, setPendingRunAllOps] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    cancelledRef.current = false;
-    return () => {
-      cancelledRef.current = true;
-    };
-  }, []);
+  // Indicates whether a "Run Subset" execution is currently in progress
+  const [subsetActive, setSubsetActive] = useState(false);
+
+  const warnedRef = useRef<Set<string>>(new Set());
+  const { token } = useOpenMFPContext();
 
   const addError = useCallback((message: string) => {
     setRunErrors((prev) => [
@@ -121,85 +96,108 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     setRunErrors((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [pluginList, ops] = await Promise.all([fetchPlugins(token), fetchOperations(token)]);
-      if (cancelledRef.current) return;
-      setPlugins(pluginList);
-      setOperations(ops);
-    } catch (err) {
-      if (!cancelledRef.current) {
-        addError(err instanceof Error ? err.message : 'Failed to load plugin status');
-      }
-    } finally {
-      if (!cancelledRef.current) setLoading(false);
-    }
-  }, [addError, token]);
+  const pluginsQuery = useQuery({
+    queryKey: queryKeys.plugins,
+    queryFn: () => fetchPlugins(token),
+  });
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  const markRunning = (name: string) =>
-    setRunningPlugins((prev) => new Set(prev).add(name));
-
-  const markStopped = (name: string) =>
-    setRunningPlugins((prev) => {
-      const next = new Set(prev);
-      next.delete(name);
-      return next;
-    });
-
-  const settleOne = useCallback(
-    async (op: OperationResource) => {
-      try {
-        const { operation, timedOut } = await pollSingle(token, op, cancelledRef);
-        if (cancelledRef.current) return;
-
-        if (timedOut) {
-          addError(`"${op.plugin}" is taking longer than expected — check back shortly.`);
-        } else {
-          setOperations((prev) => mergeOperation(prev, operation));
-        }
-      } finally {
-        markStopped(op.plugin);
-      }
+  const operationsQuery = useQuery({
+    queryKey: queryKeys.operations,
+    queryFn: () => fetchOperations(token),
+    refetchInterval: (query) => {
+      const ops = query.state.data ?? [];
+      return ops.some((op) => !isTerminal(op)) ? POLL_INTERVAL_MS : false;
     },
-    [addError, token]
-  );
+  });
+
+  const operations = operationsQuery.data ?? EMPTY_OPERATIONS;
+
+  const runningPlugins = useMemo(() => {
+    const running = new Set(
+      operations.filter((op) => !isTerminal(op)).map((op) => op.plugin)
+    );
+    pendingLocal.forEach((p) => running.add(p));
+    return running;
+  }, [operations, pendingLocal]);
+
+  // Emit a warning notice if an operation exceeds the stale threshold
+  useEffect(() => {
+    operations.filter(isStale).forEach((op) => {
+      if (!warnedRef.current.has(op.name)) {
+        warnedRef.current.add(op.name);
+        addError(`"${op.plugin}" is taking longer than expected — check back shortly.`);
+      }
+    });
+  }, [operations, addError]);
+
+  // Remove settled operations from the "Run All" tracking set
+  useEffect(() => {
+    if (pendingRunAllOps.size === 0) return;
+    setPendingRunAllOps((prev) => {
+      const next = new Set(
+        Array.from(prev).filter((name) => {
+          const op = operations.find((o) => o.name === name);
+          return op ? !isTerminal(op) : true;
+        })
+      );
+      return next.size === prev.size ? prev : next;
+    });
+  }, [operations, pendingRunAllOps]);
+  
+  const refresh = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.plugins }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.operations }),
+    ]);
+  }, [queryClient]);
+
+  const runOneMutation = useMutation({
+    mutationFn: (pluginName: string) => apiRunPlugin(token, pluginName),
+    onMutate: (pluginName: string) => {
+      setPendingLocal((prev) => new Set(prev).add(pluginName));
+    },
+    onSuccess: (newOp) => {
+      queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
+        mergeOperations(oldOps, [newOp])
+      );
+    },
+    onError: (err, pluginName) => {
+      addError(err instanceof Error ? err.message : `Failed to run "${pluginName}"`);
+    },
+    onSettled: (_data, _err, pluginName) => {
+      setPendingLocal((prev) => {
+        const next = new Set(prev);
+        next.delete(pluginName);
+        return next;
+      });
+    },
+  });
+
+  const runAllMutation = useMutation({
+    mutationFn: () => apiRunAllPlugins(token),
+    onSuccess: (ops) => {
+      setPendingRunAllOps(new Set(ops.map((op) => op.name)));
+      queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
+        mergeOperations(oldOps, ops)
+      );
+    },
+    onError: (err) => {
+      addError(err instanceof Error ? err.message : 'Failed to trigger plugin run');
+    },
+  });
 
   const runOne = useCallback(
     async (pluginName: string) => {
-      markRunning(pluginName);
-      try {
-        const op = await apiRunPlugin(token, pluginName);
-        await settleOne(op);
-      } catch (err) {
-        if (!cancelledRef.current) {
-          addError(err instanceof Error ? err.message : `Failed to run "${pluginName}"`);
-          markStopped(pluginName);
-        }
-      }
+      await runOneMutation.mutateAsync(pluginName).catch(() => {});
     },
-    [settleOne, addError, token]
+    [runOneMutation]
   );
 
   const runAll = useCallback(async () => {
-    setRunAllActive(true);
-    try {
-      const ops = await apiRunAllPlugins(token);
-      ops.forEach((op) => markRunning(op.plugin));
+    await runAllMutation.mutateAsync().catch(() => {});
+  }, [runAllMutation]);
 
-      await Promise.all(ops.map((op) => settleOne(op)));
-    } catch (err) {
-      if (!cancelledRef.current) {
-        addError(err instanceof Error ? err.message : 'Failed to trigger plugin run');
-      }
-    } finally {
-      if (!cancelledRef.current) setRunAllActive(false);
-    }
-  }, [settleOne, addError, token]);
+  const runAllActive = pendingRunAllOps.size > 0 || runAllMutation.isPending || subsetActive;
 
   /**
    * Like `runAll`, but scoped to a specific set of plugins — used by viewpoints
@@ -208,37 +206,46 @@ export function usePluginsStatus(): UsePluginsStatusResult {
    */
   const runSubset = useCallback(
     async (pluginNames: string[]) => {
-      setRunAllActive(true);
+      setPendingLocal((prev) => {
+        const next = new Set(prev);
+        pluginNames.forEach((name) => next.add(name));
+        return next;
+      });
+      setSubsetActive(true);
       try {
-        pluginNames.forEach(markRunning);
-        await Promise.allSettled(
+        const results = await Promise.allSettled(
           pluginNames.map(async (name) => {
             const op = await apiRunPlugin(token, name);
-            await settleOne(op);
+            queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
+              mergeOperations(oldOps, [op])
+            );
           })
-        ).then((results) => {
-          results.forEach((result, i) => {
-            if (result.status === 'rejected' && !cancelledRef.current) {
-              addError(
-                result.reason instanceof Error
-                  ? result.reason.message
-                  : `Failed to run "${pluginNames[i]}"`
-              );
-              markStopped(pluginNames[i]);
-            }
-          });
+        );
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') {
+            addError(
+              result.reason instanceof Error
+                ? result.reason.message
+                : `Failed to run "${pluginNames[i]}"`
+            );
+          }
         });
       } finally {
-        if (!cancelledRef.current) setRunAllActive(false);
+        setPendingLocal((prev) => {
+          const next = new Set(prev);
+          pluginNames.forEach((name) => next.delete(name));
+          return next;
+        });
+        setSubsetActive(false);
       }
     },
-    [settleOne, addError]
+    [token, queryClient, addError]
   );
 
   return {
-    plugins,
+    plugins: pluginsQuery.data ?? [],
     operations,
-    loading,
+    loading: pluginsQuery.isLoading || operationsQuery.isLoading,
     runningPlugins,
     runAllActive,
     runErrors,
