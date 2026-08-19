@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -28,51 +27,6 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
-
-// Property keys for mcp_server nodes.
-const (
-	propertyKeyProtocolVersion = "protocol_version"
-	propertyKeyServerName      = "server_name"
-	propertyKeyServerTitle     = "server_title"
-	propertyKeyServerVersion   = "server_version"
-	propertyKeyWebsiteURL      = "website_url"
-	propertyKeyInstructions    = "instructions"
-	propertyKeyEndpoint        = "endpoint"
-	propertyKeyAuthType        = "auth_type"
-	propertyKeyReachable       = "reachable"
-	propertyKeyError           = "error"
-)
-
-// Property keys for advertised server capabilities.
-const (
-	propertyKeyCapabilityTools       = "capability_tools"
-	propertyKeyCapabilityResources   = "capability_resources"
-	propertyKeyCapabilityPrompts     = "capability_prompts"
-	propertyKeyCapabilityLogging     = "capability_logging"
-	propertyKeyCapabilityCompletions = "capability_completions"
-)
-
-// Property keys for mcp_tool nodes.
-const (
-	propertyKeyTitle           = "title"
-	propertyKeyDescription     = "description"
-	propertyKeyInputSchema     = "input_schema"
-	propertyKeyOutputSchema    = "output_schema"
-	propertyKeyAnnotationTitle = "annotation_title"
-	propertyKeyReadOnlyHint    = "readonly_hint"
-	propertyKeyDestructiveHint = "destructive_hint"
-	propertyKeyIdempotentHint  = "idempotent_hint"
-	propertyKeyOpenWorldHint   = "open_world_hint"
-)
-
-// Values for the auth_type
-const (
-	authTypeNone   = "none"
-	authTypeBearer = "bearer"
-)
-
-// maxTextLength for fields
-const maxTextLength = 2000
 
 type config struct {
 	PathPrefix  string        `env:"PATH_PREFIX" usage:"prefix for emitted Node paths, e.g. 'platform' yields 'platform/github'"`
@@ -166,111 +120,12 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		inventory, err := mcputil.Inspect(ctx, p.httpClient, target)
 		if err != nil {
 			p.logger.Printf("WARN: inspecting MCP server %q at %q: %v", target.Name, target.Endpoint, err)
-			nodes = append(nodes, p.serverNode(target, inventory, err))
-			continue
 		}
 
-		serverID := p.serverID(target.Name)
-		nodes = append(nodes, p.serverNode(target, inventory, nil))
-
-		for _, tool := range inventory.Tools {
-			toolID := p.toolID(target.Name, tool.Name)
-			nodes = append(nodes, pluginapi.NodeClaim{
-				ID:         toolID,
-				Properties: p.toolProperties(tool),
-			})
-			relations = append(relations, pluginapi.RelationClaim{
-				Kind: pluginapi.RelationKindExposes,
-				From: serverID,
-				To:   toolID,
-			})
-		}
+		targetNodes, targetRelations := mcputil.Graph(p.nodePrefix, target, inventory, err, nil)
+		nodes = append(nodes, targetNodes...)
+		relations = append(relations, targetRelations...)
 	}
 
 	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
-}
-
-func (p *Plugin) serverID(name string) pluginapi.NodeID {
-	return pluginapi.NodeID{Kind: pluginapi.NodeKindMCPServer, Path: p.nodePrefix + "/" + name}
-}
-
-func (p *Plugin) toolID(serverName, toolName string) pluginapi.NodeID {
-	return pluginapi.NodeID{Kind: pluginapi.NodeKindMCPTool, Path: p.nodePrefix + "/" + serverName + "/" + toolName}
-}
-
-func (p *Plugin) serverNode(target mcputil.Target, inventory mcputil.Inventory, collectErr error) pluginapi.NodeClaim {
-	properties := pluginapi.PropertyMap{
-		propertyKeyEndpoint:  mcputil.RedactEndpoint(target.Endpoint),
-		propertyKeyAuthType:  authType(target.BearerToken),
-		propertyKeyReachable: strconv.FormatBool(collectErr == nil),
-	}
-
-	if collectErr != nil {
-		properties[propertyKeyError] = truncate(collectErr.Error())
-	}
-
-	server := inventory.Server
-	setNonEmpty(properties, propertyKeyProtocolVersion, server.ProtocolVersion)
-	setNonEmpty(properties, propertyKeyServerName, server.Name)
-	setNonEmpty(properties, propertyKeyServerTitle, server.Title)
-	setNonEmpty(properties, propertyKeyServerVersion, server.Version)
-	setNonEmpty(properties, propertyKeyWebsiteURL, server.WebsiteURL)
-	setNonEmpty(properties, propertyKeyInstructions, truncate(server.Instructions))
-
-	if collectErr == nil {
-		properties[propertyKeyCapabilityTools] = strconv.FormatBool(server.Capabilities.Tools)
-		properties[propertyKeyCapabilityResources] = strconv.FormatBool(server.Capabilities.Resources)
-		properties[propertyKeyCapabilityPrompts] = strconv.FormatBool(server.Capabilities.Prompts)
-		properties[propertyKeyCapabilityLogging] = strconv.FormatBool(server.Capabilities.Logging)
-		properties[propertyKeyCapabilityCompletions] = strconv.FormatBool(server.Capabilities.Completions)
-	}
-
-	return pluginapi.NodeClaim{ID: p.serverID(target.Name), Properties: properties}
-}
-
-func (p *Plugin) toolProperties(tool mcputil.Tool) pluginapi.PropertyMap {
-	properties := pluginapi.PropertyMap{}
-
-	setNonEmpty(properties, propertyKeyTitle, tool.Title)
-	setNonEmpty(properties, propertyKeyDescription, truncate(tool.Description))
-	setNonEmpty(properties, propertyKeyInputSchema, string(tool.InputSchema))
-	setNonEmpty(properties, propertyKeyOutputSchema, string(tool.OutputSchema))
-
-	// Annotations are hints declared by the server
-	if tool.Annotations != nil {
-		setNonEmpty(properties, propertyKeyAnnotationTitle, tool.Annotations.Title)
-		properties[propertyKeyReadOnlyHint] = strconv.FormatBool(tool.Annotations.ReadOnlyHint)
-		properties[propertyKeyIdempotentHint] = strconv.FormatBool(tool.Annotations.IdempotentHint)
-		if tool.Annotations.DestructiveHint != nil {
-			properties[propertyKeyDestructiveHint] = strconv.FormatBool(*tool.Annotations.DestructiveHint)
-		}
-		if tool.Annotations.OpenWorldHint != nil {
-			properties[propertyKeyOpenWorldHint] = strconv.FormatBool(*tool.Annotations.OpenWorldHint)
-		}
-	}
-
-	return properties
-}
-
-func authType(bearerToken string) string {
-	if strings.TrimSpace(bearerToken) == "" {
-		return authTypeNone
-	}
-	return authTypeBearer
-}
-
-func setNonEmpty(properties pluginapi.PropertyMap, key, value string) {
-	if value == "" {
-		return
-	}
-	properties[key] = value
-}
-
-func truncate(value string) string {
-	runes := []rune(value)
-	if len(runes) <= maxTextLength {
-		return value
-	}
-
-	return string(runes[:maxTextLength]) + "…"
 }

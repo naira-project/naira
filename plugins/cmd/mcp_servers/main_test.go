@@ -141,29 +141,29 @@ func TestCollectEmitsServerAndTools(t *testing.T) {
 	require.Contains(t, servers, "platform/github", "server path uses the configured name, not the reported one")
 	server := servers["platform/github"]
 
-	assert.Equal(t, "true", server[propertyKeyReachable])
-	assert.Equal(t, "reported-name", server[propertyKeyServerName])
-	assert.Equal(t, "Reported", server[propertyKeyServerTitle])
-	assert.Equal(t, "4.5.6", server[propertyKeyServerVersion])
-	assert.Equal(t, "Test instructions.", server[propertyKeyInstructions])
-	assert.Equal(t, "none", server[propertyKeyAuthType])
-	assert.Equal(t, "true", server[propertyKeyCapabilityTools])
-	assert.Equal(t, "true", server[propertyKeyCapabilityPrompts])
-	assert.Equal(t, "false", server[propertyKeyCapabilityResources])
-	assert.NotEmpty(t, server[propertyKeyProtocolVersion])
-	assert.NotContains(t, server, propertyKeyError)
+	assert.Equal(t, "true", server["reachable"])
+	assert.Equal(t, "reported-name", server["server_name"])
+	assert.Equal(t, "Reported", server["server_title"])
+	assert.Equal(t, "4.5.6", server["server_version"])
+	assert.Equal(t, "Test instructions.", server["instructions"])
+	assert.Equal(t, "none", server["auth_type"])
+	assert.Equal(t, "true", server["capability_tools"])
+	assert.Equal(t, "true", server["capability_prompts"])
+	assert.Equal(t, "false", server["capability_resources"])
+	assert.NotEmpty(t, server["protocol_version"])
+	assert.NotContains(t, server, "error")
 
 	tools := nodesByKind(response, pluginapi.NodeKindMCPTool)
 	require.Contains(t, tools, "platform/github/search_code")
 	tool := tools["platform/github/search_code"]
 
-	assert.Equal(t, "Search Code", tool[propertyKeyTitle])
-	assert.Equal(t, "Search the codebase.", tool[propertyKeyDescription])
-	assert.JSONEq(t, `{"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"required":["query"]}`, tool[propertyKeyInputSchema])
-	assert.Equal(t, "true", tool[propertyKeyReadOnlyHint])
-	assert.Equal(t, "false", tool[propertyKeyDestructiveHint])
-	assert.Equal(t, "true", tool[propertyKeyOpenWorldHint])
-	assert.Equal(t, "false", tool[propertyKeyIdempotentHint])
+	assert.Equal(t, "Search Code", tool["title"])
+	assert.Equal(t, "Search the codebase.", tool["description"])
+	assert.JSONEq(t, `{"type":"object","properties":{"query":{"type":"string"},"limit":{"type":"integer"}},"required":["query"]}`, tool["input_schema"])
+	assert.Equal(t, "true", tool["readonly_hint"])
+	assert.Equal(t, "false", tool["destructive_hint"])
+	assert.Equal(t, "true", tool["open_world_hint"])
+	assert.Equal(t, "false", tool["idempotent_hint"])
 
 	require.Len(t, response.Relations, 1)
 	relation := response.Relations[0]
@@ -187,8 +187,8 @@ func TestCollectOmitsUndeclaredAnnotationHints(t *testing.T) {
 	require.NotNil(t, tool)
 	// The protocol defaults these two hints to true, so an absent value must not
 	// be recorded as a declared false.
-	assert.NotContains(t, tool, propertyKeyDestructiveHint)
-	assert.NotContains(t, tool, propertyKeyOpenWorldHint)
+	assert.NotContains(t, tool, "destructive_hint")
+	assert.NotContains(t, tool, "open_world_hint")
 }
 
 func TestCollectKeepsUnreachableServerVisible(t *testing.T) {
@@ -207,9 +207,9 @@ func TestCollectKeepsUnreachableServerVisible(t *testing.T) {
 	require.Contains(t, servers, "platform/broken")
 	server := servers["platform/broken"]
 
-	assert.Equal(t, "false", server[propertyKeyReachable])
-	assert.NotEmpty(t, server[propertyKeyError])
-	assert.NotContains(t, server, propertyKeyCapabilityTools, "capabilities are unknown when the session never opened")
+	assert.Equal(t, "false", server["reachable"])
+	assert.NotEmpty(t, server["error"])
+	assert.NotContains(t, server, "capability_tools", "capabilities are unknown when the session never opened")
 	assert.Empty(t, nodesByKind(response, pluginapi.NodeKindMCPTool))
 }
 
@@ -230,8 +230,8 @@ func TestCollectContinuesAfterUnreachableServer(t *testing.T) {
 	require.NoError(t, err)
 
 	servers := nodesByKind(response, pluginapi.NodeKindMCPServer)
-	assert.Equal(t, "false", servers["platform/broken"][propertyKeyReachable])
-	assert.Equal(t, "true", servers["platform/healthy"][propertyKeyReachable])
+	assert.Equal(t, "false", servers["platform/broken"]["reachable"])
+	assert.Equal(t, "true", servers["platform/healthy"]["reachable"])
 	assert.Contains(t, nodesByKind(response, pluginapi.NodeKindMCPTool), "platform/healthy/tool")
 }
 
@@ -250,9 +250,9 @@ func TestCollectRedactsEndpointCredentials(t *testing.T) {
 
 	server := nodesByKind(response, pluginapi.NodeKindMCPServer)["platform/secret"]
 	require.NotNil(t, server)
-	assert.Equal(t, "https://mcp.example.com/mcp", server[propertyKeyEndpoint])
-	assert.NotContains(t, server[propertyKeyEndpoint], "pass")
-	assert.NotContains(t, server[propertyKeyEndpoint], "abc")
+	assert.Equal(t, "https://mcp.example.com/mcp", server["endpoint"])
+	assert.NotContains(t, server["endpoint"], "pass")
+	assert.NotContains(t, server["endpoint"], "abc")
 }
 
 func TestBearerTokenAppliesToEveryEndpoint(t *testing.T) {
@@ -271,7 +271,7 @@ func TestBearerTokenAppliesToEveryEndpoint(t *testing.T) {
 
 func TestCollectTruncatesOverlongText(t *testing.T) {
 	longDescription := ""
-	for range maxTextLength + 100 {
+	for range 2000 + 100 {
 		longDescription += "é"
 	}
 
@@ -289,8 +289,8 @@ func TestCollectTruncatesOverlongText(t *testing.T) {
 	response, err := plugin.Collect(t.Context())
 	require.NoError(t, err)
 
-	description := nodesByKind(response, pluginapi.NodeKindMCPTool)["platform/srv/tool"][propertyKeyDescription]
-	assert.Equal(t, maxTextLength+1, len([]rune(description)), "truncation must cut on a rune boundary")
+	description := nodesByKind(response, pluginapi.NodeKindMCPTool)["platform/srv/tool"]["description"]
+	assert.Equal(t, 2000+1, len([]rune(description)), "truncation must cut on a rune boundary")
 	assert.True(t, utf8ValidString(description))
 }
 

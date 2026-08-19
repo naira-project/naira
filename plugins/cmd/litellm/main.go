@@ -80,6 +80,10 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		modelKeys[model.ID] = node
 	}
 
+	mcpNodes, mcpRelations := p.collectMCPServers(ctx)
+	nodes = append(nodes, mcpNodes...)
+	relations = append(relations, mcpRelations...)
+
 	if p.appIdentityProvider == nil {
 		return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
 	}
