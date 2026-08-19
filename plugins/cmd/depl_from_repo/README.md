@@ -7,7 +7,6 @@ For every discovered Deployment, the plugin emits a Deployment node with contain
 ## Environment Variables
 
   - KUBECONFIG (optional) - path to a kubeconfig file; when unset, in-cluster configuration is used.
-  - HTTP\_TIMEOUT (optional) - HTTP timeout used by the plugin configuration; defaults to 10s.
 
 ---
 Readme created from Go doc with [goreadme](https://github.com/posener/goreadme)

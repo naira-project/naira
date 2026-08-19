@@ -10,8 +10,6 @@
 //
 //   - KUBECONFIG (optional) - path to a kubeconfig file; when unset, in-cluster
 //     configuration is used.
-//   - HTTP_TIMEOUT (optional) - HTTP timeout used by the plugin configuration;
-//     defaults to 10s.
 //
 //go:generate bash -c "goreadme -use-stdlib-markdown -title 'depl_from_repo plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
@@ -21,7 +19,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -39,8 +36,7 @@ const (
 )
 
 type config struct {
-	Kubeconfig  string        `env:"KUBECONFIG"`
-	HTTPTimeout time.Duration `env:"HTTP_TIMEOUT" default:"10s"`
+	Kubeconfig string `env:"KUBECONFIG"`
 }
 
 type Plugin struct {

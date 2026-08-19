@@ -45,8 +45,6 @@ const (
 )
 
 type config struct {
-	PathPrefix string `env:"PATH_PREFIX" default:"git"`
-
 	// GitHubOrg limits collection to repositories used by Deployments and owned
 	// by this GitHub organization.
 	GitHubOrg string `env:"GITHUB_ORG"`

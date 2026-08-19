@@ -66,20 +66,6 @@ func (c *githubClient) do(ctx context.Context, path string, out any) (bool, erro
 	return true, nil
 }
 
-// ListOrgRepos lists repositories for an org. Single page only (per_page=100);
-// orgs with >100 repos need pagination added here later.
-func (c *githubClient) ListOrgRepos(ctx context.Context, org string) ([]ghRepo, error) {
-	var repos []ghRepo
-	found, err := c.do(ctx, fmt.Sprintf("/orgs/%s/repos?per_page=100&type=sources", url.PathEscape(org)), &repos)
-	if err != nil {
-		return nil, fmt.Errorf("listing repos for org %s: %w", org, err)
-	}
-	if !found {
-		return nil, nil
-	}
-	return repos, nil
-}
-
 func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo, bool, error) {
 	var r ghRepo
 	found, err := c.do(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &r)
