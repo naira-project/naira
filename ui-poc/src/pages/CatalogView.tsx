@@ -11,6 +11,7 @@ import { derivePlugins } from '../lib/kindUtils';
 import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
 import GenericTable from '../components/GenericTable';
+import EmptyState from '../components/EmptyState';
 import { PluginsManagerDialog } from '../components/PluginsManagerDialog';
 import { formatRelativeTime, latestOperation } from '../lib/utils';
 
@@ -115,44 +116,43 @@ export default function CatalogView({ allowedKinds, heading, subheading, allowed
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {/* Kind selector area */}
-          <div className="mb-6">
-            <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">
-              {heading ?? 'Catalog Explorer'}
-            </h1>
-            <p className="mt-1 mb-4 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-              {subheading ?? 'Select a resource kind to browse its entries.'}
-            </p>
+        <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4">
+          {!kindsError && !kindsLoading && kinds.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <div className="mb-6">
+              <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">
+                {heading ?? 'Catalog Explorer'}
+              </h1>
+              <p className="mt-1 mb-4 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+                {subheading ?? 'Select a resource kind to browse its entries.'}
+              </p>
 
-            {kindsError && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-red-500">
-                <span>{kindsError}</span>
-                <button onClick={refreshKinds} className="underline hover:no-underline">
-                  Retry
-                </button>
-              </div>
-            )}
+              {kindsError && (
+                <div className="mb-4 flex items-center gap-2 text-sm text-red-500">
+                  <span>{kindsError}</span>
+                  <button onClick={refreshKinds} className="underline hover:no-underline">
+                    Retry
+                  </button>
+                </div>
+              )}
 
-            {!kindsError && filteredKinds.length === 0 && !kindsLoading && (
-              <div className="mb-4 flex flex-col items-center gap-2 py-6 text-foreground-secondary dark:text-foreground-dark-secondary">
-                <Layers size={32} className="opacity-40" />
-                <p className="text-sm">
-                  {kinds.length === 0
-                    ? 'No kinds found. Run plugins from "Plugins & Ingestion" first.'
-                    : 'No kinds match your search.'}
-                </p>
-              </div>
-            )}
-            {(!allowedKinds || allowedKinds.length > 1) && (
-            <KindSelector
-              kinds={filteredKinds}
-              activeKind={activeKind}
-              onSelect={setActiveKind}
-              loading={kindsLoading}
-            />
-            )}
-          </div>
+              {!kindsError && filteredKinds.length === 0 && !kindsLoading && (
+                <div className="mb-4 flex flex-col items-center gap-2 py-6 text-foreground-secondary dark:text-foreground-dark-secondary">
+                  <Layers size={32} className="opacity-40" />
+                  <p className="text-sm">No kinds match your search.</p>
+                </div>
+              )}
+              {(!allowedKinds || allowedKinds.length > 1) && (
+              <KindSelector
+                kinds={filteredKinds}
+                activeKind={activeKind}
+                onSelect={setActiveKind}
+                loading={kindsLoading}
+              />
+              )}
+            </div>
+          )}
 
           {/* Node table area */}
           {activeKind && (

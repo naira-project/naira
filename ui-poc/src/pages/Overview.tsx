@@ -49,10 +49,10 @@ export default function Overview() {
                 className="cursor-pointer transition-shadow hover:shadow-md"
               >
                 <CardContent>
-                  <h3 className="text-sm font-semibold text-foreground dark:text-foreground-dark-default">
+                  <h3 className="text-sm text-center font-semibold text-foreground dark:text-foreground-dark-default">
                     {viewpoint.heading}
                   </h3>
-                  <p className="mt-1 text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+                  <p className="mt-1 text-xs text-center text-foreground-secondary dark:text-foreground-dark-secondary">
                     {viewpoint.subheading}
                   </p>
                 </CardContent>

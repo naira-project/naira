@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { NodeResource, nodeProps } from '../lib/catalogApi';
 import { inferColumns, formatPropValue, parsePath,  namespaceColumnLabel, RelationSummary } from '../lib/kindUtils';
+import EmptyState from './EmptyState';
 
 interface GenericTableProps {
   nodes: NodeResource[];
@@ -55,11 +56,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
   }, [pluginColCount, hasPluginColumns]);
 
   if (nodes.length === 0) {
-    return (
-      <p className="px-4 py-8 text-center text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-        No {kind} nodes found.
-      </p>
-    );
+    return <EmptyState />;
   }
 
   const headerCell =
