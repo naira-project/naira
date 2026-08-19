@@ -80,7 +80,7 @@ func DiscoverDeployments(
 				entry.Images = append(entry.Images, container.Image)
 			}
 
-			// Try to discover the source repository from the primary container.
+			// Try to discover the source repository from the primary container (for simplicity).
 			// A failed or empty discovery is non-fatal — the deployment is still
 			// emitted without a Repository link.
 			if len(containers) > 0 {
