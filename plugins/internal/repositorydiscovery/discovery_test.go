@@ -22,7 +22,7 @@ func TestParseGitHubRepository(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			owner, repo, ok := ParseGitHubRepository(test.input)
+			owner, repo, ok := parseGitHubRepository(test.input)
 			if owner != test.owner || repo != test.repo || ok != test.ok {
 				t.Fatalf("ParseGitHubRepository(%q) = (%q, %q, %t), want (%q, %q, %t)", test.input, owner, repo, ok, test.owner, test.repo, test.ok)
 			}

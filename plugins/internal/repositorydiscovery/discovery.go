@@ -84,13 +84,13 @@ func DiscoverDeployments(
 			// A failed or empty discovery is non-fatal — the deployment is still
 			// emitted without a Repository link.
 			if len(containers) > 0 {
-				repo, err := InspectImage(ctx, containers[0].Image)
+				repo, err := inspectImage(ctx, containers[0].Image)
 				if err != nil {
 					if logger != nil {
 						logger.Printf("WARN: failed to inspect image %q in deployment %s/%s: %v", containers[0].Image, ns, dep.Name, err)
 					}
 				} else if repo.URL != "" {
-					if owner, name, ok := ParseGitHubRepository(repo.URL); ok {
+					if owner, name, ok := parseGitHubRepository(repo.URL); ok {
 						repo.Owner = owner
 						repo.Name = name
 					}
@@ -125,9 +125,9 @@ func Discover(ctx context.Context, client kubernetes.Interface, logger *log.Logg
 	return result, nil
 }
 
-// InspectImage reads source and revision labels from an image config,
+// inspectImage reads source and revision labels from an image config,
 // falling back to repository inference
-func InspectImage(ctx context.Context, image string) (Repository, error) {
+func inspectImage(ctx context.Context, image string) (Repository, error) {
 	ref, err := name.ParseReference(image)
 	if err != nil {
 		return Repository{}, fmt.Errorf("parsing image reference: %w", err)
@@ -135,7 +135,7 @@ func InspectImage(ctx context.Context, image string) (Repository, error) {
 	img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithTransport(http.DefaultTransport))
 	if err != nil {
 		// Fallback to infer repository from GHCR image name
-		if inferred := InferRepository(image); inferred != "" {
+		if inferred := inferRepository(image); inferred != "" {
 			return Repository{
 				URL:    inferred,
 				Method: "INFERRED",
@@ -162,7 +162,7 @@ func InspectImage(ctx context.Context, image string) (Repository, error) {
 
 	// Fallback to infer repository from GHCR image name
 	if result.URL == "" {
-		if inferred := InferRepository(image); inferred != "" {
+		if inferred := inferRepository(image); inferred != "" {
 			result.URL = inferred
 			result.Method = "INFERRED"
 		}
@@ -171,8 +171,8 @@ func InspectImage(ctx context.Context, image string) (Repository, error) {
 	return result, nil
 }
 
-// InferRepository infers a GitHub repository from a GHCR image.
-func InferRepository(image string) string {
+// inferRepository infers a GitHub repository from a GHCR image.
+func inferRepository(image string) string {
 	if !strings.HasPrefix(image, "ghcr.io/") {
 		return ""
 	}
@@ -197,7 +197,7 @@ func CanonicalPathFromRepo(repo Repository) string {
 // CanonicalPath returns the canonical NodeID path for a GitHub repository URL.
 // URLs for other Git hosts are not supported and return an empty path.
 func CanonicalPath(rawURL string) string {
-	owner, name, ok := ParseGitHubRepository(rawURL)
+	owner, name, ok := parseGitHubRepository(rawURL)
 	if !ok {
 		log.Printf("WARN: failed to parse GitHub repository from URL %q", rawURL)
 		return ""
@@ -210,8 +210,8 @@ func githubCanonicalPath(owner, name string) string {
 	return "github.com/" + strings.ToLower(owner+"/"+name)
 }
 
-// ParseGitHubRepository returns the owner and repository name from a GitHub URL.
-func ParseGitHubRepository(rawURL string) (owner, name string, ok bool) {
+// parseGitHubRepository returns the owner and repository name from a GitHub URL.
+func parseGitHubRepository(rawURL string) (owner, name string, ok bool) {
 	value := strings.TrimSpace(rawURL)
 	value = strings.TrimPrefix(value, "git@github.com:")
 	value = strings.TrimPrefix(value, "https://")
