@@ -32,7 +32,10 @@ func main() {
 	}
 	defer cleanup()
 
-	keycloakClient := gocloak.NewClient(config.KeycloakBaseURL)
+	var keycloakClient keycloak.TokenDecoder
+	if config.AuthEnabled {
+		keycloakClient = gocloak.NewClient(config.KeycloakBaseURL)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -40,7 +43,7 @@ func main() {
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
 
-	router, err := httpapi.NewRouter(catalogService, runner, logger, keycloak.Config{
+	router, err := httpapi.NewRouter(catalogService, runner, logger, config.AuthEnabled, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 		Issuer: config.KeycloakIssuer,
