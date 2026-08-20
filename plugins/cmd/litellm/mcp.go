@@ -33,13 +33,10 @@ type mcpServer struct {
 	AccessGroups []string `json:"mcp_access_groups"`
 }
 
-func (p *Plugin) collectMCPServers(ctx context.Context) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim) {
+func (p *Plugin) collectMCPServers(ctx context.Context) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
 	servers, err := p.fetchMCPServers(ctx)
 	if err != nil {
-		if p.logger != nil {
-			p.logger.Printf("listing LiteLLM MCP servers failed, continuing without them: %v", err)
-		}
-		return nil, nil
+		return nil, nil, fmt.Errorf("listing LiteLLM MCP servers: %w", err)
 	}
 
 	var (
@@ -72,7 +69,7 @@ func (p *Plugin) collectMCPServers(ctx context.Context) ([]pluginapi.NodeClaim, 
 		relations = append(relations, serverRelations...)
 	}
 
-	return nodes, relations
+	return nodes, relations, nil
 }
 
 func (s mcpServer) properties() pluginapi.PropertyMap {
