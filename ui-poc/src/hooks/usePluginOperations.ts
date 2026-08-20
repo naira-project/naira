@@ -66,6 +66,7 @@ interface UsePluginsStatusResult {
   refresh: () => Promise<void>;
   runOne: (pluginName: string) => Promise<void>;
   runAll: () => Promise<void>;
+  runSubset: (pluginNames: string[]) => Promise<void>;
 }
 
 export function usePluginsStatus(): UsePluginsStatusResult {
@@ -77,7 +78,10 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   
   // Tracks operation names triggered by "Run All" until they reach a terminal state
   const [pendingRunAllOps, setPendingRunAllOps] = useState<Set<string>>(new Set());
-  
+
+  // Indicates whether a "Run Subset" execution is currently in progress
+  const [subsetActive, setSubsetActive] = useState(false);
+
   const warnedRef = useRef<Set<string>>(new Set());
   const { token } = useOpenMFPContext();
 
@@ -193,7 +197,50 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     await runAllMutation.mutateAsync().catch(() => {});
   }, [runAllMutation]);
 
-  const runAllActive = pendingRunAllOps.size > 0 || runAllMutation.isPending;
+  const runAllActive = pendingRunAllOps.size > 0 || runAllMutation.isPending || subsetActive;
+
+  /**
+   * Like `runAll`, but scoped to a specific set of plugins — used by viewpoints
+   * (e.g. Model, Software Catalog) that only want to trigger the plugins they show,
+   * rather than every plugin the backend knows about.
+   */
+  const runSubset = useCallback(
+    async (pluginNames: string[]) => {
+      setPendingLocal((prev) => {
+        const next = new Set(prev);
+        pluginNames.forEach((name) => next.add(name));
+        return next;
+      });
+      setSubsetActive(true);
+      try {
+        const results = await Promise.allSettled(
+          pluginNames.map(async (name) => {
+            const op = await apiRunPlugin(token, name);
+            queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
+              mergeOperations(oldOps, [op])
+            );
+          })
+        );
+        results.forEach((result, i) => {
+          if (result.status === 'rejected') {
+            addError(
+              result.reason instanceof Error
+                ? result.reason.message
+                : `Failed to run "${pluginNames[i]}"`
+            );
+          }
+        });
+      } finally {
+        setPendingLocal((prev) => {
+          const next = new Set(prev);
+          pluginNames.forEach((name) => next.delete(name));
+          return next;
+        });
+        setSubsetActive(false);
+      }
+    },
+    [token, queryClient, addError]
+  );
 
   return {
     plugins: pluginsQuery.data ?? [],
@@ -206,5 +253,6 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     refresh,
     runOne,
     runAll,
+    runSubset,
   };
 }

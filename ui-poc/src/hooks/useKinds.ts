@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { discoverKinds } from '../lib/kindUtils';
 import { queryKeys } from '../lib/queryKeys';
@@ -17,12 +17,12 @@ interface UseKindsResult {
  * Encapsulates kind discovery, loading/error state, active kind selection,
  * and a refresh mechanism.
  */
-export function useKinds(): UseKindsResult {
+export function useKinds(viewpointKinds?: string[]): UseKindsResult {
   const [activeKind, setActiveKind] = useState<string | null>(null);
   const { token } = useOpenMFPContext();
 
   const {
-    data: kinds = [],
+    data: discoveredKinds = [],
     isLoading: kindsLoading,
     error,
     refetch,
@@ -30,6 +30,11 @@ export function useKinds(): UseKindsResult {
     queryKey: queryKeys.kinds,
     queryFn: () => discoverKinds(token),
   });
+
+  const kinds = useMemo(
+    () => (viewpointKinds ? viewpointKinds.filter((k) => discoveredKinds.includes(k)) : discoveredKinds),
+    [viewpointKinds?.join(','), discoveredKinds],
+  );
 
   // Auto-select first kind if none selected yet.
   useEffect(() => {

@@ -4,19 +4,38 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { BrowserRouter as Router, Routes, Route } from "react-router";
 import CatalogView from './pages/CatalogView';
 import CatalogDetail from './pages/CatalogDetail';
+import PluginsPage from './pages/PluginsPage';
+import { CATALOG_VIEWPOINTS } from './config/viewpoints';
+import Overview from './pages/Overview';
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<CatalogView />} />
-            <Route path="/catalog" element={<CatalogView />} />
-            <Route path="/catalog/:kind/*" element={<CatalogDetail />} />
-          </Routes>
-        </Router>
-      </ThemeProvider>
+    <ThemeProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Overview />} />
+          <Route path="/catalog" element={<Overview />} />
+          <Route path="/plugins" element={<PluginsPage />} />
+          {CATALOG_VIEWPOINTS.map((viewpoint) => (
+            <Route
+              key={viewpoint.path}
+              path={`/catalog/${viewpoint.path}`}
+              element={
+                <CatalogView
+                  key={viewpoint.path}
+                  viewpointKinds={viewpoint.kinds}
+                  viewpointPlugins={viewpoint.plugins}
+                  heading={viewpoint.heading}
+                  subheading={viewpoint.subheading}
+                />
+              }
+            />
+          ))}
+          <Route path="/catalog/:kind/*" element={<CatalogDetail />} />
+        </Routes>
+    </Router>
+    </ThemeProvider>
     </QueryClientProvider>
   );
 }
