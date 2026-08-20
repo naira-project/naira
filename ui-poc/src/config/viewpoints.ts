@@ -10,8 +10,8 @@ export interface CatalogViewpoint {
   path: string;
   heading: string;
   subheading: string;
-  allowedKinds: string[];
-  allowedPlugins: string[];
+  kinds: string[];
+  plugins: string[];
 }
 
 export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
@@ -19,22 +19,22 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
     path: 'dataset',
     heading: 'Dataset Catalog',
     subheading: 'Datasets registered in the catalog.',
-    allowedKinds: ['dataset'],
-    allowedPlugins: ['openmetadata'],
+    kinds: ['dataset'],
+    plugins: ['openmetadata'],
   },
   {
     path: 'software_catalog',
     heading: 'Software Catalog',
     subheading: 'Deployments and services running in the cluster.',
-    allowedKinds: ['deployment', 'service'],
-    allowedPlugins: ['depl-calls-svc', 'depl-uses-litellm', 'fluxcd'],
+    kinds: ['deployment', 'service'],
+    plugins: ['depl-calls-svc', 'depl-uses-litellm', 'fluxcd'],
   },
   {
     path: 'model',
     heading: 'Model',
     subheading: 'Models registered in the catalog.',
-    allowedKinds: ['model'],
-    allowedPlugins: ['litellm', 'mlflow'],
+    kinds: ['model'],
+    plugins: ['litellm', 'mlflow'],
   },
 ];
 
@@ -44,5 +44,5 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
  * page without relying on browser history.
  */
 export function findViewpointForKind(kind: string): CatalogViewpoint | undefined {
-  return CATALOG_VIEWPOINTS.find((viewpoint) => viewpoint.allowedKinds.includes(kind));
+  return CATALOG_VIEWPOINTS.find((viewpoint) => viewpoint.kinds.includes(kind));
 }

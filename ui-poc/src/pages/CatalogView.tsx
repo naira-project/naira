@@ -16,23 +16,23 @@ import { formatRelativeTime, latestOperation } from '../lib/utils';
 
 
 interface CatalogViewProps {
-  allowedKinds?: string[];
+  viewpointKinds?: string[];
   heading?: string;
   subheading?: string;
   /** Plugins relevant to this viewpoint; used for the empty-state message and its link to /plugins. */
-  allowedPlugins?: string[];
+  viewpointPlugins?: string[];
 }
 /**
  * Unified catalog view.
  * Focuses on browsing the catalog: kind selector + resource table.
  * Plugin management (run, history, status) lives on its own dedicated page (see PluginsPage).
  */
-export default function CatalogView({ allowedKinds, heading, subheading, allowedPlugins }: CatalogViewProps) {
+export default function CatalogView({ viewpointKinds, heading, subheading, viewpointPlugins }: CatalogViewProps) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
   // Kind discovery & selection
-  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } = useKinds(allowedKinds);
+  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } = useKinds(viewpointKinds);
 
   // Fetch nodes for the active kind
   const { nodes, loading: nodesLoading, error: nodesError } = useCatalogNodes(activeKind ?? '');
@@ -96,7 +96,7 @@ export default function CatalogView({ allowedKinds, heading, subheading, allowed
 
         <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4">
           {!kindsError && !kindsLoading && kinds.length === 0 ? (
-            <EmptyState pluginNames={allowedPlugins} />
+            <EmptyState pluginNames={viewpointPlugins} />
           ) : (
             <div className="mb-6">
               <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">
@@ -121,7 +121,7 @@ export default function CatalogView({ allowedKinds, heading, subheading, allowed
                   <p className="text-sm">No kinds match your search.</p>
                 </div>
               )}
-              {(!allowedKinds || allowedKinds.length > 1) && (
+              {(!viewpointKinds || viewpointKinds.length > 1) && (
               <KindSelector
                 kinds={filteredKinds}
                 activeKind={activeKind}

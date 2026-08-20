@@ -17,7 +17,7 @@ interface UseKindsResult {
  * Encapsulates kind discovery, loading/error state, active kind selection,
  * and a refresh mechanism.
  */
-export function useKinds(allowedKinds?: string[]): UseKindsResult {
+export function useKinds(viewpointKinds?: string[]): UseKindsResult {
   const [activeKind, setActiveKind] = useState<string | null>(null);
   const { token } = useOpenMFPContext();
 
@@ -32,8 +32,8 @@ export function useKinds(allowedKinds?: string[]): UseKindsResult {
   });
 
   const kinds = useMemo(
-    () => (allowedKinds ? allowedKinds.filter((k) => discoveredKinds.includes(k)) : discoveredKinds),
-    [allowedKinds?.join(','), discoveredKinds],
+    () => (viewpointKinds ? viewpointKinds.filter((k) => discoveredKinds.includes(k)) : discoveredKinds),
+    [viewpointKinds?.join(','), discoveredKinds],
   );
 
   // Auto-select first kind if none selected yet.

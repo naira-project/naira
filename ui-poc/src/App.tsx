@@ -24,8 +24,8 @@ function App() {
               element={
                 <CatalogView
                   key={viewpoint.path}
-                  allowedKinds={viewpoint.allowedKinds}
-                  allowedPlugins={viewpoint.allowedPlugins}
+                  viewpointKinds={viewpoint.kinds}
+                  viewpointPlugins={viewpoint.plugins}
                   heading={viewpoint.heading}
                   subheading={viewpoint.subheading}
                 />
