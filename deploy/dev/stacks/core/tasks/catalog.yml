@@ -10,6 +10,9 @@ vars:
   CATALOG_LOCAL_PORT: '8090'
   CATALOG_REMOTE_PORT: '8090'
   KEYCLOAK_REMOTE_PORT: '8080'
+  KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE | default "keycloak"}}'
+  KEYCLOAK_REALM: '{{.KEYCLOAK_REALM | default "naira"}}'
+  KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT | default "8080"}}'
 
 tasks:
   image:build:
