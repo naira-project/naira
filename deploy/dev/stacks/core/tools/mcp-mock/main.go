@@ -51,7 +51,6 @@ func main() {
 	})
 
 	mux.Handle("/mcp", requireToken(handler, token))
-	mux.Handle("/mcp/", requireToken(handler, token))
 
 	server := &http.Server{
 		Addr:              ":" + port,

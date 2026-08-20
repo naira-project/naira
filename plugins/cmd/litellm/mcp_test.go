@@ -29,7 +29,6 @@ func startLiteLLM(t *testing.T, registry []map[string]any, mcpServers map[string
 	for name, server := range mcpServers {
 		handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
 		mux.Handle("/"+name+"/mcp", handler)
-		mux.Handle("/"+name+"/mcp/", handler)
 	}
 
 	httpServer := httptest.NewServer(mux)
@@ -88,7 +87,8 @@ func TestCollectMCPServersEmitsOneNodePerServer(t *testing.T) {
 		},
 	)
 
-	nodes, relations := testPlugin(t, baseURL).collectMCPServers(t.Context())
+	nodes, relations, err := testPlugin(t, baseURL).collectMCPServers(t.Context())
+	require.NoError(t, err)
 
 	servers := nodePaths(nodes, pluginapi.NodeKindMCPServer)
 	require.Contains(t, servers, "litellm/github", "each proxied server gets its own node, not one gateway node")
@@ -127,21 +127,23 @@ func TestCollectMCPServersSkipsUnusableNames(t *testing.T) {
 		nil,
 	)
 
-	nodes, relations := testPlugin(t, baseURL).collectMCPServers(t.Context())
+	nodes, relations, err := testPlugin(t, baseURL).collectMCPServers(t.Context())
+	require.NoError(t, err)
 
 	assert.Empty(t, nodes, "a name that cannot form a URL segment cannot be reached or addressed")
 	assert.Empty(t, relations)
 }
 
-func TestCollectMCPServersTolerantOfMissingGateway(t *testing.T) {
+func TestCollectMCPServersReportsUnreachableRegistry(t *testing.T) {
 	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	}))
 	t.Cleanup(httpServer.Close)
 
-	nodes, relations := testPlugin(t, httpServer.URL).collectMCPServers(t.Context())
+	nodes, relations, err := testPlugin(t, httpServer.URL).collectMCPServers(t.Context())
 
-	assert.Empty(t, nodes, "a LiteLLM without the MCP gateway must not fail the collection")
+	require.Error(t, err, "an unreachable registry must be distinguishable from a LiteLLM proxying no servers")
+	assert.Empty(t, nodes)
 	assert.Empty(t, relations)
 }
 
@@ -149,7 +151,8 @@ func TestCollectMCPServersKeepsUnreachableServerVisible(t *testing.T) {
 	// Registered in the registry but not served, so the session cannot open.
 	baseURL := startLiteLLM(t, []map[string]any{{"server_id": "srv-1", "server_name": "ghost"}}, nil)
 
-	nodes, relations := testPlugin(t, baseURL).collectMCPServers(t.Context())
+	nodes, relations, err := testPlugin(t, baseURL).collectMCPServers(t.Context())
+	require.NoError(t, err)
 
 	servers := nodePaths(nodes, pluginapi.NodeKindMCPServer)
 	require.Contains(t, servers, "litellm/ghost")
