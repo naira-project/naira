@@ -9,14 +9,10 @@
 //   - MCP_MOCK_SERVER_NAME (optional) - name the server reports during
 //     initialization; defaults to "mock-knowledge-base". Set it to run several
 //     instances with distinct identities.
-//   - MCP_MOCK_TOKEN (optional) - when set, requests must carry
-//     "Authorization: Bearer <token>". Unset means no authentication, which is
-//     the default.
 package main
 
 import (
 	"context"
-	"crypto/subtle"
 	"fmt"
 	"log"
 	"net/http"
@@ -30,7 +26,6 @@ import (
 type config struct {
 	Port       int    `env:"PORT" default:"8080"`
 	ServerName string `env:"MCP_MOCK_SERVER_NAME" default:"mock-knowledge-base"`
-	Token      string `env:"MCP_MOCK_TOKEN"`
 }
 
 func main() {
@@ -53,7 +48,7 @@ func main() {
 		fmt.Fprintln(w, "ok")
 	})
 
-	mux.Handle("/mcp", requireToken(handler, cfg.Token))
+	mux.Handle("/mcp", handler)
 
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
@@ -61,28 +56,10 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	logger.Printf("mock MCP server %q listening on :%d/mcp (auth required: %t)", cfg.ServerName, cfg.Port, cfg.Token != "")
+	logger.Printf("mock MCP server %q listening on :%d/mcp", cfg.ServerName, cfg.Port)
 	if err := server.ListenAndServe(); err != nil {
 		logger.Fatalf("failed to serve: %v", err)
 	}
-}
-
-// requireToken rejects unauthenticated requests when a token is configured
-func requireToken(next http.Handler, token string) http.Handler {
-	if token == "" {
-		return next
-	}
-
-	expected := "Bearer " + token
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		provided := r.Header.Get("Authorization")
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 func newServer(name string) *mcp.Server {
