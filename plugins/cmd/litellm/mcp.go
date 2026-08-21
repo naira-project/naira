@@ -11,7 +11,7 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
-// LiteLLM specific ingo that an MCP server does not self report.
+// LiteLLM specific info that an MCP server does not self report.
 const (
 	propertyKeyDescription  = "description"
 	propertyKeyAlias        = "litellm_alias"
