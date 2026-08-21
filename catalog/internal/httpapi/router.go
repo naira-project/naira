@@ -16,14 +16,10 @@ import (
 // NewRouter wires up the catalog HTTP API.
 // catalogService serves read-only graph queries (nodes/relations);
 // runner drives and reports on asynchronous plugin runs (plugins/operations).
-func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger *log.Logger, authEnabled bool, kc keycloak.Config) (http.Handler, error) {
-	var authMiddleware func(http.Handler) http.Handler
-	if authEnabled {
-		var err error
-		authMiddleware, err = keycloak.NewAuthMiddleware(kc)
-		if err != nil {
-			return nil, fmt.Errorf("creating auth middleware: %w", err)
-		}
+func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
+	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
+	if err != nil {
+		return nil, fmt.Errorf("creating auth middleware: %w", err)
 	}
 
 	router := chi.NewRouter()
@@ -38,9 +34,7 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger
 	})
 
 	router.Route("/v1", func(r chi.Router) {
-		if authEnabled {
-			r.Use(authMiddleware)
-		}
+		r.Use(authMiddleware)
 
 		r.Post("/plugins:run", newRunAllPluginsHandler(runner))
 		r.Get("/plugins", newListPluginsHandler(runner))

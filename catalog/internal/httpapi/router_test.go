@@ -129,27 +129,9 @@ func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.
 
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), true, keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 	return router
-}
-
-func TestRouterWithoutAuthServesV1Endpoints(t *testing.T) {
-	store := catalog.NewMemoryStore()
-	applyPluginSnapshot(t, store, []catalog.NodeClaim{
-		{ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"}},
-	}, nil)
-
-	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), store, operations.NewMemoryStore(), nil, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), false, keycloak.Config{})
-	require.NoError(t, err)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/nodes", nil)
-	response := httptest.NewRecorder()
-	router.ServeHTTP(response, req)
-
-	assert.Equal(t, http.StatusOK, response.Code)
 }
 
 func TestRouterServesCurrentEndpoints(t *testing.T) {
@@ -397,7 +379,7 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), true, keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 
 	// First request — starts the plugin run.
@@ -502,3 +484,4 @@ func TestListPluginsEndpoint(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
 	assert.Equal(t, []string{"litellm", "mlflow"}, payload["plugins"])
 }
+
