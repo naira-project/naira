@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/naira-project/naira/plugins/internal/mcputil"
+	"github.com/naira-project/naira/plugins/internal/util"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -72,41 +73,21 @@ func main() {
 
 // parseEndpoints turns the "name=url,name=url" configuration into targets.
 func parseEndpoints(raw string, bearerToken string) ([]mcputil.Target, error) {
-	var targets []mcputil.Target
-	seen := make(map[string]struct{})
-
-	for _, entry := range strings.Split(raw, ",") {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-
-		name, endpoint, ok := strings.Cut(entry, "=")
-		if !ok {
-			return nil, fmt.Errorf("invalid endpoint entry %q: must be in name=url format", entry)
-		}
-		name = strings.TrimSpace(name)
-		endpoint = strings.TrimSpace(endpoint)
-		if name == "" || endpoint == "" {
-			return nil, fmt.Errorf("invalid endpoint entry %q: name and url must not be empty", entry)
-		}
-		if strings.Contains(name, "/") {
-			return nil, fmt.Errorf("invalid endpoint name %q: must not contain '/'", name)
-		}
-		if _, duplicate := seen[name]; duplicate {
-			return nil, fmt.Errorf("duplicate endpoint name %q", name)
-		}
-		seen[name] = struct{}{}
-
-		targets = append(targets, mcputil.Target{
-			Name:        name,
-			Endpoint:    endpoint,
-			BearerToken: bearerToken,
-		})
+	entries, err := util.ParseNamedValues(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("no endpoints configured")
 	}
 
-	if len(targets) == 0 {
-		return nil, fmt.Errorf("no endpoints configured")
+	targets := make([]mcputil.Target, 0, len(entries))
+	for _, entry := range entries {
+		targets = append(targets, mcputil.Target{
+			Name:        entry.Name,
+			Endpoint:    entry.Value,
+			BearerToken: bearerToken,
+		})
 	}
 
 	return targets, nil

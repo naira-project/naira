@@ -78,12 +78,12 @@ func TestNewValidatesConfig(t *testing.T) {
 		{
 			name:    "endpoint without name",
 			config:  config{PathPrefix: "platform", Endpoints: "http://example.com/mcp"},
-			wantErr: "must be in name=url format",
+			wantErr: "must be in name=value format",
 		},
 		{
 			name:    "endpoint with empty url",
 			config:  config{PathPrefix: "platform", Endpoints: "a="},
-			wantErr: "name and url must not be empty",
+			wantErr: "name and value must not be empty",
 		},
 		{
 			name:    "endpoint name with path separator",
@@ -93,7 +93,7 @@ func TestNewValidatesConfig(t *testing.T) {
 		{
 			name:    "duplicate endpoint names",
 			config:  config{PathPrefix: "platform", Endpoints: "a=http://one/mcp,a=http://two/mcp"},
-			wantErr: `duplicate endpoint name "a"`,
+			wantErr: `duplicate name "a"`,
 		},
 	}
 
