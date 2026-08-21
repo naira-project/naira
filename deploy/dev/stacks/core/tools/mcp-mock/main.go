@@ -24,21 +24,24 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go-simpler.org/env"
 )
 
-const (
-	defaultPort       = "8080"
-	defaultServerName = "mock-knowledge-base"
-)
+type config struct {
+	Port       int    `env:"PORT" default:"8080"`
+	ServerName string `env:"MCP_MOCK_SERVER_NAME" default:"mock-knowledge-base"`
+	Token      string `env:"MCP_MOCK_TOKEN"`
+}
 
 func main() {
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 
-	port := envOr("PORT", defaultPort)
-	serverName := envOr("MCP_MOCK_SERVER_NAME", defaultServerName)
-	token := os.Getenv("MCP_MOCK_TOKEN")
+	var cfg config
+	if err := env.Load(&cfg, nil); err != nil {
+		logger.Fatalf("failed to load config: %v", err)
+	}
 
-	mcpServer := newServer(serverName)
+	mcpServer := newServer(cfg.ServerName)
 	handler := mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return mcpServer },
 		nil,
@@ -50,26 +53,18 @@ func main() {
 		fmt.Fprintln(w, "ok")
 	})
 
-	mux.Handle("/mcp", requireToken(handler, token))
+	mux.Handle("/mcp", requireToken(handler, cfg.Token))
 
 	server := &http.Server{
-		Addr:              ":" + port,
+		Addr:              fmt.Sprintf(":%d", cfg.Port),
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	logger.Printf("mock MCP server %q listening on :%s/mcp (auth required: %t)", serverName, port, token != "")
+	logger.Printf("mock MCP server %q listening on :%d/mcp (auth required: %t)", cfg.ServerName, cfg.Port, cfg.Token != "")
 	if err := server.ListenAndServe(); err != nil {
 		logger.Fatalf("failed to serve: %v", err)
 	}
-}
-
-func envOr(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-
-	return fallback
 }
 
 // requireToken rejects unauthenticated requests when a token is configured
