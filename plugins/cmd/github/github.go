@@ -67,12 +67,12 @@ func (c *githubClient) do(ctx context.Context, path string, out any) (bool, erro
 }
 
 func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo, bool, error) {
-	var r ghRepo
-	found, err := c.do(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &r)
+	var githubRepo ghRepo
+	found, err := c.do(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &githubRepo)
 	if err != nil {
 		return ghRepo{}, false, fmt.Errorf("getting repo %s/%s: %w", owner, repo, err)
 	}
-	return r, found, nil
+	return githubRepo, found, nil
 }
 
 // GetCodeowners tries the well-known CODEOWNERS locations, in the order
