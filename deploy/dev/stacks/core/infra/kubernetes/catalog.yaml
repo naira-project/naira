@@ -288,8 +288,6 @@ spec:
           env:
             - name: PORT
               value: "8090"
-            - name: AUTH_ENABLED
-              value: "false"
             - name: KEYCLOAK_BASE_URL
               value: __KEYCLOAK_BASE_URL__
             # KEYCLOAK_REALM variable must be changed in tasks/keycloak.yml
