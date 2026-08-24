@@ -35,7 +35,7 @@ func newGithubClient(httpClient *http.Client, baseURL, token string) *githubClie
 	}
 }
 
-func (c *githubClient) do(ctx context.Context, path string, out any) (bool, error) {
+func (c *githubClient) get(ctx context.Context, path string, out any) (bool, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
 		return false, fmt.Errorf("building github request for %s: %w", path, err)
@@ -68,7 +68,7 @@ func (c *githubClient) do(ctx context.Context, path string, out any) (bool, erro
 
 func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo, bool, error) {
 	var githubRepo ghRepo
-	found, err := c.do(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &githubRepo)
+	found, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &githubRepo)
 	if err != nil {
 		return ghRepo{}, false, fmt.Errorf("getting repo %s/%s: %w", owner, repo, err)
 	}
@@ -82,7 +82,7 @@ func (c *githubClient) GetCodeowners(ctx context.Context, owner, repo string) (s
 
 	for _, path := range candidates {
 		var content ghContent
-		found, err := c.do(ctx, fmt.Sprintf("/repos/%s/%s/contents/%s", url.PathEscape(owner), url.PathEscape(repo), path), &content)
+		found, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s/contents/%s", url.PathEscape(owner), url.PathEscape(repo), path), &content)
 		if err != nil {
 			return "", false, fmt.Errorf("getting %s for %s/%s: %w", path, owner, repo, err)
 		}
