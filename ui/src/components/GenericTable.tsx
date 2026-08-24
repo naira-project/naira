@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { NodeResource, nodeProps } from '../lib/catalogApi';
-import { inferColumns, formatPropValue, parsePath, RelationSummary } from '../lib/kindUtils';
+import { inferColumns, formatPropValue, parsePath,  namespaceColumnLabel, RelationSummary } from '../lib/kindUtils';
+import EmptyState from './EmptyState';
 
 interface GenericTableProps {
   nodes: NodeResource[];
@@ -39,6 +40,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
   const pluginColumns = useMemo(() => columns.slice(2), [columns]);
   const pluginColCount = pluginColumns.length;
+  const namespaceLabel = namespaceColumnLabel(kind);
   const hasPluginColumns = pluginColCount > 0;
   const CORE_COL_COUNT = 3; // name + namespace + relations
   const ACTIONS_COL_WIDTH = '110px';
@@ -54,11 +56,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
   }, [pluginColCount, hasPluginColumns]);
 
   if (nodes.length === 0) {
-    return (
-      <p className="px-4 py-8 text-center text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-        No {kind} nodes found.
-      </p>
-    );
+    return <EmptyState />;
   }
 
   const headerCell =
@@ -93,7 +91,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
           <span className={labelText}>name</span>
         </div>
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
-          <span className={labelText}>namespace</span>
+           <span className={labelText}>{namespaceLabel}</span>
         </div>
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
           <span className={labelText}>Relations</span>

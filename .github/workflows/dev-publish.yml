@@ -36,8 +36,8 @@ jobs:
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-ui"
-      dockerfile: "ui-poc/Dockerfile"
-      context: "ui-poc"
+      dockerfile: "ui/Dockerfile"
+      context: "ui"
       platforms: "linux/amd64,linux/arm64"
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}

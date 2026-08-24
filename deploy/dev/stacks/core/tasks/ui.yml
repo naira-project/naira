@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   CLUSTER_NAME: naira-idp
-  UI_DIR: ../../../../ui-poc
+  UI_DIR: ../../../../ui
   UI_IMAGE: ui:local
   UI_NAMESPACE: idp-system
   UI_MANIFEST: ./infra/kubernetes/ui.yaml

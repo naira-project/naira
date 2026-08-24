@@ -1,8 +1,11 @@
 import { inject, provideAppInitializer, provideZonelessChangeDetection } from "@angular/core";
 import { bootstrapApplication } from "@angular/platform-browser";
 import { PortalComponent, PortalOptions, providePortal, EnvConfigService, LocalStorageKeys } from "@openmfp/portal-ui-lib";
+import { NairaStaticSettingsConfigService } from "./app/static-settings-config.service";
 
-const portalOptions: PortalOptions = {};
+const portalOptions: PortalOptions = {
+  staticSettingsConfigService: NairaStaticSettingsConfigService,
+};
 
 bootstrapApplication(PortalComponent, {
   providers: [
