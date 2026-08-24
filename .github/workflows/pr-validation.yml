@@ -29,7 +29,7 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)[:space:]]+\))?!?: .+$'
+          pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)[:space:]]+\))?!?: [^[:space:]].*$'
           if [[ ! "$PR_TITLE" =~ $pattern ]]; then
             echo "::error::PR title must use an approved Conventional Commit type (build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test), e.g. 'feat(catalog): add model search'."
             exit 1
