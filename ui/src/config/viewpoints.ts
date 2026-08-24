@@ -11,6 +11,8 @@ export interface CatalogViewpoint {
   heading: string;
   subheading: string;
   kinds: string[];
+  relatedKinds?: string[];
+  columns?: string[];
   plugins: string[];
 }
 
@@ -36,6 +38,15 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
     kinds: ['model'],
     plugins: ['litellm', 'mlflow'],
   },
+  {
+    path: 'mcp',
+    heading: 'MCP Catalog',
+    subheading: 'MCP servers and the tools they expose.',
+    kinds: ['mcp_server'],
+    relatedKinds: ['mcp_tool'],
+    columns: ['endpoint', 'description', 'instructions'],
+    plugins: ['mcp-servers', 'litellm'],
+  },
 ];
 
 /**
@@ -44,5 +55,7 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
  * page without relying on browser history.
  */
 export function findViewpointForKind(kind: string): CatalogViewpoint | undefined {
-  return CATALOG_VIEWPOINTS.find((viewpoint) => viewpoint.kinds.includes(kind));
+  return CATALOG_VIEWPOINTS.find(
+    (viewpoint) => viewpoint.kinds.includes(kind) || (viewpoint.relatedKinds?.includes(kind) ?? false),
+  );
 }

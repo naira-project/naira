@@ -26,6 +26,7 @@ function App() {
                   key={viewpoint.path}
                   viewpointKinds={viewpoint.kinds}
                   viewpointPlugins={viewpoint.plugins}
+                  viewpointColumns={viewpoint.columns}
                   heading={viewpoint.heading}
                   subheading={viewpoint.subheading}
                 />
