@@ -11,12 +11,13 @@ import (
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/scheduling"
 )
 
 // NewRouter wires up the catalog HTTP API.
 // catalogService serves read-only graph queries (nodes/relations);
 // runner drives and reports on asynchronous plugin runs (plugins/operations).
-func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
+func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger *log.Logger, kc keycloak.Config, scheduler *scheduling.Scheduler) (http.Handler, error) {
 	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
 	if err != nil {
 		return nil, fmt.Errorf("creating auth middleware: %w", err)
@@ -38,6 +39,9 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger
 
 		r.Post("/plugins:run", newRunAllPluginsHandler(runner))
 		r.Get("/plugins", newListPluginsHandler(runner))
+		r.Get("/schedules", newListSchedulesHandler(scheduler))
+		r.Get("/{plugin}/schedule", newGetScheduleHandler(scheduler))
+		r.Put("/{plugin}/schedule", newSetScheduleHandler(scheduler))
 		r.Post("/{plugin}:run", newRunPluginHandler(runner))
 
 		r.Get("/operations", newListOperationsHandler(runner, logger))
