@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { X, Play, RefreshCw, AlertCircle } from 'lucide-react';
+import { X, Play, RefreshCw, AlertCircle, Pencil, Check, X as Close } from 'lucide-react';
+import cronstrue from 'cronstrue';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
 import {
@@ -196,11 +197,10 @@ function StatusTab({
     <table className="w-full table-fixed text-left text-sm">
       <colgroup>
         <col className="w-[22%]" />
-        <col className="w-[15%]" />
+        <col className="w-[16%]" />
         <col className="w-[12%]" />
         <col className="w-[17%]" />
-        <col className="w-[20%]" />
-        <col className="w-[18%]" />
+        <col className="w-[22%]" />
         <col className="w-[11%]" />
       </colgroup>
       <thead>
@@ -264,7 +264,7 @@ function StatusTab({
                 )}
               </td>
               <td className="py-3 pr-4">
-                <ScheduleEditor
+                <ScheduleCell
                   plugin={plugin}
                   schedule={schedules.get(plugin)}
                   disabled={scheduleSaving}
@@ -290,7 +290,7 @@ function StatusTab({
   );
 }
 
-function ScheduleEditor({
+function ScheduleCell({
   plugin,
   schedule,
   disabled,
@@ -303,6 +303,7 @@ function ScheduleEditor({
 }) {
   const currentExpression = schedule?.expression ?? '';
   const currentEnabled = schedule?.enabled ?? false;
+  const [editing, setEditing] = useState(false);
   const [expression, setExpression] = useState(currentExpression);
   const [enabled, setEnabled] = useState(currentEnabled);
 
@@ -312,35 +313,122 @@ function ScheduleEditor({
   }, [currentExpression, currentEnabled]);
   const dirty = expression !== currentExpression || enabled !== currentEnabled;
 
+  const friendly = expression && enabled ? friendlySchedule(expression) : 'Not scheduled';
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="group flex max-w-full items-center gap-2 text-left"
+        title="Edit schedule"
+      >
+        <span className={enabled && expression ? 'text-gray-700 dark:text-gray-200' : 'text-gray-400'}>
+          {friendly}
+        </span>
+        <Pencil size={13} className="shrink-0 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-1.5">
-      <input
-        value={expression}
-        onChange={(event) => setExpression(event.target.value)}
-        placeholder="manual"
-        aria-label={`Schedule for ${plugin}`}
-        className="w-28 rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <select
+        value={schedulePreset(expression, enabled)}
+        onChange={(event) => applyPreset(event.target.value, setExpression, setEnabled)}
+        aria-label={`Schedule type for ${plugin}`}
+        className="rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
         disabled={disabled}
-      />
-      <label className="flex items-center gap-1 text-xs text-gray-500">
+      >
+        <option value="manual">Manual only</option>
+        <option value="minutes">Every N minutes</option>
+        <option value="hourly">Every hour</option>
+        <option value="daily">Every day</option>
+        <option value="custom">Custom</option>
+      </select>
+      {schedulePreset(expression, enabled) === 'minutes' && (
         <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(event) => setEnabled(event.target.checked)}
+          type="number"
+          min="1"
+          value={minutesFromCron(expression)}
+          onChange={(event) => setExpression(`*/${Math.max(1, Number(event.target.value) || 1)} * * * *`)}
+          aria-label={`Minutes interval for ${plugin}`}
+          className="w-24 rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
           disabled={disabled}
         />
-        on
-      </label>
-      {dirty && (
-        <button
-          type="button"
-          onClick={() => onSave(plugin, expression, enabled)}
-          disabled={disabled}
-          className="rounded bg-primary px-2 py-1 text-xs text-white disabled:opacity-50"
-        >
-          Save
-        </button>
       )}
+      {schedulePreset(expression, enabled) === 'daily' && (
+        <input
+          type="time"
+          value={timeFromCron(expression)}
+          onChange={(event) => setExpression(timeToCron(event.target.value))}
+          aria-label={`Daily time for ${plugin}`}
+          className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
+          disabled={disabled}
+        />
+      )}
+      {schedulePreset(expression, enabled) === 'custom' && (
+        <input
+          value={expression}
+          onChange={(event) => setExpression(event.target.value)}
+          aria-label={`Custom cron for ${plugin}`}
+          className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
+          disabled={disabled}
+        />
+      )}
+      {schedulePreset(expression, enabled) === 'hourly' && (
+        <select value={minuteFromHourlyCron(expression)} onChange={(event) => setExpression(`${event.target.value} * * * *`)} disabled={disabled} className="rounded border px-2 py-1 text-xs">
+          {['00', '15', '30', '45'].map((minute) => <option key={minute} value={Number(minute)}>{`At :${minute}`}</option>)}
+        </select>
+      )}
+      <div className="flex items-center gap-1.5">
+        <button type="button" onClick={() => { onSave(plugin, expression, enabled); setEditing(false); }} disabled={disabled || !dirty} className="inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-xs text-white disabled:opacity-50"><Check size={12} />Save</button>
+        <button type="button" onClick={() => { setExpression(currentExpression); setEnabled(currentEnabled); setEditing(false); }} className="inline-flex items-center gap-1 rounded border px-2 py-1 text-xs"><Close size={12} />Cancel</button>
+      </div>
     </div>
   );
+}
+
+function friendlySchedule(expression: string): string {
+  try {
+    return cronstrue.toString(expression, { use24HourTimeFormat: true });
+  } catch {
+    return 'Custom schedule';
+  }
+}
+
+function schedulePreset(expression: string, enabled: boolean): string {
+  if (!enabled || !expression) return 'manual';
+  if (/^\*\/\d+ \* \* \* \*$/.test(expression)) return 'minutes';
+  if (/^\d+ \* \* \* \*$/.test(expression)) return 'hourly';
+  if (/^\d+ \d+ \* \* \*$/.test(expression)) return 'daily';
+  return 'custom';
+}
+
+function minutesFromCron(expression: string): number {
+  const match = expression.match(/^\*\/(\d+) /);
+  return match ? Number(match[1]) : 15;
+}
+
+function minuteFromHourlyCron(expression: string): string {
+  const match = expression.match(/^(\d+) \* /);
+  return match?.[1] ?? '0';
+}
+
+function timeFromCron(expression: string): string {
+  const match = expression.match(/^(\d+) (\d+) /);
+  return match ? `${match[2].padStart(2, '0')}:${match[1].padStart(2, '0')}` : '03:00';
+}
+
+function timeToCron(time: string): string {
+  const [hour = '0', minute = '0'] = time.split(':');
+  return `${Number(minute)} ${Number(hour)} * * *`;
+}
+
+function applyPreset(preset: string, setExpression: (value: string) => void, setEnabled: (value: boolean) => void) {
+  if (preset === 'manual') { setExpression(''); setEnabled(false); return; }
+  setEnabled(true);
+  if (preset === 'minutes') setExpression('*/15 * * * *');
+  if (preset === 'hourly') setExpression('0 * * * *');
+  if (preset === 'daily') setExpression('0 3 * * *');
 }
