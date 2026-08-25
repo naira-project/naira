@@ -74,3 +74,10 @@ export function formatDuration(startIso: string, endIso: string): string {
   const remainingMinutes = minutes % 60;
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
+
+/**
+ * Builds a link to the Plugins page, optionally scoped to a subset of plugins.
+ */
+export function pluginsPageLink(pluginNames: string[]): string {
+  return pluginNames.length ? `/plugins?only=${encodeURIComponent(pluginNames.join(','))}` : '/plugins';
+}
