@@ -67,7 +67,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	relations := make([]pluginapi.RelationClaim, 0)
 	modelKeys := make(map[string]pluginapi.NodeClaim, len(models))
 	seenRelations := make(map[string]struct{})
-	fetchAllowedModelsErrors := make([]error, 0)
+	collectErrors := make([]error, 0)
 
 	for _, model := range models {
 		node := pluginapi.NodeClaim{
@@ -80,8 +80,15 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		modelKeys[model.ID] = node
 	}
 
+	mcpNodes, mcpRelations, err := p.collectMCPServers(ctx)
+	if err != nil {
+		collectErrors = append(collectErrors, err)
+	}
+	nodes = append(nodes, mcpNodes...)
+	relations = append(relations, mcpRelations...)
+
 	if p.appIdentityProvider == nil {
-		return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
+		return pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}, errors.Join(collectErrors...)
 	}
 
 	apps, err := p.appIdentityProvider.ListAppIdentities(ctx)
@@ -89,7 +96,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		if p.logger != nil {
 			p.logger.Printf("listing LiteLLM app identities failed, continuing without app identities: %v", err)
 		}
-		return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
+		return pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}, errors.Join(collectErrors...)
 	}
 
 	for _, app := range apps {
@@ -109,7 +116,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 		allowedModels, err := p.fetchAllowedModels(ctx, app.LiteLLMVirtualKey)
 		if err != nil {
-			fetchAllowedModelsErrors = append(fetchAllowedModelsErrors, fmt.Errorf("fetching allowed LiteLLM models for app %q: %w", app.Name, err))
+			collectErrors = append(collectErrors, fmt.Errorf("fetching allowed LiteLLM models for app %q: %w", app.Name, err))
 			continue
 		}
 
@@ -147,12 +154,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 	}
 
-	response := pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}
-	if len(fetchAllowedModelsErrors) > 0 {
-		return response, errors.Join(fetchAllowedModelsErrors...)
-	}
-
-	return response, nil
+	return pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}, errors.Join(collectErrors...)
 }
 
 func (p *Plugin) fetchModels(ctx context.Context) ([]model, error) {

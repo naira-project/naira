@@ -9,11 +9,13 @@ interface GenericTableProps {
   kind: string;
   onSelect: (node: NodeResource) => void;
   relationSummaries: Map<string, RelationSummary>;
+  columns?: string[];
 }
 
 /**
  * A generic, kind-agnostic table that:
- * 1. Infers columns from the union of all node props.
+ * 1. Shows the plugin property columns a viewpoint pins, or every property found
+ *    across the nodes when it pins none.
  * 2. Always shows `name`, `namespace`, and `Relations` as the "Core Metadata" columns.
  * 3. Renders plugin-derived prop columns as "Plugin Properties", immediately after Core Metadata.
  *    The group-header row (Core Metadata / Plugin Properties) is always rendered, even when a
@@ -29,7 +31,13 @@ interface GenericTableProps {
  * sizing would be computed separately per row and columns would drift out of alignment on
  * wider screens.
  */
-export default function GenericTable({ nodes, kind, onSelect, relationSummaries }: GenericTableProps) {
+export default function GenericTable({
+  nodes,
+  kind,
+  onSelect,
+  relationSummaries,
+  columns: configuredColumns,
+}: GenericTableProps) {
   const parsedPaths = useMemo(
     () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
     [nodes]
@@ -38,7 +46,10 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
   // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
   // rendered explicitly as the core columns, so we only need the plugin tail here.
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
-  const pluginColumns = useMemo(() => columns.slice(2), [columns]);
+  const pluginColumns = useMemo(
+    () => configuredColumns ?? columns.slice(2),
+    [configuredColumns?.join(','), columns]
+  );
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
   const hasPluginColumns = pluginColCount > 0;
