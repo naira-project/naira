@@ -32,6 +32,31 @@ func NewScheduler(store Store, starter RunStarter, logger *log.Logger) *Schedule
 	}
 }
 
+// NewConfiguredScheduler creates and starts the initial in-process scheduler.
+// The scheduler owns interpretation of plugin defaults and their registration.
+func NewConfiguredScheduler(plugins map[string]string, defaults map[string]string, starter RunStarter, logger *log.Logger) (*Scheduler, error) {
+	scheduler := NewScheduler(NewMemoryStore(), starter, logger)
+	for plugin := range plugins {
+		expression, configured := defaults[plugin]
+		schedule := Schedule{
+			Plugin:     plugin,
+			Expression: expression,
+			Enabled:    configured,
+			Source:     "default",
+		}
+		if configured {
+			schedule.Source = "configuration"
+		}
+		if err := scheduler.SetSchedule(schedule); err != nil {
+			return nil, fmt.Errorf("configuring schedule for plugin %q: %w", plugin, err)
+		}
+	}
+	if err := scheduler.Start(); err != nil {
+		return nil, fmt.Errorf("starting scheduler: %w", err)
+	}
+	return scheduler, nil
+}
+
 func (s *Scheduler) Start() error {
 	schedules, err := s.store.List()
 	if err != nil {
