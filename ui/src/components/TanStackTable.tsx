@@ -5,15 +5,21 @@ import {
   columnVisibilityFeature,
   createFilteredRowModel,
   createSortedRowModel,
-  filterFns,
   globalFilteringFeature,
   rowSortingFeature,
   SortingState,
-  sortFns,
   tableFeatures,
+  ColumnVisibilityState,
 } from "@tanstack/table-core";
 import { useTable } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
+import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpDown, ArrowUpRight, Info, Search } from "lucide-react";
+import { parsePath } from "@/lib/kindUtils";
+import {
+  formatPropValue,
+  namespaceColumnLabel,
+  inferColumns,
+  RelationSummary,
+} from "@/lib/kindUtils";
 
 import {
   Table,
@@ -24,11 +30,24 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Columns3 } from "lucide-react";
 import { nodeProps, NodeResource } from "../lib/catalogApi";
-import { useCatalogNodes } from "../hooks/useCatalogNodes";
+//import EmptyState from "./EmptyState";
 
 interface TanStackTableProps {
+  nodes: NodeResource[];
   kind: string;
+  onSelect: (node: NodeResource) => void;
+  relationSummaries: Map<string, RelationSummary>;
 }
 
 // Only the features we actually use are pulled in, keeping the table tree-shakeable.
@@ -39,38 +58,102 @@ const features = tableFeatures({
   rowSortingFeature,
   filteredRowModel: createFilteredRowModel(),
   sortedRowModel: createSortedRowModel(),
-  filterFns,
-  sortFns,
 });
 
-const columns: ColumnDef<typeof features, NodeResource>[] = [
-  {
-    accessorKey: "name",
-    header: "Name",
-  },
-  {
-    accessorKey: "kind",
-    header: "Kind",
-  },
-  {
-    accessorKey: "path",
-    header: "Path",
-  },
-  {
-    id: "plugins",
-    header: "Plugins",
-    accessorFn: (node) => node.pluginClaims.map((claim) => claim.plugin).join(", "),
-  },
-  {
-    id: "props",
-    header: "Props",
-    accessorFn: (node) => Object.keys(nodeProps(node)).length,
-    sortFn: "alphanumeric",
-  },
-];
+export default function TanStackTable({ nodes, kind, onSelect, relationSummaries }: TanStackTableProps) {
+  
 
-export default function TanStackTable({ kind }: TanStackTableProps) {
-  const { nodes, loading, error } = useCatalogNodes(kind);
+  const labelText =
+    'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
+  const groupText =
+    'flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none';
+  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
+  
+  const parsedPaths = useMemo(
+    () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
+    [nodes]
+  );
+
+  // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
+  // rendered explicitly as core columns below, so only the plugin tail is needed here.
+  const inferredColumns = useMemo(() => inferColumns(nodes), [nodes]);
+  const pluginColumns = useMemo(() => inferredColumns.slice(2), [inferredColumns]);
+  const pluginColCount = pluginColumns.length;
+  const namespaceLabel = namespaceColumnLabel(kind);
+  const hasPluginColumns = pluginColCount > 0;
+  const CORE_COL_COUNT = 3; // name + namespace + relations
+  const ACTIONS_COL_WIDTH = '110px';
+
+  const columns = useMemo<ColumnDef<typeof features, NodeResource>[]>(() => {
+    const cols: ColumnDef<typeof features, NodeResource>[] = [
+      {
+        id: "name",
+        header: "Name",
+        accessorFn: (node) => parsedPaths.get(node.name)?.name ?? node.name,
+        cell: (info) => (
+          <span
+            className="truncate text-sm font-medium text-foreground dark:text-foreground-dark-default"
+            title={info.row.original.name}
+          >
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        id: namespaceLabel,
+        header: namespaceLabel.charAt(0).toUpperCase() + namespaceLabel.slice(1),
+        accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? "—",
+        cell: (info) => (
+          <span className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        id: "relations",
+        header: "Relations",
+        enableSorting: false,
+        cell: (info) => (
+          <RelationCell nodeName={info.row.original.name} summaries={relationSummaries} />
+        ),
+      },
+      ...pluginColumns.map(
+        (col): ColumnDef<typeof features, NodeResource> => ({
+          id: col,
+          header: col,
+          accessorFn: (node) => nodeProps(node)[col],
+          cell: (info) => {
+            const value = info.getValue();
+            return (
+              <span
+                className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
+                title={typeof value === "string" ? value : undefined}
+              >
+                {formatPropValue(value)}
+              </span>
+            );
+          },
+        })
+      ),
+      {
+        id: "actions",
+        header: "Actions",
+        enableSorting: false,
+        cell: (info) => (
+          <button
+            onClick={() => onSelect(info.row.original)}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
+            title="View details"
+          >
+            <Info size={14} />
+            Details
+          </button>
+        ),
+      },
+    ];
+    return cols;
+  }, [namespaceLabel, parsedPaths, pluginColumns, relationSummaries, onSelect]);
+
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
 
@@ -80,21 +163,21 @@ export default function TanStackTable({ kind }: TanStackTableProps) {
     features,
     data,
     columns,
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter, columnVisibility },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onColumnVisibilityChange: setColumnVisibility,
   });
 
-  if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading nodes…</p>;
-  }
-
-  if (error) {
-    return <p className="text-sm text-destructive">{error}</p>;
-  }
+  // TODO: return another picture with a different state here than plugin sync
+  /*if (nodes.length === 0) {
+    return <EmptyState />;
+  }*/
 
   return (
     <div className="flex flex-col gap-3">
+
+      <div className="flex flex-row gap-3">
       <Input
         value={globalFilter}
         onChange={(event) => setGlobalFilter(event.target.value)}
@@ -103,8 +186,46 @@ export default function TanStackTable({ kind }: TanStackTableProps) {
         className="max-w-sm"
       />
 
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm">
+            <Columns3 className="size-4" />
+            Columns
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {table.getAllLeafColumns().map((column) => (
+            <DropdownMenuCheckboxItem
+              key={column.id}
+              checked={column.getIsVisible()}
+              onCheckedChange={(checked) => column.toggleVisibility(!!checked)}
+              onSelect={(e) => e.preventDefault()} // keep menu open after each click
+            >
+              {column.id}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      </div>
+
       <Table>
         <TableHeader>
+          {/* Row 1: group headers — mirrors GenericTable's "Core Metadata" / "Plugin Properties" bands */}
+          <TableRow>
+            <TableHead colSpan={CORE_COL_COUNT} className="bg-gray-50 dark:bg-white/5">
+              <span className={groupText}>Core Metadata</span>
+            </TableHead>
+            {hasPluginColumns && (
+              <TableHead colSpan={pluginColCount} className="bg-gray-50 dark:bg-white/5">
+                <span className={groupText}>Plugin Properties</span>
+              </TableHead>
+            )}
+            <TableHead className="bg-gray-50 dark:bg-white/5" /> {/* spacer over the Actions column */}
+          </TableRow>
+
+          {/* Row 2: per-column header labels, with sort affordances */}
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => {
@@ -116,7 +237,9 @@ export default function TanStackTable({ kind }: TanStackTableProps) {
                     onClick={header.column.getToggleSortingHandler()}
                   >
                     <div className="flex items-center gap-1">
-                      <table.FlexRender header={header} />
+                      <span className={labelText}>
+                        <table.FlexRender header={header} />
+                      </span>
                       {header.column.getCanSort() &&
                         (sortDirection === "asc" ? (
                           <ArrowUp className="size-3.5" />
@@ -152,6 +275,52 @@ export default function TanStackTable({ kind }: TanStackTableProps) {
           )}
         </TableBody>
       </Table>
+    </div>
+  );
+}
+
+/** Renders relation badges for a single node. */
+function RelationCell({
+  nodeName,
+  summaries,
+}: {
+  nodeName: string;
+  summaries: Map<string, RelationSummary>;
+}) {
+  const summary = summaries.get(nodeName);
+
+  if (!summary) {
+    return <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">—</span>;
+  }
+
+  const relationKinds = Object.keys(summary).sort();
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {relationKinds.map((relKind) => {
+        const { inbound, outbound } = summary[relKind];
+        return (
+          <span
+            key={relKind}
+            className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[0.65rem] font-medium text-foreground-secondary dark:bg-white/10 dark:text-foreground-dark-secondary"
+            title={`${relKind}: ${inbound} inbound, ${outbound} outbound`}
+          >
+            {outbound > 0 && (
+              <>
+                <ArrowUpRight size={10} className="shrink-0 text-blue-500" />
+                <span>{outbound}</span>
+              </>
+            )}
+            {inbound > 0 && (
+              <>
+                <ArrowDownRight size={10} className="shrink-0 text-green-500" />
+                <span>{inbound}</span>
+              </>
+            )}
+            <span className="truncate max-w-[80px]">{relKind}</span>
+          </span>
+        );
+      })}
     </div>
   );
 }

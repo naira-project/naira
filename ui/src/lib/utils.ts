@@ -20,18 +20,6 @@ export function formatRelativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-export function formatDuration(startIso: string, endIso: string): string {
-  const seconds = Math.max(0, Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 1000));
-
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return `${hours}h ${remainingMinutes}m`;
-}
-
 /**
  * Returns the most recent operation from a list of operations.
  */
@@ -59,8 +47,6 @@ export function latestOperationPerPlugin(
   }
   return latest;
 }
-<<<<<<< HEAD:ui-poc/src/lib/utils.ts
-=======
 
 /**
  * Formats the elapsed time between two ISO timestamps into a human-readable
@@ -95,4 +81,3 @@ export function formatDuration(startIso: string, endIso: string): string {
 export function pluginsPageLink(pluginNames: string[]): string {
   return pluginNames.length ? `/plugins?only=${encodeURIComponent(pluginNames.join(','))}` : '/plugins';
 }
->>>>>>> origin/main:ui/src/lib/utils.ts
