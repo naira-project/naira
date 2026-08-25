@@ -59,3 +59,40 @@ export function latestOperationPerPlugin(
   }
   return latest;
 }
+<<<<<<< HEAD:ui-poc/src/lib/utils.ts
+=======
+
+/**
+ * Formats the elapsed time between two ISO timestamps into a human-readable
+ * duration string (e.g. "1s", "1m 45s", "2h 12m").
+ */
+export function formatDuration(startIso: string, endIso: string): string {
+  const diffMs = new Date(endIso).getTime() - new Date(startIso).getTime();
+  if (diffMs < 0) return '—';
+  if (diffMs === 0) return '0s';
+
+  const totalSeconds = Math.max(1, Math.round(diffMs / 1000));
+
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes < 60) {
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
+/**
+ * Builds a link to the Plugins page, optionally scoped to a subset of plugins.
+ */
+export function pluginsPageLink(pluginNames: string[]): string {
+  return pluginNames.length ? `/plugins?only=${encodeURIComponent(pluginNames.join(','))}` : '/plugins';
+}
+>>>>>>> origin/main:ui/src/lib/utils.ts
