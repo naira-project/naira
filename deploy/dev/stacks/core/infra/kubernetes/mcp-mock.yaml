@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mcp-mock
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-mock
+  namespace: mcp-mock
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-mock
+  template:
+    metadata:
+      labels:
+        app: mcp-mock
+    spec:
+      containers:
+        - name: mcp-mock
+          image: mcp-mock:local
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "8080"
+            - name: MCP_MOCK_SERVER_NAME
+              value: mock-knowledge-base
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-mock
+  namespace: mcp-mock
+spec:
+  selector:
+    app: mcp-mock
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP

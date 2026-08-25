@@ -271,9 +271,24 @@ spec:
           image: depl-from-repo:local
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-mcp-servers
+          image: mcp-servers:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50058"
+              value: "50059"
+            - name: MCP_ENDPOINTS
+              value: mock-knowledge-base=http://mcp-mock.mcp-mock.svc.cluster.local:8080/mcp
+            - name: PATH_PREFIX
+              value: mcp
           resources:
             requests:
               cpu: 50m
@@ -296,7 +311,7 @@ spec:
             - name: KEYCLOAK_ISSUER
               value: __KEYCLOAK_ISSUER__
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,github=localhost:50057,depl-from-repo=localhost:50058"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,github=localhost:50057,depl-from-repo=localhost:50058,mcp-servers=localhost:50059"
           ports:
             - containerPort: 8090
               name: http

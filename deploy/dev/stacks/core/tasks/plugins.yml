@@ -22,6 +22,9 @@ vars:
     - name: openmetadata
       dir: '{{.PLUGINS_BASE}}/openmetadata'
       image: openmetadata:local
+    - name: mcp-servers
+      dir: '{{.PLUGINS_BASE}}/mcp_servers'
+      image: mcp-servers:local
 
 tasks:
   image:build:

@@ -120,7 +120,12 @@ jobs:
       platforms: "linux/amd64,linux/arm64"
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
-
+  container-publish-plugin-mcp-servers:
+    name: Publish · Plugin MCP Servers
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-mcp-servers"
+      dockerfile: "plugins/cmd/mcp_servers/Dockerfile"
   container-publish-plugin-depl-from-repo:
     name: Publish · Plugin Depl From Repo
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
@@ -131,7 +136,6 @@ jobs:
       platforms: "linux/amd64,linux/arm64"
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
-
   container-publish-plugin-github:
     name: Publish · Plugin GitHub
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
@@ -156,6 +160,7 @@ jobs:
       - container-publish-plugin-fluxcd
       - container-publish-plugin-depl-uses-litellm
       - container-publish-plugin-openmetadata
+      - container-publish-plugin-mcp-servers
       - container-publish-plugin-depl-from-repo
       - container-publish-plugin-github
     if: always()
@@ -173,6 +178,7 @@ jobs:
             "${{ needs.container-publish-plugin-fluxcd.result }}"
             "${{ needs.container-publish-plugin-depl-uses-litellm.result }}"
             "${{ needs.container-publish-plugin-openmetadata.result }}"
+            "${{ needs.container-publish-plugin-mcp-servers.result }}"
             "${{ needs.container-publish-plugin-depl-from-repo.result }}"
             "${{ needs.container-publish-plugin-github.result }}"
           )

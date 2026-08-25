@@ -1,0 +1,43 @@
+version: '3'
+
+vars:
+  CLUSTER_NAME: naira-idp
+  MCP_MOCK_NAMESPACE: mcp-mock
+  MCP_MOCK_MANIFEST: infra/kubernetes/mcp-mock.yaml
+  MCP_MOCK_SERVICE: svc/mcp-mock
+  MCP_MOCK_DIR: tools/mcp-mock
+  MCP_MOCK_IMAGE: mcp-mock:local
+  MCP_MOCK_LOCAL_PORT: '8081'
+  MCP_MOCK_REMOTE_PORT: '8080'
+
+tasks:
+  image:build:
+    internal: true
+    desc: Build the mock MCP server image
+    cmds:
+      - task: :docker:build
+        vars: { IMAGE: '{{.MCP_MOCK_IMAGE}}', DIR: '{{.MCP_MOCK_DIR}}' }
+
+  image:load:
+    desc: Load the mock MCP server image into kind
+    deps: [image:build]
+    cmds:
+      - task: :docker:load
+        vars: { IMAGE: '{{.MCP_MOCK_IMAGE}}', CLUSTER_NAME: '{{.CLUSTER_NAME}}' }
+
+  deploy:
+    desc: Deploy the mock MCP server to kind
+    deps: [image:load]
+    cmds:
+      - kubectl apply -f {{.MCP_MOCK_MANIFEST}}
+      - kubectl -n {{.MCP_MOCK_NAMESPACE}} rollout status deploy/mcp-mock --timeout=180s
+
+  undeploy:
+    desc: Remove the mock MCP server from kind
+    cmds:
+      - kubectl delete -f {{.MCP_MOCK_MANIFEST}} --ignore-not-found
+
+  port-forward:
+    desc: Expose the mock MCP server on localhost:8081
+    cmds:
+      - kubectl -n {{.MCP_MOCK_NAMESPACE}} port-forward {{.MCP_MOCK_SERVICE}} {{.MCP_MOCK_LOCAL_PORT}}:{{.MCP_MOCK_REMOTE_PORT}}

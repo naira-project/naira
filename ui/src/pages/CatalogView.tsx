@@ -21,13 +21,21 @@ interface CatalogViewProps {
   subheading?: string;
   /** Plugins relevant to this viewpoint; used for the empty-state message and its link to /plugins. */
   viewpointPlugins?: string[];
+  /** Plugin property columns to show, in order; defaults to all of them. */
+  viewpointColumns?: string[];
 }
 /**
  * Unified catalog view.
  * Focuses on browsing the catalog: kind selector + resource table.
  * Plugin management (run, history, status) lives on its own dedicated page (see PluginsPage).
  */
-export default function CatalogView({ viewpointKinds, heading, subheading, viewpointPlugins }: CatalogViewProps) {
+export default function CatalogView({
+  viewpointKinds,
+  heading,
+  subheading,
+  viewpointPlugins,
+  viewpointColumns,
+}: CatalogViewProps) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
@@ -167,6 +175,7 @@ export default function CatalogView({ viewpointKinds, heading, subheading, viewp
                   kind={activeKind}
                   onSelect={handleSelect}
                   relationSummaries={relationSummaries}
+                  columns={viewpointColumns}
                 />
               )}
             </div>
