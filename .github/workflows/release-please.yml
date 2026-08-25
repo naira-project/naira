@@ -163,6 +163,20 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  container-publish-plugin-openai-api-models:
+    name: Publish · Plugin OpenAI API Models
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-openai-api-models"
+      dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   container-publish-plugin-depl-calls-svc:
     name: Publish · Plugin Depl Calls Svc
     needs: release-please
