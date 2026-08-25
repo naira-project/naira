@@ -4,6 +4,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { BrowserRouter as Router, Routes, Route } from "react-router";
 import CatalogView from './pages/CatalogView';
 import CatalogDetail from './pages/CatalogDetail';
+import TanStackTable from './components/TanStackTable';
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
             <Route path="/" element={<CatalogView />} />
             <Route path="/catalog" element={<CatalogView />} />
             <Route path="/catalog/:kind/*" element={<CatalogDetail />} />
+            <Route path="/catalog/mod" element={<TanStackTable kind='model'/>} />
           </Routes>
         </Router>
       </ThemeProvider>
