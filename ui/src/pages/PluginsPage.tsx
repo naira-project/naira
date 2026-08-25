@@ -1,11 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { X, Play, RefreshCw, AlertCircle } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
-import { OperationResource, StatusErrorResource } from '../lib/catalogApi';
+import {
+  OperationResource,
+  ScheduleResource,
+  StatusErrorResource,
+  fetchSchedules,
+  updateSchedule,
+} from '../lib/catalogApi';
 import { PluginStatusBadge } from '../components/PluginStatusBadge';
 import { PluginErrorModal } from '../components/PluginErrorModal';
 import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
+import { useOpenMFPContext } from '../hooks/useOpenMFPContext';
+import { queryKeys } from '../lib/queryKeys';
 
 /**
  * Dedicated page for managing plugin ingestion.
@@ -36,6 +45,21 @@ export default function PluginsPage() {
     runAll,
     runSubset,
   } = usePluginsStatus();
+  const { token } = useOpenMFPContext();
+  const queryClient = useQueryClient();
+  const schedulesQuery = useQuery({
+    queryKey: queryKeys.schedules,
+    queryFn: () => fetchSchedules(token),
+  });
+  const scheduleMutation = useMutation({
+    mutationFn: ({ plugin, expression, enabled }: { plugin: string; expression: string; enabled: boolean }) =>
+      updateSchedule(token, plugin, { expression: expression || undefined, enabled }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.schedules }),
+  });
+  const schedules = useMemo(
+    () => new Map((schedulesQuery.data ?? []).map((schedule) => [schedule.plugin, schedule])),
+    [schedulesQuery.data]
+  );
 
   const visiblePlugins = allowedPlugins
     ? plugins.filter((p) => allowedPlugins.includes(p))
@@ -119,6 +143,11 @@ export default function PluginsPage() {
             runningPlugins={runningPlugins}
             onRun={handleRunSingle}
             onViewError={(plugin, error) => setSelectedError({ plugin, error })}
+            schedules={schedules}
+            onScheduleChange={(plugin, expression, enabled) =>
+              scheduleMutation.mutate({ plugin, expression, enabled })
+            }
+            scheduleSaving={scheduleMutation.isPending}
           />
         </div>
       </div>
@@ -139,6 +168,9 @@ function StatusTab({
   runningPlugins,
   onRun,
   onViewError,
+  schedules,
+  onScheduleChange,
+  scheduleSaving,
 }: {
   plugins: string[];
   operations: OperationResource[];
@@ -146,6 +178,9 @@ function StatusTab({
   runningPlugins: Set<string>;
   onRun: (plugin: string) => void;
   onViewError: (plugin: string, error: StatusErrorResource) => void;
+  schedules: Map<string, ScheduleResource>;
+  onScheduleChange: (plugin: string, expression: string, enabled: boolean) => void;
+  scheduleSaving: boolean;
 }) {
   const latestByPlugin = latestOperationPerPlugin(operations);
 
@@ -164,7 +199,8 @@ function StatusTab({
         <col className="w-[15%]" />
         <col className="w-[12%]" />
         <col className="w-[17%]" />
-        <col className="w-[23%]" />
+        <col className="w-[20%]" />
+        <col className="w-[18%]" />
         <col className="w-[11%]" />
       </colgroup>
       <thead>
@@ -174,6 +210,7 @@ function StatusTab({
           <th className="py-2 pr-4 font-medium">Duration</th>
           <th className="py-2 pr-4 font-medium">Status</th>
           <th className="py-2 pr-4 font-medium">Result</th>
+          <th className="py-2 pr-4 font-medium">Schedule</th>
           <th className="py-2 text-right font-medium">Action</th>
         </tr>
       </thead>
@@ -226,6 +263,14 @@ function StatusTab({
                   <span className="text-xs text-gray-400">—</span>
                 )}
               </td>
+              <td className="py-3 pr-4">
+                <ScheduleEditor
+                  plugin={plugin}
+                  schedule={schedules.get(plugin)}
+                  disabled={scheduleSaving}
+                  onSave={onScheduleChange}
+                />
+              </td>
               <td className="py-3 text-right">
                 <button
                   onClick={() => onRun(plugin)}
@@ -242,5 +287,60 @@ function StatusTab({
         })}
       </tbody>
     </table>
+  );
+}
+
+function ScheduleEditor({
+  plugin,
+  schedule,
+  disabled,
+  onSave,
+}: {
+  plugin: string;
+  schedule?: ScheduleResource;
+  disabled: boolean;
+  onSave: (plugin: string, expression: string, enabled: boolean) => void;
+}) {
+  const currentExpression = schedule?.expression ?? '';
+  const currentEnabled = schedule?.enabled ?? false;
+  const [expression, setExpression] = useState(currentExpression);
+  const [enabled, setEnabled] = useState(currentEnabled);
+
+  useEffect(() => {
+    setExpression(currentExpression);
+    setEnabled(currentEnabled);
+  }, [currentExpression, currentEnabled]);
+  const dirty = expression !== currentExpression || enabled !== currentEnabled;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        value={expression}
+        onChange={(event) => setExpression(event.target.value)}
+        placeholder="manual"
+        aria-label={`Schedule for ${plugin}`}
+        className="w-28 rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800"
+        disabled={disabled}
+      />
+      <label className="flex items-center gap-1 text-xs text-gray-500">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) => setEnabled(event.target.checked)}
+          disabled={disabled}
+        />
+        on
+      </label>
+      {dirty && (
+        <button
+          type="button"
+          onClick={() => onSave(plugin, expression, enabled)}
+          disabled={disabled}
+          className="rounded bg-primary px-2 py-1 text-xs text-white disabled:opacity-50"
+        >
+          Save
+        </button>
+      )}
+    </div>
   );
 }

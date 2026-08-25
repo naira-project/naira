@@ -157,6 +157,54 @@ export async function fetchPlugins(token: string | null): Promise<string[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Plugin schedules
+// ---------------------------------------------------------------------------
+
+export interface ScheduleResource {
+  plugin: string;
+  expression?: string;
+  enabled: boolean;
+  source: string;
+  updatedAt: string;
+}
+
+interface ListSchedulesResponse {
+  schedules?: ScheduleResource[];
+}
+
+/** GET /v1/schedules — returns effective schedules for registered plugins. */
+export async function fetchSchedules(token: string | null): Promise<ScheduleResource[]> {
+  const data = await fetchJson<ListSchedulesResponse>('/v1/schedules', token);
+  return data.schedules ?? [];
+}
+
+/** GET /v1/{plugin}/schedule — returns one plugin's effective schedule. */
+export async function fetchSchedule(token: string | null, plugin: string): Promise<ScheduleResource> {
+  return fetchJson<ScheduleResource>(`/v1/${encodeURIComponent(plugin)}/schedule`, token);
+}
+
+/** PUT /v1/{plugin}/schedule — replaces one plugin's schedule. */
+export async function updateSchedule(
+  token: string | null,
+  plugin: string,
+  schedule: Pick<ScheduleResource, 'expression' | 'enabled'>
+): Promise<ScheduleResource> {
+  const response = await fetch(`/v1/${encodeURIComponent(plugin)}/schedule`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(schedule),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error ?? `Failed to update schedule for "${plugin}"`);
+  }
+  return response.json() as Promise<ScheduleResource>;
+}
+
+// ---------------------------------------------------------------------------
 // Plugin run operations (AIP-151)
 // ---------------------------------------------------------------------------
 

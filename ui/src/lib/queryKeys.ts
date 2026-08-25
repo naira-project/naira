@@ -18,5 +18,6 @@ export const queryKeys = {
     ['catalog', 'graph', rootName, depth] as const,
 
   plugins: ['plugins'] as const,
+  schedules: ['schedules'] as const,
   operations: ['operations'] as const,
 };
