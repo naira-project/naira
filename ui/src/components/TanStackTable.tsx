@@ -12,7 +12,7 @@ import {
   ColumnVisibilityState,
 } from "@tanstack/table-core";
 import { useTable } from "@tanstack/react-table";
-import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpDown, ArrowUpRight, Info, Search } from "lucide-react";
+import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpDown, ArrowUpRight, Info, Search, Columns3 } from "lucide-react";
 import { parsePath } from "@/lib/kindUtils";
 import {
   formatPropValue,
@@ -30,7 +30,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -39,9 +38,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Columns3 } from "lucide-react";
 import { nodeProps, NodeResource } from "../lib/catalogApi";
-//import EmptyState from "./EmptyState";
+import EmptyState from "./states/EmptyState";
 
 interface TanStackTableProps {
   nodes: NodeResource[];
@@ -82,7 +80,6 @@ export default function TanStackTable({ nodes, kind, onSelect, relationSummaries
   const namespaceLabel = namespaceColumnLabel(kind);
   const hasPluginColumns = pluginColCount > 0;
   const CORE_COL_COUNT = 3; // name + namespace + relations
-  const ACTIONS_COL_WIDTH = '110px';
 
   const columns = useMemo<ColumnDef<typeof features, NodeResource>[]>(() => {
     const cols: ColumnDef<typeof features, NodeResource>[] = [
@@ -104,7 +101,10 @@ export default function TanStackTable({ nodes, kind, onSelect, relationSummaries
         header: namespaceLabel.charAt(0).toUpperCase() + namespaceLabel.slice(1),
         accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? "—",
         cell: (info) => (
-          <span className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+          <span
+            className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
+            title={parsedPaths.get(info.row.original.name)?.namespace}
+          >
             {info.getValue() as string}
           </span>
         ),
@@ -169,10 +169,9 @@ export default function TanStackTable({ nodes, kind, onSelect, relationSummaries
     onColumnVisibilityChange: setColumnVisibility,
   });
 
-  // TODO: return another picture with a different state here than plugin sync
-  /*if (nodes.length === 0) {
+  if (nodes.length === 0) {
     return <EmptyState />;
-  }*/
+  }
 
   return (
     <div className="flex flex-col gap-3">

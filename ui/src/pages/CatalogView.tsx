@@ -11,7 +11,7 @@ import { derivePlugins } from '../lib/kindUtils';
 import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
 import TanStackTable from '@/components/TanStackTable';
-import EmptyState from '../components/EmptyState';
+import PluginSyncState from '../components/states/PluginSyncState';
 import { formatRelativeTime, latestOperation } from '../lib/utils';
 
 
@@ -96,7 +96,7 @@ export default function CatalogView({ viewpointKinds, heading, subheading, viewp
 
         <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4">
           {!kindsError && !kindsLoading && kinds.length === 0 ? (
-            <EmptyState pluginNames={viewpointPlugins} />
+            <PluginSyncState pluginNames={viewpointPlugins} />
           ) : (
             <div className="mb-6">
               <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">

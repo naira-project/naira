@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { NodeResource, nodeProps } from '../lib/catalogApi';
 import { inferColumns, formatPropValue, parsePath,  namespaceColumnLabel, RelationSummary } from '../lib/kindUtils';
-import EmptyState from './EmptyState';
+import EmptyState from './states/EmptyState';
 
 interface GenericTableProps {
   nodes: NodeResource[];

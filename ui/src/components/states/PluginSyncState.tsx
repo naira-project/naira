@@ -1,13 +1,13 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { pluginsPageLink } from '../lib/utils';
+import { pluginsPageLink } from '../../lib/utils';
 
 /**
  * Shown in place of a data view (e.g. the catalog table) when there is
  * nothing to display yet. Once a sync populates data, the caller swaps
  * this out for the real content.
  */
-export default function EmptyState({ pluginNames }: { pluginNames?: string[] }) {
+export default function PluginSyncState({ pluginNames }: { pluginNames?: string[] }) {
   const description: ReactNode =
     (pluginNames && pluginNames.length > 0 ? (
       <>
