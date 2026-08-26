@@ -23,14 +23,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
-    }
-  },
-  "assist": {
-    "actions": {
-      "source": {
-        "organizeImports": "on"
-      }
+      "preset": "recommended"
     }
   },
   "javascript": {
