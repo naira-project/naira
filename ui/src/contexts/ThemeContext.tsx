@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type React from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 type ColorMode = 'light' | 'dark';
 
@@ -32,8 +33,11 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   }, [mode]);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ mode, toggleColorMode: () => setMode((prev) => (prev === 'light' ? 'dark' : 'light')) }),
-    [mode]
+    () => ({
+      mode,
+      toggleColorMode: () => setMode((prev) => (prev === 'light' ? 'dark' : 'light')),
+    }),
+    [mode],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

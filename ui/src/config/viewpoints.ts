@@ -56,6 +56,7 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
  */
 export function findViewpointForKind(kind: string): CatalogViewpoint | undefined {
   return CATALOG_VIEWPOINTS.find(
-    (viewpoint) => viewpoint.kinds.includes(kind) || (viewpoint.relatedKinds?.includes(kind) ?? false),
+    (viewpoint) =>
+      viewpoint.kinds.includes(kind) || (viewpoint.relatedKinds?.includes(kind) ?? false),
   );
 }

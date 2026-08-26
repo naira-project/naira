@@ -1,6 +1,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { OperationResource } from './catalogApi';
+import type { OperationResource } from './catalogApi';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -26,7 +26,7 @@ export function formatRelativeTime(iso: string): string {
 export function latestOperation(operations: OperationResource[]): OperationResource | null {
   if (operations.length === 0) return null;
   return [...operations].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )[0];
 }
 
@@ -34,10 +34,10 @@ export function latestOperation(operations: OperationResource[]): OperationResou
  * Returns a map of plugin name → most recent operation for each plugin.
  */
 export function latestOperationPerPlugin(
-  operations: OperationResource[]
+  operations: OperationResource[],
 ): Map<string, OperationResource> {
   const sorted = [...operations].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
   const latest = new Map<string, OperationResource>();
   for (const op of sorted) {
@@ -79,5 +79,7 @@ export function formatDuration(startIso: string, endIso: string): string {
  * Builds a link to the Plugins page, optionally scoped to a subset of plugins.
  */
 export function pluginsPageLink(pluginNames: string[]): string {
-  return pluginNames.length ? `/plugins?only=${encodeURIComponent(pluginNames.join(','))}` : '/plugins';
+  return pluginNames.length
+    ? `/plugins?only=${encodeURIComponent(pluginNames.join(','))}`
+    : '/plugins';
 }

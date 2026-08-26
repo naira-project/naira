@@ -1,10 +1,10 @@
+import { AlertCircle, Play, RefreshCw, X } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { X, Play, RefreshCw, AlertCircle } from 'lucide-react';
-import { usePluginsStatus } from '../hooks/usePluginOperations';
-import { OperationResource, StatusErrorResource } from '../lib/catalogApi';
-import { PluginStatusBadge } from '../components/PluginStatusBadge';
 import { PluginErrorModal } from '../components/PluginErrorModal';
+import { PluginStatusBadge } from '../components/PluginStatusBadge';
+import { usePluginsStatus } from '../hooks/usePluginOperations';
+import type { OperationResource, StatusErrorResource } from '../lib/catalogApi';
 import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 
 /**
@@ -21,7 +21,12 @@ import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '..
 export default function PluginsPage() {
   const [searchParams] = useSearchParams();
   const only = searchParams.get('only');
-  const allowedPlugins = only ? only.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+  const allowedPlugins = only
+    ? only
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
 
   const {
     plugins,
@@ -41,7 +46,10 @@ export default function PluginsPage() {
     ? plugins.filter((p) => allowedPlugins.includes(p))
     : plugins;
 
-  const [selectedError, setSelectedError] = useState<{ plugin: string; error: StatusErrorResource } | null>(null);
+  const [selectedError, setSelectedError] = useState<{
+    plugin: string;
+    error: StatusErrorResource;
+  } | null>(null);
 
   const handleRunVisible = async () => {
     if (allowedPlugins) {
@@ -185,7 +193,10 @@ function StatusTab({
           const running = runningPlugins.has(plugin);
 
           return (
-            <tr key={plugin} className="border-b border-gray-100 last:border-0 dark:border-gray-800">
+            <tr
+              key={plugin}
+              className="border-b border-gray-100 last:border-0 dark:border-gray-800"
+            >
               <td className="py-3 pr-4 font-medium text-gray-900 dark:text-gray-100">{plugin}</td>
               <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">
                 {op ? formatRelativeTime(op.createdAt) : 'Never'}

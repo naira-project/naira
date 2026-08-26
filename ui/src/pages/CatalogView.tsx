@@ -1,19 +1,18 @@
-import { useState, useMemo, useEffect } from 'react';
+import { Layers, Search } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, Layers } from 'lucide-react';
-import { Input } from '../components/ui/input';
-import { useKinds } from '../hooks/useKinds';
-import { useCatalogNodes } from '../hooks/useCatalogNodes';
-import { useRelationSummaries } from '../hooks/useRelationSummaries';
-import { usePluginsStatus } from '../hooks/usePluginOperations';
-import { NodeResource } from '../lib/catalogApi';
-import { derivePlugins } from '../lib/kindUtils';
+import EmptyState from '../components/EmptyState';
+import GenericTable from '../components/GenericTable';
 import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
-import GenericTable from '../components/GenericTable';
-import EmptyState from '../components/EmptyState';
+import { Input } from '../components/ui/input';
+import { useCatalogNodes } from '../hooks/useCatalogNodes';
+import { useKinds } from '../hooks/useKinds';
+import { usePluginsStatus } from '../hooks/usePluginOperations';
+import { useRelationSummaries } from '../hooks/useRelationSummaries';
+import type { NodeResource } from '../lib/catalogApi';
+import { derivePlugins } from '../lib/kindUtils';
 import { formatRelativeTime, latestOperation } from '../lib/utils';
-
 
 interface CatalogViewProps {
   viewpointKinds?: string[];
@@ -40,7 +39,8 @@ export default function CatalogView({
   const [search, setSearch] = useState('');
 
   // Kind discovery & selection
-  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } = useKinds(viewpointKinds);
+  const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } =
+    useKinds(viewpointKinds);
 
   // Fetch nodes for the active kind
   const { nodes, loading: nodesLoading, error: nodesError } = useCatalogNodes(activeKind ?? '');
@@ -57,7 +57,7 @@ export default function CatalogView({
       activePlugin
         ? nodes.filter((n) => n.pluginClaims?.some((c) => c.plugin === activePlugin))
         : nodes,
-    [nodes, activePlugin]
+    [nodes, activePlugin],
   );
 
   // Relation summaries — computed whenever the filtered node set changes
@@ -67,9 +67,7 @@ export default function CatalogView({
   const { operations } = usePluginsStatus();
 
   // Filter kinds by search
-  const filteredKinds = kinds.filter((k) =>
-    k.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredKinds = kinds.filter((k) => k.toLowerCase().includes(search.toLowerCase()));
 
   const lastSync = useMemo(() => latestOperation(operations), [operations]);
 
@@ -95,9 +93,7 @@ export default function CatalogView({
           {/* Compact last-sync indicator */}
           {lastSync && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-              <span>
-                Last sync: {formatRelativeTime(lastSync.createdAt)}
-              </span>
+              <span>Last sync: {formatRelativeTime(lastSync.createdAt)}</span>
             </div>
           )}
         </header>
@@ -130,12 +126,12 @@ export default function CatalogView({
                 </div>
               )}
               {(!viewpointKinds || viewpointKinds.length > 1) && (
-              <KindSelector
-                kinds={filteredKinds}
-                activeKind={activeKind}
-                onSelect={setActiveKind}
-                loading={kindsLoading}
-              />
+                <KindSelector
+                  kinds={filteredKinds}
+                  activeKind={activeKind}
+                  onSelect={setActiveKind}
+                  loading={kindsLoading}
+                />
               )}
             </div>
           )}
@@ -161,13 +157,15 @@ export default function CatalogView({
 
               {!nodesLoading && !nodesError && plugins.length > 0 && (
                 <div className="mb-4">
-                  <PluginTabs plugins={plugins} activePlugin={activePlugin} onSelect={setActivePlugin} />
+                  <PluginTabs
+                    plugins={plugins}
+                    activePlugin={activePlugin}
+                    onSelect={setActivePlugin}
+                  />
                 </div>
               )}
 
-              {nodesError && (
-                <p className="text-sm text-red-500">{nodesError}</p>
-              )}
+              {nodesError && <p className="text-sm text-red-500">{nodesError}</p>}
 
               {!nodesLoading && !nodesError && (
                 <GenericTable

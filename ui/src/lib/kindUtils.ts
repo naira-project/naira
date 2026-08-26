@@ -1,4 +1,4 @@
-import { fetchNodes, fetchRelations, nodeProps, NodeResource } from './catalogApi';
+import { fetchNodes, fetchRelations, type NodeResource, nodeProps } from './catalogApi';
 
 /**
  * Parse a node path into its structural segments.
@@ -151,7 +151,7 @@ export function isUrlValue(value: unknown): value is string {
  */
 export async function computeRelationSummaries(
   token: string | null,
-  nodes: NodeResource[]
+  nodes: NodeResource[],
 ): Promise<Map<string, RelationSummary>> {
   if (nodes.length === 0) {
     return new Map();
