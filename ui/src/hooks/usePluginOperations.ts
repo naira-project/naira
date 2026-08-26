@@ -114,7 +114,9 @@ export function usePluginsStatus(): UsePluginsStatusResult {
 
   const runningPlugins = useMemo(() => {
     const running = new Set(operations.filter((op) => !isTerminal(op)).map((op) => op.plugin));
-    pendingLocal.forEach((p) => running.add(p));
+    pendingLocal.forEach((p) => {
+      running.add(p);
+    });
     return running;
   }, [operations, pendingLocal]);
 
@@ -206,7 +208,9 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     async (pluginNames: string[]) => {
       setPendingLocal((prev) => {
         const next = new Set(prev);
-        pluginNames.forEach((name) => next.add(name));
+        pluginNames.forEach((name) => {
+          next.add(name);
+        });
         return next;
       });
       setSubsetActive(true);
@@ -231,7 +235,9 @@ export function usePluginsStatus(): UsePluginsStatusResult {
       } finally {
         setPendingLocal((prev) => {
           const next = new Set(prev);
-          pluginNames.forEach((name) => next.delete(name));
+          pluginNames.forEach((name) => {
+            next.delete(name);
+          });
           return next;
         });
         setSubsetActive(false);

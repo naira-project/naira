@@ -80,6 +80,7 @@ export default function PluginsPage() {
           <div className="flex-1" />
 
           <button
+            type="button"
             onClick={refresh}
             disabled={loading}
             className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -89,6 +90,7 @@ export default function PluginsPage() {
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
+            type="button"
             onClick={handleRunVisible}
             disabled={runAllActive}
             className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
@@ -109,6 +111,7 @@ export default function PluginsPage() {
                 >
                   <span>{err.message}</span>
                   <button
+                    type="button"
                     onClick={() => dismissError(err.id)}
                     className="shrink-0 rounded p-0.5 text-red-500 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900"
                     aria-label="Dismiss"
@@ -215,7 +218,8 @@ function StatusTab({
                   <span className="text-xs text-gray-400">—</span>
                 ) : op && op.state === 'FAILED' && op.error ? (
                   <button
-                    onClick={() => onViewError(plugin, op.error!)}
+                    type="button"
+                    onClick={() => onViewError(plugin, op.error)}
                     className="inline-flex items-center gap-1.5 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:bg-red-950/80 dark:text-red-400 dark:hover:bg-red-900"
                   >
                     <AlertCircle size={13} />
@@ -239,6 +243,7 @@ function StatusTab({
               </td>
               <td className="py-3 text-right">
                 <button
+                  type="button"
                   onClick={() => onRun(plugin)}
                   disabled={running}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
