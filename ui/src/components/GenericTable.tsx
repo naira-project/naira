@@ -73,6 +73,7 @@ export default function GenericTable({
   kind,
   onSelect,
   relationSummaries,
+  columns,
 }: GenericTableProps) {
   const labelText =
     'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
@@ -87,13 +88,16 @@ export default function GenericTable({
 
   // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
   // rendered explicitly as core columns below, so only the plugin tail is needed here.
-  const pluginColumns = useMemo(() => inferColumns(nodes).slice(2), [nodes]);
+  const pluginColumns = useMemo(() => {
+    const inferred = inferColumns(nodes).slice(2);
+    return columns ? columns.filter((col) => inferred.includes(col)) : inferred;
+  }, [nodes, columns]);
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
   const hasPluginColumns = pluginColCount > 0;
   const CORE_COL_COUNT = 3; // name + namespace + relations
 
-  const columns = useMemo<ColumnDef<typeof features, NodeResource>[]>(
+  const columnDefs = useMemo<ColumnDef<typeof features, NodeResource>[]>(
     () => [
       {
         id: 'name',
@@ -174,7 +178,7 @@ export default function GenericTable({
   const table = useTable({
     features,
     data,
-    columns,
+    columns: columnDefs,
     state: { sorting, globalFilter, columnVisibility },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
@@ -281,7 +285,7 @@ export default function GenericTable({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
+                <TableCell colSpan={columnDefs.length} className="text-center text-muted-foreground">
                   No nodes found.
                 </TableCell>
               </TableRow>
