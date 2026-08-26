@@ -78,9 +78,10 @@ export default function CatalogView({
   const hasSyncedViewpointPlugin = useMemo(
     () =>
       operations.some(
-        (op) => op.state === 'SUCCEEDED' && (!viewpointPlugins || viewpointPlugins.includes(op.plugin))
+        (op) =>
+          op.state === 'SUCCEEDED' && (!viewpointPlugins || viewpointPlugins.includes(op.plugin)),
       ),
-    [operations, viewpointPlugins]
+    [operations, viewpointPlugins],
   );
 
   const handleSelect = (node: NodeResource) => {

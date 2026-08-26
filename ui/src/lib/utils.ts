@@ -3,7 +3,7 @@ import { twMerge } from 'tailwind-merge';
 import type { OperationResource } from './catalogApi';
 
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 export function formatRelativeTime(iso: string): string {

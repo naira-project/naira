@@ -1,9 +1,8 @@
 /**
- * Shown as the empty page, after respective plugins for a viewpoint have been 
+ * Shown as the empty page, after respective plugins for a viewpoint have been
  * run. If the page does not consist of any data for the respective user, then this state comes up.
  */
 export default function EmptyState() {
-
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-[10px] self-stretch pt-10 pb-[220px]">
       <div className="flex h-[262.381px] w-[280.603px] items-center justify-center pt-[31.925px] pr-[35.496px] pb-[30.226px] pl-[33.65px]">
