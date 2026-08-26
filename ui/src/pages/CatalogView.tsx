@@ -10,7 +10,7 @@ import { NodeResource } from '../lib/catalogApi';
 import { derivePlugins } from '../lib/kindUtils';
 import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
-import TanStackTable from '@/components/TanStackTable';
+import GenericTable from '@/components/GenericTable';
 import PluginSyncState from '../components/states/PluginSyncState';
 import EmptyState from '../components/states/EmptyState';
 import { formatRelativeTime, latestOperation } from '../lib/utils';
@@ -178,7 +178,7 @@ export default function CatalogView({ viewpointKinds, heading, subheading, viewp
               )}
 
               {!nodesLoading && !nodesError && (
-                <TanStackTable
+                <GenericTable
                   nodes={filteredNodes}
                   kind={activeKind}
                   onSelect={handleSelect}

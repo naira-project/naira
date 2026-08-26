@@ -1,8 +1,45 @@
-import { useMemo } from 'react';
-import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { NodeResource, nodeProps } from '../lib/catalogApi';
-import { inferColumns, formatPropValue, parsePath,  namespaceColumnLabel, RelationSummary } from '../lib/kindUtils';
-import EmptyState from './states/EmptyState';
+import { useMemo, useState } from "react";
+import {
+  ColumnDef,
+  columnFilteringFeature,
+  columnVisibilityFeature,
+  createFilteredRowModel,
+  createSortedRowModel,
+  globalFilteringFeature,
+  rowSortingFeature,
+  SortingState,
+  tableFeatures,
+  ColumnVisibilityState,
+} from "@tanstack/table-core";
+import { useTable } from "@tanstack/react-table";
+import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpDown, ArrowUpRight, Info, Search, Columns3 } from "lucide-react";
+import { parsePath } from "@/lib/kindUtils";
+import {
+  formatPropValue,
+  namespaceColumnLabel,
+  inferColumns,
+  RelationSummary,
+} from "@/lib/kindUtils";
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { nodeProps, NodeResource } from "../lib/catalogApi";
+import EmptyState from "./states/EmptyState";
 
 interface GenericTableProps {
   nodes: NodeResource[];
@@ -11,175 +48,232 @@ interface GenericTableProps {
   relationSummaries: Map<string, RelationSummary>;
 }
 
-/**
- * A generic, kind-agnostic table that:
- * 1. Infers columns from the union of all node props.
- * 2. Always shows `name`, `namespace`, and `Relations` as the "Core Metadata" columns.
- * 3. Renders plugin-derived prop columns as "Plugin Properties", immediately after Core Metadata.
- *    The group-header row (Core Metadata / Plugin Properties) is always rendered, even when a
- *    kind has zero plugin properties — this keeps table height/layout stable when switching
- *    between kinds instead of the header jumping around.
- * 4. Renders a clickable "Details" action column pinned to the right; every other column
- *    hugs the left edge (a flexible spacer column absorbs leftover space, and also stands in
- *    for "Plugin Properties" visually when there are no plugin columns).
- *
- * Implementation note: the whole table (header rows + every data row) lives inside a SINGLE
- * CSS grid container. Row wrappers use `display: contents` so their cells become direct grid
- * items. This matters — if each row were its own independent grid, `max-content` column
- * sizing would be computed separately per row and columns would drift out of alignment on
- * wider screens.
- */
+// Only the features we actually use are pulled in, keeping the table tree-shakeable.
+const features = tableFeatures({
+  columnFilteringFeature,
+  columnVisibilityFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+});
+
 export default function GenericTable({ nodes, kind, onSelect, relationSummaries }: GenericTableProps) {
+  
+
+  const labelText =
+    'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
+  const groupText =
+    'flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none';
+  const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
+  
   const parsedPaths = useMemo(
     () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
     [nodes]
   );
 
   // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
-  // rendered explicitly as the core columns, so we only need the plugin tail here.
-  const columns = useMemo(() => inferColumns(nodes), [nodes]);
-  const pluginColumns = useMemo(() => columns.slice(2), [columns]);
+  // rendered explicitly as core columns below, so only the plugin tail is needed here.
+  const inferredColumns = useMemo(() => inferColumns(nodes), [nodes]);
+  const pluginColumns = useMemo(() => inferredColumns.slice(2), [inferredColumns]);
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
   const hasPluginColumns = pluginColCount > 0;
   const CORE_COL_COUNT = 3; // name + namespace + relations
-  const ACTIONS_COL_WIDTH = '110px';
 
-  // Core + plugin columns hug the left (content-sized), a flexible spacer absorbs leftover
-  // width (and doubles as the "Plugin Properties" area when there are no plugin columns), and
-  // Actions is pinned to the right.
-  const gridTemplateColumns = useMemo(() => {
-    const pluginPart = hasPluginColumns
-      ? ` repeat(${pluginColCount}, minmax(100px, max-content))`
-      : '';
-    return `minmax(140px, max-content) minmax(100px, max-content) minmax(160px, max-content)${pluginPart} 1fr ${ACTIONS_COL_WIDTH}`;
-  }, [pluginColCount, hasPluginColumns]);
+  const columns = useMemo<ColumnDef<typeof features, NodeResource>[]>(() => {
+    const cols: ColumnDef<typeof features, NodeResource>[] = [
+      {
+        id: "name",
+        header: "Name",
+        accessorFn: (node) => parsedPaths.get(node.name)?.name ?? node.name,
+        cell: (info) => (
+          <span
+            className="truncate text-sm font-medium text-foreground dark:text-foreground-dark-default"
+            title={info.row.original.name}
+          >
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        id: namespaceLabel,
+        header: namespaceLabel.charAt(0).toUpperCase() + namespaceLabel.slice(1),
+        accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? "—",
+        cell: (info) => (
+          <span
+            className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
+            title={parsedPaths.get(info.row.original.name)?.namespace}
+          >
+            {info.getValue() as string}
+          </span>
+        ),
+      },
+      {
+        id: "relations",
+        header: "Relations",
+        enableSorting: false,
+        cell: (info) => (
+          <RelationCell nodeName={info.row.original.name} summaries={relationSummaries} />
+        ),
+      },
+      ...pluginColumns.map(
+        (col): ColumnDef<typeof features, NodeResource> => ({
+          id: col,
+          header: col,
+          accessorFn: (node) => nodeProps(node)[col],
+          cell: (info) => {
+            const value = info.getValue();
+            return (
+              <span
+                className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
+                title={typeof value === "string" ? value : undefined}
+              >
+                {formatPropValue(value)}
+              </span>
+            );
+          },
+        })
+      ),
+      {
+        id: "actions",
+        header: "Actions",
+        enableSorting: false,
+        cell: (info) => (
+          <button
+            onClick={() => onSelect(info.row.original)}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
+            title="View details"
+          >
+            <Info size={14} />
+            Details
+          </button>
+        ),
+      },
+    ];
+    return cols;
+  }, [namespaceLabel, parsedPaths, pluginColumns, relationSummaries, onSelect]);
+
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
+
+  const data = useMemo(() => nodes, [nodes]);
+
+  const table = useTable({
+    features,
+    data,
+    columns,
+    state: { sorting, globalFilter, columnVisibility },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    onColumnVisibilityChange: setColumnVisibility,
+  });
 
   if (nodes.length === 0) {
     return <EmptyState />;
   }
 
-  const headerCell =
-    'flex items-center h-full bg-gray-50 px-4 py-2.5 dark:bg-white/5';
-  const labelText =
-    'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
-  const groupText =
-    'flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none';
-
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-      <div className="grid" style={{ gridTemplateColumns }}>
-        {/* Row 1: group headers — always rendered so the table doesn't jump in height when a
-            kind has no plugin properties. "Plugin Properties" spans the plugin columns plus the
-            spacer, so it still shows even with zero plugin columns. */}
-        <div
-          className={`${headerCell} ${groupText} rounded-tl-lg`}
-          style={{ gridColumn: `span ${CORE_COL_COUNT}` }}
-        >
-          Core Metadata
-        </div>
-        <div
-          className={`${headerCell} ${groupText}`}
-          style={{ gridColumn: `span ${pluginColCount + 1}` }}
-        >
-          Plugin Properties
-        </div>
-        <div className={`${headerCell} rounded-tr-lg`} />
+    <div className="flex flex-col gap-3">
 
-        {/* Row 2: column labels */}
-        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
-          <span className={labelText}>name</span>
-        </div>
-        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
-           <span className={labelText}>{namespaceLabel}</span>
-        </div>
-        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
-          <span className={labelText}>Relations</span>
-        </div>
-        {pluginColumns.map((col) => (
-          <div
-            key={col}
-            className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
-          >
-            <span className={labelText}>{col}</span>
-          </div>
-        ))}
-        <div
-          className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
-        />
-        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
-          <span className={labelText}>Actions</span>
-        </div>
+      <div className="flex flex-row gap-3">
+      <Input
+        value={globalFilter}
+        onChange={(event) => setGlobalFilter(event.target.value)}
+        placeholder="Filter nodes…"
+        startAdornment={<Search className="size-4" />}
+        className="max-w-sm"
+      />
 
-        {/* Data rows — `contents` makes each row's cells direct grid items so they share the
-            same column tracks as the header (see note above). */}
-        {nodes.map((node, rowIdx) => {
-          const parsed = parsedPaths.get(node.name);
-          const props = nodeProps(node);
-          const isLastRow = rowIdx === nodes.length - 1;
-          const cellBase = `flex items-center h-full px-4 py-3 group-hover/row:bg-gray-50 dark:group-hover/row:bg-white/5 ${
-            isLastRow ? '' : 'border-b border-gray-200 dark:border-gray-700'
-          }`;
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm">
+            <Columns3 className="size-4" />
+            Columns
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {table.getAllLeafColumns().map((column) => (
+            <DropdownMenuCheckboxItem
+              key={column.id}
+              checked={column.getIsVisible()}
+              onCheckedChange={(checked) => column.toggleVisibility(!!checked)}
+              onSelect={(e) => e.preventDefault()} // keep menu open after each click
+            >
+              {column.id}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+      <Table>
+        <TableHeader>
+          {/* Row 1: group headers — mirrors GenericTable's "Core Metadata" / "Plugin Properties" bands */}
+          <TableRow>
+            <TableHead colSpan={CORE_COL_COUNT} className="bg-gray-50 dark:bg-white/5">
+              <span className={groupText}>Core Metadata</span>
+            </TableHead>
+            {hasPluginColumns && (
+              <TableHead colSpan={pluginColCount} className="bg-gray-50 dark:bg-white/5">
+                <span className={groupText}>Plugin Properties</span>
+              </TableHead>
+            )}
+            <TableHead className="bg-gray-50 dark:bg-white/5" /> {/* spacer over the Actions column */}
+          </TableRow>
 
-          return (
-            <div key={node.name} className="contents group/row">
-              <div className={`${cellBase} truncate ${isLastRow ? 'rounded-bl-lg' : ''}`}>
-                <span
-                  className="truncate text-sm font-medium text-foreground dark:text-foreground-dark-default"
-                  title={node.name}
-                >
-                  {parsed?.name ?? node.name}
-                </span>
-              </div>
-
-              <div className={`${cellBase} truncate`}>
-                <span
-                  className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
-                  title={parsed?.namespace}
-                >
-                  {parsed?.namespace ?? '—'}
-                </span>
-              </div>
-
-              <div className={cellBase}>
-                <RelationCell nodeName={node.name} summaries={relationSummaries} />
-              </div>
-
-              {pluginColumns.map((col) => {
-                const value = props[col];
+          {/* Row 2: per-column header labels, with sort affordances */}
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => {
+                const sortDirection = header.column.getIsSorted();
                 return (
-                  <div
-                    key={col}
-                    className={`${cellBase}`}
+                  <TableHead
+                    key={header.id}
+                    className={header.column.getCanSort() ? "cursor-pointer select-none" : undefined}
+                    onClick={header.column.getToggleSortingHandler()}
                   >
-                    <span
-                      className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
-                      title={typeof value === 'string' ? value : undefined}
-                    >
-                      {formatPropValue(value)}
-                    </span>
-                  </div>
+                    <div className="flex items-center gap-1">
+                      <span className={labelText}>
+                        <table.FlexRender header={header} />
+                      </span>
+                      {header.column.getCanSort() &&
+                        (sortDirection === "asc" ? (
+                          <ArrowUp className="size-3.5" />
+                        ) : sortDirection === "desc" ? (
+                          <ArrowDown className="size-3.5" />
+                        ) : (
+                          <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                        ))}
+                    </div>
+                  </TableHead>
                 );
               })}
-
-              {/* Spacer — absorbs leftover width so only Actions sits on the right */}
-              <div
-                className={`${cellBase}`}
-              />
-
-              <div className={`${cellBase} ${isLastRow ? 'rounded-br-lg' : ''}`}>
-                <button
-                  onClick={() => onSelect(node)}
-                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
-                  title="View details"
-                >
-                  <Info size={14} />
-                  Details
-                </button>
-              </div>
-            </div>
-          );
-        })}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.length ? (
+            table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    <table.FlexRender cell={cell} />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
+                No nodes found.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
       </div>
     </div>
   );
