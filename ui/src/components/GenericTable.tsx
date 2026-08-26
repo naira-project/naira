@@ -1,25 +1,36 @@
-import { useMemo, useState } from "react";
+import { useTable } from '@tanstack/react-table';
 import {
-  ColumnDef,
+  type ColumnDef,
+  type ColumnVisibilityState,
   columnFilteringFeature,
   columnVisibilityFeature,
   createFilteredRowModel,
   createSortedRowModel,
   globalFilteringFeature,
   rowSortingFeature,
-  SortingState,
+  type SortingState,
   tableFeatures,
-  ColumnVisibilityState,
-} from "@tanstack/table-core";
-import { useTable } from "@tanstack/react-table";
-import { ArrowDown, ArrowDownRight, ArrowUp, ArrowUpDown, ArrowUpRight, Info, Search, Columns3 } from "lucide-react";
-import { parsePath } from "@/lib/kindUtils";
+} from '@tanstack/table-core';
 import {
-  formatPropValue,
-  namespaceColumnLabel,
-  inferColumns,
-  type RelationSummary,
-} from "@/lib/kindUtils";
+  ArrowDown,
+  ArrowDownRight,
+  ArrowUp,
+  ArrowUpDown,
+  ArrowUpRight,
+  Columns3,
+  Info,
+  Search,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 
 import {
   Table,
@@ -28,18 +39,16 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/table';
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import { nodeProps, type NodeResource } from "../lib/catalogApi";
-import EmptyState from "./states/EmptyState";
+  formatPropValue,
+  inferColumns,
+  namespaceColumnLabel,
+  parsePath,
+  type RelationSummary,
+} from '@/lib/kindUtils';
+import { type NodeResource, nodeProps } from '../lib/catalogApi';
+import EmptyState from './states/EmptyState';
 
 interface GenericTableProps {
   nodes: NodeResource[];
@@ -59,15 +68,18 @@ const features = tableFeatures({
   sortedRowModel: createSortedRowModel(),
 });
 
-export default function GenericTable({ nodes, kind, onSelect, relationSummaries }: GenericTableProps) {
-  
-
+export default function GenericTable({
+  nodes,
+  kind,
+  onSelect,
+  relationSummaries,
+}: GenericTableProps) {
   const labelText =
     'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
   const groupText =
     'flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none';
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
-  
+
   const parsedPaths = useMemo(
     () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
     [nodes],
@@ -75,18 +87,17 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
 
   // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
   // rendered explicitly as core columns below, so only the plugin tail is needed here.
-  const inferredColumns = useMemo(() => inferColumns(nodes), [nodes]);
-  const pluginColumns = useMemo(() => inferredColumns.slice(2), [inferredColumns]);
+  const pluginColumns = useMemo(() => inferColumns(nodes).slice(2), [nodes]);
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
   const hasPluginColumns = pluginColCount > 0;
   const CORE_COL_COUNT = 3; // name + namespace + relations
 
-  const columns = useMemo<ColumnDef<typeof features, NodeResource>[]>(() => {
-    const cols: ColumnDef<typeof features, NodeResource>[] = [
+  const columns = useMemo<ColumnDef<typeof features, NodeResource>[]>(
+    () => [
       {
-        id: "name",
-        header: "Name",
+        id: 'name',
+        header: 'Name',
         accessorFn: (node) => parsedPaths.get(node.name)?.name ?? node.name,
         cell: (info) => (
           <span
@@ -100,7 +111,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
       {
         id: namespaceLabel,
         header: namespaceLabel.charAt(0).toUpperCase() + namespaceLabel.slice(1),
-        accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? "—",
+        accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? '—',
         cell: (info) => (
           <span
             className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
@@ -111,8 +122,8 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
         ),
       },
       {
-        id: "relations",
-        header: "Relations",
+        id: 'relations',
+        header: 'Relations',
         enableSorting: false,
         cell: (info) => (
           <RelationCell nodeName={info.row.original.name} summaries={relationSummaries} />
@@ -128,17 +139,17 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
             return (
               <span
                 className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
-                title={typeof value === "string" ? value : undefined}
+                title={typeof value === 'string' ? value : undefined}
               >
                 {formatPropValue(value)}
               </span>
             );
           },
-        })
+        }),
       ),
       {
-        id: "actions",
-        header: "Actions",
+        id: 'actions',
+        header: 'Actions',
         enableSorting: false,
         cell: (info) => (
           <button
@@ -151,12 +162,12 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
           </button>
         ),
       },
-    ];
-    return cols;
-  }, [namespaceLabel, parsedPaths, pluginColumns, relationSummaries, onSelect]);
+    ],
+    [namespaceLabel, parsedPaths, pluginColumns, relationSummaries, onSelect],
+  );
 
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [globalFilter, setGlobalFilter] = useState('');
 
   const data = useMemo(() => nodes, [nodes]);
 
@@ -176,105 +187,107 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
 
   return (
     <div className="flex flex-col gap-3">
-
       <div className="flex flex-row gap-3">
-      <Input
-        value={globalFilter}
-        onChange={(event) => setGlobalFilter(event.target.value)}
-        placeholder="Filter nodes…"
-        startAdornment={<Search className="size-4" />}
-        className="max-w-sm"
-      />
+        <Input
+          value={globalFilter}
+          onChange={(event) => setGlobalFilter(event.target.value)}
+          placeholder="Filter nodes…"
+          startAdornment={<Search className="size-4" />}
+          className="max-w-sm"
+        />
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm">
-            <Columns3 className="size-4" />
-            Columns
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {table.getAllLeafColumns().map((column) => (
-            <DropdownMenuCheckboxItem
-              key={column.id}
-              checked={column.getIsVisible()}
-              onCheckedChange={(checked) => column.toggleVisibility(!!checked)}
-              onSelect={(e) => e.preventDefault()} // keep menu open after each click
-            >
-              {column.id}
-            </DropdownMenuCheckboxItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm">
+              <Columns3 className="size-4" />
+              Columns
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {table.getAllLeafColumns().map((column) => (
+              <DropdownMenuCheckboxItem
+                key={column.id}
+                checked={column.getIsVisible()}
+                onCheckedChange={(checked) => column.toggleVisibility(!!checked)}
+                onSelect={(e) => e.preventDefault()} // keep menu open after each click
+              >
+                {column.id}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-      <Table>
-        <TableHeader>
-          {/* Row 1: group headers — mirrors GenericTable's "Core Metadata" / "Plugin Properties" bands */}
-          <TableRow>
-            <TableHead colSpan={CORE_COL_COUNT} className="bg-gray-50 dark:bg-white/5">
-              <span className={groupText}>Core Metadata</span>
-            </TableHead>
-            {hasPluginColumns && (
-              <TableHead colSpan={pluginColCount} className="bg-gray-50 dark:bg-white/5">
-                <span className={groupText}>Plugin Properties</span>
-              </TableHead>
-            )}
-            <TableHead className="bg-gray-50 dark:bg-white/5" /> {/* spacer over the Actions column */}
-          </TableRow>
-
-          {/* Row 2: per-column header labels, with sort affordances */}
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => {
-                const sortDirection = header.column.getIsSorted();
-                return (
-                  <TableHead
-                    key={header.id}
-                    className={header.column.getCanSort() ? "cursor-pointer select-none" : undefined}
-                    onClick={header.column.getToggleSortingHandler()}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span className={labelText}>
-                        <table.FlexRender header={header} />
-                      </span>
-                      {header.column.getCanSort() &&
-                        (sortDirection === "asc" ? (
-                          <ArrowUp className="size-3.5" />
-                        ) : sortDirection === "desc" ? (
-                          <ArrowDown className="size-3.5" />
-                        ) : (
-                          <ArrowUpDown className="size-3.5 text-muted-foreground" />
-                        ))}
-                    </div>
-                  </TableHead>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
-                    <table.FlexRender cell={cell} />
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
-          ) : (
+        <Table>
+          <TableHeader>
+            {/* Row 1: group headers — mirrors GenericTable's "Core Metadata" / "Plugin Properties" bands */}
             <TableRow>
-              <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
-                No nodes found.
-              </TableCell>
+              <TableHead colSpan={CORE_COL_COUNT} className="bg-gray-50 dark:bg-white/5">
+                <span className={groupText}>Core Metadata</span>
+              </TableHead>
+              {hasPluginColumns && (
+                <TableHead colSpan={pluginColCount} className="bg-gray-50 dark:bg-white/5">
+                  <span className={groupText}>Plugin Properties</span>
+                </TableHead>
+              )}
+              <TableHead className="bg-gray-50 dark:bg-white/5" />{' '}
+              {/* spacer over the Actions column */}
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+
+            {/* Row 2: per-column header labels, with sort affordances */}
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  const sortDirection = header.column.getIsSorted();
+                  return (
+                    <TableHead
+                      key={header.id}
+                      className={
+                        header.column.getCanSort() ? 'cursor-pointer select-none' : undefined
+                      }
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className="flex items-center gap-1">
+                        <span className={labelText}>
+                          <table.FlexRender header={header} />
+                        </span>
+                        {header.column.getCanSort() &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="size-3.5" />
+                          ) : sortDirection === 'desc' ? (
+                            <ArrowDown className="size-3.5" />
+                          ) : (
+                            <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                          ))}
+                      </div>
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      <table.FlexRender cell={cell} />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
+                  No nodes found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
