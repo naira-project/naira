@@ -4,7 +4,7 @@
 // TODO: add support for Bucket and other FluxCD sources kinds.
 // TODO: add support for any other resources managed by FluxCD (Services, Ingresses, thirdparty CRDs, ...)
 //
-// GitRepository nodes currently support GitHub URLs only. Other Git hosts are
+// GitRepository nodes currently support GitHub URLs only. Other Git hosts are ignored.
 // TODO: add support for other Git hosts.
 package main
 
