@@ -49,7 +49,7 @@ export default function CatalogView({
   const [activePlugin, setActivePlugin] = useState<string | null>(null);
   useEffect(() => {
     setActivePlugin(null);
-  }, [activeKind]);
+  }, []);
 
   const plugins = useMemo(() => derivePlugins(nodes), [nodes]);
   const filteredNodes = useMemo(
