@@ -66,6 +66,7 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
         {tools.map((tool) => (
           <li key={tool.name}>
             <button
+              type="button"
               onClick={() =>
                 navigate(
                   `/catalog/${encodeURIComponent(tool.kind)}/${encodeCatalogPath(tool.path)}`,

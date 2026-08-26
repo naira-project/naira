@@ -15,6 +15,7 @@ export default function PluginTabs({ plugins, activePlugin, onSelect }: PluginTa
   return (
     <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
       <button
+        type="button"
         onClick={() => onSelect(null)}
         className={cn(
           'px-3 py-1.5 text-sm transition-colors',
@@ -27,6 +28,7 @@ export default function PluginTabs({ plugins, activePlugin, onSelect }: PluginTa
       </button>
       {plugins.map((plugin) => (
         <button
+          type="button"
           key={plugin}
           onClick={() => onSelect(plugin)}
           className={cn(
