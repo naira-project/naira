@@ -1,4 +1,4 @@
-import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { CheckCircle, Clock, Loader2, XCircle } from 'lucide-react';
 import { Badge } from './ui/badge';
 
 interface PluginStatusBadgeProps {

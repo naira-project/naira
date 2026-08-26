@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from 'react';
 import * as LuigiClient from '@luigi-project/client';
+import { useSyncExternalStore } from 'react';
 
 export interface OpenMFPContext {
   token: string | null;

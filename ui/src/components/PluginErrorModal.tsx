@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { StatusErrorResource } from '../lib/catalogApi';
+import type { StatusErrorResource } from '../lib/catalogApi';
 
 interface PluginErrorModalProps {
   pluginName: string;
