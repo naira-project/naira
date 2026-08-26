@@ -116,7 +116,11 @@ export default function CatalogView({
               {kindsError && (
                 <div className="mb-4 flex items-center gap-2 text-sm text-red-500">
                   <span>{kindsError}</span>
-                  <button type="button" onClick={refreshKinds} className="underline hover:no-underline">
+                  <button
+                    type="button"
+                    onClick={refreshKinds}
+                    className="underline hover:no-underline"
+                  >
                     Retry
                   </button>
                 </div>
