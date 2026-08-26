@@ -10,6 +10,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/naira-project/naira/plugins/internal/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go-simpler.org/env"
@@ -391,27 +392,27 @@ func TestConfigNamedHostsParsing(t *testing.T) {
 	tests := []struct {
 		name      string
 		hostsEnv  string
-		wantHosts []namedHost
+		wantHosts []util.NamedValue
 		wantErr   string
 	}{
 		{
 			name:     "valid named hosts (https & http; trailing slash trimmed; port; path)",
 			hostsEnv: "host1=https://example.com,host2=http://example.org:8080/path/,host3=https://example.net/foo/bar",
-			wantHosts: []namedHost{
-				{name: "host1", baseURL: "https://example.com"},
-				{name: "host2", baseURL: "http://example.org:8080/path"},
-				{name: "host3", baseURL: "https://example.net/foo/bar"},
+			wantHosts: []util.NamedValue{
+				{Name: "host1", Value: "https://example.com"},
+				{Name: "host2", Value: "http://example.org:8080/path"},
+				{Name: "host3", Value: "https://example.net/foo/bar"},
 			},
 		},
 		{
 			name:     "invalid: '/' in name",
 			hostsEnv: "invalid/name=https://example.com",
-			wantErr:  `"/"`,
+			wantErr:  "/",
 		},
 		{
 			name:     "invalid: missing '='",
 			hostsEnv: "before=ok,https://example.com,after=ok",
-			wantErr:  `=`,
+			wantErr:  "=",
 		},
 		{
 			name:     "invalid: empty name",
@@ -423,23 +424,25 @@ func TestConfigNamedHostsParsing(t *testing.T) {
 			hostsEnv: "before=ok,host1=,after=ok",
 			wantErr:  `"host1="`,
 		},
+		{
+			name:     "no hosts configured",
+			hostsEnv: "",
+			wantErr:  "DEPL_USES_LITELLM_NAMED_HOSTS is empty",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var cfg config
-			err := env.Load(&cfg, &env.Options{
-				SliceSep: ",",
-				Source: env.Map{
-					"DEPL_USES_LITELLM_NAMED_HOSTS": tt.hostsEnv,
-				},
-			})
+			// Through New rather than env.Load, so the test exercises the same
+			// parsing the plugin uses in production.
+			p, err := New(config{NamedHosts: tt.hostsEnv})
 			if tt.wantErr != "" {
 				assert.ErrorContains(t, err, tt.wantErr)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.wantHosts, cfg.NamedHosts)
+				return
 			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantHosts, p.namedHosts)
 		})
 	}
 }

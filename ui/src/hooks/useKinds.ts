@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { discoverKinds } from '../lib/kindUtils';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
@@ -32,7 +32,8 @@ export function useKinds(viewpointKinds?: string[]): UseKindsResult {
   });
 
   const kinds = useMemo(
-    () => (viewpointKinds ? viewpointKinds.filter((k) => discoveredKinds.includes(k)) : discoveredKinds),
+    () =>
+      viewpointKinds ? viewpointKinds.filter((k) => discoveredKinds.includes(k)) : discoveredKinds,
     [viewpointKinds?.join(','), discoveredKinds],
   );
 

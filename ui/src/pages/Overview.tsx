@@ -1,8 +1,8 @@
+import { Search } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Search } from 'lucide-react';
-import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
+import { Input } from '../components/ui/input';
 import { CATALOG_VIEWPOINTS } from '../config/viewpoints';
 
 /**
@@ -13,7 +13,7 @@ export default function Overview() {
   const [search, setSearch] = useState('');
 
   const filteredViewpoints = CATALOG_VIEWPOINTS.filter((viewpoint) =>
-    viewpoint.heading.toLowerCase().includes(search.toLowerCase())
+    viewpoint.heading.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (

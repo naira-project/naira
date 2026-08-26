@@ -14,7 +14,7 @@ export function useAsyncData<T>(
   loader: () => Promise<T>,
   deps: unknown[],
   initial: T,
-  errorMessage: string
+  errorMessage: string,
 ): AsyncDataResult<T> {
   const [data, setData] = useState<T>(initial);
   const [loading, setLoading] = useState(true);

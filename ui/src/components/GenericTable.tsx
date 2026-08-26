@@ -18,7 +18,7 @@ import {
   formatPropValue,
   namespaceColumnLabel,
   inferColumns,
-  RelationSummary,
+  type RelationSummary,
 } from "@/lib/kindUtils";
 
 import {
@@ -38,7 +38,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { nodeProps, NodeResource } from "../lib/catalogApi";
+import { nodeProps, type NodeResource } from "../lib/catalogApi";
 import EmptyState from "./states/EmptyState";
 
 interface GenericTableProps {
@@ -46,6 +46,7 @@ interface GenericTableProps {
   kind: string;
   onSelect: (node: NodeResource) => void;
   relationSummaries: Map<string, RelationSummary>;
+  columns?: string[];
 }
 
 // Only the features we actually use are pulled in, keeping the table tree-shakeable.
@@ -69,7 +70,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
   
   const parsedPaths = useMemo(
     () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
-    [nodes]
+    [nodes],
   );
 
   // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
@@ -290,7 +291,11 @@ function RelationCell({
   const summary = summaries.get(nodeName);
 
   if (!summary) {
-    return <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">—</span>;
+    return (
+      <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+        —
+      </span>
+    );
   }
 
   const relationKinds = Object.keys(summary).sort();

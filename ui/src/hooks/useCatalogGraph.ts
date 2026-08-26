@@ -1,9 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { buildCatalogGraphSlice, type CatalogGraphResponse, type CatalogGraphRoot } from '../lib/catalogGraph';
+import {
+  buildCatalogGraphSlice,
+  type CatalogGraphResponse,
+  type CatalogGraphRoot,
+} from '../lib/catalogGraph';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
 
-export type { CatalogGraphEdge, CatalogGraphNode, CatalogGraphRoot, CatalogGraphResponse } from '../lib/catalogGraph';
+export type {
+  CatalogGraphEdge,
+  CatalogGraphNode,
+  CatalogGraphResponse,
+  CatalogGraphRoot,
+} from '../lib/catalogGraph';
 
 const EMPTY_GRAPH: CatalogGraphResponse = { nodes: [], edges: [] };
 

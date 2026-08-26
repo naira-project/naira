@@ -50,6 +50,28 @@ data:
       callbacks:
         - prometheus
       prometheus_initialize_budget_metrics: true
+    mcp_servers:
+      # Mcp server running on the cluster
+      mock_kb:
+        url: http://mcp-mock.mcp-mock.svc.cluster.local:8080/mcp
+        transport: http
+        description: Mock MCP server for local development
+
+      # Public MCP servers can be added the same way. Uncomment for richer
+      # sample data, noting that a catalog sync then makes outbound calls to a
+      # third party.
+      # deepwiki:
+      #   url: https://mcp.deepwiki.com/mcp
+      #   transport: http
+      #   description: Ask questions about public GitHub repositories
+      # huggingface:
+      #   url: https://huggingface.co/mcp
+      #   transport: http
+      #   description: Search Hugging Face models, datasets and spaces
+      # ms_learn:
+      #   url: https://learn.microsoft.com/api/mcp
+      #   transport: http
+      #   description: Search Microsoft Learn documentation
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -68,7 +90,7 @@ spec:
     spec:
       containers:
         - name: litellm
-          image: docker.litellm.ai/berriai/litellm:v1.82.3
+          image: docker.litellm.ai/berriai/litellm:v1.97.0
           imagePullPolicy: IfNotPresent
           args:
             - --config

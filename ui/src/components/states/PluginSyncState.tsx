@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { pluginsPageLink } from '../../lib/utils';
 
@@ -9,7 +9,7 @@ import { pluginsPageLink } from '../../lib/utils';
  */
 export default function PluginSyncState({ pluginNames }: { pluginNames?: string[] }) {
   const description: ReactNode =
-    (pluginNames && pluginNames.length > 0 ? (
+    pluginNames && pluginNames.length > 0 ? (
       <>
         Please sync the{' '}
         {pluginNames.map((name, i) => (
@@ -25,7 +25,7 @@ export default function PluginSyncState({ pluginNames }: { pluginNames?: string[
       </>
     ) : (
       'Please sync the plugins to see the data.'
-    ));
+    );
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-[10px] self-stretch pt-10 pb-[220px]">

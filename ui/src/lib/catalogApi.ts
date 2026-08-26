@@ -1,13 +1,13 @@
 export interface PluginClaim {
-	plugin: string;
-	props: Record<string, string>;
+  plugin: string;
+  props: Record<string, string>;
 }
 
 export interface NodeResource {
-	name: string;
-	kind: string;
-	path: string;
-	pluginClaims: PluginClaim[];
+  name: string;
+  kind: string;
+  path: string;
+  pluginClaims: PluginClaim[];
 }
 
 /**
@@ -16,128 +16,128 @@ export interface NodeResource {
  */
 // TODO(#104): Visualise props from all plugins in the properties panel, instead of overwriting them by key.
 export function nodeProps(node: NodeResource): Record<string, string> {
-	const merged: Record<string, string> = {};
-	for (const claim of node.pluginClaims ?? []) {
-		for (const [key, value] of Object.entries(claim.props)) {
-			merged[key] = value;
-		}
-	}
-	return merged;
+  const merged: Record<string, string> = {};
+  for (const claim of node.pluginClaims ?? []) {
+    for (const [key, value] of Object.entries(claim.props)) {
+      merged[key] = value;
+    }
+  }
+  return merged;
 }
 
 export interface NodeNameParts {
-	kind: string;
-	path: string;
+  kind: string;
+  path: string;
 }
 
 interface ListNodesResponse {
-	nodes?: NodeResource[];
+  nodes?: NodeResource[];
 }
 
 export interface RelationResource {
-	name: string;
-	kind: string;
-	fromNode: string;
-	toNode: string;
+  name: string;
+  kind: string;
+  fromNode: string;
+  toNode: string;
 }
 
 interface ListRelationsResponse {
-	relations?: RelationResource[];
+  relations?: RelationResource[];
 }
 
 interface ListRequest {
-	filter?: string;
-	pageSize?: number;
-	pageToken?: string;
+  filter?: string;
+  pageSize?: number;
+  pageToken?: string;
 }
 
 function buildListUrl(basePath: string, options: ListRequest = {}) {
-	const params = new URLSearchParams();
+  const params = new URLSearchParams();
 
-	if (options.filter) {
-		params.set('filter', options.filter);
-	}
-	if (typeof options.pageSize === 'number') {
-		params.set('pageSize', String(options.pageSize));
-	}
-	if (options.pageToken) {
-		params.set('pageToken', options.pageToken);
-	}
+  if (options.filter) {
+    params.set('filter', options.filter);
+  }
+  if (typeof options.pageSize === 'number') {
+    params.set('pageSize', String(options.pageSize));
+  }
+  if (options.pageToken) {
+    params.set('pageToken', options.pageToken);
+  }
 
-	const query = params.toString();
-	return query ? `${basePath}?${query}` : basePath;
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 export function encodeCatalogPath(path: string) {
-	return path
-		.split('/')
-		.map((segment) => encodeURIComponent(segment))
-		.join('/');
+  return path
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
 }
 
 export function buildEqualityFilter(field: string, value: string) {
-	return `${field}="${value}"`;
+  return `${field}="${value}"`;
 }
 
 export function buildNodeUrl(kind: string, path: string) {
-	return `/v1/nodes/${encodeURIComponent(kind)}/${encodeCatalogPath(path)}`;
+  return `/v1/nodes/${encodeURIComponent(kind)}/${encodeCatalogPath(path)}`;
 }
 
 export function parseNodeName(name: string): NodeNameParts | null {
-	const parts = name.split('/');
-	if (parts.length < 3 || parts[0] !== 'nodes') {
-		return null;
-	}
+  const parts = name.split('/');
+  if (parts.length < 3 || parts[0] !== 'nodes') {
+    return null;
+  }
 
-	const kind = parts[1] ?? '';
-	const path = parts.slice(2).join('/');
-	if (!kind || !path) {
-		return null;
-	}
+  const kind = parts[1] ?? '';
+  const path = parts.slice(2).join('/');
+  if (!kind || !path) {
+    return null;
+  }
 
-	return { kind, path };
+  return { kind, path };
 }
 
 export function buildListNodesUrl(options: ListRequest = {}) {
-	return buildListUrl('/v1/nodes', options);
+  return buildListUrl('/v1/nodes', options);
 }
 
 export function buildListRelationsUrl(options: ListRequest = {}) {
-	return buildListUrl('/v1/relations', options);
+  return buildListUrl('/v1/relations', options);
 }
 
 async function fetchJson<T>(url: string, token: string | null) {
-	const response = await fetch(url, {
-		headers: token ? { Authorization: `Bearer ${token}` } : {},
-	});
-	if (!response.ok) {
-		throw new Error(`Request failed for ${url}`);
-	}
+  const response = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed for ${url}`);
+  }
 
-	return response.json() as Promise<T>;
+  return response.json() as Promise<T>;
 }
 
 export async function fetchNodes(token: string | null, options: ListRequest = {}) {
-	const data = await fetchJson<ListNodesResponse>(buildListNodesUrl(options), token);
-	return data.nodes ?? [];
+  const data = await fetchJson<ListNodesResponse>(buildListNodesUrl(options), token);
+  return data.nodes ?? [];
 }
 
 export async function fetchNode(token: string | null, kind: string, path: string) {
-	return fetchJson<NodeResource>(buildNodeUrl(kind, path), token);
+  return fetchJson<NodeResource>(buildNodeUrl(kind, path), token);
 }
 
 export async function fetchNodeByName(token: string | null, name: string) {
-	const node = parseNodeName(name);
-	if (!node) {
-		throw new Error(`Invalid node name: ${name}`);
-	}
+  const node = parseNodeName(name);
+  if (!node) {
+    throw new Error(`Invalid node name: ${name}`);
+  }
 
-	return fetchNode(token, node.kind, node.path);
+  return fetchNode(token, node.kind, node.path);
 }
 
 export async function fetchRelations(token: string | null, options: ListRequest = {}) {
-	const data = await fetchJson<ListRelationsResponse>(buildListRelationsUrl(options), token);
-	return data.relations ?? [];
+  const data = await fetchJson<ListRelationsResponse>(buildListRelationsUrl(options), token);
+  return data.relations ?? [];
 }
 
 // ---------------------------------------------------------------------------
@@ -145,15 +145,15 @@ export async function fetchRelations(token: string | null, options: ListRequest 
 // ---------------------------------------------------------------------------
 
 interface ListPluginsResponse {
-	plugins: string[];
+  plugins: string[];
 }
 
 /**
  * GET /v1/plugins — returns the list of registered plugin names.
  */
 export async function fetchPlugins(token: string | null): Promise<string[]> {
-	const data = await fetchJson<ListPluginsResponse>('/v1/plugins', token);
-	return data.plugins ?? [];
+  const data = await fetchJson<ListPluginsResponse>('/v1/plugins', token);
+  return data.plugins ?? [];
 }
 
 // ---------------------------------------------------------------------------
@@ -161,31 +161,31 @@ export async function fetchPlugins(token: string | null): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 export interface StatusErrorResource {
-	message: string;
+  message: string;
 }
 
 export interface OperationResource {
-	name: string;
-	plugin: string;
-	state: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
-	startTime: string;
-	endTime?: string;
-	error?: StatusErrorResource;
-	nodesUpserted: number;
-	relationsUpserted: number;
-	createdAt: string;
+  name: string;
+  plugin: string;
+  state: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+  startTime: string;
+  endTime?: string;
+  error?: StatusErrorResource;
+  nodesUpserted: number;
+  relationsUpserted: number;
+  createdAt: string;
 }
 
 interface RunPluginsResponse {
-	operations: OperationResource[];
+  operations: OperationResource[];
 }
 
 interface ListOperationsResponse {
-	operations?: OperationResource[];
+  operations?: OperationResource[];
 }
 
 export function buildListOperationsUrl(options: ListRequest = {}) {
-	return buildListUrl('/v1/operations', options);
+  return buildListUrl('/v1/operations', options);
 }
 
 /**
@@ -193,17 +193,17 @@ export function buildListOperationsUrl(options: ListRequest = {}) {
  * Returns the list of tracking operations.
  */
 export async function runAllPlugins(token: string | null): Promise<OperationResource[]> {
-	const response = await fetch('/v1/plugins:run', {
-		method: 'POST',
-		headers: token ? { Authorization: `Bearer ${token}` } : {},
-	});
-	if (!response.ok) {
-		const payload = await response.json().catch(() => ({}));
-		throw new Error(payload.error ?? 'Failed to trigger plugin run');
-	}
+  const response = await fetch('/v1/plugins:run', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error ?? 'Failed to trigger plugin run');
+  }
 
-	const payload = await response.json() as RunPluginsResponse;
-	return payload.operations ?? [];
+  const payload = (await response.json()) as RunPluginsResponse;
+  return payload.operations ?? [];
 }
 
 /**
@@ -211,29 +211,35 @@ export async function runAllPlugins(token: string | null): Promise<OperationReso
  * Returns the tracking operation.
  */
 export async function runPlugin(token: string | null, plugin: string): Promise<OperationResource> {
-	const response = await fetch(`/v1/${encodeURIComponent(plugin)}:run`, {
-		method: 'POST',
-		headers: token ? { Authorization: `Bearer ${token}` } : {},
-	});
-	if (!response.ok) {
-		const payload = await response.json().catch(() => ({}));
-		throw new Error(payload.error ?? `Failed to trigger plugin "${plugin}"`);
-	}
+  const response = await fetch(`/v1/${encodeURIComponent(plugin)}:run`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error ?? `Failed to trigger plugin "${plugin}"`);
+  }
 
-	return response.json() as Promise<OperationResource>;
+  return response.json() as Promise<OperationResource>;
 }
 
 /**
  * GET /v1/operations/{operationId} — fetches a single operation by name.
  */
-export async function fetchOperation(token: string | null, operationId: string): Promise<OperationResource> {
-	return fetchJson<OperationResource>(`/v1/operations/${encodeURIComponent(operationId)}`, token);
+export async function fetchOperation(
+  token: string | null,
+  operationId: string,
+): Promise<OperationResource> {
+  return fetchJson<OperationResource>(`/v1/operations/${encodeURIComponent(operationId)}`, token);
 }
 
 /**
  * GET /v1/operations — lists operations with optional filter.
  */
-export async function fetchOperations(token: string | null, options: ListRequest = {}): Promise<OperationResource[]> {
-	const data = await fetchJson<ListOperationsResponse>(buildListOperationsUrl(options), token);
-	return data.operations ?? [];
+export async function fetchOperations(
+  token: string | null,
+  options: ListRequest = {},
+): Promise<OperationResource[]> {
+  const data = await fetchJson<ListOperationsResponse>(buildListOperationsUrl(options), token);
+  return data.operations ?? [];
 }
