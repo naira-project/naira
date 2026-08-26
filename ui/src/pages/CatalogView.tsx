@@ -12,6 +12,7 @@ import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
 import TanStackTable from '@/components/TanStackTable';
 import PluginSyncState from '../components/states/PluginSyncState';
+import EmptyState from '../components/states/EmptyState';
 import { formatRelativeTime, latestOperation } from '../lib/utils';
 
 
@@ -65,6 +66,17 @@ export default function CatalogView({ viewpointKinds, heading, subheading, viewp
 
   const lastSync = useMemo(() => latestOperation(operations), [operations]);
 
+  // Whether a specific viewpoint's plugin(s) have completed at least one successful sync.
+  // Distinguishes "never synced" (show PluginSyncState) from "synced, but no data present"
+  // (show EmptyState)
+  const hasSyncedViewpointPlugin = useMemo(
+    () =>
+      operations.some(
+        (op) => op.state === 'SUCCEEDED' && (!viewpointPlugins || viewpointPlugins.includes(op.plugin))
+      ),
+    [operations, viewpointPlugins]
+  );
+
   const handleSelect = (node: NodeResource) => {
     navigate(`/catalog/${encodeURIComponent(activeKind!)}/${encodeURIComponent(node.path)}`);
   };
@@ -96,7 +108,11 @@ export default function CatalogView({ viewpointKinds, heading, subheading, viewp
 
         <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4">
           {!kindsError && !kindsLoading && kinds.length === 0 ? (
-            <PluginSyncState pluginNames={viewpointPlugins} />
+            hasSyncedViewpointPlugin ? (
+              <EmptyState />
+            ) : (
+              <PluginSyncState pluginNames={viewpointPlugins} />
+            )
           ) : (
             <div className="mb-6">
               <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">

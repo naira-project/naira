@@ -8,7 +8,7 @@ export default function EmptyState() {
     <div className="flex flex-1 flex-col items-center justify-center gap-[10px] self-stretch pt-10 pb-[220px]">
       <div className="flex h-[262.381px] w-[280.603px] items-center justify-center pt-[31.925px] pr-[35.496px] pb-[30.226px] pl-[33.65px]">
         <img
-          src="/empty.png"
+          src="/empty.svg"
           alt="Ghost image for showing the empty state"
           className="h-full w-full object-contain"
         />
