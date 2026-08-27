@@ -2,7 +2,7 @@ import type React from 'react';
 import { cn } from '../../lib/utils';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  startAdornment: React.ReactNode;
+  startAdornment?: React.ReactNode;
 }
 
 export function Input({ className, startAdornment, ...props }: InputProps) {
