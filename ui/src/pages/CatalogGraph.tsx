@@ -20,7 +20,6 @@ import PropertiesPanel from '../components/PropertiesPanel';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { Separator } from '../components/ui/separator';
 import {
   type CatalogGraphEdge,
   type CatalogGraphNode,
@@ -328,7 +327,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
               <p className="mt-1 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
                 Selected node in the current rooted graph slice.
               </p>
-              <Separator className="my-4" />
+              <hr className="my-4 border-t border-white/10" />
 
               {!selectedNode && (
                 <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
