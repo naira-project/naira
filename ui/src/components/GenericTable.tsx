@@ -173,11 +173,9 @@ export default function GenericTable({
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
 
-  const data = useMemo(() => nodes, [nodes]);
-
   const table = useTable({
     features,
-    data,
+    data: nodes,
     columns: columnDefs,
     state: { sorting, globalFilter, columnVisibility },
     onSortingChange: setSorting,
@@ -226,7 +224,6 @@ export default function GenericTable({
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
         <Table>
           <TableHeader>
-            {/* Row 1: group headers — mirrors GenericTable's "Core Metadata" / "Plugin Properties" bands */}
             <TableRow>
               <TableHead colSpan={CORE_COL_COUNT} className="bg-gray-50 dark:bg-white/5">
                 <span className={groupText}>Core Metadata</span>
@@ -240,7 +237,6 @@ export default function GenericTable({
               {/* spacer over the Actions column */}
             </TableRow>
 
-            {/* Row 2: per-column header labels, with sort affordances */}
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
