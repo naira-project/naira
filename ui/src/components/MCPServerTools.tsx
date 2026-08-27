@@ -129,8 +129,9 @@ function mcpToolsFromGraph(graph: CatalogGraphResponse, serverName: string): MCP
       kind: node.kind,
       path: node.path,
       toolName: parsePath(node.path).name,
-      title: node.properties?.title,
-      description: node.properties?.description,
+      title: typeof node.properties?.title === 'string' ? node.properties.title : undefined,
+      description:
+        typeof node.properties?.description === 'string' ? node.properties.description : undefined,
     }))
     .sort((a, b) => a.toolName.localeCompare(b.toolName));
 }

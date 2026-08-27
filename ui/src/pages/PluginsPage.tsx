@@ -219,7 +219,11 @@ function StatusTab({
                 ) : op && op.state === 'FAILED' && op.error ? (
                   <button
                     type="button"
-                    onClick={() => onViewError(plugin, op.error)}
+                    onClick={() => {
+                      if (op.error) {
+                        onViewError(plugin, op.error);
+                      }
+                    }}
                     className="inline-flex items-center gap-1.5 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:bg-red-950/80 dark:text-red-400 dark:hover:bg-red-900"
                   >
                     <AlertCircle size={13} />
