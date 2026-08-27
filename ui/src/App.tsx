@@ -1,4 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { Route, BrowserRouter as Router, Routes } from 'react-router';
 import { CATALOG_VIEWPOINTS } from './config/viewpoints';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { queryClient } from './lib/queryClient';
@@ -6,7 +7,6 @@ import CatalogDetail from './pages/CatalogDetail';
 import CatalogView from './pages/CatalogView';
 import Overview from './pages/Overview';
 import PluginsPage from './pages/PluginsPage';
-import { Route, BrowserRouter as Router, Routes } from 'react-router';
 
 function App() {
   return (
