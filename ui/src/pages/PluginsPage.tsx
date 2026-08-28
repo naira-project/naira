@@ -64,15 +64,13 @@ export default function PluginsPage() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background dark:bg-background-dark-default">
+    <div className="flex h-screen overflow-hidden bg-background">
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-background-dark-paper">
+        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3 dark:border-gray-700">
           <div>
-            <h1 className="text-lg font-semibold text-foreground dark:text-foreground-dark-default">
-              Plugins & Ingestion
-            </h1>
-            <p className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+            <h1 className="text-lg font-semibold text-foreground">Plugins & Ingestion</h1>
+            <p className="text-xs text-muted-foreground">
               Run individual plugins or all at once, and inspect their latest status.
             </p>
           </div>

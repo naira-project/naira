@@ -32,16 +32,12 @@ export default function PropertiesPanel({
   const keys = Object.keys(props).sort();
 
   if (keys.length === 0) {
-    return (
-      <div className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-        No properties.
-      </div>
-    );
+    return <div className="text-sm text-muted-foreground">No properties.</div>;
   }
 
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h3>
       <div className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
@@ -72,8 +68,8 @@ function PropertyRow({
     <span
       className={
         stacked
-          ? 'block font-mono text-[0.65rem] font-medium uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary'
-          : 'min-w-[160px] max-w-[200px] shrink-0 font-mono text-xs font-medium text-foreground-secondary dark:text-foreground-dark-secondary'
+          ? 'block font-mono text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground'
+          : 'min-w-[160px] max-w-[200px] shrink-0 font-mono text-xs font-medium text-muted-foreground'
       }
     >
       {name}
@@ -83,7 +79,7 @@ function PropertyRow({
   const valueEl = isComplex ? (
     <button
       onClick={() => setExpanded((v) => !v)}
-      className="flex items-center gap-1 text-xs text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default"
+      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
     >
       {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
       {expanded ? 'Collapse' : 'Expand'}
@@ -103,9 +99,7 @@ function PropertyRow({
       {String(value)}
     </a>
   ) : (
-    <span className="break-words font-mono text-xs text-foreground dark:text-foreground-dark-default">
-      {String(value ?? '—')}
-    </span>
+    <span className="break-words font-mono text-xs text-foreground">{String(value ?? '—')}</span>
   );
 
   return (

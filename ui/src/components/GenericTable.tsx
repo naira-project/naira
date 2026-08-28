@@ -22,6 +22,7 @@ import {
   Search,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -76,9 +77,9 @@ export default function GenericTable({
   columns,
 }: GenericTableProps) {
   const labelText =
-    'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
+    'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground';
   const groupText =
-    'flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-foreground-secondary/70 leading-none';
+    'flex items-center text-[0.6rem] font-bold uppercase tracking-wider text-muted-foreground/70 leading-none';
   const [columnVisibility, setColumnVisibility] = useState<ColumnVisibilityState>({});
 
   const parsedPaths = useMemo(
@@ -105,7 +106,7 @@ export default function GenericTable({
         accessorFn: (node) => parsedPaths.get(node.name)?.name ?? node.name,
         cell: (info) => (
           <span
-            className="truncate text-sm font-medium text-foreground dark:text-foreground-dark-default"
+            className="truncate text-sm font-medium text-foreground"
             title={info.row.original.name}
           >
             {info.getValue() as string}
@@ -118,7 +119,7 @@ export default function GenericTable({
         accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? '—',
         cell: (info) => (
           <span
-            className="truncate text-sm text-foreground-secondary dark:text-foreground-dark-secondary"
+            className="truncate text-sm text-muted-foreground"
             title={parsedPaths.get(info.row.original.name)?.namespace}
           >
             {info.getValue() as string}
@@ -142,7 +143,7 @@ export default function GenericTable({
             const value = info.getValue();
             return (
               <span
-                className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
+                className="truncate text-sm italic text-muted-foreground/75"
                 title={typeof value === 'string' ? value : undefined}
               >
                 {formatPropValue(value)}
@@ -156,14 +157,15 @@ export default function GenericTable({
         header: 'Actions',
         enableSorting: false,
         cell: (info) => (
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => onSelect(info.row.original)}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
             title="View details"
           >
             <Info size={14} />
             Details
-          </button>
+          </Button>
         ),
       },
     ],
@@ -200,10 +202,10 @@ export default function GenericTable({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm">
+            <Button variant="outline" size="sm">
               <Columns3 className="size-4" />
               Columns
-            </button>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
@@ -281,7 +283,10 @@ export default function GenericTable({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columnDefs.length} className="text-center text-muted-foreground">
+                <TableCell
+                  colSpan={columnDefs.length}
+                  className="text-center text-muted-foreground"
+                >
                   No nodes found.
                 </TableCell>
               </TableRow>
@@ -304,11 +309,7 @@ function RelationCell({
   const summary = summaries.get(nodeName);
 
   if (!summary) {
-    return (
-      <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
-        —
-      </span>
-    );
+    return <span className="text-xs text-muted-foreground">—</span>;
   }
 
   const relationKinds = Object.keys(summary).sort();
@@ -320,7 +321,7 @@ function RelationCell({
         return (
           <span
             key={relKind}
-            className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[0.65rem] font-medium text-foreground-secondary dark:bg-white/10 dark:text-foreground-dark-secondary"
+            className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground dark:bg-white/10"
             title={`${relKind}: ${inbound} inbound, ${outbound} outbound`}
           >
             {outbound > 0 && (

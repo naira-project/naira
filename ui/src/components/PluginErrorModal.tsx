@@ -18,13 +18,13 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
       aria-modal="true"
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-lg bg-white shadow-2xl dark:bg-background-dark-paper"
+        className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-lg bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4 dark:border-gray-700">
           <div className="flex items-center gap-2.5 dark:text-red-400">
-            <h3 className="text-base font-semibold text-foreground dark:text-foreground-dark-default">
+            <h3 className="text-base font-semibold text-foreground">
               Execution Error: <span className="font-mono text-sm font-normal">{pluginName}</span>
             </h3>
           </div>
