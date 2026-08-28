@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -30,26 +29,6 @@ func newGetScheduleHandler(scheduler *scheduling.Scheduler) http.HandlerFunc {
 			return fmt.Errorf("getting schedule: %w", err)
 		}
 		writeJSON(w, http.StatusOK, schedule)
-		return nil
-	})
-}
-
-// PUT /v1/{plugin}/schedule replaces one plugin's schedule.
-func newSetScheduleHandler(scheduler *scheduling.Scheduler) http.HandlerFunc {
-	return handle(func(w http.ResponseWriter, r *http.Request) error {
-		var schedule scheduling.Schedule
-		if err := json.NewDecoder(r.Body).Decode(&schedule); err != nil {
-			return fmt.Errorf("decoding schedule: %w", err)
-		}
-		schedule.Plugin = chi.URLParam(r, "plugin")
-		if err := scheduler.SetSchedule(schedule); err != nil {
-			return fmt.Errorf("setting schedule: %w", err)
-		}
-		updated, err := scheduler.GetSchedule(schedule.Plugin)
-		if err != nil {
-			return fmt.Errorf("reading updated schedule: %w", err)
-		}
-		writeJSON(w, http.StatusOK, updated)
 		return nil
 	})
 }

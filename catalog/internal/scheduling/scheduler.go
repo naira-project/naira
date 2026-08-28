@@ -1,3 +1,6 @@
+// scheduling turns schedules into plugin run requests.
+//
+//	Todo: implement a persistent scheduler. Postgres?
 package scheduling
 
 import (
@@ -15,7 +18,6 @@ type RunStarter interface {
 	RunPluginAsync(context.Context, string) (operations.Operation, error)
 }
 
-// Scheduler turns persisted schedules into plugin run requests.
 type Scheduler struct {
 	mu      sync.Mutex
 	store   Store
@@ -42,12 +44,8 @@ func NewConfiguredScheduler(plugins map[string]string, defaults map[string]strin
 			Plugin:     plugin,
 			Expression: expression,
 			Enabled:    configured,
-			Source:     "default",
 		}
-		if configured {
-			schedule.Source = "configuration"
-		}
-		if err := scheduler.SetSchedule(schedule); err != nil {
+		if err := scheduler.configureSchedule(schedule); err != nil {
 			return nil, fmt.Errorf("configuring schedule for plugin %q: %w", plugin, err)
 		}
 	}
@@ -75,9 +73,8 @@ func (s *Scheduler) Stop() context.Context {
 	return s.cron.Stop()
 }
 
-// SetSchedule persists and activates a schedule. An empty expression or a
-// disabled schedule makes the plugin manual-only.
-func (s *Scheduler) SetSchedule(schedule Schedule) error {
+// configureSchedule persists and activates an initial schedule from configuration.
+func (s *Scheduler) configureSchedule(schedule Schedule) error {
 	if err := validateSchedule(schedule); err != nil {
 		return err
 	}

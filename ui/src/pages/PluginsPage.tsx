@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import cronstrue from 'cronstrue';
-import { X, Play, RefreshCw, AlertCircle, Pencil, X as Close } from 'lucide-react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { X, Play, RefreshCw, AlertCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
 import {
   OperationResource,
   ScheduleResource,
   StatusErrorResource,
   fetchSchedules,
-  updateSchedule,
 } from '../lib/catalogApi';
 import { PluginStatusBadge } from '../components/PluginStatusBadge';
 import { PluginErrorModal } from '../components/PluginErrorModal';
@@ -30,17 +29,9 @@ export default function PluginsPage() {
     dismissError, refresh, runOne, runAll, runSubset,
   } = usePluginsStatus();
   const { token } = useOpenMFPContext();
-  const queryClient = useQueryClient();
   const schedulesQuery = useQuery({
     queryKey: queryKeys.schedules,
     queryFn: () => fetchSchedules(token),
-  });
-  const scheduleMutation = useMutation({
-    mutationFn: ({
-      plugin, expression, enabled,
-    }: { plugin: string; expression: string; enabled: boolean }) =>
-      updateSchedule(token, plugin, { expression: expression || undefined, enabled }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.schedules }),
   });
   const schedules = useMemo(
     () => new Map((schedulesQuery.data ?? []).map((s) => [s.plugin, s])),
@@ -50,7 +41,6 @@ export default function PluginsPage() {
     ? plugins.filter((p) => allowedPlugins.includes(p))
     : plugins;
   const [selectedError, setSelectedError] = useState<{ plugin: string; error: StatusErrorResource } | null>(null);
-  const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
 
   const handleRunVisible = async () => {
     allowedPlugins ? runSubset(visiblePlugins) : runAll();
@@ -111,7 +101,6 @@ export default function PluginsPage() {
             onRun={runOne}
             onViewError={(plugin, error) => setSelectedError({ plugin, error })}
             schedules={schedules}
-            onEditSchedule={setEditingSchedule}
           />
         </div>
       </div>
@@ -120,20 +109,6 @@ export default function PluginsPage() {
         error={selectedError?.error ?? null}
         onClose={() => setSelectedError(null)}
       />
-      {editingSchedule && (
-        <ScheduleDialog
-          plugin={editingSchedule}
-          schedule={schedules.get(editingSchedule)}
-          disabled={scheduleMutation.isPending}
-          onClose={() => setEditingSchedule(null)}
-          onSave={(expression, enabled) =>
-            scheduleMutation.mutate(
-              { plugin: editingSchedule, expression, enabled },
-              { onSuccess: () => setEditingSchedule(null) },
-            )
-          }
-        />
-      )}
     </div>
   );
 }
@@ -146,11 +121,10 @@ interface StatusTabProps {
   onRun: (plugin: string) => void;
   onViewError: (plugin: string, error: StatusErrorResource) => void;
   schedules: Map<string, ScheduleResource>;
-  onEditSchedule: (plugin: string) => void;
 }
 
 function StatusTab({
-  plugins, operations, loading, runningPlugins, onRun, onViewError, schedules, onEditSchedule,
+  plugins, operations, loading, runningPlugins, onRun, onViewError, schedules,
 }: StatusTabProps) {
   const latestByPlugin = latestOperationPerPlugin(operations);
 
@@ -226,11 +200,7 @@ function StatusTab({
                     : '—'}
               </td>
               <td className="py-3 pr-4">
-                <ScheduleCell
-                  plugin={plugin}
-                  schedule={schedules.get(plugin)}
-                  onClick={() => onEditSchedule(plugin)}
-                />
+                <ScheduleCell schedule={schedules.get(plugin)} />
               </td>
               <td className="py-3 text-right">
                 <button
@@ -252,188 +222,16 @@ function StatusTab({
   );
 }
 
-function ScheduleCell({
-  plugin, schedule, onClick,
-}: {
-  plugin: string;
-  schedule?: ScheduleResource;
-  onClick: () => void;
-}) {
+function ScheduleCell({ schedule }: { schedule?: ScheduleResource }) {
   const friendly = schedule?.expression && schedule.enabled
     ? friendlySchedule(schedule.expression)
     : 'Not scheduled';
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group flex max-w-full items-center gap-2 text-left"
-      title="Edit schedule"
-    >
+    <div className="max-w-full" title={schedule?.expression ?? undefined}>
       <span className={friendly === 'Not scheduled' ? 'text-gray-400' : 'text-gray-700'}>
         {friendly}
       </span>
-      <Pencil size={13} className="shrink-0 text-gray-400 opacity-0 group-hover:opacity-100" />
-    </button>
-  );
-}
-
-function ScheduleDialog({
-  plugin,
-  schedule,
-  disabled,
-  onClose,
-  onSave,
-}: {
-  plugin: string;
-  schedule?: ScheduleResource;
-  disabled: boolean;
-  onClose: () => void;
-  onSave: (expression: string, enabled: boolean) => void;
-}) {
-  const initialExpression = schedule?.expression ?? '';
-  const initialEnabled = schedule?.enabled ?? false;
-  const [expression, setExpression] = useState(initialExpression);
-  const [enabled, setEnabled] = useState(initialEnabled);
-  const preset = schedulePreset(expression, enabled);
-  const dirty = expression !== initialExpression || enabled !== initialEnabled;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="schedule-dialog-title"
-    >
-      <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl dark:bg-gray-900">
-        <div className="mb-4 flex items-center justify-between">
-          <h2
-            id="schedule-dialog-title"
-            className="text-base font-semibold"
-          >
-            Edit schedule: {plugin}
-          </h2>
-          <button type="button" onClick={onClose} aria-label="Close">
-            <Close size={16} />
-          </button>
-        </div>
-
-        <label className="mb-3 block text-sm">
-          Schedule
-          <select
-            value={preset}
-            onChange={(event) => applyPreset(event.target.value, setExpression, setEnabled)}
-            disabled={disabled}
-            className="mt-1 w-full rounded border px-3 py-2 text-sm"
-          >
-            <option value="manual">Manual only</option>
-            <option value="minutes">Every N minutes</option>
-            <option value="hourly">Every hour</option>
-            <option value="daily">Every day</option>
-            <option value="custom">Custom</option>
-          </select>
-        </label>
-
-        {preset === 'minutes' && (
-          <label className="mb-3 block text-sm">
-            Every
-            {' '}
-            <input
-              type="number"
-              min="1"
-              value={minutesFromCron(expression)}
-              onChange={(event) =>
-                setExpression(`*/${Math.max(1, Number(event.target.value) || 1)} * * * *`)}
-              className="mx-1 w-20 rounded border px-2 py-1"
-              disabled={disabled}
-            />
-            {' '}
-            minutes
-          </label>
-        )}
-
-        {preset === 'hourly' && (
-          <label className="mb-3 block text-sm">
-            At minute
-            {' '}
-            <select
-              value={minuteFromHourlyCron(expression)}
-              onChange={(event) => setExpression(`${event.target.value} * * * *`)}
-              className="ml-2 rounded border px-2 py-1"
-              disabled={disabled}
-            >
-              {['00', '15', '30', '45'].map((minute) => (
-                <option key={minute} value={Number(minute)}>
-                  {minute}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-
-        {preset === 'daily' && (
-          <label className="mb-3 block text-sm">
-            At
-            {' '}
-            <input
-              type="time"
-              value={timeFromCron(expression)}
-              onChange={(event) => setExpression(timeToCron(event.target.value))}
-              className="ml-2 rounded border px-2 py-1"
-              disabled={disabled}
-            />
-          </label>
-        )}
-
-        {preset === 'custom' && (
-          <label className="mb-3 block text-sm">
-            Cron expression
-            <input
-              value={expression}
-              onChange={(event) => setExpression(event.target.value)}
-              placeholder="*/15 * * * *"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm font-mono"
-              disabled={disabled}
-            />
-          </label>
-        )}
-
-        <div className="mb-4 text-xs text-gray-500">
-          {expression && enabled ? friendlySchedule(expression) : 'Ingestion is disabled.'}
-        </div>
-
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={(event) => setEnabled(event.target.checked)}
-              disabled={disabled}
-              className="rounded"
-            />
-            Enabled
-          </label>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={disabled}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => onSave(expression, enabled)}
-              disabled={disabled || !dirty}
-              className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

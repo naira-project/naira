@@ -23,7 +23,7 @@ func (s *stubStarter) RunPluginAsync(_ context.Context, plugin string) (operatio
 
 func TestMemoryStoreRoundTrip(t *testing.T) {
 	store := NewMemoryStore()
-	schedule := Schedule{Plugin: " GitHub ", Expression: "*/5 * * * *", Enabled: true, Source: "configuration"}
+	schedule := Schedule{Plugin: " GitHub ", Expression: "*/5 * * * *", Enabled: true}
 
 	require.NoError(t, store.Upsert(schedule))
 	got, err := store.Get("github")
@@ -33,10 +33,10 @@ func TestMemoryStoreRoundTrip(t *testing.T) {
 	assert.False(t, got.UpdatedAt.IsZero())
 }
 
-func TestSetScheduleRejectsInvalidExpression(t *testing.T) {
+func TestConfiguredSchedulerRejectsInvalidExpression(t *testing.T) {
 	scheduler := NewScheduler(NewMemoryStore(), &stubStarter{calls: make(chan string)}, nil)
 
-	err := scheduler.SetSchedule(Schedule{Plugin: "github", Expression: "not a cron", Enabled: true})
+	err := scheduler.configureSchedule(Schedule{Plugin: "github", Expression: "not a cron", Enabled: true})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid schedule expression")
 }
@@ -44,7 +44,7 @@ func TestSetScheduleRejectsInvalidExpression(t *testing.T) {
 func TestSchedulerTriggersConfiguredPlugin(t *testing.T) {
 	starter := &stubStarter{calls: make(chan string, 1)}
 	scheduler := NewScheduler(NewMemoryStore(), starter, log.New(io.Discard, "", 0))
-	require.NoError(t, scheduler.SetSchedule(Schedule{Plugin: "github", Expression: "* * * * *", Enabled: true}))
+	require.NoError(t, scheduler.configureSchedule(Schedule{Plugin: "github", Expression: "* * * * *", Enabled: true}))
 	require.NoError(t, scheduler.Start())
 	defer scheduler.Stop()
 

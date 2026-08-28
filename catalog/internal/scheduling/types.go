@@ -8,7 +8,6 @@ type Schedule struct {
 	Plugin     string    `json:"plugin"`
 	Expression string    `json:"expression,omitempty"`
 	Enabled    bool      `json:"enabled"`
-	Source     string    `json:"source"`
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
