@@ -268,7 +268,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Card className="min-h-0 overflow-hidden rounded-[20px] border-gray-200 dark:border-gray-700">
+        <Card className="min-h-0 overflow-hidden rounded-[20px] border-gray-200">
           <div className="relative h-[580px]">
             {loading && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-card/85">
@@ -317,7 +317,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
         </Card>
 
         <div className="space-y-4">
-          <Card className="rounded-[20px] border-gray-200 dark:border-gray-700">
+          <Card className="rounded-[20px] border-gray-200">
             <CardContent>
               <h2 className="text-base font-semibold text-foreground">Node Details</h2>
               <p className="mt-1 text-sm text-muted-foreground">

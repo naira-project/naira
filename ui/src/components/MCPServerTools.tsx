@@ -58,7 +58,7 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
         {tools.length} {tools.length === 1 ? 'tool' : 'tools'} exposed
       </p>
 
-      <ul className="divide-y divide-gray-200 overflow-hidden rounded-md border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
+      <ul className="divide-y divide-gray-200 overflow-hidden rounded-md border border-gray-200">
         {tools.map((tool) => (
           <li key={tool.name}>
             <button
@@ -67,7 +67,7 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
                   `/catalog/${encodeURIComponent(tool.kind)}/${encodeCatalogPath(tool.path)}`,
                 )
               }
-              className="flex w-full items-start gap-3 bg-card px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
+              className="flex w-full items-start gap-3 bg-card px-4 py-3 text-left transition-colors hover:bg-gray-50"
             >
               <Wrench size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
 

@@ -13,7 +13,7 @@ interface PluginTabsProps {
  */
 export default function PluginTabs({ plugins, activePlugin, onSelect }: PluginTabsProps) {
   return (
-    <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex gap-1 border-b border-gray-200">
       <button
         onClick={() => onSelect(null)}
         className={cn(

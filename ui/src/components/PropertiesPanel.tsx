@@ -40,7 +40,7 @@ export default function PropertiesPanel({
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </h3>
-      <div className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
+      <div className="divide-y divide-gray-200 rounded-lg border border-gray-200">
         {keys.map((key) => (
           <PropertyRow key={key} name={key} value={props[key]} layout={layout} />
         ))}
@@ -103,7 +103,7 @@ function PropertyRow({
   );
 
   return (
-    <div className={`group relative px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5`}>
+    <div className={`group relative px-4 py-2.5 text-sm hover:bg-gray-50`}>
       {stacked ? (
         <div className="space-y-1 pr-6">
           {keyEl}
@@ -118,7 +118,7 @@ function PropertyRow({
 
       {isComplex && expanded && (
         <pre
-          className={`mt-2 overflow-x-auto rounded-md bg-gray-100 p-3 text-xs dark:bg-white/10 ${stacked ? '' : 'ml-[172px]'}`}
+          className={`mt-2 overflow-x-auto rounded-md bg-gray-100 p-3 text-xs ${stacked ? '' : 'ml-[172px]'}`}
         >
           {JSON.stringify(parsedComplex, null, 2)}
         </pre>

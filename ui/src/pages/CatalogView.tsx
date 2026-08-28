@@ -92,7 +92,7 @@ export default function CatalogView({
     <div className="flex h-screen overflow-hidden bg-background">
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3 dark:border-gray-700">
+        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
           <Input
             startAdornment={<Search size={16} />}
             placeholder="Search kinds..."
@@ -105,7 +105,7 @@ export default function CatalogView({
 
           {/* Compact last-sync indicator */}
           {lastSync && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <span>Last sync: {formatRelativeTime(lastSync.createdAt)}</span>
             </div>
           )}

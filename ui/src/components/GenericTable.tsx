@@ -223,19 +223,19 @@ export default function GenericTable({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="overflow-x-auto rounded-lg border border-gray-200">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead colSpan={CORE_COL_COUNT} className="bg-gray-50 dark:bg-white/5">
+              <TableHead colSpan={CORE_COL_COUNT} className="bg-gray-50">
                 <span className={groupText}>Core Metadata</span>
               </TableHead>
               {hasPluginColumns && (
-                <TableHead colSpan={pluginColCount} className="bg-gray-50 dark:bg-white/5">
+                <TableHead colSpan={pluginColCount} className="bg-gray-50">
                   <span className={groupText}>Plugin Properties</span>
                 </TableHead>
               )}
-              <TableHead className="bg-gray-50 dark:bg-white/5" />{' '}
+              <TableHead className="bg-gray-50" />{' '}
               {/* spacer over the Actions column */}
             </TableRow>
 
@@ -321,7 +321,7 @@ function RelationCell({
         return (
           <span
             key={relKind}
-            className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground dark:bg-white/10"
+            className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground"
             title={`${relKind}: ${inbound} inbound, ${outbound} outbound`}
           >
             {outbound > 0 && (

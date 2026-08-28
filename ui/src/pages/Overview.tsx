@@ -20,7 +20,7 @@ export default function Overview() {
     <div className="flex h-screen overflow-hidden bg-background">
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3 dark:border-gray-700">
+        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
           <Input
             startAdornment={<Search size={16} />}
             placeholder="Search viewpoints..."

@@ -46,20 +46,20 @@ export default function CatalogDetail() {
     <div className="flex h-screen overflow-hidden bg-background">
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3 dark:border-gray-700">
+        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
           <button
             onClick={() => navigate(backPath ? `/catalog/${backPath}` : '/catalog')}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-gray-100 hover:text-foreground dark:hover:bg-white/10 transition-colors"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-gray-100 hover:text-foreground transition-colors"
           >
             <ArrowLeft size={16} />
             Back to catalog
           </button>
 
-          <div className="h-5 w-px bg-gray-300 dark:bg-gray-600" />
+          <div className="h-5 w-px bg-gray-300" />
 
           {node && (
             <>
-              <span className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[0.65rem] font-medium text-muted-foreground dark:bg-white/10">
+              <span className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[0.65rem] font-medium text-muted-foreground">
                 {node.kind}
               </span>
               <h1 className="truncate text-sm font-semibold text-foreground" title={node.name}>
@@ -77,7 +77,7 @@ export default function CatalogDetail() {
           {!loading && !error && node && (
             <div className="flex flex-col gap-6">
               {/* Tabs */}
-              <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex gap-1 border-b border-gray-200">
                 {tabs.map(({ value, label }) => (
                   <button
                     key={value}
