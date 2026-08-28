@@ -28,8 +28,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "biome check .",
-    "check:fix": "biome check --write ."
+    "check": "tsc -b && biome check .",
+    "fix": "biome check --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",

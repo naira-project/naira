@@ -32,7 +32,7 @@ export default function EmptyState({ pluginNames }: { pluginNames?: string[] }) 
       <div className="flex h-[262.381px] w-[280.603px] items-center justify-center pt-[31.925px] pr-[35.496px] pb-[30.226px] pl-[33.65px]">
         <img
           src="/sync.png"
-          alt="Plugin image for syncing the data"
+          alt="Plugin for syncing the data"
           className="h-full w-full object-contain"
         />
       </div>

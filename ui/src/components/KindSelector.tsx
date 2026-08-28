@@ -34,6 +34,7 @@ export default function KindSelector({ kinds, activeKind, onSelect, loading }: K
     <div className="flex flex-wrap gap-2">
       {kinds.map((kind) => (
         <button
+          type="button"
           key={kind}
           onClick={() => onSelect(kind)}
           className={cn(
