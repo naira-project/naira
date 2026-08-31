@@ -98,13 +98,22 @@ func TestListSchedulesEndpoint(t *testing.T) {
 
 func TestGetScheduleEndpoint(t *testing.T) {
 	tests := []struct {
-		name       string
-		path       string
-		statusCode int
-		plugin     string
+		name           string
+		path           string
+		expectedStatus int
+		expected       *scheduling.Schedule
 	}{
-		{name: "returns schedule", path: "/v1/mlflow/schedule", statusCode: http.StatusOK, plugin: "mlflow"},
-		{name: "returns error for unknown plugin", path: "/v1/missing/schedule", statusCode: http.StatusNotFound},
+		{
+			name:           "returns configured schedule",
+			path:           "/v1/mlflow/schedule",
+			expectedStatus: http.StatusOK,
+			expected:       &scheduling.Schedule{Plugin: "mlflow", Expression: "*/5 * * * *", Enabled: true},
+		},
+		{
+			name:           "returns not found for unknown plugin",
+			path:           "/v1/missing/schedule",
+			expectedStatus: http.StatusNotFound,
+		},
 	}
 
 	for _, tt := range tests {
@@ -116,14 +125,17 @@ func TestGetScheduleEndpoint(t *testing.T) {
 
 			router.ServeHTTP(rec, req)
 
-			assert.Equal(t, tt.statusCode, rec.Code)
-			if tt.plugin != "" {
-				var payload scheduling.Schedule
-				require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-				assert.Equal(t, tt.plugin, payload.Plugin)
-				assert.Equal(t, "*/5 * * * *", payload.Expression)
-				assert.True(t, payload.Enabled)
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			if tt.expected == nil {
+				return
 			}
+
+			var actual scheduling.Schedule
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &actual))
+			assert.Equal(t, *tt.expected, scheduling.Schedule{
+				Plugin: actual.Plugin, Expression: actual.Expression, Enabled: actual.Enabled,
+			})
+			assert.False(t, actual.UpdatedAt.IsZero())
 		})
 	}
 }
