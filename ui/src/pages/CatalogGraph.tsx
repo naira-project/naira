@@ -21,7 +21,6 @@ import PropertiesPanel from '../components/PropertiesPanel';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { Separator } from '../components/ui/separator';
 import {
   type CatalogGraphEdge,
   type CatalogGraphNode,
@@ -250,9 +249,9 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
       {/* Compact toolbar: depth controls + inline stats */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label
+          <label 
             htmlFor="catalog-graph-depth"
-            className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary"
+            className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
           >
             Depth
           </label>
@@ -268,7 +267,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
 
         <div className="flex-1 min-w-4" />
 
-        <div className="flex items-center gap-3 text-xs text-foreground-secondary">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Network size={14} className="text-primary" />
             <strong className="text-foreground">{graph.nodes.length}</strong> nodes
@@ -293,18 +292,16 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Card className="min-h-0 overflow-hidden rounded-[20px] border-gray-200 dark:border-gray-700">
+        <Card className="min-h-0 overflow-hidden rounded-[20px] border-gray-200">
           <div className="relative h-[580px]">
             {loading && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/85 dark:bg-background-dark-paper/85">
-                <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-                  Loading graph...
-                </p>
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-card/85">
+                <p className="text-sm text-muted-foreground">Loading graph...</p>
               </div>
             )}
 
             {error && !loading && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90 dark:bg-background-dark-paper/90">
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-card/90">
                 <p className="text-sm font-medium text-red-500">{error}</p>
               </div>
             )}
@@ -344,28 +341,20 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
         </Card>
 
         <div className="space-y-4">
-          <Card className="rounded-[20px] border-gray-200 dark:border-gray-700">
+          <Card className="rounded-[20px] border-gray-200">
             <CardContent>
-              <h2 className="text-base font-semibold text-foreground dark:text-foreground-dark-default">
-                Node Details
-              </h2>
-              <p className="mt-1 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+              <h2 className="text-base font-semibold text-foreground">Node Details</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Selected node in the current rooted graph slice.
               </p>
-              <Separator className="my-4" />
+              <hr className="my-4 border-t border-white/10" />
 
-              {!selectedNode && (
-                <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-                  No node selected.
-                </p>
-              )}
+              {!selectedNode && <p className="text-sm text-muted-foreground">No node selected.</p>}
 
               {selectedNode && (
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-xl font-bold text-foreground dark:text-foreground-dark-default">
-                      {selectedNode.label}
-                    </h3>
+                    <h3 className="text-xl font-bold text-foreground">{selectedNode.label}</h3>
                   </div>
 
                   <div className="flex gap-2">
@@ -378,19 +367,17 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
                   </div>
 
                   <div>
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Kind
                     </p>
-                    <p className="mt-1 text-sm text-foreground dark:text-foreground-dark-default">
-                      {selectedNode.kind}
-                    </p>
+                    <p className="mt-1 text-sm text-foreground">{selectedNode.kind}</p>
                   </div>
 
                   <div>
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Path
                     </p>
-                    <p className="mt-1 break-words font-mono text-sm text-foreground dark:text-foreground-dark-default">
+                    <p className="mt-1 break-words font-mono text-sm text-foreground">
                       {selectedNode.path}
                     </p>
                   </div>
