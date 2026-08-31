@@ -25,3 +25,8 @@
     font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
   }
 }
+
+/* Remove weird edge anchor point for graph nodes */
+.react-flow .react-flow__handle {
+  opacity: 0;
+}
