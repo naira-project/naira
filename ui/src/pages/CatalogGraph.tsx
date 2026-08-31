@@ -5,6 +5,7 @@ import {
   MarkerType,
   MiniMap,
   type Node,
+  Position,
   ReactFlow,
   type ReactFlowInstance,
   useEdgesState,
@@ -12,7 +13,7 @@ import {
 } from '@xyflow/react';
 import { ArrowRight, Focus, GitBranch, Network, Share2 } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import '@xyflow/react/dist/style.css';
 
@@ -20,7 +21,6 @@ import PropertiesPanel from '../components/PropertiesPanel';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { Separator } from '../components/ui/separator';
 import {
   type CatalogGraphEdge,
   type CatalogGraphNode,
@@ -39,6 +39,13 @@ const typePalette: Record<string, { fill: string; stroke: string }> = {
   'HelmChart.fluxcd': { fill: '#fef3c7', stroke: '#b45309' },
   git_repository: { fill: '#e0e7ff', stroke: '#3730a3' },
 };
+
+/** Depth of the graph slice loaded when the tab is first opened. */
+const DEFAULT_DEPTH = 2;
+/** Horizontal distance between two consecutive depth columns. */
+const COLUMN_SPACING = 300;
+/** Vertical distance between two nodes of the same depth column. */
+const ROW_SPACING = 150;
 
 function graphNodeId(node: CatalogGraphNode) {
   return node.name;
@@ -63,6 +70,7 @@ function toFlowNode(
           </span>
           {!node.isRoot && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onFocus(node);
@@ -84,6 +92,8 @@ function toFlowNode(
   return {
     id: graphNodeId(node),
     position,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
     data: {
       label: displayLabel,
       path: node.path,
@@ -133,13 +143,16 @@ function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode
         return left.kind.localeCompare(right.kind);
       });
 
+      // Centring the column keeps neighbours roughly level with each other
+      const columnOffset = ((orderedNodes.length - 1) * ROW_SPACING) / 2;
+
       orderedNodes.forEach((node, index) => {
         positioned.push(
           toFlowNode(
             node,
             {
-              x: (depthOffsets.get(depth) ?? 0) * 300,
-              y: index * 150,
+              x: (depthOffsets.get(depth) ?? 0) * COLUMN_SPACING,
+              y: index * ROW_SPACING - columnOffset,
             },
             onFocus,
           ),
@@ -151,6 +164,9 @@ function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode
 }
 
 function toFlowEdge(edge: CatalogGraphEdge): Edge {
+  const color = edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a';
+  const labelColor = edge.direction === 'incoming' ? '#5e3789' : '#24455f';
+
   return {
     id: edge.id,
     source: edge.fromNode,
@@ -161,14 +177,14 @@ function toFlowEdge(edge: CatalogGraphEdge): Edge {
       type: MarkerType.ArrowClosed,
       width: 18,
       height: 18,
-      color: edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a',
+      color,
     },
     style: {
-      stroke: edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a',
+      stroke: color,
       strokeWidth: 2,
     },
     labelStyle: {
-      fill: edge.direction === 'incoming' ? '#5e3789' : '#24455f',
+      fill: labelColor,
       fontWeight: 700,
       fontSize: 11,
     },
@@ -185,7 +201,7 @@ type CatalogGraphProps = {
 
 export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const navigate = useNavigate();
-  const [depth, setDepth] = useState(1);
+  const [depth, setDepth] = useState(DEFAULT_DEPTH);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { graph, loading, error } = useCatalogGraph(rootNode, depth);
 
@@ -196,10 +212,19 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const instanceRef = useRef<ReactFlowInstance | null>(null);
 
+  const handleFocusNode = useCallback(
+    (graphNode: CatalogGraphNode) => {
+      navigate(
+        `/catalog/${encodeURIComponent(graphNode.kind)}/${encodeURIComponent(graphNode.path)}`,
+      );
+    },
+    [navigate],
+  );
+
   useEffect(() => {
     setFlowNodes(layoutNodes(graph.nodes, handleFocusNode));
     setFlowEdges(graph.edges.map(toFlowEdge));
-  }, [graph, setFlowNodes, setFlowEdges]);
+  }, [graph, setFlowNodes, setFlowEdges, handleFocusNode]);
 
   // Auto-fit view after each layout change (e.g., depth change).
   useEffect(() => {
@@ -208,7 +233,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
         maxZoom: 1, // Prevents from zooming in too much in default view
       });
     });
-  }, [graph]);
+  }, []);
 
   const selectedNode =
     graph.nodes.find((node) => graphNodeId(node) === selectedNodeId) ?? graph.nodes[0] ?? null;
@@ -219,21 +244,19 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
     setSelectedNodeId(node.id);
   };
 
-  const handleFocusNode = (graphNode: CatalogGraphNode) => {
-    navigate(
-      `/catalog/${encodeURIComponent(graphNode.kind)}/${encodeURIComponent(graphNode.path)}`,
-    );
-  };
-
   return (
     <div className="flex flex-col gap-3">
       {/* Compact toolbar: depth controls + inline stats */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary">
+          <label 
+            htmlFor="catalog-graph-depth"
+            className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+          >
             Depth
           </label>
           <Input
+            id="catalog-graph-depth"
             type="number"
             min={1}
             value={depth}
@@ -244,7 +267,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
 
         <div className="flex-1 min-w-4" />
 
-        <div className="flex items-center gap-3 text-xs text-foreground-secondary">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">
             <Network size={14} className="text-primary" />
             <strong className="text-foreground">{graph.nodes.length}</strong> nodes
@@ -269,18 +292,16 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Card className="min-h-0 overflow-hidden rounded-[20px] border-gray-200 dark:border-gray-700">
+        <Card className="min-h-0 overflow-hidden rounded-[20px] border-gray-200">
           <div className="relative h-[580px]">
             {loading && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/85 dark:bg-background-dark-paper/85">
-                <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-                  Loading graph...
-                </p>
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-card/85">
+                <p className="text-sm text-muted-foreground">Loading graph...</p>
               </div>
             )}
 
             {error && !loading && (
-              <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/90 dark:bg-background-dark-paper/90">
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-card/90">
                 <p className="text-sm font-medium text-red-500">{error}</p>
               </div>
             )}
@@ -320,28 +341,20 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
         </Card>
 
         <div className="space-y-4">
-          <Card className="rounded-[20px] border-gray-200 dark:border-gray-700">
+          <Card className="rounded-[20px] border-gray-200">
             <CardContent>
-              <h2 className="text-base font-semibold text-foreground dark:text-foreground-dark-default">
-                Node Details
-              </h2>
-              <p className="mt-1 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+              <h2 className="text-base font-semibold text-foreground">Node Details</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Selected node in the current rooted graph slice.
               </p>
-              <Separator className="my-4" />
+              <hr className="my-4 border-t border-white/10" />
 
-              {!selectedNode && (
-                <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-                  No node selected.
-                </p>
-              )}
+              {!selectedNode && <p className="text-sm text-muted-foreground">No node selected.</p>}
 
               {selectedNode && (
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-xl font-bold text-foreground dark:text-foreground-dark-default">
-                      {selectedNode.label}
-                    </h3>
+                    <h3 className="text-xl font-bold text-foreground">{selectedNode.label}</h3>
                   </div>
 
                   <div className="flex gap-2">
@@ -354,19 +367,17 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
                   </div>
 
                   <div>
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Kind
                     </p>
-                    <p className="mt-1 text-sm text-foreground dark:text-foreground-dark-default">
-                      {selectedNode.kind}
-                    </p>
+                    <p className="mt-1 text-sm text-foreground">{selectedNode.kind}</p>
                   </div>
 
                   <div>
-                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary dark:text-foreground-dark-secondary">
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                       Path
                     </p>
-                    <p className="mt-1 break-words font-mono text-sm text-foreground dark:text-foreground-dark-default">
+                    <p className="mt-1 break-words font-mono text-sm text-foreground">
                       {selectedNode.path}
                     </p>
                   </div>

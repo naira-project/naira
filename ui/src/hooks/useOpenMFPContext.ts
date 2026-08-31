@@ -21,7 +21,9 @@ const subscribers = new Set<() => void>();
 let started = false;
 
 function notify() {
-  subscribers.forEach((listener) => listener());
+  subscribers.forEach((listener) => {
+    listener();
+  });
 }
 
 function stringOrNull(value: unknown): string | null {

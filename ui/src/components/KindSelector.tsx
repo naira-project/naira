@@ -15,18 +15,16 @@ export default function KindSelector({ kinds, activeKind, onSelect, loading }: K
   if (loading) {
     return (
       <div className="flex gap-2">
-        <div className="h-8 w-24 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
-        <div className="h-8 w-20 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
-        <div className="h-8 w-28 animate-pulse rounded-lg bg-gray-200 dark:bg-white/10" />
+        <div className="h-8 w-24 animate-pulse rounded-lg bg-gray-200" />
+        <div className="h-8 w-20 animate-pulse rounded-lg bg-gray-200" />
+        <div className="h-8 w-28 animate-pulse rounded-lg bg-gray-200" />
       </div>
     );
   }
 
   if (kinds.length === 0) {
     return (
-      <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-        No kinds discovered. Synchronize data first.
-      </p>
+      <p className="text-sm text-muted-foreground">No kinds discovered. Synchronize data first.</p>
     );
   }
 
@@ -34,13 +32,14 @@ export default function KindSelector({ kinds, activeKind, onSelect, loading }: K
     <div className="flex flex-wrap gap-2">
       {kinds.map((kind) => (
         <button
+          type="button"
           key={kind}
           onClick={() => onSelect(kind)}
           className={cn(
             'rounded-lg px-4 py-1.5 text-sm transition-colors',
             activeKind === kind
               ? 'bg-primary font-semibold text-white'
-              : 'bg-gray-100 font-normal text-foreground hover:bg-gray-200 dark:bg-white/10 dark:text-foreground-dark-default dark:hover:bg-white/20',
+              : 'bg-gray-100 font-normal text-foreground hover:bg-gray-200',
           )}
         >
           {kind}

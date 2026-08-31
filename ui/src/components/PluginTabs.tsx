@@ -13,27 +13,29 @@ interface PluginTabsProps {
  */
 export default function PluginTabs({ plugins, activePlugin, onSelect }: PluginTabsProps) {
   return (
-    <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex gap-1 border-b border-gray-200">
       <button
+        type="button"
         onClick={() => onSelect(null)}
         className={cn(
           'px-3 py-1.5 text-sm transition-colors',
           activePlugin === null
-            ? 'border-b-2 border-primary font-semibold text-foreground dark:text-foreground-dark-default'
-            : 'text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default',
+            ? 'border-b-2 border-primary font-semibold text-foreground'
+            : 'text-muted-foreground hover:text-foreground',
         )}
       >
         All
       </button>
       {plugins.map((plugin) => (
         <button
+          type="button"
           key={plugin}
           onClick={() => onSelect(plugin)}
           className={cn(
             'px-3 py-1.5 text-sm transition-colors',
             activePlugin === plugin
-              ? 'border-b-2 border-primary font-semibold text-foreground dark:text-foreground-dark-default'
-              : 'text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default',
+              ? 'border-b-2 border-primary font-semibold text-foreground'
+              : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {plugin}

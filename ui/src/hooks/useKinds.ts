@@ -34,7 +34,7 @@ export function useKinds(viewpointKinds?: string[]): UseKindsResult {
   const kinds = useMemo(
     () =>
       viewpointKinds ? viewpointKinds.filter((k) => discoveredKinds.includes(k)) : discoveredKinds,
-    [viewpointKinds?.join(','), discoveredKinds],
+    [viewpointKinds, discoveredKinds],
   );
 
   // Auto-select first kind if none selected yet.
