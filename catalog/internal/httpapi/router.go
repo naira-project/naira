@@ -39,7 +39,7 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger
 
 		r.Post("/plugins:run", newRunAllPluginsHandler(runner))
 		r.Get("/plugins", newListPluginsHandler(runner))
-		r.Get("/schedules", newListSchedulesHandler(scheduler))
+		r.Get("/schedules", newListSchedulesHandler(scheduler, logger))
 		r.Get("/{plugin}/schedule", newGetScheduleHandler(scheduler))
 		r.Post("/{plugin}:run", newRunPluginHandler(runner))
 
