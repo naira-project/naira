@@ -54,7 +54,7 @@ export default function GenericTable({
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
   const pluginColumns = useMemo(
     () => configuredColumns ?? columns.slice(2),
-    [configuredColumns?.join(','), columns],
+    [configuredColumns, columns],
   );
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
@@ -175,6 +175,7 @@ export default function GenericTable({
 
               <div className={`${cellBase} ${isLastRow ? 'rounded-br-lg' : ''}`}>
                 <button
+                  type="button"
                   onClick={() => onSelect(node)}
                   className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
                   title="View details"

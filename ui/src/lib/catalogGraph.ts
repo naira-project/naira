@@ -19,7 +19,7 @@ export interface CatalogGraphNode {
   label: string;
   depth: number;
   isRoot: boolean;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
 }
 
 export interface CatalogGraphEdge {

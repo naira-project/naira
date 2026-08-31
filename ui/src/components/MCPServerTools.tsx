@@ -66,6 +66,7 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
         {tools.map((tool) => (
           <li key={tool.name}>
             <button
+              type="button"
               onClick={() =>
                 navigate(
                   `/catalog/${encodeURIComponent(tool.kind)}/${encodeCatalogPath(tool.path)}`,
@@ -128,8 +129,9 @@ function mcpToolsFromGraph(graph: CatalogGraphResponse, serverName: string): MCP
       kind: node.kind,
       path: node.path,
       toolName: parsePath(node.path).name,
-      title: node.properties?.title,
-      description: node.properties?.description,
+      title: typeof node.properties?.title === 'string' ? node.properties.title : undefined,
+      description:
+        typeof node.properties?.description === 'string' ? node.properties.description : undefined,
     }))
     .sort((a, b) => a.toolName.localeCompare(b.toolName));
 }
