@@ -1,6 +1,4 @@
 // scheduling turns schedules into plugin run requests.
-//
-//	Todo: implement a persistent scheduler. Postgres?
 package scheduling
 
 import (
@@ -29,8 +27,7 @@ type Scheduler struct {
 
 func NewScheduler(store Store, starter RunStarter, logger *log.Logger) *Scheduler {
 	return &Scheduler{
-		store: store, starter: starter,
-		cron: cron.New(), entries: make(map[string]cron.EntryID), logger: logger,
+		store: store, starter: starter, cron: cron.New(), entries: make(map[string]cron.EntryID), logger: logger,
 	}
 }
 

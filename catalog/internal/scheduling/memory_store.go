@@ -3,7 +3,6 @@ package scheduling
 import (
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -47,7 +46,6 @@ func (s *MemoryStore) List() ([]Schedule, error) {
 	for _, schedule := range s.schedules {
 		result = append(result, schedule)
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].Plugin < result[j].Plugin })
 	return result, nil
 }
 

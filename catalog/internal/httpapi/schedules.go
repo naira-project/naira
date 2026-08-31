@@ -38,8 +38,6 @@ func newListSchedulesHandler(scheduler *scheduling.Scheduler, logger *log.Logger
 			return fmt.Errorf("listing schedules: %w", err)
 		}
 
-		sortSchedules(schedules)
-
 		page, nextPageToken, totalSize, err := paginate(schedules, options.pageSize, options.offset, "schedules", logger)
 		if err != nil {
 			return fmt.Errorf("paginating schedules: %w", err)
