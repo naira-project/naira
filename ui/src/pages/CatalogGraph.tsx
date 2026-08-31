@@ -5,6 +5,7 @@ import {
   MarkerType,
   MiniMap,
   type Node,
+  Position,
   ReactFlow,
   type ReactFlowInstance,
   useEdgesState,
@@ -38,6 +39,13 @@ const typePalette: Record<string, { fill: string; stroke: string }> = {
   'HelmChart.fluxcd': { fill: '#fef3c7', stroke: '#b45309' },
   git_repository: { fill: '#e0e7ff', stroke: '#3730a3' },
 };
+
+/** Depth of the graph slice loaded when the tab is first opened. */
+const DEFAULT_DEPTH = 2;
+/** Horizontal distance between two consecutive depth columns. */
+const COLUMN_SPACING = 300;
+/** Vertical distance between two nodes of the same depth column. */
+const ROW_SPACING = 150;
 
 function graphNodeId(node: CatalogGraphNode) {
   return node.name;
@@ -84,6 +92,8 @@ function toFlowNode(
   return {
     id: graphNodeId(node),
     position,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
     data: {
       label: displayLabel,
       path: node.path,
@@ -133,13 +143,16 @@ function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode
         return left.kind.localeCompare(right.kind);
       });
 
+      // Centring the column keeps neighbours roughly level with each other
+      const columnOffset = ((orderedNodes.length - 1) * ROW_SPACING) / 2;
+
       orderedNodes.forEach((node, index) => {
         positioned.push(
           toFlowNode(
             node,
             {
-              x: (depthOffsets.get(depth) ?? 0) * 300,
-              y: index * 150,
+              x: (depthOffsets.get(depth) ?? 0) * COLUMN_SPACING,
+              y: index * ROW_SPACING - columnOffset,
             },
             onFocus,
           ),
@@ -151,6 +164,9 @@ function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode
 }
 
 function toFlowEdge(edge: CatalogGraphEdge): Edge {
+  const color = edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a';
+  const labelColor = edge.direction === 'incoming' ? '#5e3789' : '#24455f';
+
   return {
     id: edge.id,
     source: edge.fromNode,
@@ -161,14 +177,14 @@ function toFlowEdge(edge: CatalogGraphEdge): Edge {
       type: MarkerType.ArrowClosed,
       width: 18,
       height: 18,
-      color: edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a',
+      color,
     },
     style: {
-      stroke: edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a',
+      stroke: color,
       strokeWidth: 2,
     },
     labelStyle: {
-      fill: edge.direction === 'incoming' ? '#5e3789' : '#24455f',
+      fill: labelColor,
       fontWeight: 700,
       fontSize: 11,
     },
@@ -185,7 +201,7 @@ type CatalogGraphProps = {
 
 export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const navigate = useNavigate();
-  const [depth, setDepth] = useState(1);
+  const [depth, setDepth] = useState(DEFAULT_DEPTH);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { graph, loading, error } = useCatalogGraph(rootNode, depth);
 
