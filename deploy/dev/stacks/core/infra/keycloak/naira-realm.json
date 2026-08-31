@@ -8,7 +8,7 @@
       "clientId": "naira-portal",
       "enabled": true,
       "publicClient": false,
-      "secret": "__KEYCLOAK_CLIENT_SECRET__",
+      "secret": "naira-local-dev-secret",
       "protocol": "openid-connect",
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
