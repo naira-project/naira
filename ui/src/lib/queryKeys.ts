@@ -14,8 +14,7 @@ export const queryKeys = {
   relationSummaries: (nodeNames: string[]) =>
     ['catalog', 'relationSummaries', [...nodeNames].sort()] as const,
 
-  graph: (rootName: string | null, depth: number) =>
-    ['catalog', 'graph', rootName, depth] as const,
+  graph: (rootName: string | null, depth: number) => ['catalog', 'graph', rootName, depth] as const,
 
   plugins: ['plugins'] as const,
   schedules: ['schedules'] as const,

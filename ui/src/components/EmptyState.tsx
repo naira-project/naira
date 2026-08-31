@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { pluginsPageLink } from '../lib/utils';
 
@@ -9,7 +9,7 @@ import { pluginsPageLink } from '../lib/utils';
  */
 export default function EmptyState({ pluginNames }: { pluginNames?: string[] }) {
   const description: ReactNode =
-    (pluginNames && pluginNames.length > 0 ? (
+    pluginNames && pluginNames.length > 0 ? (
       <>
         Please sync the{' '}
         {pluginNames.map((name, i) => (
@@ -25,14 +25,14 @@ export default function EmptyState({ pluginNames }: { pluginNames?: string[] }) 
       </>
     ) : (
       'Please sync the plugins to see the data.'
-    ));
+    );
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-[10px] self-stretch pt-10 pb-[220px]">
       <div className="flex h-[262.381px] w-[280.603px] items-center justify-center pt-[31.925px] pr-[35.496px] pb-[30.226px] pl-[33.65px]">
         <img
           src="/sync.png"
-          alt="Plugin image for syncing the data"
+          alt="Plugin for syncing the data"
           className="h-full w-full object-contain"
         />
       </div>

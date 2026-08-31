@@ -1,17 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Play, RefreshCw, X } from 'lucide-react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
-import cronstrue from 'cronstrue';
-import { X, Play, RefreshCw, AlertCircle } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { usePluginsStatus } from '../hooks/usePluginOperations';
-import {
-  OperationResource,
-  ScheduleResource,
-  StatusErrorResource,
-  fetchSchedules,
-} from '../lib/catalogApi';
-import { PluginStatusBadge } from '../components/PluginStatusBadge';
 import { PluginErrorModal } from '../components/PluginErrorModal';
+import { PluginStatusBadge } from '../components/PluginStatusBadge';
+import { usePluginsStatus } from '../hooks/usePluginOperations';
+import type { OperationResource, StatusErrorResource } from '../lib/catalogApi';
 import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 import { useOpenMFPContext } from '../hooks/useOpenMFPContext';
 import { queryKeys } from '../lib/queryKeys';
@@ -21,7 +14,10 @@ export default function PluginsPage() {
   const [searchParams] = useSearchParams();
   const only = searchParams.get('only');
   const allowedPlugins = only
-    ? only.split(',').map((s) => s.trim()).filter(Boolean)
+    ? only
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     : undefined;
 
   const {
@@ -40,7 +36,11 @@ export default function PluginsPage() {
   const visiblePlugins = allowedPlugins
     ? plugins.filter((p) => allowedPlugins.includes(p))
     : plugins;
-  const [selectedError, setSelectedError] = useState<{ plugin: string; error: StatusErrorResource } | null>(null);
+
+  const [selectedError, setSelectedError] = useState<{
+    plugin: string;
+    error: StatusErrorResource;
+  } | null>(null);
 
   const handleRunVisible = async () => {
     allowedPlugins ? runSubset(visiblePlugins) : runAll();
@@ -60,6 +60,7 @@ export default function PluginsPage() {
           </div>
           <div className="flex-1" />
           <button
+            type="button"
             onClick={refresh}
             disabled={loading}
             className="inline-flex items-center justify-center rounded-md p-1.5 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
@@ -69,6 +70,7 @@ export default function PluginsPage() {
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
+            type="button"
             onClick={handleRunVisible}
             disabled={runAllActive}
             className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
@@ -86,7 +88,12 @@ export default function PluginsPage() {
                   className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600"
                 >
                   <span>{err.message}</span>
-                  <button onClick={() => dismissError(err.id)} aria-label="Dismiss">
+                  <button
+                    type="button"
+                    onClick={() => dismissError(err.id)}
+                    className="shrink-0 rounded p-0.5 text-red-500 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900"
+                    aria-label="Dismiss"
+                  >
                     <X size={14} />
                   </button>
                 </div>
@@ -163,9 +170,12 @@ function StatusTab({
           const running = runningPlugins.has(plugin);
 
           return (
-            <tr key={plugin} className="border-b border-gray-100 last:border-0">
-              <td className="py-3 pr-4 font-medium">{plugin}</td>
-              <td className="py-3 pr-4 text-gray-500">
+            <tr
+              key={plugin}
+              className="border-b border-gray-100 last:border-0 dark:border-gray-800"
+            >
+              <td className="py-3 pr-4 font-medium text-gray-900 dark:text-gray-100">{plugin}</td>
+              <td className="py-3 pr-4 text-gray-500 dark:text-gray-400">
                 {op ? formatRelativeTime(op.createdAt) : 'Never'}
               </td>
               <td className="py-3 pr-4 text-gray-500">
@@ -176,21 +186,27 @@ function StatusTab({
                     : '—'}
               </td>
               <td className="py-3 pr-4">
-                {running
-                  ? '—'
-                  : op?.state === 'FAILED' && op?.error
-                    ? (
-                      <button
-                        onClick={() => onViewError(plugin, op.error!)}
-                        className="inline-flex items-center gap-1.5 rounded bg-red-50 px-2 py-1 text-xs text-red-700"
-                      >
-                        <AlertCircle size={13} />
-                        Failed
-                      </button>
-                    )
-                    : op
-                      ? <PluginStatusBadge state={op.state} />
-                      : <span className="text-xs text-gray-400">Not run yet</span>}
+                {running ? (
+                  <span className="text-xs text-gray-400">—</span>
+                ) : op && op.state === 'FAILED' && op.error ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (op.error) {
+                        onViewError(plugin, op.error);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:bg-red-950/80 dark:text-red-400 dark:hover:bg-red-900"
+                  >
+                    <AlertCircle size={13} />
+                    <span>Failed</span>
+                    <span className="underline ml-0.5">Details</span>
+                  </button>
+                ) : op ? (
+                  <PluginStatusBadge state={op.state} />
+                ) : (
+                  <span className="text-xs text-gray-400">Not run yet</span>
+                )}
               </td>
               <td className="py-3 pr-4 text-gray-500">
                 {running
@@ -204,6 +220,7 @@ function StatusTab({
               </td>
               <td className="py-3 text-right">
                 <button
+                  type="button"
                   onClick={() => onRun(plugin)}
                   disabled={running}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"

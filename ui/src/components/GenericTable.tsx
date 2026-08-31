@@ -1,7 +1,13 @@
+import { ArrowDownRight, ArrowUpRight, Info } from 'lucide-react';
 import { useMemo } from 'react';
-import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { NodeResource, nodeProps } from '../lib/catalogApi';
-import { inferColumns, formatPropValue, parsePath,  namespaceColumnLabel, RelationSummary } from '../lib/kindUtils';
+import { type NodeResource, nodeProps } from '../lib/catalogApi';
+import {
+  formatPropValue,
+  inferColumns,
+  namespaceColumnLabel,
+  parsePath,
+  type RelationSummary,
+} from '../lib/kindUtils';
 import EmptyState from './EmptyState';
 
 interface GenericTableProps {
@@ -9,11 +15,13 @@ interface GenericTableProps {
   kind: string;
   onSelect: (node: NodeResource) => void;
   relationSummaries: Map<string, RelationSummary>;
+  columns?: string[];
 }
 
 /**
  * A generic, kind-agnostic table that:
- * 1. Infers columns from the union of all node props.
+ * 1. Shows the plugin property columns a viewpoint pins, or every property found
+ *    across the nodes when it pins none.
  * 2. Always shows `name`, `namespace`, and `Relations` as the "Core Metadata" columns.
  * 3. Renders plugin-derived prop columns as "Plugin Properties", immediately after Core Metadata.
  *    The group-header row (Core Metadata / Plugin Properties) is always rendered, even when a
@@ -29,16 +37,25 @@ interface GenericTableProps {
  * sizing would be computed separately per row and columns would drift out of alignment on
  * wider screens.
  */
-export default function GenericTable({ nodes, kind, onSelect, relationSummaries }: GenericTableProps) {
+export default function GenericTable({
+  nodes,
+  kind,
+  onSelect,
+  relationSummaries,
+  columns: configuredColumns,
+}: GenericTableProps) {
   const parsedPaths = useMemo(
     () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
-    [nodes]
+    [nodes],
   );
 
   // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
   // rendered explicitly as the core columns, so we only need the plugin tail here.
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
-  const pluginColumns = useMemo(() => columns.slice(2), [columns]);
+  const pluginColumns = useMemo(
+    () => configuredColumns ?? columns.slice(2),
+    [configuredColumns, columns],
+  );
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
   const hasPluginColumns = pluginColCount > 0;
@@ -59,8 +76,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
     return <EmptyState />;
   }
 
-  const headerCell =
-    'flex items-center h-full bg-gray-50 px-4 py-2.5 dark:bg-white/5';
+  const headerCell = 'flex items-center h-full bg-gray-50 px-4 py-2.5 dark:bg-white/5';
   const labelText =
     'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
   const groupText =
@@ -91,22 +107,17 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
           <span className={labelText}>name</span>
         </div>
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
-           <span className={labelText}>{namespaceLabel}</span>
+          <span className={labelText}>{namespaceLabel}</span>
         </div>
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
           <span className={labelText}>Relations</span>
         </div>
         {pluginColumns.map((col) => (
-          <div
-            key={col}
-            className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
-          >
+          <div key={col} className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
             <span className={labelText}>{col}</span>
           </div>
         ))}
-        <div
-          className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
-        />
+        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`} />
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
           <span className={labelText}>Actions</span>
         </div>
@@ -148,10 +159,7 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
               {pluginColumns.map((col) => {
                 const value = props[col];
                 return (
-                  <div
-                    key={col}
-                    className={`${cellBase}`}
-                  >
+                  <div key={col} className={`${cellBase}`}>
                     <span
                       className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
                       title={typeof value === 'string' ? value : undefined}
@@ -163,12 +171,11 @@ export default function GenericTable({ nodes, kind, onSelect, relationSummaries 
               })}
 
               {/* Spacer — absorbs leftover width so only Actions sits on the right */}
-              <div
-                className={`${cellBase}`}
-              />
+              <div className={`${cellBase}`} />
 
               <div className={`${cellBase} ${isLastRow ? 'rounded-br-lg' : ''}`}>
                 <button
+                  type="button"
                   onClick={() => onSelect(node)}
                   className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
                   title="View details"
@@ -196,7 +203,11 @@ function RelationCell({
   const summary = summaries.get(nodeName);
 
   if (!summary) {
-    return <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">—</span>;
+    return (
+      <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+        —
+      </span>
+    );
   }
 
   const relationKinds = Object.keys(summary).sort();

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  OperationResource,
   runAllPlugins as apiRunAllPlugins,
   runPlugin as apiRunPlugin,
   fetchOperations,
   fetchPlugins,
+  type OperationResource,
 } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
@@ -32,7 +32,7 @@ function isStale(op: OperationResource) {
 
 function mergeOperations(
   current: OperationResource[] = [],
-  incoming: OperationResource[]
+  incoming: OperationResource[],
 ): OperationResource[] {
   const incomingByName = new Map(incoming.map((op) => [op.name, op]));
   const existing = current.filter((op) => !incomingByName.has(op.name));
@@ -72,10 +72,10 @@ interface UsePluginsStatusResult {
 export function usePluginsStatus(): UsePluginsStatusResult {
   const queryClient = useQueryClient();
   const [runErrors, setRunErrors] = useState<RunErrorEntry[]>([]);
-  
+
   // Tracks locally triggered plugins while waiting for the POST mutation response
   const [pendingLocal, setPendingLocal] = useState<Set<string>>(new Set());
-  
+
   // Tracks operation names triggered by "Run All" until they reach a terminal state
   const [pendingRunAllOps, setPendingRunAllOps] = useState<Set<string>>(new Set());
 
@@ -113,10 +113,10 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   const operations = operationsQuery.data ?? EMPTY_OPERATIONS;
 
   const runningPlugins = useMemo(() => {
-    const running = new Set(
-      operations.filter((op) => !isTerminal(op)).map((op) => op.plugin)
-    );
-    pendingLocal.forEach((p) => running.add(p));
+    const running = new Set(operations.filter((op) => !isTerminal(op)).map((op) => op.plugin));
+    pendingLocal.forEach((p) => {
+      running.add(p);
+    });
     return running;
   }, [operations, pendingLocal]);
 
@@ -138,12 +138,12 @@ export function usePluginsStatus(): UsePluginsStatusResult {
         Array.from(prev).filter((name) => {
           const op = operations.find((o) => o.name === name);
           return op ? !isTerminal(op) : true;
-        })
+        }),
       );
       return next.size === prev.size ? prev : next;
     });
   }, [operations, pendingRunAllOps]);
-  
+
   const refresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.plugins }),
@@ -158,7 +158,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     },
     onSuccess: (newOp) => {
       queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
-        mergeOperations(oldOps, [newOp])
+        mergeOperations(oldOps, [newOp]),
       );
     },
     onError: (err, pluginName) => {
@@ -178,7 +178,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     onSuccess: (ops) => {
       setPendingRunAllOps(new Set(ops.map((op) => op.name)));
       queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
-        mergeOperations(oldOps, ops)
+        mergeOperations(oldOps, ops),
       );
     },
     onError: (err) => {
@@ -190,7 +190,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     async (pluginName: string) => {
       await runOneMutation.mutateAsync(pluginName).catch(() => {});
     },
-    [runOneMutation]
+    [runOneMutation],
   );
 
   const runAll = useCallback(async () => {
@@ -208,7 +208,9 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     async (pluginNames: string[]) => {
       setPendingLocal((prev) => {
         const next = new Set(prev);
-        pluginNames.forEach((name) => next.add(name));
+        pluginNames.forEach((name) => {
+          next.add(name);
+        });
         return next;
       });
       setSubsetActive(true);
@@ -217,29 +219,31 @@ export function usePluginsStatus(): UsePluginsStatusResult {
           pluginNames.map(async (name) => {
             const op = await apiRunPlugin(token, name);
             queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
-              mergeOperations(oldOps, [op])
+              mergeOperations(oldOps, [op]),
             );
-          })
+          }),
         );
         results.forEach((result, i) => {
           if (result.status === 'rejected') {
             addError(
               result.reason instanceof Error
                 ? result.reason.message
-                : `Failed to run "${pluginNames[i]}"`
+                : `Failed to run "${pluginNames[i]}"`,
             );
           }
         });
       } finally {
         setPendingLocal((prev) => {
           const next = new Set(prev);
-          pluginNames.forEach((name) => next.delete(name));
+          pluginNames.forEach((name) => {
+            next.delete(name);
+          });
           return next;
         });
         setSubsetActive(false);
       }
     },
-    [token, queryClient, addError]
+    [token, queryClient, addError],
   );
 
   return {

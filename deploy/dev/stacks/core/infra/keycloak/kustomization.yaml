@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: keycloak
+
+resources:
+  - keycloak.yaml
+  - secret.yaml
+
+configMapGenerator:
+  - name: keycloak-realm-import
+    files:
+      - naira-realm.json
+generatorOptions:
+  disableNameSuffixHash: true

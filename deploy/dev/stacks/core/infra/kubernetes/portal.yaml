@@ -27,9 +27,9 @@ spec:
             - name: BASE_DOMAINS_KEYCLOAK
               value: localhost
             - name: AUTH_SERVER_URL_KEYCLOAK
-              value: __AUTH_SERVER_URL_KEYCLOAK__
+              value: http://localhost:8080/realms/naira/protocol/openid-connect/auth
             - name: TOKEN_URL_KEYCLOAK
-              value: __TOKEN_URL_KEYCLOAK__
+              value: http://keycloak.keycloak.svc.cluster.local:8080/realms/naira/protocol/openid-connect/token
             - name: OIDC_CLIENT_ID_KEYCLOAK
               value: naira-portal
             - name: OIDC_CLIENT_SECRET_KEYCLOAK
@@ -59,6 +59,15 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-client-secret
+  namespace: idp-system
+type: Opaque
+stringData:
+  client-secret: naira-local-dev-secret
 ---
 apiVersion: v1
 kind: Service

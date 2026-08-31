@@ -1,5 +1,5 @@
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { isComplexValue, isUrlValue, tryParseJson } from '../lib/kindUtils';
 
 type PropertiesLayout = 'row' | 'stacked';
@@ -24,7 +24,11 @@ interface PropertiesPanelProps {
  * value is displayed — both the standalone Properties tab and the node details card
  * next to the graph use this component, just with a different `layout`.
  */
-export default function PropertiesPanel({ props, title = 'Properties', layout = 'row' }: PropertiesPanelProps) {
+export default function PropertiesPanel({
+  props,
+  title = 'Properties',
+  layout = 'row',
+}: PropertiesPanelProps) {
   const keys = Object.keys(props).sort();
 
   if (keys.length === 0) {
@@ -49,7 +53,15 @@ export default function PropertiesPanel({ props, title = 'Properties', layout = 
   );
 }
 
-function PropertyRow({ name, value, layout }: { name: string; value: unknown; layout: PropertiesLayout }) {
+function PropertyRow({
+  name,
+  value,
+  layout,
+}: {
+  name: string;
+  value: unknown;
+  layout: PropertiesLayout;
+}) {
   const [expanded, setExpanded] = useState(false);
   const isComplex = isComplexValue(value);
   const isUrl = !isComplex && isUrlValue(value);
@@ -70,6 +82,7 @@ function PropertyRow({ name, value, layout }: { name: string; value: unknown; la
 
   const valueEl = isComplex ? (
     <button
+      type="button"
       onClick={() => setExpanded((v) => !v)}
       className="flex items-center gap-1 text-xs text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default"
     >

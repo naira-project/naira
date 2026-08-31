@@ -15,25 +15,27 @@ export default function PluginTabs({ plugins, activePlugin, onSelect }: PluginTa
   return (
     <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
       <button
+        type="button"
         onClick={() => onSelect(null)}
         className={cn(
           'px-3 py-1.5 text-sm transition-colors',
           activePlugin === null
             ? 'border-b-2 border-primary font-semibold text-foreground dark:text-foreground-dark-default'
-            : 'text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default'
+            : 'text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default',
         )}
       >
         All
       </button>
       {plugins.map((plugin) => (
         <button
+          type="button"
           key={plugin}
           onClick={() => onSelect(plugin)}
           className={cn(
             'px-3 py-1.5 text-sm transition-colors',
             activePlugin === plugin
               ? 'border-b-2 border-primary font-semibold text-foreground dark:text-foreground-dark-default'
-              : 'text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default'
+              : 'text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default',
           )}
         >
           {plugin}
