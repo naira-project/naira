@@ -1,13 +1,20 @@
+import { useQuery } from '@tanstack/react-query';
+import cronstrue from 'cronstrue';
 import { AlertCircle, Play, RefreshCw, X } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { PluginErrorModal } from '../components/PluginErrorModal';
 import { PluginStatusBadge } from '../components/PluginStatusBadge';
-import { usePluginsStatus } from '../hooks/usePluginOperations';
-import type { OperationResource, StatusErrorResource } from '../lib/catalogApi';
-import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 import { useOpenMFPContext } from '../hooks/useOpenMFPContext';
+import { usePluginsStatus } from '../hooks/usePluginOperations';
+import {
+  fetchSchedules,
+  type OperationResource,
+  type ScheduleResource,
+  type StatusErrorResource,
+} from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
+import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 
 /** Dedicated page for managing plugin ingestion and schedules. */
 export default function PluginsPage() {
@@ -21,8 +28,17 @@ export default function PluginsPage() {
     : undefined;
 
   const {
-    plugins, operations, loading, runningPlugins, runAllActive, runErrors,
-    dismissError, refresh, runOne, runAll, runSubset,
+    plugins,
+    operations,
+    loading,
+    runningPlugins,
+    runAllActive,
+    runErrors,
+    dismissError,
+    refresh,
+    runOne,
+    runAll,
+    runSubset,
   } = usePluginsStatus();
   const { token } = useOpenMFPContext();
   const schedulesQuery = useQuery({
@@ -131,16 +147,18 @@ interface StatusTabProps {
 }
 
 function StatusTab({
-  plugins, operations, loading, runningPlugins, onRun, onViewError, schedules,
+  plugins,
+  operations,
+  loading,
+  runningPlugins,
+  onRun,
+  onViewError,
+  schedules,
 }: StatusTabProps) {
   const latestByPlugin = latestOperationPerPlugin(operations);
 
   if (plugins.length === 0 && !loading) {
-    return (
-      <p className="py-8 text-center text-sm text-gray-500">
-        No plugins registered.
-      </p>
-    );
+    return <p className="py-8 text-center text-sm text-gray-500">No plugins registered.</p>;
   }
 
   return (
@@ -225,9 +243,7 @@ function StatusTab({
                   disabled={running}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                 >
-                  {running
-                    ? <RefreshCw size={12} className="animate-spin" />
-                    : <Play size={12} />}
+                  {running ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} />}
                   {running ? 'Running…' : 'Run'}
                 </button>
               </td>
@@ -240,9 +256,10 @@ function StatusTab({
 }
 
 function ScheduleCell({ schedule }: { schedule?: ScheduleResource }) {
-  const friendly = schedule?.expression && schedule.enabled
-    ? friendlySchedule(schedule.expression)
-    : 'Not scheduled';
+  const friendly =
+    schedule?.expression && schedule.enabled
+      ? friendlySchedule(schedule.expression)
+      : 'Not scheduled';
 
   return (
     <div className="max-w-full" title={schedule?.expression ?? undefined}>
@@ -281,9 +298,7 @@ function minuteFromHourlyCron(expression: string): string {
 
 function timeFromCron(expression: string): string {
   const match = expression.match(/^(\d+) (\d+) /);
-  return match
-    ? `${match[2].padStart(2, '0')}:${match[1].padStart(2, '0')}`
-    : '03:00';
+  return match ? `${match[2].padStart(2, '0')}:${match[1].padStart(2, '0')}` : '03:00';
 }
 
 function timeToCron(time: string): string {

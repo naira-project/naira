@@ -178,7 +178,10 @@ export async function fetchSchedules(token: string | null): Promise<ScheduleReso
 }
 
 /** GET /v1/{plugin}/schedule — returns one plugin's effective schedule. */
-export async function fetchSchedule(token: string | null, plugin: string): Promise<ScheduleResource> {
+export async function fetchSchedule(
+  token: string | null,
+  plugin: string,
+): Promise<ScheduleResource> {
   return fetchJson<ScheduleResource>(`/v1/${encodeURIComponent(plugin)}/schedule`, token);
 }
 
