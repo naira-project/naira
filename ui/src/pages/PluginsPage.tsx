@@ -164,12 +164,13 @@ function StatusTab({
   return (
     <table className="w-full table-fixed text-left text-sm">
       <colgroup>
-        <col className="w-[22%]" />
-        <col className="w-[16%]" />
-        <col className="w-[12%]" />
-        <col className="w-[17%]" />
-        <col className="w-[22%]" />
+        <col className="w-[20%]" />
+        <col className="w-[14%]" />
         <col className="w-[11%]" />
+        <col className="w-[15%]" />
+        <col className="w-[18%]" />
+        <col className="w-[12%]" />
+        <col className="w-[10%]" />
       </colgroup>
       <thead>
         <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
