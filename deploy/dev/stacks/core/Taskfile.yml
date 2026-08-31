@@ -36,13 +36,17 @@ includes:
   ui:
     taskfile: ./tasks/ui.yml
     dir: .
+  mcp-mock:
+    taskfile: ./tasks/mcp-mock.yml
+    dir: .
 
 tasks:
   deploy:
-    desc: Deploy the core stack (cluster + keycloak + catalog + portal + ui)
+    desc: Deploy the core stack (cluster + keycloak + mcp-mock + catalog + portal + ui)
     cmds:
       - task: cluster:create
       - task: keycloak:deploy
+      - task: mcp-mock:deploy
       - task: catalog:deploy
       - task: portal:deploy
       - task: ui:deploy
@@ -52,5 +56,6 @@ tasks:
     cmds:
       - task: portal:undeploy
       - task: catalog:undeploy
+      - task: mcp-mock:undeploy
       - task: ui:undeploy
       - task: keycloak:undeploy

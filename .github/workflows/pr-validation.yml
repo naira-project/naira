@@ -6,10 +6,11 @@ name: PR Validation
 on:
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
-    
+
 permissions:
   contents: read
 
@@ -18,7 +19,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ── 1. Go unit tests (catalog service) ────────────────────────────────────
+  # ── 1. Pull request title ─────────────────────────────────────────────────
+  pr-title:
+    name: Validate · PR Title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Conventional Commit title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)[:space:]]+\))?!?: [^[:space:]].*$'
+          if [[ ! "$PR_TITLE" =~ $pattern ]]; then
+            echo "::error::PR title must use an approved Conventional Commit type (build, chore, ci, docs, feat, fix, perf, refactor, revert, style, test), e.g. 'feat(catalog): add model search'."
+            exit 1
+          fi
+
+  # ── 2. Go unit tests (catalog service) ────────────────────────────────────
   go-test:
     name: Test · Catalog
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-go-test.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
@@ -30,7 +47,7 @@ jobs:
       # revisit once the test suite reaches meaningful coverage.
       coverage-threshold: 0
 
-  # ── 2. Container build — catalog (build-only, no push on PRs) ─────────────
+  # ── 3. Container build — catalog (build-only, no push on PRs) ─────────────
   container-build-catalog:
     name: Container Build · Catalog
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@9d11293b6fdfb550b5b8d43ae551639591bcf468
@@ -40,26 +57,27 @@ jobs:
       context: "."
       platforms: "linux/amd64,linux/arm64"
 
-  # ── 3. Container build — ui (build-only, no push on PRs) ──────────────────
+  # ── 4. Container build — ui (build-only, no push on PRs) ──────────────────
   container-build-ui:
     name: Container Build · UI
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@9d11293b6fdfb550b5b8d43ae551639591bcf468
     with:
       image-name: "naira-ui"
-      dockerfile: "ui-poc/Dockerfile"
-      context: "ui-poc"
+      dockerfile: "ui/Dockerfile"
+      context: "ui"
       platforms: "linux/amd64,linux/arm64"
 
   # ── Gate: single required status check for branch protection ──────────────
   all-checks:
     name: All Checks Passed
-    needs: [go-test, container-build-catalog, container-build-ui]
+    needs: [pr-title, go-test, container-build-catalog, container-build-ui]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
           RESULTS=(
+            "${{ needs.pr-title.result }}"
             "${{ needs.go-test.result }}"
             "${{ needs.container-build-catalog.result }}"
             "${{ needs.container-build-ui.result }}"
