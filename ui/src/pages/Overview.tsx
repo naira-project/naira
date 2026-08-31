@@ -56,6 +56,7 @@ export default function Overview() {
                 </CardContent>
                 <div className="px-4 pb-4">
                   <button
+                    type="button"
                     onClick={() => navigate(`/catalog/${viewpoint.path}`)}
                     className="flex w-full items-center justify-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
                   >

@@ -12,8 +12,7 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
     >
@@ -29,6 +28,7 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
             </h3>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             aria-label="Close error log"
@@ -40,9 +40,9 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
         {/* Content */}
         <div className="space-y-4 overflow-y-auto p-5">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-gray-500">
+            <h4 className="mb-1.5 block text-xs font-medium text-gray-500">
               Error Details
-            </label>
+            </h4>
             <div className="max-h-80 overflow-y-auto rounded-md border border-gray-200 bg-gray-900 p-3 font-mono text-xs leading-relaxed text-red-400">
               <pre className="whitespace-pre-wrap break-words">{error.message}</pre>
             </div>
@@ -52,6 +52,7 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
         {/* Footer */}
         <div className="flex shrink-0 justify-end border-t border-gray-200 bg-gray-50 px-5 py-3">
           <button
+            type="button"
             onClick={onClose}
             className="rounded-md bg-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300"
           >

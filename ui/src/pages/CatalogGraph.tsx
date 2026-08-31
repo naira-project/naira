@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react';
 import { ArrowRight, Focus, GitBranch, Network, Share2 } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import '@xyflow/react/dist/style.css';
 
@@ -62,6 +62,7 @@ function toFlowNode(
           </span>
           {!node.isRoot && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onFocus(node);
@@ -195,10 +196,19 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const instanceRef = useRef<ReactFlowInstance | null>(null);
 
+  const handleFocusNode = useCallback(
+    (graphNode: CatalogGraphNode) => {
+      navigate(
+        `/catalog/${encodeURIComponent(graphNode.kind)}/${encodeURIComponent(graphNode.path)}`,
+      );
+    },
+    [navigate],
+  );
+
   useEffect(() => {
     setFlowNodes(layoutNodes(graph.nodes, handleFocusNode));
     setFlowEdges(graph.edges.map(toFlowEdge));
-  }, [graph, setFlowNodes, setFlowEdges]);
+  }, [graph, setFlowNodes, setFlowEdges, handleFocusNode]);
 
   // Auto-fit view after each layout change (e.g., depth change).
   useEffect(() => {
@@ -207,7 +217,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
         maxZoom: 1, // Prevents from zooming in too much in default view
       });
     });
-  }, [graph]);
+  }, []);
 
   const selectedNode =
     graph.nodes.find((node) => graphNodeId(node) === selectedNodeId) ?? graph.nodes[0] ?? null;
@@ -218,21 +228,19 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
     setSelectedNodeId(node.id);
   };
 
-  const handleFocusNode = (graphNode: CatalogGraphNode) => {
-    navigate(
-      `/catalog/${encodeURIComponent(graphNode.kind)}/${encodeURIComponent(graphNode.path)}`,
-    );
-  };
-
   return (
     <div className="flex flex-col gap-3">
       {/* Compact toolbar: depth controls + inline stats */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <label 
+            htmlFor="catalog-graph-depth"
+            className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+          >
             Depth
           </label>
           <Input
+            id="catalog-graph-depth"
             type="number"
             min={1}
             value={depth}

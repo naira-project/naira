@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { isComplexValue, isUrlValue, tryParseJson } from '../lib/kindUtils';
 
@@ -78,6 +78,7 @@ function PropertyRow({
 
   const valueEl = isComplex ? (
     <button
+      type="button"
       onClick={() => setExpanded((v) => !v)}
       className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
     >

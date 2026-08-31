@@ -48,6 +48,7 @@ export default function CatalogDetail() {
         {/* Top bar */}
         <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
           <button
+            type="button"
             onClick={() => navigate(backPath ? `/catalog/${backPath}` : '/catalog')}
             className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-gray-100 hover:text-foreground transition-colors"
           >
@@ -80,6 +81,7 @@ export default function CatalogDetail() {
               <div className="flex gap-1 border-b border-gray-200">
                 {tabs.map(({ value, label }) => (
                   <button
+                    type="button"
                     key={value}
                     onClick={() => setActiveTab(value)}
                     className={cn(

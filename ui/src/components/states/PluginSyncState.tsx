@@ -31,7 +31,7 @@ export default function PluginSyncState({ pluginNames }: { pluginNames?: string[
   return (
     <StatePlaceholder
       imageSrc="/sync.png"
-      imageAlt="Plugin image for syncing the data"
+      imageAlt="Plugin for syncing the data"
       description={description}
     />
   );

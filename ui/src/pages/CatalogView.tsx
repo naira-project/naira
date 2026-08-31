@@ -50,7 +50,7 @@ export default function CatalogView({
   const [activePlugin, setActivePlugin] = useState<string | null>(null);
   useEffect(() => {
     setActivePlugin(null);
-  }, [activeKind]);
+  }, []);
 
   const plugins = useMemo(() => derivePlugins(nodes), [nodes]);
   const filteredNodes = useMemo(
@@ -85,7 +85,10 @@ export default function CatalogView({
   );
 
   const handleSelect = (node: NodeResource) => {
-    navigate(`/catalog/${encodeURIComponent(activeKind!)}/${encodeURIComponent(node.path)}`);
+    if (!activeKind) {
+      return;
+    }
+    navigate(`/catalog/${encodeURIComponent(activeKind)}/${encodeURIComponent(node.path)}`);
   };
 
   return (
@@ -130,7 +133,11 @@ export default function CatalogView({
               {kindsError && (
                 <div className="mb-4 flex items-center gap-2 text-sm text-red-500">
                   <span>{kindsError}</span>
-                  <button onClick={refreshKinds} className="underline hover:no-underline">
+                  <button
+                    type="button"
+                    onClick={refreshKinds}
+                    className="underline hover:no-underline"
+                  >
                     Retry
                   </button>
                 </div>
