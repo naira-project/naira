@@ -279,12 +279,11 @@ spec:
             - name: PORT
               value: "8090"
             - name: KEYCLOAK_BASE_URL
-              value: __KEYCLOAK_BASE_URL__
-            # KEYCLOAK_REALM variable must be changed in tasks/keycloak.yml
+              value: http://keycloak.keycloak.svc.cluster.local:8080
             - name: KEYCLOAK_REALM
-              value: __KEYCLOAK_REALM__
+              value: naira
             - name: KEYCLOAK_ISSUER
-              value: __KEYCLOAK_ISSUER__
+              value: http://localhost:8080/realms/naira
             - name: PLUGIN_ADDRESSES
               value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,mcp-servers=localhost:50058"
           ports:
