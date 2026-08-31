@@ -40,7 +40,7 @@ func main() {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
-	scheduler, err := newScheduler(config, runner, logger)
+	scheduler, err := scheduling.NewConfiguredScheduler(config.PluginAddresses, config.PluginSchedules, runner, logger)
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
@@ -84,8 +84,4 @@ func main() {
 	// Wait for any in-flight plugin runs to finish before exiting.
 	runner.Wait()
 	logger.Println("catalog service stopped")
-}
-
-func newScheduler(config config, runner *pluginrun.Runner, logger *log.Logger) (*scheduling.Scheduler, error) {
-	return scheduling.NewConfiguredScheduler(config.PluginAddresses, config.PluginSchedules, runner, logger)
 }
