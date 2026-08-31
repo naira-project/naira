@@ -34,7 +34,7 @@ func TestMemoryStoreRoundTrip(t *testing.T) {
 }
 
 func TestConfiguredSchedulerRejectsInvalidExpression(t *testing.T) {
-	scheduler := NewScheduler(NewMemoryStore(), &stubStarter{calls: make(chan string)}, nil)
+	scheduler := newScheduler(NewMemoryStore(), &stubStarter{calls: make(chan string)}, nil)
 
 	err := scheduler.configureSchedule(Schedule{Plugin: "github", Expression: "not a cron", Enabled: true})
 	assert.Error(t, err)
@@ -43,9 +43,9 @@ func TestConfiguredSchedulerRejectsInvalidExpression(t *testing.T) {
 
 func TestSchedulerTriggersConfiguredPlugin(t *testing.T) {
 	starter := &stubStarter{calls: make(chan string, 1)}
-	scheduler := NewScheduler(NewMemoryStore(), starter, log.New(io.Discard, "", 0))
+	scheduler := newScheduler(NewMemoryStore(), starter, log.New(io.Discard, "", 0))
 	require.NoError(t, scheduler.configureSchedule(Schedule{Plugin: "github", Expression: "* * * * *", Enabled: true}))
-	require.NoError(t, scheduler.Start())
+	require.NoError(t, scheduler.start())
 	defer scheduler.Stop()
 
 	// Cron schedules are minute based; the callback is verified by exercising

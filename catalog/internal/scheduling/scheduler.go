@@ -7,9 +7,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/robfig/cron/v3"
-
 	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/robfig/cron/v3"
 )
 
 type RunStarter interface {
@@ -25,16 +24,21 @@ type Scheduler struct {
 	logger  *log.Logger
 }
 
-func NewScheduler(store Store, starter RunStarter, logger *log.Logger) *Scheduler {
+// newScheduler creates an unstarted Scheduler instance with empty state.
+func newScheduler(store Store, starter RunStarter, logger *log.Logger) *Scheduler {
 	return &Scheduler{
-		store: store, starter: starter, cron: cron.New(), entries: make(map[string]cron.EntryID), logger: logger,
+		store:   store,
+		starter: starter,
+		cron:    cron.New(),
+		entries: make(map[string]cron.EntryID),
+		logger:  logger,
 	}
 }
 
-// NewConfiguredScheduler creates and starts the initial in-process scheduler.
-// The scheduler owns interpretation of plugin defaults and their registration.
+// NewConfiguredScheduler initializes, sets up default plugin schedules, and starts the scheduler.
+// The caller must call Scheduler.Stop when the scheduler is no longer needed.
 func NewConfiguredScheduler(plugins map[string]string, defaults map[string]string, starter RunStarter, logger *log.Logger) (*Scheduler, error) {
-	scheduler := NewScheduler(NewMemoryStore(), starter, logger)
+	scheduler := newScheduler(NewMemoryStore(), starter, logger)
 	for plugin := range plugins {
 		expression, configured := defaults[plugin]
 		schedule := Schedule{
@@ -46,13 +50,14 @@ func NewConfiguredScheduler(plugins map[string]string, defaults map[string]strin
 			return nil, fmt.Errorf("configuring schedule for plugin %q: %w", plugin, err)
 		}
 	}
-	if err := scheduler.Start(); err != nil {
+	if err := scheduler.start(); err != nil {
 		return nil, fmt.Errorf("starting scheduler: %w", err)
 	}
 	return scheduler, nil
 }
 
-func (s *Scheduler) Start() error {
+// start loads stored schedules, reconciles active jobs, and begins cron execution.
+func (s *Scheduler) start() error {
 	schedules, err := s.store.List()
 	if err != nil {
 		return fmt.Errorf("listing schedules: %w", err)
@@ -70,7 +75,7 @@ func (s *Scheduler) Stop() context.Context {
 	return s.cron.Stop()
 }
 
-// configureSchedule persists and activates an initial schedule from configuration.
+// configureSchedule persists a schedule to the store and reconciles its runtime state.
 func (s *Scheduler) configureSchedule(schedule Schedule) error {
 	if err := validateSchedule(schedule); err != nil {
 		return err
@@ -87,10 +92,12 @@ func (s *Scheduler) configureSchedule(schedule Schedule) error {
 func (s *Scheduler) GetSchedule(plugin string) (Schedule, error) { return s.store.Get(plugin) }
 func (s *Scheduler) ListSchedules() ([]Schedule, error)          { return s.store.List() }
 
+// reconcile synchronizes a plugin's cron job entry with its current Schedule definition.
 func (s *Scheduler) reconcile(schedule Schedule) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Remove old cron entry if it exists
 	if entryID, ok := s.entries[schedule.Plugin]; ok {
 		s.cron.Remove(entryID)
 		delete(s.entries, schedule.Plugin)
@@ -99,6 +106,7 @@ func (s *Scheduler) reconcile(schedule Schedule) error {
 		return nil
 	}
 
+	// Register new cron callback
 	entryID, err := s.cron.AddFunc(schedule.Expression, func() {
 		if _, err := s.starter.RunPluginAsync(context.Background(), schedule.Plugin); err != nil {
 			s.logf("scheduled run for plugin %q was not started: %v", schedule.Plugin, err)
