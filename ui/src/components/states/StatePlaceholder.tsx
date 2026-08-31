@@ -23,10 +23,10 @@ export default function StatePlaceholder({
       </div>
 
       <div className="flex w-[331px] flex-col items-center gap-[24px]">
-        <h3 className="text-center font-sans text-2xl font-semibold leading-6 text-[var(--Side-Bar-Text,#C2C0B6)]">
+        <h3 className="text-center font-sans text-2xl font-semibold leading-6 text-[var(--placeholder-text)]">
           {title}
         </h3>
-        <p className="text-center font-sans text-xl font-medium leading-6 text-[var(--Side-Bar-Text,#C2C0B6)]">
+        <p className="text-center font-sans text-xl font-medium leading-6 text-[var(--placeholder-text)]">
           {description}
         </p>
       </div>
