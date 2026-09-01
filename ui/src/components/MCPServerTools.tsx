@@ -36,11 +36,7 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
   const tools = useMemo(() => mcpToolsFromGraph(graph, node.name), [graph, node.name]);
 
   if (loading) {
-    return (
-      <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-        Loading tools…
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">Loading tools…</p>;
   }
 
   if (error) {
@@ -49,7 +45,7 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
 
   if (tools.length === 0) {
     return (
-      <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+      <p className="text-sm text-muted-foreground">
         This server exposes no tools. If it is unreachable its tools cannot be read — check the{' '}
         <span className="font-medium">reachable</span> property.
       </p>
@@ -58,11 +54,11 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+      <p className="text-xs text-muted-foreground">
         {tools.length} {tools.length === 1 ? 'tool' : 'tools'} exposed
       </p>
 
-      <ul className="divide-y divide-gray-200 overflow-hidden rounded-md border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
+      <ul className="divide-y divide-gray-200 overflow-hidden rounded-md border border-gray-200">
         {tools.map((tool) => (
           <li key={tool.name}>
             <button
@@ -72,36 +68,28 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
                   `/catalog/${encodeURIComponent(tool.kind)}/${encodeCatalogPath(tool.path)}`,
                 )
               }
-              className="flex w-full items-start gap-3 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:bg-background-dark-paper dark:hover:bg-white/5"
+              className="flex w-full items-start gap-3 bg-card px-4 py-3 text-left transition-colors hover:bg-gray-50"
             >
-              <Wrench
-                size={15}
-                className="mt-0.5 shrink-0 text-foreground-secondary dark:text-foreground-dark-secondary"
-              />
+              <Wrench size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="truncate font-mono text-sm font-medium text-foreground dark:text-foreground-dark-default">
+                  <span className="truncate font-mono text-sm font-medium text-foreground">
                     {tool.toolName}
                   </span>
                   {tool.title && tool.title !== tool.toolName && (
-                    <span className="truncate text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
-                      {tool.title}
-                    </span>
+                    <span className="truncate text-xs text-muted-foreground">{tool.title}</span>
                   )}
                 </div>
 
                 {tool.description && (
-                  <p className="mt-0.5 line-clamp-2 text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                     {tool.description}
                   </p>
                 )}
               </div>
 
-              <ChevronRight
-                size={15}
-                className="mt-0.5 shrink-0 text-foreground-secondary dark:text-foreground-dark-secondary"
-              />
+              <ChevronRight size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
             </button>
           </li>
         ))}
