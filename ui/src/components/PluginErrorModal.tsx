@@ -40,9 +40,7 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
         {/* Content */}
         <div className="space-y-4 overflow-y-auto p-5">
           <div>
-            <h4 className="mb-1.5 block text-xs font-medium text-gray-500">
-              Error Details
-            </h4>
+            <h4 className="mb-1.5 block text-xs font-medium text-gray-500">Error Details</h4>
             <div className="max-h-80 overflow-y-auto rounded-md border border-gray-200 bg-gray-900 p-3 font-mono text-xs leading-relaxed text-red-400">
               <pre className="whitespace-pre-wrap break-words">{error.message}</pre>
             </div>
