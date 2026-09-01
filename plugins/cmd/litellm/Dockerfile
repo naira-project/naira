@@ -1,12 +1,17 @@
 # --- Stage 1: Build ---
 FROM golang:1.26-alpine AS builder
 
-ARG PLUGIN=litellm
-
 WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
+
+# ARG declared here, not before go mod download: BuildKit's cache key for a
+# RUN includes the build-arg environment in scope at that point, so an ARG
+# declared earlier — even unused by go mod download — busts that layer's
+# cache across different plugin builds despite identical go.mod/go.sum,
+# forcing a redundant full module download per plugin image.
+ARG PLUGIN=litellm
 
 COPY plugins/pkg/ ./plugins/pkg/
 COPY plugins/internal/ ./plugins/internal/
