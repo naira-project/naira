@@ -1,0 +1,70 @@
+# envsubst template — substituted variables: ${NAMESPACE} ${ENV_ID} ${TAG}
+#
+# This scenario's litellm models come from litellm.yaml's static config, not
+# a seed script — this Job mints chatbot1 a model-scoped LiteLLM key (see
+# provision_chatbot1_key.py) and triggers a catalog plugin run, so the graph
+# is populated correctly before the assert step queries it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: seed
+  namespace: ${NAMESPACE}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: seed
+  namespace: ${NAMESPACE}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["chatbot1-secrets"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: seed
+  namespace: ${NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: seed
+subjects:
+  - kind: ServiceAccount
+    name: seed
+    namespace: ${NAMESPACE}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-${ENV_ID}
+  namespace: ${NAMESPACE}
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      serviceAccountName: seed
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: seed:${TAG}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CATALOG_URL
+              value: http://catalog.${NAMESPACE}.svc.cluster.local:8090
+            - name: KEYCLOAK_URL
+              value: http://keycloak.${NAMESPACE}.svc.cluster.local:8080
+            - name: LITELLM_URL
+              value: http://litellm.${NAMESPACE}.svc.cluster.local:4000
+            - name: LITELLM_MASTER_KEY
+              value: sk-e2elitellmmasterkey001
+            - name: POD_NAMESPACE
+              value: ${NAMESPACE}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

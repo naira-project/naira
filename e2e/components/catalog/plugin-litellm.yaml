@@ -1,0 +1,24 @@
+        - name: plugin-litellm
+          image: litellm:${TAG}
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50051"
+            - name: LITELLM_BASE_URL
+              value: http://litellm.${NAMESPACE}.svc.cluster.local:4000
+            # Plain value, not Secret-sourced — see components/litellm.yaml's
+            # comment on why: depl_uses_litellm only scans Secret-referencing
+            # env vars, and catalog holding this same key in a Secret would
+            # get catalog itself flagged as "using" litellm's models too.
+            - name: LITELLM_API_KEY
+              value: sk-e2elitellmmasterkey001
+            - name: PATH_PREFIX
+              value: litellm1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

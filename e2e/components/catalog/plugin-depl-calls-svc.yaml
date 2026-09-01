@@ -1,0 +1,16 @@
+        - name: plugin-depl-calls-svc
+          image: depl-calls-svc:${TAG}
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50053"
+            - name: DEPL_CALLS_SVC_KUBECONFIG
+              value: ""
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

@@ -92,6 +92,22 @@ spec:
             - name: realm-import
               mountPath: /opt/keycloak/data/import
               readOnly: true
+          # Liveness has always had a tight kill window (~70-90s: 30s delay +
+          # 3 failures at 20s apart) — fine once actually up, but CI runners'
+          # CPU/network variance sometimes makes a cold JVM boot take longer
+          # than that, and liveness doesn't know "still starting" from
+          # "hung" without help. startupProbe supplies that: kubelet skips
+          # liveness/readiness entirely until this succeeds once, so a slow
+          # boot just boots instead of getting killed and restarted from
+          # zero (which is what actually caused the multi-minute flakes —
+          # not one slow boot, but repeated kill-and-restart cycles).
+          # /health/started is Keycloak's dedicated startup-gating check.
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: health
+            periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /health/ready
