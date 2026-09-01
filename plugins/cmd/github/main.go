@@ -76,8 +76,7 @@ func main() {
 		app.Logger.Fatal("GITHUB_ORG is required")
 	}
 
-	p := New(app.PluginConfig, app.Logger)
-	app.Serve(p)
+	app.Serve(New(app.PluginConfig, app.Logger))
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {

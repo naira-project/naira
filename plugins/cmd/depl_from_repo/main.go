@@ -45,19 +45,14 @@ type Plugin struct {
 	config    config
 }
 
-func New(cfg config, logger *log.Logger) (*Plugin, error) {
-	return &Plugin{config: cfg, logger: logger}, nil
+func New(cfg config, logger *log.Logger) *Plugin {
+	return &Plugin{config: cfg, logger: logger}
 }
 
 func main() {
 	app := pluginmain.New[config]()
 
-	p, err := New(app.PluginConfig, app.Logger)
-	if err != nil {
-		app.Logger.Fatalf("Plugin initialization error: %v", err)
-	}
-
-	app.Serve(p)
+	app.Serve(New(app.PluginConfig, app.Logger))
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
