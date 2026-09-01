@@ -286,6 +286,8 @@ spec:
               value: http://localhost:8080/realms/naira
             - name: PLUGIN_ADDRESSES
               value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,mcp-servers=localhost:50058"
+            - name: PLUGIN_SCHEDULES
+              value: "litellm=0 0 * * *,mlflow=0 0 * * *,depl-calls-svc=0 * * * *,depl-uses-litellm=0 * * * *,fluxcd=*/1 * * * *"
           ports:
             - containerPort: 8090
               name: http
