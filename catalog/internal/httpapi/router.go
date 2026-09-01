@@ -17,7 +17,7 @@ import (
 // NewRouter wires up the catalog HTTP API.
 // catalogService serves read-only graph queries (nodes/relations);
 // runner drives and reports on asynchronous plugin runs (plugins/operations).
-func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, logger *log.Logger, kc keycloak.Config, scheduler *scheduling.Scheduler) (http.Handler, error) {
+func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, scheduler *scheduling.Scheduler, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
 	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
 	if err != nil {
 		return nil, fmt.Errorf("creating auth middleware: %w", err)

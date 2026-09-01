@@ -44,13 +44,13 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
-	defer scheduler.Stop()
+	defer scheduler.Stop(ctx)
 
-	router, err := httpapi.NewRouter(catalogService, runner, logger, keycloak.Config{
+	router, err := httpapi.NewRouter(catalogService, runner, scheduler, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 		Issuer: config.KeycloakIssuer,
-	}, scheduler)
+	})
 	if err != nil {
 		logger.Fatalf("failed to create router: %v", err)
 	}

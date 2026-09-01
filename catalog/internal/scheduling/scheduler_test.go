@@ -34,25 +34,27 @@ func TestMemoryStoreRoundTrip(t *testing.T) {
 }
 
 func TestConfiguredSchedulerRejectsInvalidExpression(t *testing.T) {
-	scheduler := newScheduler(NewMemoryStore(), &stubStarter{calls: make(chan string)}, nil)
+	plugins := map[string]string{"github": "desc"}
+	defaults := map[string]string{"github": "not a cron"}
+	starter := &stubStarter{calls: make(chan string)}
 
-	err := scheduler.configureSchedule(Schedule{Plugin: "github", Expression: "not a cron", Enabled: true})
+	_, err := NewConfiguredScheduler(plugins, defaults, starter, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid schedule expression")
 }
 
 func TestSchedulerTriggersConfiguredPlugin(t *testing.T) {
 	starter := &stubStarter{calls: make(chan string, 1)}
-	scheduler := newScheduler(NewMemoryStore(), starter, log.New(io.Discard, "", 0))
-	require.NoError(t, scheduler.configureSchedule(Schedule{Plugin: "github", Expression: "* * * * *", Enabled: true}))
-	require.NoError(t, scheduler.start())
-	defer scheduler.Stop()
+	plugins := map[string]string{"github": "desc"}
+	defaults := map[string]string{"github": "* * * * *"}
 
-	// Cron schedules are minute based; the callback is verified by exercising
+	scheduler, err := NewConfiguredScheduler(plugins, defaults, starter, log.New(io.Discard, "", 0))
+	require.NoError(t, err)
+	defer scheduler.Stop(context.Background())
+
+	// Cron schedules are minute-based; the callback is verified by exercising
 	// the registered cron entry directly through the scheduler's entry table.
-	scheduler.mu.Lock()
 	entryID := scheduler.entries["github"]
-	scheduler.mu.Unlock()
 	scheduler.cron.Entry(entryID).Job.Run()
 
 	select {
