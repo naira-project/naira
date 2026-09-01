@@ -8,7 +8,7 @@ import (
 
 var (
 	// Format SCP: git@github.com:owner/repo[.git]
-	scpPattern = regexp.MustCompile(`^git@github\.com:([^/]+)/(.+)$`)
+	scpPattern = regexp.MustCompile(`^git@github\.com:([^/]+)/([^/]+)$`)
 )
 
 // parseGitHubRepository returns the owner and repository name from a GitHub URL.

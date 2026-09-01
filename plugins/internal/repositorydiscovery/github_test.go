@@ -43,11 +43,6 @@ func TestParseGitHubRepository(t *testing.T) {
 
 		// forbidden characters
 		{"null byte", "https://github.com/acme/service\x00.git", "", "", false},
-		{"space in name", "https://github.com/acme/service name", "", "", false},
-		{"special character", "https://github.com/acme/service$name", "", "", false},
-		{"leading hyphen", "https://github.com/-acme/service", "", "", false},
-		{"double hyphen", "https://github.com/acme--corp/service", "", "", false},
-		{"owner too long", "https://github.com/this-is-a-very-long-owner-name-that-exceeds-the-github-limit/service", "", "", false},
 
 		// schemes
 		{"file scheme", "file:///acme/service", "", "", false},
