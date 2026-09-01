@@ -43,27 +43,30 @@ export default function CatalogDetail() {
   const currentTab = tabs.some((tab) => tab.value === activeTab) ? activeTab : landingTab;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background dark:bg-background-dark-default">
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
+        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-background-dark-paper">
           <button
             type="button"
             onClick={() => navigate(backPath ? `/catalog/${backPath}` : '/catalog')}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-gray-100 hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
           >
             <ArrowLeft size={16} />
             Back to catalog
           </button>
 
-          <div className="h-5 w-px bg-gray-300" />
+          <div className="h-5 w-px bg-gray-300 dark:bg-gray-600" />
 
           {node && (
             <>
-              <span className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[0.65rem] font-medium text-muted-foreground">
+              <span className="rounded-md bg-gray-100 px-2 py-0.5 font-mono text-[0.65rem] font-medium text-foreground-secondary dark:bg-white/10 dark:text-foreground-dark-secondary">
                 {node.kind}
               </span>
-              <h1 className="truncate text-sm font-semibold text-foreground" title={node.name}>
+              <h1
+                className="truncate text-sm font-semibold text-foreground dark:text-foreground-dark-default"
+                title={node.name}
+              >
                 {node.name}
               </h1>
             </>
@@ -71,14 +74,18 @@ export default function CatalogDetail() {
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {loading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {loading && (
+            <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+              Loading…
+            </p>
+          )}
 
           {error && <p className="text-sm text-red-500">{error}</p>}
 
           {!loading && !error && node && (
             <div className="flex flex-col gap-6">
               {/* Tabs */}
-              <div className="flex gap-1 border-b border-gray-200">
+              <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700">
                 {tabs.map(({ value, label }) => (
                   <button
                     type="button"
@@ -87,8 +94,8 @@ export default function CatalogDetail() {
                     className={cn(
                       'px-4 py-2 text-sm transition-colors',
                       currentTab === value
-                        ? 'border-b-2 border-primary font-semibold text-foreground'
-                        : 'text-muted-foreground hover:text-foreground',
+                        ? 'border-b-2 border-primary font-semibold text-foreground dark:text-foreground-dark-default'
+                        : 'text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default',
                     )}
                   >
                     {label}

@@ -1,11 +1,10 @@
 import { Layers, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import GenericTable from '@/components/GenericTable';
+import EmptyState from '../components/EmptyState';
+import GenericTable from '../components/GenericTable';
 import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
-import EmptyState from '../components/states/EmptyState';
-import PluginSyncState from '../components/states/PluginSyncState';
 import { Input } from '../components/ui/input';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { useKinds } from '../hooks/useKinds';
@@ -72,18 +71,6 @@ export default function CatalogView({
 
   const lastSync = useMemo(() => latestOperation(operations), [operations]);
 
-  // Whether a specific viewpoint's plugin(s) have completed at least one successful sync.
-  // Distinguishes "never synced" (show PluginSyncState) from "synced, but no data present"
-  // (show EmptyState)
-  const hasSyncedViewpointPlugin = useMemo(
-    () =>
-      operations.some(
-        (op) =>
-          op.state === 'SUCCEEDED' && (!viewpointPlugins || viewpointPlugins.includes(op.plugin)),
-      ),
-    [operations, viewpointPlugins],
-  );
-
   const handleSelect = (node: NodeResource) => {
     if (!activeKind) {
       return;
@@ -92,10 +79,10 @@ export default function CatalogView({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background dark:bg-background-dark-default">
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
+        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-background-dark-paper">
           <Input
             startAdornment={<Search size={16} />}
             placeholder="Search kinds..."
@@ -108,7 +95,7 @@ export default function CatalogView({
 
           {/* Compact last-sync indicator */}
           {lastSync && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
               <span>Last sync: {formatRelativeTime(lastSync.createdAt)}</span>
             </div>
           )}
@@ -116,17 +103,13 @@ export default function CatalogView({
 
         <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4">
           {!kindsError && !kindsLoading && kinds.length === 0 ? (
-            hasSyncedViewpointPlugin ? (
-              <EmptyState />
-            ) : (
-              <PluginSyncState pluginNames={viewpointPlugins} />
-            )
+            <EmptyState pluginNames={viewpointPlugins} />
           ) : (
             <div className="mb-6">
-              <h1 className="text-xl font-semibold text-foreground">
+              <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">
                 {heading ?? 'Catalog Explorer'}
               </h1>
-              <p className="mt-1 mb-4 text-sm text-muted-foreground">
+              <p className="mt-1 mb-4 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
                 {subheading ?? 'Select a resource kind to browse its entries.'}
               </p>
 
@@ -144,7 +127,7 @@ export default function CatalogView({
               )}
 
               {!kindsError && filteredKinds.length === 0 && !kindsLoading && (
-                <div className="mb-4 flex flex-col items-center gap-2 py-6 text-muted-foreground">
+                <div className="mb-4 flex flex-col items-center gap-2 py-6 text-foreground-secondary dark:text-foreground-dark-secondary">
                   <Layers size={32} className="opacity-40" />
                   <p className="text-sm">No kinds match your search.</p>
                 </div>
@@ -164,10 +147,16 @@ export default function CatalogView({
           {activeKind && (
             <div>
               <div className="mb-3 flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-foreground">{activeKind}</h2>
-                {nodesLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
+                <h2 className="text-sm font-semibold text-foreground dark:text-foreground-dark-default">
+                  {activeKind}
+                </h2>
+                {nodesLoading && (
+                  <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+                    Loading…
+                  </span>
+                )}
                 {!nodesLoading && !nodesError && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
                     ({filteredNodes.length} node{filteredNodes.length !== 1 ? 's' : ''})
                   </span>
                 )}

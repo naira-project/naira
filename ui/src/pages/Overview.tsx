@@ -17,10 +17,10 @@ export default function Overview() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background dark:bg-background-dark-default">
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
+        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-gray-700 dark:bg-background-dark-paper">
           <Input
             startAdornment={<Search size={16} />}
             placeholder="Search viewpoints..."
@@ -34,8 +34,10 @@ export default function Overview() {
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="mb-6 text-center">
-            <h1 className="text-xl font-semibold text-foreground">Overview</h1>
-            <p className="mt-1 mb-4 text-sm text-muted-foreground">
+            <h1 className="text-xl font-semibold text-foreground dark:text-foreground-dark-default">
+              Overview
+            </h1>
+            <p className="mt-1 mb-4 text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
               Select a viewpoint to browse its catalog.
             </p>
           </div>
@@ -47,10 +49,10 @@ export default function Overview() {
                 className="cursor-pointer transition-shadow hover:shadow-md"
               >
                 <CardContent>
-                  <h3 className="text-sm text-center font-semibold text-foreground">
+                  <h3 className="text-sm text-center font-semibold text-foreground dark:text-foreground-dark-default">
                     {viewpoint.heading}
                   </h3>
-                  <p className="mt-1 text-xs text-center text-muted-foreground">
+                  <p className="mt-1 text-xs text-center text-foreground-secondary dark:text-foreground-dark-secondary">
                     {viewpoint.subheading}
                   </p>
                 </CardContent>

@@ -32,15 +32,19 @@ export default function PropertiesPanel({
   const keys = Object.keys(props).sort();
 
   if (keys.length === 0) {
-    return <div className="text-sm text-muted-foreground">No properties.</div>;
+    return (
+      <div className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+        No properties.
+      </div>
+    );
   }
 
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary">
         {title}
       </h3>
-      <div className="divide-y divide-gray-200 rounded-lg border border-gray-200">
+      <div className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
         {keys.map((key) => (
           <PropertyRow key={key} name={key} value={props[key]} layout={layout} />
         ))}
@@ -68,8 +72,8 @@ function PropertyRow({
     <span
       className={
         stacked
-          ? 'block font-mono text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground'
-          : 'min-w-[160px] max-w-[200px] shrink-0 font-mono text-xs font-medium text-muted-foreground'
+          ? 'block font-mono text-[0.65rem] font-medium uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary'
+          : 'min-w-[160px] max-w-[200px] shrink-0 font-mono text-xs font-medium text-foreground-secondary dark:text-foreground-dark-secondary'
       }
     >
       {name}
@@ -80,7 +84,7 @@ function PropertyRow({
     <button
       type="button"
       onClick={() => setExpanded((v) => !v)}
-      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      className="flex items-center gap-1 text-xs text-foreground-secondary hover:text-foreground dark:text-foreground-dark-secondary dark:hover:text-foreground-dark-default"
     >
       {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
       {expanded ? 'Collapse' : 'Expand'}
@@ -100,11 +104,13 @@ function PropertyRow({
       {String(value)}
     </a>
   ) : (
-    <span className="break-words font-mono text-xs text-foreground">{String(value ?? '—')}</span>
+    <span className="break-words font-mono text-xs text-foreground dark:text-foreground-dark-default">
+      {String(value ?? '—')}
+    </span>
   );
 
   return (
-    <div className={`group relative px-4 py-2.5 text-sm hover:bg-gray-50`}>
+    <div className={`group relative px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5`}>
       {stacked ? (
         <div className="space-y-1 pr-6">
           {keyEl}
@@ -119,7 +125,7 @@ function PropertyRow({
 
       {isComplex && expanded && (
         <pre
-          className={`mt-2 overflow-x-auto rounded-md bg-gray-100 p-3 text-xs ${stacked ? '' : 'ml-[172px]'}`}
+          className={`mt-2 overflow-x-auto rounded-md bg-gray-100 p-3 text-xs dark:bg-white/10 ${stacked ? '' : 'ml-[172px]'}`}
         >
           {JSON.stringify(parsedComplex, null, 2)}
         </pre>
