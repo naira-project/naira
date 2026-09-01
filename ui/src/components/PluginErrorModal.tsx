@@ -16,10 +16,7 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
       role="dialog"
       aria-modal="true"
     >
-      <div
-        className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-lg bg-card shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="flex max-h-[85vh] w-full max-w-xl flex-col rounded-lg bg-card shadow-2xl">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4">
           <div className="flex items-center gap-2.5">
