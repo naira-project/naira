@@ -35,13 +35,13 @@ jobs:
             exit 1
           fi
 
-  # ── 2. Go unit tests (catalog service) ────────────────────────────────────
+  # ── 2. Go unit tests ──────────────────────────────────────────────────────
   go-test:
-    name: Test · Catalog
+    name: Test
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-go-test.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
     with:
       go-version: "1.26"
-      working-directory: "catalog"
+      working-directory: "."
       run-race-detector: true
       # Threshold is 0 (informational only) until a baseline is established;
       # revisit once the test suite reaches meaningful coverage.
