@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Tears down a `full`-profile E2E environment. Namespace deletion removes
-# everything namespace-scoped, including Helm-managed resources — there is no
-# separate Cleanup Job or GC sweeper under `full` (see the RFC's "Clean Slate").
-# ClusterRoles/ClusterRoleBindings are cluster-scoped and survive namespace
-# deletion, so they're removed explicitly by the naira.io/env-id label.
+# Tears down an E2E environment. Namespace deletion removes everything
+# namespace-scoped, including Helm-managed resources — there is no separate
+# Cleanup Job or GC sweeper. ClusterRoles/ClusterRoleBindings are
+# cluster-scoped and survive namespace deletion, so they're removed
+# explicitly by the naira.io/env-id label.
 #
 # Usage: destroy-environment.sh --env-id <ID> [--cluster-name <NAME>]
 set -euo pipefail
 
-CLUSTER_NAME="naira-e2e"
+CLUSTER_NAME="naira-idp-e2e"
 ENV_ID=""
 
 usage() {

@@ -1,9 +1,23 @@
 # envsubst template — substituted variables: ${NAMESPACE}
 #
-# `full` profile only. The DATABASE_URL below points at the per-PR postgres
-# Service (deploy/e2e/postgres.yaml) in this same namespace — the dev manifest's
-# equivalent points cross-namespace at postgres.litellm-db, which does not apply
-# here since postgres is deployed per-PR alongside litellm, not shared.
+# Minimal config for the litellm_chatbot_to_catalog_api scenario: exactly the
+# 2 models it asserts on (openai, mistral). Fake provider keys are fine —
+# LiteLLM lists models via /v1/models regardless of whether the underlying
+# provider key is real. DATABASE_URL points at components/postgres.yaml:
+# unlike everything else here, LiteLLM's virtual-key management genuinely
+# needs a database (/key/generate 500s with "DB not connected" otherwise) —
+# the seed step (seed/provision_chatbot1_key.py) uses it to mint chatbot1 a
+# key scoped to just the "openai" model, so depl_uses_litellm's discovered
+# edge is exactly chatbot1 -> openai, not every model on this instance.
+#
+# LITELLM_MASTER_KEY is a real, well-formed key (matches depl_uses_litellm's
+# default ^sk-.{22}$ detection regexp) — chatbot1 (components/chatbot1.yaml)
+# authenticates to LiteLLM with the same value. depl_uses_litellm discovers
+# a Deployment by scanning for *Secret-sourced* env values matching that
+# regexp, so the master key deliberately stays a plain container env value
+# here (not sourced from litellm-secrets) — otherwise litellm's own pod,
+# which necessarily holds its own master key, would also get flagged as
+# "using" its own models, breaking the exactly-1-relation assertion.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -11,11 +25,8 @@ metadata:
   namespace: ${NAMESPACE}
 type: Opaque
 stringData:
-  LITELLM_MASTER_KEY: sk-local-litellm
   OPENAI_API_KEY: change-me
-  ANTHROPIC_API_KEY: change-me
-  GEMINI_API_KEY: change-me
-  OPENROUTER_API_KEY: change-me
+  MISTRAL_API_KEY: change-me
   DATABASE_URL: postgresql://litellm:litellm-local-password@postgres.${NAMESPACE}.svc.cluster.local:5432/litellm
 ---
 apiVersion: v1
@@ -26,31 +37,14 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      - model_name: idp-gpt-4o-mini
+      - model_name: openai
         litellm_params:
           model: openai/gpt-4o-mini
           api_key: os.environ/OPENAI_API_KEY
-      - model_name: idp-claude-sonnet
+      - model_name: mistral
         litellm_params:
-          model: anthropic/claude-3-5-sonnet-latest
-          api_key: os.environ/ANTHROPIC_API_KEY
-      - model_name: idp-gemini-flash
-        litellm_params:
-          model: gemini/gemini-2.0-flash
-          api_key: os.environ/GEMINI_API_KEY
-      - model_name: idp-embedding-small
-        litellm_params:
-          model: openai/text-embedding-3-small
-          api_key: os.environ/OPENAI_API_KEY
-      - model_name: openrouter-gpt-3.5-turbo
-        litellm_params:
-          model: openrouter/openai/gpt-3.5-turbo
-          api_key: os.environ/OPENROUTER_API_KEY
-
-    litellm_settings:
-      callbacks:
-        - prometheus
-      prometheus_initialize_budget_metrics: true
+          model: mistral/mistral-small-latest
+          api_key: os.environ/MISTRAL_API_KEY
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -78,6 +72,9 @@ spec:
             - "4000"
             - --host
             - 0.0.0.0
+          env:
+            - name: LITELLM_MASTER_KEY
+              value: sk-e2elitellmmasterkey001
           envFrom:
             - secretRef:
                 name: litellm-secrets
@@ -89,6 +86,16 @@ spec:
               mountPath: /app/config.yaml
               subPath: config.yaml
               readOnly: true
+          # Same reasoning as keycloak's startupProbe (components/keycloak.yaml)
+          # — livenessProbe's ~100s kill window (40s delay + 3 failures at
+          # 20s apart) has been observed killing a still-booting litellm on
+          # CI runners under resource pressure, not a genuinely hung one.
+          startupProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /health/readiness

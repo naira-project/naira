@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Naira Project Contributors
 # SPDX-License-Identifier: Apache-2.0
 #
-# Deploys the full platform into an isolated namespace on a throwaway kind
-# cluster and runs the E2E suite against it. 
+# Deploys the litellm_chatbot_to_catalog_api scenario (see e2e/README.md)
+# into an isolated namespace on a throwaway kind cluster and runs its
+# assertions against it.
 #
 # `workflow_dispatch`-only for now, deliberately: this is a new, unvalidated
 # ~7-13 minute job. Switch the `on:` block to `pull_request` once a run has
@@ -31,7 +32,7 @@ env:
 
 jobs:
   e2e:
-    name: E2E · full profile
+    name: E2E · litellm_chatbot_to_catalog_api
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,14 +40,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
-
-      # deploy/e2e's full profile brings in OpenMetadata (server + MySQL +
-      # OpenSearch) plus ~9 locally-built images. ubuntu-latest ships with
-      # toolchains this job doesn't use — reclaim their space first.
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          df -h /
 
       - name: Install kind
         run: |
@@ -86,12 +79,12 @@ jobs:
         run: echo "ENV_ID=pr-${{ steps.pr.outputs.number }}-${{ github.run_id }}" >> "$GITHUB_ENV"
 
       - name: Create kind cluster
-        run: kind create cluster --config deploy/e2e/kind-config.yaml
+        run: kind create cluster --config e2e/base/kind-config.yaml
 
       - name: Create E2E environment
         run: |
-          ./deploy/e2e/scripts/create-environment.sh \
-            --profile full \
+          ./e2e/scripts/create-environment.sh \
+            --scenario litellm_chatbot_to_catalog_api \
             --env-id "${ENV_ID}" \
             --tag "${{ github.sha }}" \
             --cluster-name "${CLUSTER_NAME}"
@@ -111,7 +104,7 @@ jobs:
 
       # The catalog API requires a Bearer token (Keycloak auth integration).
       # E2E tests fetch their own token via KEYCLOAK_URL — see authToken() in
-      # tests/e2e/smoke_test.go.
+      # e2e/litellm_chatbot_to_catalog_api/assert/assert_test.go.
       - name: Port-forward keycloak
         run: |
           kubectl -n "${ENV_ID}" port-forward svc/keycloak 8080:8080 &
@@ -132,7 +125,7 @@ jobs:
         env:
           CATALOG_URL: http://localhost:8090
           KEYCLOAK_URL: http://localhost:8080
-        run: go test -tags e2e -v ./tests/e2e/...
+        run: go test -tags e2e -v ./e2e/litellm_chatbot_to_catalog_api/assert/...
 
       - name: Stop port-forwards
         if: always()
@@ -152,6 +145,6 @@ jobs:
       - name: Destroy environment
         if: always()
         run: |
-          ./deploy/e2e/scripts/destroy-environment.sh \
+          ./e2e/scripts/destroy-environment.sh \
             --env-id "${ENV_ID}" \
             --cluster-name "${CLUSTER_NAME}"

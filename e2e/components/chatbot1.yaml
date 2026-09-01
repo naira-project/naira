@@ -1,0 +1,74 @@
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
+#
+# LITELLM_API_KEY must match depl_uses_litellm's default key-detection
+# regexp (^sk-.{22}$) and must actually authenticate against the litellm
+# component (components/litellm.yaml) — it's the same LITELLM_MASTER_KEY
+# value, so the plugin's live /v1/models probe against that key succeeds.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: chatbot1-secrets
+  namespace: ${NAMESPACE}
+type: Opaque
+stringData:
+  LITELLM_API_KEY: sk-e2elitellmmasterkey001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbot1
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chatbot1
+  template:
+    metadata:
+      labels:
+        app: chatbot1
+    spec:
+      containers:
+        - name: chatbot1
+          image: chatbot1:${TAG}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LITELLM_API_URL
+              value: http://litellm.${NAMESPACE}.svc.cluster.local:4000
+            - name: LITELLM_MODEL
+              value: openai
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chatbot1-secrets
+                  key: LITELLM_API_KEY
+          ports:
+            - containerPort: 8501
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatbot1
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: chatbot1
+  ports:
+    - name: http
+      port: 8501
+      targetPort: http
+  type: ClusterIP
