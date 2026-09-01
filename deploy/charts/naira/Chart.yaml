@@ -1,0 +1,17 @@
+apiVersion: v2
+name: naira
+description: An umbrella Helm chart for the Naira application stack
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.29.0-0"
+dependencies:
+  - name: catalog
+    version: 0.1.0
+    repository: oci://ghcr.io/naira-project/charts
+  - name: ui
+    version: 0.1.0
+    repository: oci://ghcr.io/naira-project/charts
+  - name: portal
+    version: 0.1.0
+    repository: oci://ghcr.io/naira-project/charts
