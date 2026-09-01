@@ -177,14 +177,6 @@ export async function fetchSchedules(token: string | null): Promise<ScheduleReso
   return data.schedules ?? [];
 }
 
-/** GET /v1/{plugin}/schedule — returns one plugin's effective schedule. */
-export async function fetchSchedule(
-  token: string | null,
-  plugin: string,
-): Promise<ScheduleResource> {
-  return fetchJson<ScheduleResource>(`/v1/${encodeURIComponent(plugin)}/schedule`, token);
-}
-
 // ---------------------------------------------------------------------------
 // Plugin run operations (AIP-151)
 // ---------------------------------------------------------------------------
