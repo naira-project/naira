@@ -209,21 +209,3 @@ func CanonicalPath(rawURL string) string {
 func githubCanonicalPath(owner, name string) string {
 	return "github.com/" + strings.ToLower(owner+"/"+name)
 }
-
-// parseGitHubRepository returns the owner and repository name from a GitHub URL.
-func parseGitHubRepository(rawURL string) (owner, name string, ok bool) {
-	value := strings.TrimSpace(rawURL)
-	value = strings.TrimPrefix(value, "git@github.com:")
-	value = strings.TrimPrefix(value, "https://")
-	value = strings.TrimPrefix(value, "http://")
-	value = strings.TrimPrefix(value, "github.com/")
-	if strings.Contains(value, "://") || strings.Contains(value, "@") {
-		return "", "", false
-	}
-	value = strings.TrimSuffix(value, ".git")
-	parts := strings.Split(strings.Trim(value, "/"), "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
-	}
-	return parts[0], parts[1], true
-}
