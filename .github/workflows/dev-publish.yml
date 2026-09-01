@@ -120,6 +120,7 @@ jobs:
       platforms: "linux/amd64,linux/arm64"
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   container-publish-plugin-mcp-servers:
     name: Publish · Plugin MCP Servers
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
@@ -141,6 +142,7 @@ jobs:
       platforms: "linux/amd64,linux/arm64"
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
+      
   container-publish-plugin-github:
     name: Publish · Plugin GitHub
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
