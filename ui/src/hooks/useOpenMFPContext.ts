@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from 'react';
 import * as LuigiClient from '@luigi-project/client';
+import { useSyncExternalStore } from 'react';
 
 export interface OpenMFPContext {
   token: string | null;
@@ -21,7 +21,9 @@ const subscribers = new Set<() => void>();
 let started = false;
 
 function notify() {
-  subscribers.forEach((listener) => listener());
+  subscribers.forEach((listener) => {
+    listener();
+  });
 }
 
 function stringOrNull(value: unknown): string | null {

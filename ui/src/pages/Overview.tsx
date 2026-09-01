@@ -1,8 +1,8 @@
+import { Search } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Search } from 'lucide-react';
-import { Input } from '../components/ui/input';
 import { Card, CardContent } from '../components/ui/card';
+import { Input } from '../components/ui/input';
 import { CATALOG_VIEWPOINTS } from '../config/viewpoints';
 
 /**
@@ -13,7 +13,7 @@ export default function Overview() {
   const [search, setSearch] = useState('');
 
   const filteredViewpoints = CATALOG_VIEWPOINTS.filter((viewpoint) =>
-    viewpoint.heading.toLowerCase().includes(search.toLowerCase())
+    viewpoint.heading.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
@@ -58,6 +58,7 @@ export default function Overview() {
                 </CardContent>
                 <div className="px-4 pb-4">
                   <button
+                    type="button"
                     onClick={() => navigate(`/catalog/${viewpoint.path}`)}
                     className="flex w-full items-center justify-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
                   >

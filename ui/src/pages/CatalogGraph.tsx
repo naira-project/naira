@@ -1,32 +1,33 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
-import {
-  ArrowRight,
-  Focus,
-  GitBranch,
-  Network,
-  Share2,
-} from 'lucide-react';
 import {
   Background,
   Controls,
+  type Edge,
   MarkerType,
   MiniMap,
+  type Node,
+  Position,
   ReactFlow,
+  type ReactFlowInstance,
   useEdgesState,
   useNodesState,
-  type Edge,
-  type Node,
-  type ReactFlowInstance,
 } from '@xyflow/react';
+import { ArrowRight, Focus, GitBranch, Network, Share2 } from 'lucide-react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import '@xyflow/react/dist/style.css';
 
+import PropertiesPanel from '../components/PropertiesPanel';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Separator } from '../components/ui/separator';
-import { useCatalogGraph, type CatalogGraphEdge, type CatalogGraphNode, type CatalogGraphRoot } from '../hooks/useCatalogGraph';
-import PropertiesPanel from '../components/PropertiesPanel';
+import {
+  type CatalogGraphEdge,
+  type CatalogGraphNode,
+  type CatalogGraphRoot,
+  useCatalogGraph,
+} from '../hooks/useCatalogGraph';
 
 // TODO: how to make in a way that is not hardcoded?
 const typePalette: Record<string, { fill: string; stroke: string }> = {
@@ -40,10 +41,16 @@ const typePalette: Record<string, { fill: string; stroke: string }> = {
   git_repository: { fill: '#e0e7ff', stroke: '#3730a3' },
 };
 
+/** Depth of the graph slice loaded when the tab is first opened. */
+const DEFAULT_DEPTH = 2;
+/** Horizontal distance between two consecutive depth columns. */
+const COLUMN_SPACING = 300;
+/** Vertical distance between two nodes of the same depth column. */
+const ROW_SPACING = 150;
+
 function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
-
 
 function toFlowNode(
   node: CatalogGraphNode,
@@ -56,14 +63,15 @@ function toFlowNode(
     <div className="flex gap-2 text-left h-full">
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
-          <span 
-            className="text-[10px] font-bold uppercase tracking-wider truncate" 
+          <span
+            className="text-[10px] font-bold uppercase tracking-wider truncate"
             style={{ color: palette.stroke }}
           >
             {node.kind}
           </span>
           {!node.isRoot && (
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onFocus(node);
@@ -85,6 +93,8 @@ function toFlowNode(
   return {
     id: graphNodeId(node),
     position,
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
     data: {
       label: displayLabel,
       path: node.path,
@@ -111,7 +121,9 @@ function toFlowNode(
 
 function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode) => void): Node[] {
   const grouped = new Map<number, CatalogGraphNode[]>();
-  const sortedDepths = Array.from(new Set(nodes.map((node) => node.depth))).sort((left, right) => left - right);
+  const sortedDepths = Array.from(new Set(nodes.map((node) => node.depth))).sort(
+    (left, right) => left - right,
+  );
   const depthOffsets = new Map(sortedDepths.map((depth, index) => [depth, index]));
 
   for (const node of nodes) {
@@ -132,11 +144,20 @@ function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode
         return left.kind.localeCompare(right.kind);
       });
 
+      // Centring the column keeps neighbours roughly level with each other
+      const columnOffset = ((orderedNodes.length - 1) * ROW_SPACING) / 2;
+
       orderedNodes.forEach((node, index) => {
-        positioned.push(toFlowNode(node, {
-          x: (depthOffsets.get(depth) ?? 0) * 300,
-          y: index * 150,
-        }, onFocus));
+        positioned.push(
+          toFlowNode(
+            node,
+            {
+              x: (depthOffsets.get(depth) ?? 0) * COLUMN_SPACING,
+              y: index * ROW_SPACING - columnOffset,
+            },
+            onFocus,
+          ),
+        );
       });
     });
 
@@ -144,6 +165,9 @@ function layoutNodes(nodes: CatalogGraphNode[], onFocus: (node: CatalogGraphNode
 }
 
 function toFlowEdge(edge: CatalogGraphEdge): Edge {
+  const color = edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a';
+  const labelColor = edge.direction === 'incoming' ? '#5e3789' : '#24455f';
+
   return {
     id: edge.id,
     source: edge.fromNode,
@@ -154,14 +178,14 @@ function toFlowEdge(edge: CatalogGraphEdge): Edge {
       type: MarkerType.ArrowClosed,
       width: 18,
       height: 18,
-      color: edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a',
+      color,
     },
     style: {
-      stroke: edge.direction === 'incoming' ? '#7b4bb3' : '#3b6a8a',
+      stroke: color,
       strokeWidth: 2,
     },
     labelStyle: {
-      fill: edge.direction === 'incoming' ? '#5e3789' : '#24455f',
+      fill: labelColor,
       fontWeight: 700,
       fontSize: 11,
     },
@@ -178,7 +202,7 @@ type CatalogGraphProps = {
 
 export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const navigate = useNavigate();
-  const [depth, setDepth] = useState(1);
+  const [depth, setDepth] = useState(DEFAULT_DEPTH);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { graph, loading, error } = useCatalogGraph(rootNode, depth);
 
@@ -189,21 +213,31 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
   const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const instanceRef = useRef<ReactFlowInstance | null>(null);
 
+  const handleFocusNode = useCallback(
+    (graphNode: CatalogGraphNode) => {
+      navigate(
+        `/catalog/${encodeURIComponent(graphNode.kind)}/${encodeURIComponent(graphNode.path)}`,
+      );
+    },
+    [navigate],
+  );
+
   useEffect(() => {
     setFlowNodes(layoutNodes(graph.nodes, handleFocusNode));
     setFlowEdges(graph.edges.map(toFlowEdge));
-  }, [graph, setFlowNodes, setFlowEdges]);
+  }, [graph, setFlowNodes, setFlowEdges, handleFocusNode]);
 
   // Auto-fit view after each layout change (e.g., depth change).
   useEffect(() => {
     requestAnimationFrame(() => {
       instanceRef.current?.fitView({
-        maxZoom: 1,   // Prevents from zooming in too much in default view
+        maxZoom: 1, // Prevents from zooming in too much in default view
       });
     });
-  }, [graph]);
+  }, []);
 
-  const selectedNode = graph.nodes.find((node) => graphNodeId(node) === selectedNodeId) ?? graph.nodes[0] ?? null;
+  const selectedNode =
+    graph.nodes.find((node) => graphNodeId(node) === selectedNodeId) ?? graph.nodes[0] ?? null;
   const incomingCount = graph.edges.filter((edge) => edge.direction === 'incoming').length;
   const outgoingCount = graph.edges.filter((edge) => edge.direction === 'outgoing').length;
 
@@ -211,19 +245,19 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
     setSelectedNodeId(node.id);
   };
 
-  const handleFocusNode = (graphNode: CatalogGraphNode) => {
-    navigate(`/catalog/${encodeURIComponent(graphNode.kind)}/${encodeURIComponent(graphNode.path)}`);
-  };
-
   return (
     <div className="flex flex-col gap-3">
       {/* Compact toolbar: depth controls + inline stats */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary">
+          <label
+            htmlFor="catalog-graph-depth"
+            className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-foreground-secondary"
+          >
             Depth
           </label>
           <Input
+            id="catalog-graph-depth"
             type="number"
             min={1}
             value={depth}
@@ -263,7 +297,9 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
           <div className="relative h-[580px]">
             {loading && (
               <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/85 dark:bg-background-dark-paper/85">
-                <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">Loading graph...</p>
+                <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
+                  Loading graph...
+                </p>
               </div>
             )}
 
@@ -294,7 +330,10 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
                 zoomable
                 nodeColor={(node) => {
                   const typedNode = graph.nodes.find((item) => graphNodeId(item) === node.id);
-                  const palette = typePalette[typedNode?.kind ?? ''] ?? { fill: '#ced6de', stroke: '#94a3b8' };
+                  const palette = typePalette[typedNode?.kind ?? ''] ?? {
+                    fill: '#ced6de',
+                    stroke: '#94a3b8',
+                  };
                   return typedNode?.isRoot ? '#0f5c61' : palette.stroke;
                 }}
               />

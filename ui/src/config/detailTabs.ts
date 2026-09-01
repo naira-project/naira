@@ -1,10 +1,10 @@
 import type { ComponentType } from 'react';
-import type { NodeResource } from '../lib/catalogApi';
 import MCPServerTools, { MCP_SERVER_KIND } from '../components/MCPServerTools';
+import type { NodeResource } from '../lib/catalogApi';
 
 /**
  * Extra detail-page tabs, per node kind.
- * Every node gets Graph and Properties. 
+ * Every node gets Graph and Properties.
  */
 export interface KindDetailTab {
   value: string;

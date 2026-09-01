@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { computeRelationSummaries, RelationSummary } from '../lib/kindUtils';
-import { NodeResource } from '../lib/catalogApi';
+import type { NodeResource } from '../lib/catalogApi';
+import { computeRelationSummaries, type RelationSummary } from '../lib/kindUtils';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
 

@@ -1,8 +1,8 @@
+import { ChevronRight, Wrench } from 'lucide-react';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import { Wrench, ChevronRight } from 'lucide-react';
-import { useCatalogGraph, type CatalogGraphResponse } from '../hooks/useCatalogGraph';
-import { encodeCatalogPath, NodeResource } from '../lib/catalogApi';
+import { type CatalogGraphResponse, useCatalogGraph } from '../hooks/useCatalogGraph';
+import { encodeCatalogPath, type NodeResource } from '../lib/catalogApi';
 import { parsePath } from '../lib/kindUtils';
 
 export const MCP_SERVER_KIND = 'mcp_server';
@@ -50,8 +50,8 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
   if (tools.length === 0) {
     return (
       <p className="text-sm text-foreground-secondary dark:text-foreground-dark-secondary">
-        This server exposes no tools. If it is unreachable its tools cannot be read — check
-        the <span className="font-medium">reachable</span> property.
+        This server exposes no tools. If it is unreachable its tools cannot be read — check the{' '}
+        <span className="font-medium">reachable</span> property.
       </p>
     );
   }
@@ -66,8 +66,11 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
         {tools.map((tool) => (
           <li key={tool.name}>
             <button
+              type="button"
               onClick={() =>
-                navigate(`/catalog/${encodeURIComponent(tool.kind)}/${encodeCatalogPath(tool.path)}`)
+                navigate(
+                  `/catalog/${encodeURIComponent(tool.kind)}/${encodeCatalogPath(tool.path)}`,
+                )
               }
               className="flex w-full items-start gap-3 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:bg-background-dark-paper dark:hover:bg-white/5"
             >
@@ -116,7 +119,7 @@ function mcpToolsFromGraph(graph: CatalogGraphResponse, serverName: string): MCP
   const exposed = new Set(
     graph.edges
       .filter((edge) => edge.kind === EXPOSES_RELATION && edge.fromNode === serverName)
-      .map((edge) => edge.toNode)
+      .map((edge) => edge.toNode),
   );
 
   return graph.nodes
@@ -126,8 +129,9 @@ function mcpToolsFromGraph(graph: CatalogGraphResponse, serverName: string): MCP
       kind: node.kind,
       path: node.path,
       toolName: parsePath(node.path).name,
-      title: node.properties?.title,
-      description: node.properties?.description,
+      title: typeof node.properties?.title === 'string' ? node.properties.title : undefined,
+      description:
+        typeof node.properties?.description === 'string' ? node.properties.description : undefined,
     }))
     .sort((a, b) => a.toolName.localeCompare(b.toolName));
 }

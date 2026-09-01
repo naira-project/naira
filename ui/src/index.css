@@ -9,7 +9,7 @@
 
   body {
     margin: 0;
-    font-family: 'Inter', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+    font-family: "Inter", "Roboto", "Helvetica", "Arial", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: #f0fafa;
@@ -22,6 +22,11 @@
   }
 
   code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
   }
+}
+
+/* Remove weird edge anchor point for graph nodes */
+.react-flow .react-flow__handle {
+  opacity: 0;
 }

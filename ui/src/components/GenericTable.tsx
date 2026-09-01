@@ -1,7 +1,13 @@
+import { ArrowDownRight, ArrowUpRight, Info } from 'lucide-react';
 import { useMemo } from 'react';
-import { Info, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { NodeResource, nodeProps } from '../lib/catalogApi';
-import { inferColumns, formatPropValue, parsePath,  namespaceColumnLabel, RelationSummary } from '../lib/kindUtils';
+import { type NodeResource, nodeProps } from '../lib/catalogApi';
+import {
+  formatPropValue,
+  inferColumns,
+  namespaceColumnLabel,
+  parsePath,
+  type RelationSummary,
+} from '../lib/kindUtils';
 import EmptyState from './EmptyState';
 
 interface GenericTableProps {
@@ -40,7 +46,7 @@ export default function GenericTable({
 }: GenericTableProps) {
   const parsedPaths = useMemo(
     () => new Map(nodes.map((n) => [n.name, parsePath(n.path)])),
-    [nodes]
+    [nodes],
   );
 
   // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
@@ -48,7 +54,7 @@ export default function GenericTable({
   const columns = useMemo(() => inferColumns(nodes), [nodes]);
   const pluginColumns = useMemo(
     () => configuredColumns ?? columns.slice(2),
-    [configuredColumns?.join(','), columns]
+    [configuredColumns, columns],
   );
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
@@ -70,8 +76,7 @@ export default function GenericTable({
     return <EmptyState />;
   }
 
-  const headerCell =
-    'flex items-center h-full bg-gray-50 px-4 py-2.5 dark:bg-white/5';
+  const headerCell = 'flex items-center h-full bg-gray-50 px-4 py-2.5 dark:bg-white/5';
   const labelText =
     'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-foreground-secondary dark:text-foreground-dark-secondary';
   const groupText =
@@ -102,22 +107,17 @@ export default function GenericTable({
           <span className={labelText}>name</span>
         </div>
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
-           <span className={labelText}>{namespaceLabel}</span>
+          <span className={labelText}>{namespaceLabel}</span>
         </div>
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
           <span className={labelText}>Relations</span>
         </div>
         {pluginColumns.map((col) => (
-          <div
-            key={col}
-            className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
-          >
+          <div key={col} className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
             <span className={labelText}>{col}</span>
           </div>
         ))}
-        <div
-          className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}
-        />
+        <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`} />
         <div className={`${headerCell} border-b border-gray-200 dark:border-gray-700`}>
           <span className={labelText}>Actions</span>
         </div>
@@ -159,10 +159,7 @@ export default function GenericTable({
               {pluginColumns.map((col) => {
                 const value = props[col];
                 return (
-                  <div
-                    key={col}
-                    className={`${cellBase}`}
-                  >
+                  <div key={col} className={`${cellBase}`}>
                     <span
                       className="truncate text-sm italic text-foreground-secondary/75 dark:text-foreground-dark-secondary/70"
                       title={typeof value === 'string' ? value : undefined}
@@ -174,12 +171,11 @@ export default function GenericTable({
               })}
 
               {/* Spacer — absorbs leftover width so only Actions sits on the right */}
-              <div
-                className={`${cellBase}`}
-              />
+              <div className={`${cellBase}`} />
 
               <div className={`${cellBase} ${isLastRow ? 'rounded-br-lg' : ''}`}>
                 <button
+                  type="button"
                   onClick={() => onSelect(node)}
                   className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-foreground-secondary hover:bg-gray-100 hover:text-foreground dark:text-foreground-dark-secondary dark:hover:bg-white/10 dark:hover:text-foreground-dark-default transition-colors"
                   title="View details"
@@ -207,7 +203,11 @@ function RelationCell({
   const summary = summaries.get(nodeName);
 
   if (!summary) {
-    return <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">—</span>;
+    return (
+      <span className="text-xs text-foreground-secondary dark:text-foreground-dark-secondary">
+        —
+      </span>
+    );
   }
 
   const relationKinds = Object.keys(summary).sort();
