@@ -11,7 +11,6 @@ import { CATALOG_VIEWPOINTS } from '../config/viewpoints';
 export default function Overview() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
-  debugger; // temporary: verifying PR-validation lint annotations, remove before merge
 
   const filteredViewpoints = CATALOG_VIEWPOINTS.filter((viewpoint) =>
     viewpoint.heading.toLowerCase().includes(search.toLowerCase()),
