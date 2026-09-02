@@ -70,8 +70,12 @@ jobs:
 
       - name: Run checks
         run: |
+          set -o pipefail
           npx tsc -b
-          npx biome ci --reporter=github .
+          # biome reports paths relative to this job's working-directory (ui/), but
+          # GitHub Actions resolves annotation `file=` paths relative to the repo
+          # root, so prefix them to make inline PR annotations line up correctly.
+          npx biome ci --reporter=github . | sed -E 's/(file=)/\1ui\//'
 
   # ── 4. Container build — catalog (build-only, no push on PRs) ─────────────
   container-build-catalog:
