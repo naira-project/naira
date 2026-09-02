@@ -21,25 +21,13 @@ func (s *stubStarter) RunPluginAsync(_ context.Context, plugin string) (operatio
 	return operations.Operation{Plugin: plugin}, nil
 }
 
-func TestMemoryStoreRoundTrip(t *testing.T) {
-	store := NewMemoryStore()
-	schedule := Schedule{Plugin: " GitHub ", Expression: "*/5 * * * *", Enabled: true}
-
-	require.NoError(t, store.Upsert(schedule))
-	got, err := store.Get("github")
-	require.NoError(t, err)
-	assert.Equal(t, "github", got.Plugin)
-	assert.Equal(t, schedule.Expression, got.Expression)
-	assert.False(t, got.UpdatedAt.IsZero())
-}
-
 func TestConfiguredSchedulerRejectsInvalidExpression(t *testing.T) {
 	schedules := map[string]string{"github": "not a cron"}
 	starter := &stubStarter{calls: make(chan string)}
 
 	_, err := NewConfiguredScheduler(schedules, starter, nil)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid schedule expression")
+	assert.Contains(t, err.Error(), "registering schedule for plugin")
 }
 
 func TestSchedulerTriggersConfiguredPlugin(t *testing.T) {
@@ -50,10 +38,10 @@ func TestSchedulerTriggersConfiguredPlugin(t *testing.T) {
 	require.NoError(t, err)
 	defer scheduler.Stop(context.Background())
 
-	// Cron schedules are minute-based; the callback is verified by exercising
-	// the registered cron entry directly through the scheduler's entry table.
-	entryID := scheduler.entries["github"]
-	scheduler.cron.Entry(entryID).Job.Run()
+	// Fetch registered entries directly from the cron instance and trigger the job manually
+	entries := scheduler.cron.Entries()
+	require.Len(t, entries, 1)
+	entries[0].Job.Run()
 
 	select {
 	case plugin := <-starter.calls:

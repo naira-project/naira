@@ -47,7 +47,7 @@ func newStartedScheduleTestScheduler(t *testing.T, schedules ...scheduling.Sched
 
 	scheduleMap := make(map[string]string, len(schedules))
 	for _, schedule := range schedules {
-		if schedule.Enabled && schedule.Expression != "" {
+		if schedule.Expression != "" {
 			scheduleMap[schedule.Plugin] = schedule.Expression
 		}
 	}
@@ -84,8 +84,8 @@ func TestListPluginsIncludesSchedules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			scheduler := newStartedScheduleTestScheduler(t,
-				scheduling.Schedule{Plugin: "zeta", Expression: "0 0 * * *", Enabled: true},
-				scheduling.Schedule{Plugin: "alpha", Expression: "*/5 * * * *", Enabled: true},
+				scheduling.Schedule{Plugin: "zeta", Expression: "0 0 * * *"},
+				scheduling.Schedule{Plugin: "alpha", Expression: "*/5 * * * *"},
 			)
 			router := newScheduleTestRouter(t, scheduler, "zeta", "alpha")
 			req := withAuth(httptest.NewRequest(http.MethodGet, tt.path, nil), testBearerToken)
@@ -118,7 +118,7 @@ func TestGetPluginWithScheduleEndpoint(t *testing.T) {
 			name:           "returns configured schedule",
 			path:           "/v1/plugins/mlflow",
 			expectedStatus: http.StatusOK,
-			expected:       &scheduling.Schedule{Plugin: "mlflow", Expression: "*/5 * * * *", Enabled: true},
+			expected:       &scheduling.Schedule{Plugin: "mlflow", Expression: "*/5 * * * *"},
 		},
 		{
 			name:           "returns not found for unknown plugin",
@@ -129,7 +129,7 @@ func TestGetPluginWithScheduleEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			scheduler := newStartedScheduleTestScheduler(t, scheduling.Schedule{Plugin: "mlflow", Expression: "*/5 * * * *", Enabled: true})
+			scheduler := newStartedScheduleTestScheduler(t, scheduling.Schedule{Plugin: "mlflow", Expression: "*/5 * * * *"})
 			router := newScheduleTestRouter(t, scheduler, "mlflow")
 			req := withAuth(httptest.NewRequest(http.MethodGet, tt.path, nil), testBearerToken)
 			rec := httptest.NewRecorder()
