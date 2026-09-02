@@ -1,4 +1,4 @@
-package repositorydiscovery
+package repositoryidentity
 
 import (
 	"net/url"
@@ -11,8 +11,8 @@ var (
 	scpPattern = regexp.MustCompile(`^git@github\.com:([^/]+)/([^/]+)$`)
 )
 
-// parseGitHubRepository returns the owner and repository name from a GitHub URL.
-func parseGitHubRepository(rawURL string) (owner, name string, ok bool) {
+// ParseGitHubRepository returns the owner and repository name from a GitHub URL.
+func ParseGitHubRepository(rawURL string) (owner, name string, ok bool) {
 	input := strings.TrimSpace(rawURL)
 	if input == "" {
 		return "", "", false
@@ -62,4 +62,22 @@ func validate(rawOwner, rawRepo string) (owner, name string, ok bool) {
 		return "", "", false
 	}
 	return rawOwner, repo, true
+}
+
+// GitHubRepositoryNodePath returns the stable graph path for a GitHub repository.
+func GitHubRepositoryNodePath(owner, name string) string {
+	if owner == "" || name == "" {
+		return ""
+	}
+	return "github.com/" + strings.ToLower(owner+"/"+name)
+}
+
+// GitHubRepositoryNodePathFromURL returns the stable graph path for a GitHub
+// repository URL, or an empty string when the URL is unsupported.
+func GitHubRepositoryNodePathFromURL(rawURL string) string {
+	owner, name, ok := ParseGitHubRepository(rawURL)
+	if !ok {
+		return ""
+	}
+	return GitHubRepositoryNodePath(owner, name)
 }

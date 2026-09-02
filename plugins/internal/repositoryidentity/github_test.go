@@ -1,4 +1,4 @@
-package repositorydiscovery
+package repositoryidentity
 
 import "testing"
 
@@ -32,7 +32,7 @@ func TestParseGitHubRepository(t *testing.T) {
 		{"credentials", "https://admin:secret@github.com/acme/service", "", "", false},
 		{"user without password", "https://git@github.com/acme/service", "", "", false},
 
-		// path traversal / path structure
+		// path traversal
 		{"traversal as repo", "https://github.com/acme/..", "", "", false},
 		{"dot as repo", "https://github.com/acme/.", "", "", false},
 		{"too many segments", "https://github.com/acme/platform/service", "", "", false},
@@ -56,9 +56,9 @@ func TestParseGitHubRepository(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			owner, repo, ok := parseGitHubRepository(tt.input)
+			owner, repo, ok := ParseGitHubRepository(tt.input)
 			if owner != tt.wantOwner || repo != tt.wantRepo || ok != tt.wantOK {
-				t.Errorf("parseGitHubRepository(%q) = (%q, %q, %t), want (%q, %q, %t)",
+				t.Errorf("ParseGitHubRepository(%q) = (%q, %q, %t), want (%q, %q, %t)",
 					tt.input, owner, repo, ok, tt.wantOwner, tt.wantRepo, tt.wantOK)
 			}
 		})

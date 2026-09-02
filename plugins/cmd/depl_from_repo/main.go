@@ -22,8 +22,8 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/naira-project/naira/plugins/internal/deploymentdiscovery"
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
-	"github.com/naira-project/naira/plugins/internal/repositorydiscovery"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -67,7 +67,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient *kubernetes.Clientset) (
 	var nodes []pluginapi.NodeClaim
 	var relations []pluginapi.RelationClaim
 
-	entries, err := repositorydiscovery.DiscoverDeployments(ctx, k8sClient, p.logger)
+	entries, err := deploymentdiscovery.DiscoverDeployments(ctx, k8sClient, p.logger)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("discovering deployments: %w", err)
 	}
@@ -75,7 +75,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient *kubernetes.Clientset) (
 	seenRepos := make(map[string]bool)
 
 	for _, entry := range entries {
-		depPath := fmt.Sprintf("%s/%s/%s", entry.ClusterID, entry.Namespace, entry.Deployment)
+		depPath := fmt.Sprintf("%s/%s/%s", entry.ClusterID, entry.Namespace, entry.Name)
 		depNodeID := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindDeployment,
 			Path: depPath,
@@ -93,11 +93,11 @@ func (p *Plugin) collect(ctx context.Context, k8sClient *kubernetes.Clientset) (
 
 		// Repository linkage is optional — only create the git node + relation
 		// when a repository was successfully discovered for this deployment.
-		if entry.Repository.URL == "" {
+		if entry.SourceRepository.URL == "" {
 			continue
 		}
 
-		repoPath := repositorydiscovery.CanonicalPathFromRepo(entry.Repository)
+		repoPath := deploymentdiscovery.GitHubRepositoryNodePathFromReference(entry.SourceRepository)
 		if repoPath == "" {
 			continue
 		}
@@ -111,8 +111,8 @@ func (p *Plugin) collect(ctx context.Context, k8sClient *kubernetes.Clientset) (
 			nodes = append(nodes, pluginapi.NodeClaim{
 				ID: gitNodeID,
 				Properties: pluginapi.PropertyMap{
-					propertyKeyRepoURL:   entry.Repository.URL,
-					propertyKeyDetection: entry.Repository.Method,
+					propertyKeyRepoURL:   entry.SourceRepository.URL,
+					propertyKeyDetection: entry.SourceRepository.Method,
 				},
 			})
 			seenRepos[repoPath] = true

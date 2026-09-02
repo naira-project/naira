@@ -31,8 +31,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/naira-project/naira/plugins/internal/deploymentdiscovery"
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
-	"github.com/naira-project/naira/plugins/internal/repositorydiscovery"
+	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	"k8s.io/client-go/kubernetes"
@@ -118,7 +119,7 @@ type repoRef struct {
 // resolveRepos figures out which GitHub repos to collect by running repository discovery
 // and filtering by GitHub host and p.config.GitHubOrg if set.
 func (p *Plugin) resolveRepos(ctx context.Context, k8sClient kubernetes.Interface) ([]repoRef, error) {
-	discovered, err := repositorydiscovery.Discover(ctx, k8sClient, p.logger)
+	discovered, err := deploymentdiscovery.Discover(ctx, k8sClient, p.logger)
 	if err != nil {
 		return nil, fmt.Errorf("discovering repositories from deployments: %w", err)
 	}
@@ -192,10 +193,7 @@ func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]plugina
 func gitRepositoryNodeID(owner, name string) pluginapi.NodeID {
 	return pluginapi.NodeID{
 		Kind: pluginapi.NodeKindGitRepository,
-		Path: repositorydiscovery.CanonicalPathFromRepo(repositorydiscovery.Repository{
-			Owner: owner,
-			Name:  name,
-		}),
+		Path: repositoryidentity.GitHubRepositoryNodePath(owner, name),
 	}
 }
 
