@@ -29,28 +29,34 @@ data:
         litellm_params:
           model: openai/gpt-4o-mini
           api_key: os.environ/OPENAI_API_KEY
+          api_base: https://api.openai.com/v1
       - model_name: idp-claude-sonnet
         litellm_params:
           model: anthropic/claude-3-5-sonnet-latest
           api_key: os.environ/ANTHROPIC_API_KEY
+          api_base: https://api.anthropic.com
           region_name: us-east-1
       - model_name: idp-claude-sonnet
         litellm_params:
           model: anthropic/claude-3-5-sonnet-latest
           api_key: os.environ/ANTHROPIC_API_KEY
+          api_base: https://api.anthropic.com
           region_name: eu-central-1
       - model_name: idp-gemini-flash
         litellm_params:
           model: gemini/gemini-2.0-flash
           api_key: os.environ/GEMINI_API_KEY
+          api_base: https://generativelanguage.googleapis.com
       - model_name: idp-embedding-small
         litellm_params:
           model: openai/text-embedding-3-small
           api_key: os.environ/OPENAI_API_KEY
+          api_base: https://api.openai.com/v1
       - model_name: openrouter-gpt-3.5-turbo
         litellm_params:
           model: openrouter/openai/gpt-3.5-turbo
           api_key: os.environ/OPENROUTER_API_KEY
+          api_base: https://openrouter.ai/api/v1
 
     litellm_settings:
       callbacks:

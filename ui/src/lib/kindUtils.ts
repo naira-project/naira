@@ -34,6 +34,7 @@ const NAMESPACE_COLUMN_LABELS: Record<string, string> = {
   model: 'source',
   dataset: 'source',
   git_repository: 'source',
+  inference_endpoint: 'source',
 };
 
 export function namespaceColumnLabel(kind: string): string {

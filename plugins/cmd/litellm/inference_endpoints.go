@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -12,20 +14,22 @@ import (
 )
 
 const (
-	propertyKeyEndpointType    = "endpoint_type"
-	propertyKeyProvider        = "provider"
-	propertyKeyEndpointStatus  = "status"
-	propertyKeyAPIProtocol     = "api_protocol"
-	propertyKeyEndpointURL     = "endpoint_url"
-	propertyKeyRegion          = "region"
-	propertyKeyModelID         = "model_id"
-	propertyKeyServesModel     = "serves_model"
-	propertyKeyLifecycleStatus = "lifecycle_status"
-	propertyKeyLastSeen        = "last_seen"
-	propertyKeyMode            = "mode"
-	propertyKeyMaxTokens       = "max_tokens"
-	propertyKeyInputCost       = "input_cost_per_token"
-	propertyKeyOutputCost      = "output_cost_per_token"
+	propertyKeyEndpointType               = "endpoint_type"
+	propertyKeyProvider                   = "provider"
+	propertyKeyEndpointStatus             = "status"
+	propertyKeyAPIProtocol                = "api_protocol"
+	propertyKeyEndpointURL                = "endpoint_url"
+	propertyKeyRegion                     = "region"
+	propertyKeyServesModel                = "serves_model"
+	propertyKeyLifecycleStatus            = "lifecycle_status"
+	propertyKeyLastSeen                   = "last_seen"
+	propertyKeyMode                       = "mode"
+	propertyKeyMaxTokens                  = "max_tokens"
+	propertyKeyInputCostPerMillionTokens  = "input_cost_per_million_tokens"
+	propertyKeyOutputCostPerMillionTokens = "output_cost_per_million_tokens"
+
+	endpointTypeInternal = "internal"
+	endpointTypeExternal = "external"
 )
 
 type inferenceEndpoint struct {
@@ -35,7 +39,6 @@ type inferenceEndpoint struct {
 	APIProtocol     string  `json:"api_protocol"`
 	EndpointURL     string  `json:"endpoint_url"`
 	Region          string  `json:"region"`
-	ModelID         string  `json:"model_id"`
 	ServesModel     string  `json:"model_name"`
 	OwnedBy         string  `json:"owned_by"`
 	LifecycleStatus string  `json:"lifecycle_status"`
@@ -47,10 +50,35 @@ type inferenceEndpoint struct {
 	OutputCost      float64 `json:"output_cost_per_token"`
 }
 
+type modelInfoResponse struct {
+	Data []modelInfoEntry `json:"data"`
+}
+
+type modelInfoEntry struct {
+	ModelName     string           `json:"model_name"`
+	LiteLLMParams modelInfoLiteLLM `json:"litellm_params"`
+	ModelInfo     modelInfoDetail  `json:"model_info"`
+}
+
+type modelInfoLiteLLM struct {
+	Model             string `json:"model"`
+	APIBase           string `json:"api_base"`
+	CustomLLMProvider string `json:"custom_llm_provider"`
+	RegionName        string `json:"region_name"`
+}
+
+type modelInfoDetail struct {
+	ID                 string  `json:"id"`
+	Mode               string  `json:"mode"`
+	MaxTokens          int64   `json:"max_tokens"`
+	InputCostPerToken  float64 `json:"input_cost_per_token"`
+	OutputCostPerToken float64 `json:"output_cost_per_token"`
+}
+
 func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[string]string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
 	endpoints, err := p.fetchInferenceEndpoints(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("listing LiteLLM MCP servers: %w", err)
+		return nil, nil, fmt.Errorf("listing inference endpoints: %w", err)
 	}
 
 	var (
@@ -62,16 +90,16 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[st
 		modelName := strings.TrimSpace(endpoint.ServesModel)
 		if modelName == "" {
 			if p.logger != nil {
-				p.logger.Printf("WARN: skipping LiteLLM inference endpoint with no model name")
+				p.logger.Printf("WARN: skipping inference endpoint with no model name")
 			}
 			continue
 		}
 
 		endpoint.OwnedBy = ownedByModel[modelName]
 
-		endpointKey := strings.TrimSpace(endpoint.ModelID)
-		if endpointKey == "" {
-			endpointKey = modelName
+		endpointKey := modelName
+		if region := strings.TrimSpace(endpoint.Region); region != "" {
+			endpointKey += "-" + region
 		}
 
 		endpointNode := pluginapi.NodeClaim{
@@ -90,6 +118,37 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[st
 	return nodes, relations, nil
 }
 
+// endpointType distinguishes a self-hosted deployment reachable only inside the
+// cluster from an externally managed SaaS endpoint, based on the api_base host.
+func (m modelInfoLiteLLM) endpointType() string {
+	base := strings.TrimSpace(m.APIBase)
+	if base == "" {
+		return endpointTypeExternal
+	}
+	parsedURL, err := url.Parse(base)
+	if err != nil {
+		return endpointTypeExternal
+	}
+	host := parsedURL.Hostname()
+	if host == "localhost" || strings.HasSuffix(host, ".svc") || strings.HasSuffix(host, ".svc.cluster.local") {
+		return endpointTypeInternal
+	}
+	if ip := net.ParseIP(host); ip != nil && (ip.IsPrivate() || ip.IsLoopback()) {
+		return endpointTypeInternal
+	}
+	return endpointTypeExternal
+}
+
+func (m modelInfoLiteLLM) provider() string {
+	if p := strings.TrimSpace(m.CustomLLMProvider); p != "" {
+		return p
+	}
+	if provider, _, ok := strings.Cut(m.Model, "/"); ok {
+		return strings.TrimSpace(provider)
+	}
+	return ""
+}
+
 func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 	properties := pluginapi.PropertyMap{}
 	for key, value := range map[string]string{
@@ -99,7 +158,6 @@ func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 		propertyKeyAPIProtocol:     e.APIProtocol,
 		propertyKeyEndpointURL:     e.EndpointURL,
 		propertyKeyRegion:          e.Region,
-		propertyKeyModelID:         e.ModelID,
 		propertyKeyServesModel:     e.ServesModel,
 		propertyKeyOwnedBy:         e.OwnedBy,
 		propertyKeyLifecycleStatus: e.LifecycleStatus,
@@ -116,10 +174,10 @@ func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 		properties[propertyKeyMaxTokens] = strconv.FormatInt(e.MaxTokens, 10)
 	}
 	if e.InputCost != 0 {
-		properties[propertyKeyInputCost] = strconv.FormatFloat(e.InputCost, 'f', -1, 64)
+		properties[propertyKeyInputCostPerMillionTokens] = strconv.FormatFloat(e.InputCost*1_000_000, 'f', 4, 64)
 	}
 	if e.OutputCost != 0 {
-		properties[propertyKeyOutputCost] = strconv.FormatFloat(e.OutputCost, 'f', -1, 64)
+		properties[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(e.OutputCost*1_000_000, 'f', 4, 64)
 	}
 
 	return properties
@@ -150,41 +208,17 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context) ([]inferenceEndpoi
 	endpoints := make([]inferenceEndpoint, 0, len(payload.Data))
 	for _, entry := range payload.Data {
 		endpoints = append(endpoints, inferenceEndpoint{
-			Provider:    entry.LiteLLMParams.CustomLLMProvider,
-			EndpointURL: entry.LiteLLMParams.APIBase,
-			Region:      entry.LiteLLMParams.RegionName,
-			ModelID:     strings.TrimSpace(entry.ModelInfo.ID),
-			ServesModel: strings.TrimSpace(entry.ModelName),
-			Mode:        entry.ModelInfo.Mode,
-			MaxTokens:   entry.ModelInfo.MaxTokens,
-			InputCost:   entry.ModelInfo.InputCostPerToken,
-			OutputCost:  entry.ModelInfo.OutputCostPerToken,
+			Provider:     entry.LiteLLMParams.provider(),
+			EndpointType: entry.LiteLLMParams.endpointType(),
+			EndpointURL:  entry.LiteLLMParams.APIBase,
+			Region:       entry.LiteLLMParams.RegionName,
+			ServesModel:  strings.TrimSpace(entry.ModelName),
+			Mode:         entry.ModelInfo.Mode,
+			MaxTokens:    entry.ModelInfo.MaxTokens,
+			InputCost:    entry.ModelInfo.InputCostPerToken,
+			OutputCost:   entry.ModelInfo.OutputCostPerToken,
 		})
 	}
 
 	return endpoints, nil
-}
-
-type modelInfoResponse struct {
-	Data []modelInfoEntry `json:"data"`
-}
-
-type modelInfoEntry struct {
-	ModelName     string           `json:"model_name"`
-	LiteLLMParams modelInfoLiteLLM `json:"litellm_params"`
-	ModelInfo     modelInfoDetail  `json:"model_info"`
-}
-
-type modelInfoLiteLLM struct {
-	APIBase           string `json:"api_base"`
-	CustomLLMProvider string `json:"custom_llm_provider"`
-	RegionName        string `json:"region_name"`
-}
-
-type modelInfoDetail struct {
-	ID                 string  `json:"id"`
-	Mode               string  `json:"mode"`
-	MaxTokens          int64   `json:"max_tokens"`
-	InputCostPerToken  float64 `json:"input_cost_per_token"`
-	OutputCostPerToken float64 `json:"output_cost_per_token"`
 }
