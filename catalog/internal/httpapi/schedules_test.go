@@ -154,9 +154,9 @@ func schedulerSchedules(scheduler *scheduling.Scheduler) []scheduling.Schedule {
 }
 
 func pluginNames(plugins []PluginResource) []string {
-	names := make([]string, 0, len(plugins))
-	for _, plugin := range plugins {
-		names = append(names, plugin.Name[len("plugins/"):])
+	names := make([]string, len(plugins))
+	for i, p := range plugins {
+		names[i] = p.Name
 	}
 	return names
 }

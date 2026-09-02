@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
-	"sort"
+	"slices"
 
 	"github.com/go-chi/chi/v5"
 
@@ -28,7 +29,7 @@ type ListPluginsResponse struct {
 
 var pluginListOptionsSpec = listOptionsSpec{
 	scope:         "plugins",
-	allowedFields: map[string]bool{"name": true},
+	allowedFields: map[string]bool{},
 }
 
 func pluginResource(name string, definition catalog.PluginDefinition) PluginResource {
@@ -38,27 +39,9 @@ func pluginResource(name string, definition catalog.PluginDefinition) PluginReso
 // GET /v1/plugins lists configured plugin resources and their schedules.
 func newListPluginsHandler(definitions map[string]catalog.PluginDefinition, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(pluginListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-		names := make([]string, 0, len(definitions))
-		for name := range definitions {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		resources := make([]PluginResource, 0, len(names))
-		for _, name := range names {
+		resources := make([]PluginResource, 0, len(definitions))
+		for _, name := range slices.Sorted(maps.Keys(definitions)) {
 			resources = append(resources, pluginResource(name, definitions[name]))
-		}
-		if options.filter != nil {
-			filtered := resources[:0]
-			for _, resource := range resources {
-				matches, err := options.filter.matchesResource(map[string]string{"name": resource.Name}, resource.Name)
-				if err != nil {
-					return err
-				}
-				if matches {
-					filtered = append(filtered, resource)
-				}
-			}
-			resources = filtered
 		}
 
 		page, nextPageToken, totalSize, err := paginate(resources, options.pageSize, options.offset, "plugins", logger)
