@@ -33,6 +33,12 @@ data:
         litellm_params:
           model: anthropic/claude-3-5-sonnet-latest
           api_key: os.environ/ANTHROPIC_API_KEY
+          region_name: us-east-1
+      - model_name: idp-claude-sonnet
+        litellm_params:
+          model: anthropic/claude-3-5-sonnet-latest
+          api_key: os.environ/ANTHROPIC_API_KEY
+          region_name: eu-central-1
       - model_name: idp-gemini-flash
         litellm_params:
           model: gemini/gemini-2.0-flash

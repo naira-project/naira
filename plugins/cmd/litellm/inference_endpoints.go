@@ -19,7 +19,7 @@ const (
 	propertyKeyEndpointURL     = "endpoint_url"
 	propertyKeyRegion          = "region"
 	propertyKeyModelID         = "model_id"
-	propertyKeyModelName       = "model_name"
+	propertyKeyServesModel     = "serves_model"
 	propertyKeyLifecycleStatus = "lifecycle_status"
 	propertyKeyLastSeen        = "last_seen"
 	propertyKeyMode            = "mode"
@@ -36,7 +36,7 @@ type inferenceEndpoint struct {
 	EndpointURL     string  `json:"endpoint_url"`
 	Region          string  `json:"region"`
 	ModelID         string  `json:"model_id"`
-	ModelName       string  `json:"model_name"`
+	ServesModel     string  `json:"model_name"`
 	OwnedBy         string  `json:"owned_by"`
 	LifecycleStatus string  `json:"lifecycle_status"`
 	DiscoveredVia   string  `json:"discovered_via"`
@@ -59,7 +59,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[st
 	)
 
 	for _, endpoint := range endpoints {
-		modelName := strings.TrimSpace(endpoint.ModelName)
+		modelName := strings.TrimSpace(endpoint.ServesModel)
 		if modelName == "" {
 			if p.logger != nil {
 				p.logger.Printf("WARN: skipping LiteLLM inference endpoint with no model name")
@@ -100,7 +100,7 @@ func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 		propertyKeyEndpointURL:     e.EndpointURL,
 		propertyKeyRegion:          e.Region,
 		propertyKeyModelID:         e.ModelID,
-		propertyKeyModelName:       e.ModelName,
+		propertyKeyServesModel:     e.ServesModel,
 		propertyKeyOwnedBy:         e.OwnedBy,
 		propertyKeyLifecycleStatus: e.LifecycleStatus,
 		propertyKeyDiscoveredVia:   e.DiscoveredVia,
@@ -154,7 +154,7 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context) ([]inferenceEndpoi
 			EndpointURL: entry.LiteLLMParams.APIBase,
 			Region:      entry.LiteLLMParams.RegionName,
 			ModelID:     strings.TrimSpace(entry.ModelInfo.ID),
-			ModelName:   strings.TrimSpace(entry.ModelName),
+			ServesModel: strings.TrimSpace(entry.ModelName),
 			Mode:        entry.ModelInfo.Mode,
 			MaxTokens:   entry.ModelInfo.MaxTokens,
 			InputCost:   entry.ModelInfo.InputCostPerToken,
