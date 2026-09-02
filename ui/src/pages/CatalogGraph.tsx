@@ -249,7 +249,7 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
       {/* Compact toolbar: depth controls + inline stats */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <label 
+          <label
             htmlFor="catalog-graph-depth"
             className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
           >
