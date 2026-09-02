@@ -1,9 +1,9 @@
 # envsubst template — substituted variables: ${NAMESPACE}
 #
-# `full` profile numbers — see the SPEC's "Resource Cost" section for the
-# per-component breakdown these are summed from. OpenMetadata (server + MySQL +
-# OpenSearch) dominates; its figures are Helm chart defaults, not yet measured
-# against actual usage (see SPEC "Verification").
+# Sized for the whole e2e/components/ pool, not per-scenario — an unused
+# ceiling costs nothing per run (see e2e/README.md). OpenMetadata (server +
+# MySQL + OpenSearch) dominates; its figures are Helm chart defaults, not
+# yet measured against actual usage.
 apiVersion: v1
 kind: ResourceQuota
 metadata:

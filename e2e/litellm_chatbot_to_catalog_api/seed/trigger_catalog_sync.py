@@ -1,8 +1,9 @@
 """Triggers a full catalog plugin run and waits for it to finish.
 
 The catalog's node store is populated on demand (POST /v1/plugins:run), not
-by polling plugins in the background — so seeding MLflow/OpenMetadata alone
-leaves the catalog's graph empty until a run executes. This makes sure one
+by polling plugins in the background — so configuring a plugin's backend
+alone (e.g. litellm.yaml's static model list) leaves the catalog's graph
+empty until a run executes. This makes sure one
 has completed before the seed Job reports success, so E2E tests that query
 /v1/nodes right after don't race an empty store.
 """

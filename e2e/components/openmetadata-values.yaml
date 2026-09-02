@@ -10,7 +10,6 @@ openmetadata:
 # so it doesn't impose limits on resource-constrained clusters like Minikube.
 # Our namespace has a LimitRange with a 512Mi default container limit — nowhere
 # near enough for this JVM app, and it was getting OOMKilled at startup.
-# Figures match the SPEC's "Resource Cost" estimate for the openmetadata server.
 resources:
   requests:
     cpu: 250m
