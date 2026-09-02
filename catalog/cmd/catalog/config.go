@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
-	"strings"
+	"os"
 	"time"
 
 	"go-simpler.org/env"
+	"gopkg.in/yaml.v3"
 )
 
 type config struct {
@@ -22,18 +23,10 @@ type config struct {
 }
 
 type envConfig struct {
-	Port               int           `env:"PORT" default:"8090"`
-	ReadHeadersTimeout time.Duration `env:"READ_HEADERS_TIMEOUT" default:"5s"`
-	ShutdownTimeout    time.Duration `env:"SHUTDOWN_TIMEOUT" default:"5s"`
-	// PluginAddresses is a list of plugin name-to-address mappings.
-	// Values must be in the format: name=address (comma-separated).
-	// 	Example: PLUGIN_ADDRESSES="litellm=localhost:9001,mlflow=localhost:9002"
-	PluginAddresses []string `env:"PLUGIN_ADDRESSES"`
-	// PluginSchedules is an optional list of plugin cron schedules.
-	// Values must be in the format: name=cron_expression (comma-separated).
-	// A missing entry means the plugin is manual-only.
-	// 	Example: PLUGIN_SCHEDULES="litellm=0 * * * *,mlflow=@daily"
-	PluginSchedules         []string      `env:"PLUGIN_SCHEDULES"`
+	Port                    int           `env:"PORT" default:"8090"`
+	ReadHeadersTimeout      time.Duration `env:"READ_HEADERS_TIMEOUT" default:"5s"`
+	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" default:"5s"`
+	PluginConfigFile        string        `env:"PLUGIN_CONFIG_FILE" default:"/etc/catalog/plugins.yaml"`
 	PluginConnectionTimeout time.Duration `env:"PLUGIN_CONNECTION_TIMEOUT" default:"10s"`
 	PluginTimeout           time.Duration `env:"PLUGIN_TIMEOUT" default:"5m"`
 	KeycloakBaseURL         string        `env:"KEYCLOAK_BASE_URL"`
@@ -41,26 +34,43 @@ type envConfig struct {
 	KeycloakIssuer          string        `env:"KEYCLOAK_ISSUER"`
 }
 
+type pluginConfig struct {
+	Plugins map[string]pluginEntry `yaml:"plugins"`
+}
+
+type pluginEntry struct {
+	Address  string `yaml:"address"`
+	Schedule string `yaml:"schedule,omitempty"`
+}
+
 func loadConfig() (config, error) {
 	var raw envConfig
-	opts := &env.Options{
-		SliceSep: ",",
-	}
-	if err := env.Load(&raw, opts); err != nil {
-		return config{}, fmt.Errorf("load config from environment: %w", err)
+	if err := env.Load(&raw, nil); err != nil {
+		return config{}, fmt.Errorf("load environment configuration: %w", err)
 	}
 
-	pluginAddresses, err := parseKeyValuePairs(raw.PluginAddresses)
+	contents, err := os.ReadFile(raw.PluginConfigFile)
 	if err != nil {
-		return config{}, fmt.Errorf("parse plugin addresses: %w", err)
+		return config{}, fmt.Errorf("read plugin configuration file %q: %w", raw.PluginConfigFile, err)
 	}
 
-	pluginSchedules, err := parseKeyValuePairs(raw.PluginSchedules)
-	if err != nil {
-		return config{}, fmt.Errorf("parse plugin schedules: %w", err)
+	var plugins pluginConfig
+	if err := yaml.Unmarshal(contents, &plugins); err != nil {
+		return config{}, fmt.Errorf("parse plugin configuration file %q: %w", raw.PluginConfigFile, err)
+	}
+	pluginAddresses := make(map[string]string, len(plugins.Plugins))
+	pluginSchedules := make(map[string]string, len(plugins.Plugins))
+	for name, plugin := range plugins.Plugins {
+		if plugin.Address == "" {
+			return config{}, fmt.Errorf("plugin %q has no address", name)
+		}
+		pluginAddresses[name] = plugin.Address
+		if plugin.Schedule != "" {
+			pluginSchedules[name] = plugin.Schedule
+		}
 	}
 
-	cfg := config{
+	return config{
 		Port:                    raw.Port,
 		ReadHeadersTimeout:      raw.ReadHeadersTimeout,
 		ShutdownTimeout:         raw.ShutdownTimeout,
@@ -71,25 +81,5 @@ func loadConfig() (config, error) {
 		KeycloakBaseURL:         raw.KeycloakBaseURL,
 		KeycloakRealm:           raw.KeycloakRealm,
 		KeycloakIssuer:          raw.KeycloakIssuer,
-	}
-
-	return cfg, nil
-}
-
-func parseKeyValuePairs(raw []string) (map[string]string, error) {
-	result := make(map[string]string, len(raw))
-	for _, entry := range raw {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-		key, val, ok := strings.Cut(entry, "=")
-		key = strings.TrimSpace(key)
-		val = strings.TrimSpace(val)
-		if !ok || key == "" || val == "" {
-			return nil, fmt.Errorf("invalid entry %q: must be in key=value format", entry)
-		}
-		result[key] = val
-	}
-	return result, nil
+	}, nil
 }
