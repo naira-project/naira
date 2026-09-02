@@ -27,7 +27,16 @@ func main() {
 		logger.Fatalf("invalid configuration: %v", err)
 	}
 
-	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, config.PluginConnectionTimeout, logger)
+	pluginAddresses := make(map[string]string, len(config.Plugins))
+	pluginSchedules := make(map[string]string, len(config.Plugins))
+	for name, plugin := range config.Plugins {
+		pluginAddresses[name] = plugin.Address
+		if plugin.Schedule != "" {
+			pluginSchedules[name] = plugin.Schedule
+		}
+	}
+
+	registeredPlugins, cleanup, err := pluginmanager.Register(pluginAddresses, config.PluginConnectionTimeout, logger)
 	if err != nil {
 		logger.Fatalf("failed to register plugins: %v", err)
 	}
@@ -40,13 +49,13 @@ func main() {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
-	scheduler, err := scheduling.NewConfiguredScheduler(config.PluginAddresses, config.PluginSchedules, runner, logger)
+	scheduler, err := scheduling.NewConfiguredScheduler(pluginSchedules, runner, logger)
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
 	defer scheduler.Stop(ctx)
 
-	router, err := httpapi.NewRouter(catalogService, runner, scheduler, logger, keycloak.Config{
+	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 		Issuer: config.KeycloakIssuer,
@@ -62,7 +71,7 @@ func main() {
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
-		for name, addr := range config.PluginAddresses {
+		for name, addr := range pluginAddresses {
 			logger.Printf("plugin %q -> %s", name, addr)
 		}
 

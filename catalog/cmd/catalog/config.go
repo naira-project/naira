@@ -5,6 +5,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/naira-project/naira/catalog/internal/catalog"
+
 	"go-simpler.org/env"
 	"gopkg.in/yaml.v3"
 )
@@ -13,8 +15,7 @@ type config struct {
 	Port                    int
 	ReadHeadersTimeout      time.Duration
 	ShutdownTimeout         time.Duration
-	PluginAddresses         map[string]string
-	PluginSchedules         map[string]string
+	Plugins                 map[string]catalog.PluginDefinition
 	PluginConnectionTimeout time.Duration
 	PluginTimeout           time.Duration
 	KeycloakBaseURL         string
@@ -58,24 +59,19 @@ func loadConfig() (config, error) {
 	if err := yaml.Unmarshal(contents, &plugins); err != nil {
 		return config{}, fmt.Errorf("parse plugin configuration file %q: %w", raw.PluginConfigFile, err)
 	}
-	pluginAddresses := make(map[string]string, len(plugins.Plugins))
-	pluginSchedules := make(map[string]string, len(plugins.Plugins))
+	pluginDefinitions := make(map[string]catalog.PluginDefinition, len(plugins.Plugins))
 	for name, plugin := range plugins.Plugins {
 		if plugin.Address == "" {
 			return config{}, fmt.Errorf("plugin %q has no address", name)
 		}
-		pluginAddresses[name] = plugin.Address
-		if plugin.Schedule != "" {
-			pluginSchedules[name] = plugin.Schedule
-		}
+		pluginDefinitions[name] = catalog.PluginDefinition{Address: plugin.Address, Schedule: plugin.Schedule}
 	}
 
 	return config{
 		Port:                    raw.Port,
 		ReadHeadersTimeout:      raw.ReadHeadersTimeout,
 		ShutdownTimeout:         raw.ShutdownTimeout,
-		PluginAddresses:         pluginAddresses,
-		PluginSchedules:         pluginSchedules,
+		Plugins:                 pluginDefinitions,
 		PluginConnectionTimeout: raw.PluginConnectionTimeout,
 		PluginTimeout:           raw.PluginTimeout,
 		KeycloakBaseURL:         raw.KeycloakBaseURL,

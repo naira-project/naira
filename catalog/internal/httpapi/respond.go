@@ -66,7 +66,7 @@ func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	message := err.Error()
 	switch {
-	case errors.Is(err, catalog.ErrNodeNotFound), errors.Is(err, operations.ErrNotFound), errors.Is(err, scheduling.ErrNotFound):
+	case errors.Is(err, catalog.ErrNodeNotFound), errors.Is(err, operations.ErrNotFound), errors.Is(err, scheduling.ErrNotFound), errors.Is(err, errPluginResourceNotFound):
 		status = http.StatusNotFound
 	case errors.Is(err, pluginrun.ErrPluginAlreadyRunning):
 		// AIP-151 parallel operations: reject a run while one is in flight.

@@ -34,21 +34,19 @@ func TestMemoryStoreRoundTrip(t *testing.T) {
 }
 
 func TestConfiguredSchedulerRejectsInvalidExpression(t *testing.T) {
-	plugins := map[string]string{"github": "desc"}
-	defaults := map[string]string{"github": "not a cron"}
+	schedules := map[string]string{"github": "not a cron"}
 	starter := &stubStarter{calls: make(chan string)}
 
-	_, err := NewConfiguredScheduler(plugins, defaults, starter, nil)
+	_, err := NewConfiguredScheduler(schedules, starter, nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid schedule expression")
 }
 
 func TestSchedulerTriggersConfiguredPlugin(t *testing.T) {
 	starter := &stubStarter{calls: make(chan string, 1)}
-	plugins := map[string]string{"github": "desc"}
-	defaults := map[string]string{"github": "* * * * *"}
+	schedules := map[string]string{"github": "* * * * *"}
 
-	scheduler, err := NewConfiguredScheduler(plugins, defaults, starter, log.New(io.Discard, "", 0))
+	scheduler, err := NewConfiguredScheduler(schedules, starter, log.New(io.Discard, "", 0))
 	require.NoError(t, err)
 	defer scheduler.Stop(context.Background())
 

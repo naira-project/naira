@@ -35,15 +35,15 @@ func newScheduler(store Store, starter RunStarter, logger *log.Logger) *Schedule
 
 // NewConfiguredScheduler initializes default plugin schedules, persists them, and starts the scheduler.
 // The caller must call Scheduler.Stop when the scheduler is no longer needed.
-func NewConfiguredScheduler(plugins map[string]string, defaults map[string]string, starter RunStarter, logger *log.Logger) (*Scheduler, error) {
+// schedules maps plugin name to cron expression; plugins not in the map have no schedule.
+func NewConfiguredScheduler(schedules map[string]string, starter RunStarter, logger *log.Logger) (*Scheduler, error) {
 	scheduler := newScheduler(NewMemoryStore(), starter, logger)
 
-	for plugin := range plugins {
-		expression, configured := defaults[plugin]
+	for plugin, expression := range schedules {
 		schedule := Schedule{
 			Plugin:     plugin,
 			Expression: expression,
-			Enabled:    configured,
+			Enabled:    expression != "",
 		}
 
 		if err := validateSchedule(schedule); err != nil {
