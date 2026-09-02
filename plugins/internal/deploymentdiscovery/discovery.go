@@ -9,7 +9,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
-	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
 	"github.com/naira-project/naira/plugins/internal/sourcerepository"
 )
 
@@ -65,10 +64,6 @@ func DiscoverDeployments(
 						logger.Printf("WARN: failed to inspect image %q in deployment %s/%s: %v", containers[0].Image, namespace, deployment.Name, err)
 					}
 				} else if repo.URL != "" {
-					if owner, name, ok := repositoryidentity.ParseGitHubRepository(repo.URL); ok {
-						repo.Owner = owner
-						repo.Name = name
-					}
 					entry.SourceRepository = repo
 				}
 			}
@@ -76,32 +71,4 @@ func DiscoverDeployments(
 		}
 	}
 	return results, nil
-}
-
-// Discover returns unique source repositories found in Deployments.
-func Discover(ctx context.Context, client kubernetes.Interface, logger *log.Logger) ([]sourcerepository.Repository, error) {
-	entries, err := DiscoverDeployments(ctx, client, logger)
-	if err != nil {
-		return nil, fmt.Errorf("discovering deployment repositories: %w", err)
-	}
-	seen := map[string]bool{}
-	result := make([]sourcerepository.Repository, 0, len(entries))
-	for _, entry := range entries {
-		path := GitHubRepositoryNodePathFromReference(entry.SourceRepository)
-		if path == "" || seen[path] {
-			continue
-		}
-		seen[path] = true
-		result = append(result, entry.SourceRepository)
-	}
-	return result, nil
-}
-
-// GitHubRepositoryNodePathFromReference returns the stable graph path for a
-// GitHub repository reference, or an empty string when it is unsupported.
-func GitHubRepositoryNodePathFromReference(repo sourcerepository.Repository) string {
-	if repo.Owner != "" && repo.Name != "" {
-		return repositoryidentity.GitHubRepositoryNodePath(repo.Owner, repo.Name)
-	}
-	return repositoryidentity.GitHubRepositoryNodePathFromURL(repo.URL)
 }

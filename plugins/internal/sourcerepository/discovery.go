@@ -14,8 +14,6 @@ import (
 // Repository is a source repository discovered from a container image.
 type Repository struct {
 	URL    string
-	Owner  string
-	Name   string
 	Method string
 }
 

@@ -24,6 +24,7 @@ import (
 
 	"github.com/naira-project/naira/plugins/internal/deploymentdiscovery"
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
+	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -91,13 +92,9 @@ func (p *Plugin) collect(ctx context.Context, k8sClient *kubernetes.Clientset) (
 			Properties: depProps,
 		})
 
+		repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(entry.SourceRepository.URL)
 		// Repository linkage is optional — only create the git node + relation
 		// when a repository was successfully discovered for this deployment.
-		if entry.SourceRepository.URL == "" {
-			continue
-		}
-
-		repoPath := deploymentdiscovery.GitHubRepositoryNodePathFromReference(entry.SourceRepository)
 		if repoPath == "" {
 			continue
 		}

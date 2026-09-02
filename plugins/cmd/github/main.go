@@ -34,6 +34,7 @@ import (
 	"github.com/naira-project/naira/plugins/internal/deploymentdiscovery"
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
 	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
+	"github.com/naira-project/naira/plugins/internal/sourcerepository"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	"k8s.io/client-go/kubernetes"
@@ -119,7 +120,7 @@ type repoRef struct {
 // resolveRepos figures out which GitHub repos to collect by running repository discovery
 // and filtering by GitHub host and p.config.GitHubOrg if set.
 func (p *Plugin) resolveRepos(ctx context.Context, k8sClient kubernetes.Interface) ([]repoRef, error) {
-	discovered, err := deploymentdiscovery.Discover(ctx, k8sClient, p.logger)
+	discovered, err := discoverRepos(ctx, k8sClient, p.logger)
 	if err != nil {
 		return nil, fmt.Errorf("discovering repositories from deployments: %w", err)
 	}
@@ -128,17 +129,21 @@ func (p *Plugin) resolveRepos(ctx context.Context, k8sClient kubernetes.Interfac
 
 	for _, repo := range discovered {
 		// Only collect GitHub repositories with valid owner/name parsed
-		if repo.Owner == "" || repo.Name == "" {
+		owner, name, ok := repositoryidentity.ParseGitHubRepository(repo.URL)
+		if !ok {
+			continue
+		}
+		if owner == "" || name == "" {
 			continue
 		}
 
-		if p.config.GitHubOrg != "" && !strings.EqualFold(repo.Owner, p.config.GitHubOrg) {
+		if p.config.GitHubOrg != "" && !strings.EqualFold(owner, p.config.GitHubOrg) {
 			continue
 		}
 
 		refs = append(refs, repoRef{
-			owner: repo.Owner,
-			name:  repo.Name,
+			owner: owner,
+			name:  name,
 		})
 	}
 
@@ -195,6 +200,25 @@ func gitRepositoryNodeID(owner, name string) pluginapi.NodeID {
 		Kind: pluginapi.NodeKindGitRepository,
 		Path: repositoryidentity.GitHubRepositoryNodePath(owner, name),
 	}
+}
+
+// discoverRepos returns unique source repositories found in Deployments.
+func discoverRepos(ctx context.Context, client kubernetes.Interface, logger *log.Logger) ([]sourcerepository.Repository, error) {
+	entries, err := deploymentdiscovery.DiscoverDeployments(ctx, client, logger)
+	if err != nil {
+		return nil, fmt.Errorf("discovering deployment repositories: %w", err)
+	}
+	seen := map[string]bool{}
+	result := make([]sourcerepository.Repository, 0, len(entries))
+	for _, entry := range entries {
+		path := repositoryidentity.GitHubRepositoryNodePathFromURL(entry.SourceRepository.URL)
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		result = append(result, entry.SourceRepository)
+	}
+	return result, nil
 }
 
 func (p *Plugin) connect() (*kubernetes.Clientset, error) {
