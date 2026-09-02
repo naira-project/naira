@@ -21,7 +21,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
-	"github.com/naira-project/naira/plugins/internal/repositorydiscovery"
+	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -108,7 +108,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	for _, r := range repos {
 		shortPath := r.GetNamespace() + "/" + r.GetName()
 		url, _, _ := unstructured.NestedString(r.Object, "spec", "url")
-		repoPath := repositorydiscovery.CanonicalPath(url)
+		repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(url)
 		if repoPath == "" {
 			log.Printf("%s: WARN: skipping GitRepository %s with unsupported URL %q", pluginName, shortPath, url)
 			continue
