@@ -69,7 +69,9 @@ jobs:
         run: npm ci
 
       - name: Run checks
-        run: npm run check
+        run: |
+          npx tsc -b
+          npx biome ci --reporter=github .
 
   # ── 4. Container build — catalog (build-only, no push on PRs) ─────────────
   container-build-catalog:
