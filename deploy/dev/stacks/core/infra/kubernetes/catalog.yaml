@@ -13,6 +13,76 @@ stringData:
   LITELLM_API_KEY: sk-local-litellm
   OPENMETADATA_ADMIN_PASSWORD: admin
 ---
+# The tech radar is rendered read-only from this admin-managed config.
+# Schema reference and annotated example: docs/tech-radar.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tech-radar-config
+  namespace: idp-system
+data:
+  radar.yaml: |
+    schema_version: 1            # required; only 1 accepted
+    radar:
+      id: naira                  # optional, default "default"
+      title: Naira Tech Radar    # required
+      edition: 2026-09           # required; free-form edition label
+      owner: platform-team       # required
+    quadrants:                   # required; exactly 4; order = display order
+      - id: models
+        name: Models
+      - id: agentic
+        name: Agentic Patterns
+      - id: knowledge
+        name: Knowledge Techniques
+      - id: others
+        name: Others
+    rings:                       # required; 1-6; order = innermost to outermost
+      - id: adopt
+        name: Adopt
+        description: Proven; default choice for new work.
+      - id: trial
+        name: Trial
+        description: Worth pursuing on projects that can absorb risk.
+      - id: assess
+        name: Assess
+        description: Explore to understand impact.
+      - id: hold
+        name: Hold
+        description: Do not start new work with this.
+    entries:
+      - id: claude-sonnet
+        name: Claude Sonnet
+        quadrant: models         # must match a quadrant id
+        ring: adopt              # must match a ring id
+        moved: in                # in | out | none; default none
+        owner: ml-platform
+        rationale: >
+          Default general-purpose model; served through the central gateway.
+      - id: react-agents
+        name: ReAct Agents
+        quadrant: agentic
+        ring: trial
+        owner: ai-board
+        rationale: >
+          Promising for tool-using workflows; evaluate on internal projects first.
+      - id: hybrid-retrieval
+        name: Hybrid Retrieval
+        quadrant: knowledge
+        ring: assess
+        moved: in
+        owner: ai-board
+        rationale: >
+          Combines dense and sparse retrieval; explore impact on answer quality.
+      - id: naive-rag
+        name: Naive RAG
+        quadrant: knowledge
+        ring: hold
+        moved: out
+        owner: ai-board
+        rationale: >
+          Superseded by hybrid retrieval; migrate existing pipelines.
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -271,6 +341,32 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+        - name: plugin-tech-radar
+          image: tech-radar:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50057"
+            - name: TECH_RADAR_CONFIG_PATH
+              value: /etc/naira/techradar/radar.yaml
+          # Mounted as a directory (no subPath) so ConfigMap updates reach the
+          # running pod and take effect on the next plugin sync.
+          volumeMounts:
+            - name: tech-radar-config
+              mountPath: /etc/naira/techradar
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: tech-radar-config
+          configMap:
+            name: tech-radar-config
       containers:
         - name: catalog
           image: catalog:local
@@ -285,7 +381,7 @@ spec:
             - name: KEYCLOAK_ISSUER
               value: http://localhost:8080/realms/naira
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,mcp-servers=localhost:50058"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,tech-radar=localhost:50057,mcp-servers=localhost:50058"
           ports:
             - containerPort: 8090
               name: http

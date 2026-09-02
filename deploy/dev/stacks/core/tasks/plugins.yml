@@ -25,6 +25,9 @@ vars:
     - name: mcp-servers
       dir: '{{.PLUGINS_BASE}}/mcp_servers'
       image: mcp-servers:local
+    - name: tech-radar
+      dir: '{{.PLUGINS_BASE}}/tech_radar'
+      image: tech-radar:local
 
 tasks:
   image:build:

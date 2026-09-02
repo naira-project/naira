@@ -132,6 +132,17 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  container-publish-plugin-tech-radar:
+    name: Publish · Plugin Tech Radar
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-tech-radar"
+      dockerfile: "plugins/cmd/tech_radar/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Gate: surfaces overall publish status as a single check ───────────────
   all-published:
     name: All Images Published
@@ -146,6 +157,7 @@ jobs:
       - container-publish-plugin-depl-uses-litellm
       - container-publish-plugin-openmetadata
       - container-publish-plugin-mcp-servers
+      - container-publish-plugin-tech-radar
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -162,6 +174,7 @@ jobs:
             "${{ needs.container-publish-plugin-depl-uses-litellm.result }}"
             "${{ needs.container-publish-plugin-openmetadata.result }}"
             "${{ needs.container-publish-plugin-mcp-servers.result }}"
+            "${{ needs.container-publish-plugin-tech-radar.result }}"
           )
           for r in "${RESULTS[@]}"; do
             if [[ "$r" != "success" ]]; then
