@@ -1,5 +1,7 @@
 # envsubst template — substituted variables: ${NAMESPACE}
-# `full` profile only — LiteLLM's backing store, deployed per-PR alongside it.
+# LiteLLM's backing store — opt-in, deployed only by scenarios whose
+# components.env lists it (e.g. litellm_chatbot_to_catalog_api, for
+# litellm's virtual-key API).
 apiVersion: v1
 kind: Secret
 metadata:

@@ -1,6 +1,6 @@
 # envsubst template — substituted variables: ${NAMESPACE}
 #
-# Mirrors deploy/dev/stacks/core/infra/kubernetes/keycloak.yaml, but namespaced
+# Mirrors deploy/dev/stacks/core/infra/keycloak/keycloak.yaml, but namespaced
 # per-PR instead of a dedicated shared "keycloak" namespace, and with
 # KC_HOSTNAME set to the in-cluster Service DNS name instead of localhost:8080
 # — nothing here is an interactive browser login, so there's no dev-machine

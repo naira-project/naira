@@ -1,10 +1,10 @@
 # envsubst template — substituted variables: ${NAMESPACE}
 #
-# `full` profile only. Deliberately excludes llama-qwen25-05b (downloads a
-# full-size model — flakiness risk under CI network conditions) and vLLM
-# (requires a GPU node). llama-dummy-model is the CI-safe backend, though its
-# init container still fetches a small GGUF from HuggingFace on every fresh
-# PVC — see the RFC's "Excluded from CI under both profiles" note.
+# Opt-in component — no current scenario deploys it (see e2e/README.md).
+# Deliberately excludes llama-qwen25-05b (downloads a full-size model —
+# flakiness risk under CI network conditions) and vLLM (requires a GPU
+# node). llama-dummy-model is the CI-safe backend, though its init
+# container still fetches a small GGUF from HuggingFace on every fresh PVC.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
