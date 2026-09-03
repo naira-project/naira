@@ -1,19 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
 import cronstrue from 'cronstrue';
 import { AlertCircle, Play, RefreshCw, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { PluginErrorModal } from '../components/PluginErrorModal';
 import { PluginStatusBadge } from '../components/PluginStatusBadge';
-import { useOpenMFPContext } from '../hooks/useOpenMFPContext';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
-import {
-  fetchSchedules,
-  type OperationResource,
-  type ScheduleResource,
-  type StatusErrorResource,
-} from '../lib/catalogApi';
-import { queryKeys } from '../lib/queryKeys';
+import type { OperationResource, PluginResource, StatusErrorResource } from '../lib/catalogApi';
 import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 
 /** Dedicated page for managing plugin ingestion and schedules. */
@@ -29,6 +21,7 @@ export default function PluginsPage() {
 
   const {
     plugins,
+    pluginResources,
     operations,
     loading,
     runningPlugins,
@@ -40,14 +33,9 @@ export default function PluginsPage() {
     runAll,
     runSubset,
   } = usePluginsStatus();
-  const { token } = useOpenMFPContext();
-  const schedulesQuery = useQuery({
-    queryKey: queryKeys.schedules,
-    queryFn: () => fetchSchedules(token),
-  });
   const schedules = useMemo(
-    () => new Map((schedulesQuery.data ?? []).map((s) => [s.plugin, s])),
-    [schedulesQuery.data],
+    () => new Map(pluginResources.map((plugin) => [plugin.name, plugin])),
+    [pluginResources],
   );
   const visiblePlugins = allowedPlugins
     ? plugins.filter((p) => allowedPlugins.includes(p))
@@ -142,7 +130,7 @@ interface StatusTabProps {
   runningPlugins: Set<string>;
   onRun: (plugin: string) => void;
   onViewError: (plugin: string, error: StatusErrorResource) => void;
-  schedules: Map<string, ScheduleResource>;
+  schedules: Map<string, PluginResource>;
 }
 
 function StatusTab({
@@ -256,14 +244,11 @@ function StatusTab({
   );
 }
 
-function ScheduleCell({ schedule }: { schedule?: ScheduleResource }) {
-  const friendly =
-    schedule?.expression && schedule.enabled
-      ? friendlySchedule(schedule.expression)
-      : 'Not scheduled';
+function ScheduleCell({ schedule }: { schedule?: PluginResource }) {
+  const friendly = schedule?.schedule ? friendlySchedule(schedule.schedule) : 'Not scheduled';
 
   return (
-    <div className="max-w-full" title={schedule?.expression ?? undefined}>
+    <div className="max-w-full" title={schedule?.schedule || undefined}>
       <span className={friendly === 'Not scheduled' ? 'text-gray-400' : 'text-gray-700'}>
         {friendly}
       </span>

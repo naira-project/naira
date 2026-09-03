@@ -6,6 +6,7 @@ import {
   fetchOperations,
   fetchPlugins,
   type OperationResource,
+  type PluginResource,
 } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
@@ -54,6 +55,7 @@ export interface RunErrorEntry {
  */
 interface UsePluginsStatusResult {
   plugins: string[];
+  pluginResources: PluginResource[];
   operations: OperationResource[];
   loading: boolean;
   /** Set of plugin names currently executing or awaiting response. */
@@ -247,7 +249,8 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   );
 
   return {
-    plugins: pluginsQuery.data ?? [],
+    plugins: (pluginsQuery.data ?? []).map((plugin) => plugin.name),
+    pluginResources: pluginsQuery.data ?? [],
     operations,
     loading: pluginsQuery.isLoading || operationsQuery.isLoading,
     runningPlugins,
