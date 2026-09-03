@@ -14,33 +14,91 @@ import (
 
 type stubStarter struct {
 	calls chan string
+	err   error
 }
 
 func (s *stubStarter) RunPluginAsync(_ context.Context, plugin string) (operations.Operation, error) {
-	s.calls <- plugin
-	return operations.Operation{Plugin: plugin}, nil
+	if s.calls != nil {
+		s.calls <- plugin
+	}
+	return operations.Operation{Plugin: plugin}, s.err
 }
 
-func TestConfiguredSchedulerRejectsInvalidExpression(t *testing.T) {
-	schedules := map[string]string{"github": "not a cron"}
-	starter := &stubStarter{calls: make(chan string)}
+func TestNewConfiguredScheduler_Initialization(t *testing.T) {
+	tests := []struct {
+		name         string
+		schedules    map[string]string
+		wantErr      bool
+		expectedErr  error
+		errContains  string
+		expectedJobs int
+	}{
+		{
+			name:        "rejects invalid cron expression",
+			schedules:   map[string]string{"github": "not a cron"},
+			wantErr:     true,
+			errContains: `registering schedule for plugin "github"`,
+		},
+		{
+			name:        "rejects empty plugin name",
+			schedules:   map[string]string{"": "* * * * *"},
+			wantErr:     true,
+			expectedErr: ErrInvalidPlugin,
+		},
+		{
+			name:         "ignores empty expression",
+			schedules:    map[string]string{"manual": ""},
+			wantErr:      false,
+			expectedJobs: 0,
+		},
+		{
+			name:         "registers valid schedule",
+			schedules:    map[string]string{"github": "* * * * *"},
+			wantErr:      false,
+			expectedJobs: 1,
+		},
+	}
 
-	_, err := NewConfiguredScheduler(schedules, starter, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "registering schedule for plugin")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			starter := &stubStarter{calls: make(chan string, 1)}
+
+			scheduler, err := NewConfiguredScheduler(tt.schedules, starter, log.New(io.Discard, "", 0))
+
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.expectedErr != nil {
+					assert.ErrorIs(t, err, tt.expectedErr)
+				}
+				if tt.errContains != "" {
+					assert.Contains(t, err.Error(), tt.errContains)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				require.NoError(t, scheduler.Stop(context.Background()))
+			})
+
+			assert.Len(t, scheduler.cron.Entries(), tt.expectedJobs)
+		})
+	}
 }
 
-func TestSchedulerTriggersConfiguredPlugin(t *testing.T) {
+func TestScheduler_Execution(t *testing.T) {
 	starter := &stubStarter{calls: make(chan string, 1)}
-	schedules := map[string]string{"github": "* * * * *"}
 
-	scheduler, err := NewConfiguredScheduler(schedules, starter, log.New(io.Discard, "", 0))
+	scheduler, err := NewConfiguredScheduler(map[string]string{"github": "* * * * *"}, starter, log.New(io.Discard, "", 0))
 	require.NoError(t, err)
-	defer scheduler.Stop(context.Background())
+	t.Cleanup(func() {
+		require.NoError(t, scheduler.Stop(context.Background()))
+	})
 
-	// Fetch registered entries directly from the cron instance and trigger the job manually
 	entries := scheduler.cron.Entries()
 	require.Len(t, entries, 1)
+
+	// trigger the job manually
 	entries[0].Job.Run()
 
 	select {
