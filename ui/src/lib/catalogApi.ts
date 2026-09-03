@@ -144,7 +144,6 @@ export async function fetchRelations(token: string | null, options: ListRequest 
 // Plugin discovery
 // ---------------------------------------------------------------------------
 
-// The backend returns configured plugin resources rather than bare names.
 export interface PluginResource {
   name: string;
   schedule: string;
