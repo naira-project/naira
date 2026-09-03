@@ -157,11 +157,7 @@ function StatusTab({
   const latestByPlugin = latestOperationPerPlugin(operations);
 
   if (plugins.length === 0 && !loading) {
-    return (
-      <p className="py-8 text-center text-sm text-gray-500">
-        No plugins registered.
-      </p>
-    );
+    return <p className="py-8 text-center text-sm text-gray-500">No plugins registered.</p>;
   }
 
   return (
@@ -192,10 +188,7 @@ function StatusTab({
           const running = runningPlugins.has(plugin);
 
           return (
-            <tr
-              key={plugin}
-              className="border-b border-gray-100 last:border-0"
-            >
+            <tr key={plugin} className="border-b border-gray-100 last:border-0">
               <td className="py-3 pr-4 font-medium text-gray-900">{plugin}</td>
               <td className="py-3 pr-4 text-gray-500">
                 {op ? formatRelativeTime(op.createdAt) : 'Never'}
