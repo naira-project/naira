@@ -1,40 +1,23 @@
 version: '3'
 
 vars:
-  KEYCLOAK_MANIFEST: infra/kubernetes/keycloak.yaml
-  KEYCLOAK_REALM_IMPORT: infra/keycloak/naira-realm.json
+  KEYCLOAK_DIR: infra/keycloak
   KEYCLOAK_SERVICE: svc/keycloak
   KEYCLOAK_REMOTE_PORT: '8080'
   KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE | default "keycloak"}}'
-  KEYCLOAK_ADMIN_USER: '{{.KEYCLOAK_ADMIN_USER | default "admin"}}'
-  KEYCLOAK_ADMIN_PASSWORD: '{{.KEYCLOAK_ADMIN_PASSWORD | default "admin"}}'
 
 tasks:
   deploy:
-    desc: Deploy a local Keycloak to kind. The realm configuration is seeded from infra/keycloak/naira-realm.json
+    desc: Deploy a local Keycloak to kind from the declarative Kustomize overlay
     cmds:
       - task: apply
 
   apply:
     internal: true
     cmds:
-      - |
-        kubectl create namespace {{.KEYCLOAK_NAMESPACE}} --dry-run=client -o yaml | kubectl apply -f -
-        REALM_IMPORT_TMP="$(mktemp)"
-        trap 'rm -f "$REALM_IMPORT_TMP"' EXIT
-        sed -e "s|__KEYCLOAK_CLIENT_SECRET__|{{.KEYCLOAK_CLIENT_SECRET}}|" \
-            {{.KEYCLOAK_REALM_IMPORT}} > "$REALM_IMPORT_TMP"
-        kubectl create configmap keycloak-realm-import -n {{.KEYCLOAK_NAMESPACE}} \
-          --from-file=naira-realm.json="$REALM_IMPORT_TMP" \
-          --dry-run=client -o yaml | kubectl apply -f -
-        kubectl create secret generic keycloak-admin -n {{.KEYCLOAK_NAMESPACE}} \
-          --from-literal=username="{{.KEYCLOAK_ADMIN_USER}}" \
-          --from-literal=password="{{.KEYCLOAK_ADMIN_PASSWORD}}" \
-          --dry-run=client -o yaml | kubectl apply -f -
-        kubectl apply -f {{.KEYCLOAK_MANIFEST}}
-        kubectl -n {{.KEYCLOAK_NAMESPACE}} rollout restart deploy/keycloak
-        kubectl -n {{.KEYCLOAK_NAMESPACE}} rollout status deploy/keycloak --timeout=180s
-        kubectl -n {{.KEYCLOAK_NAMESPACE}} get pods
+      - kubectl apply -k {{.KEYCLOAK_DIR}}
+      - kubectl -n {{.KEYCLOAK_NAMESPACE}} rollout status deploy/keycloak --timeout=180s
+      - kubectl -n {{.KEYCLOAK_NAMESPACE}} get pods
 
   undeploy:
     desc: Remove the local Keycloak from kind

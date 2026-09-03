@@ -1,18 +1,19 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { lazy, Suspense } from 'react';
 import { Route, BrowserRouter as Router, Routes } from 'react-router';
 import { CATALOG_VIEWPOINTS } from './config/viewpoints';
-import { ThemeProvider } from './contexts/ThemeContext';
 import { queryClient } from './lib/queryClient';
-import CatalogDetail from './pages/CatalogDetail';
-import CatalogView from './pages/CatalogView';
-import Overview from './pages/Overview';
-import PluginsPage from './pages/PluginsPage';
+
+const CatalogDetail = lazy(() => import('./pages/CatalogDetail'));
+const CatalogView = lazy(() => import('./pages/CatalogView'));
+const Overview = lazy(() => import('./pages/Overview'));
+const PluginsPage = lazy(() => import('./pages/PluginsPage'));
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <Router>
+      <Router>
+        <Suspense fallback={<p>Loading…</p>}>
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/catalog" element={<Overview />} />
@@ -35,8 +36,8 @@ function App() {
             ))}
             <Route path="/catalog/:kind/*" element={<CatalogDetail />} />
           </Routes>
-        </Router>
-      </ThemeProvider>
+        </Suspense>
+      </Router>
     </QueryClientProvider>
   );
 }
