@@ -471,55 +471,6 @@ func TestGetOperationByIDEndpoint(t *testing.T) {
 	assert.Equal(t, "seed", op.Plugin)
 }
 
-func TestListPluginsEndpoint(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{
-		"mlflow":  stubPlugin{},
-		"litellm": stubPlugin{},
-	})
-
-	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/plugins", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var payload ListPluginsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	assert.Equal(t, int32(2), payload.TotalSize)
-	assert.Equal(t, []PluginResource{
-		{Name: "litellm"},
-		{Name: "mlflow"},
-	}, payload.Plugins)
-}
-
-func TestGetPluginEndpoint(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{
-		"mlflow": stubPlugin{},
-	})
-
-	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/plugins/mlflow", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	var payload PluginResource
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	assert.Equal(t, PluginResource{Name: "mlflow"}, payload)
-}
-
-func TestGetPluginEndpointUnknownPlugin(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{"mlflow": stubPlugin{}})
-
-	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/plugins/missing", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusNotFound, rec.Code)
-}
-
 func TestSupersededPluginRoutesAreNotServed(t *testing.T) {
 	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{"mlflow": stubPlugin{}})
 
