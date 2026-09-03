@@ -50,7 +50,7 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
   {
     path: 'inference_endpoints',
     heading: 'Inference Endpoints Catalog',
-    subheading: 'Inference endpoints served via LiteLLM. More inference gateways are on development',
+    subheading: 'Inference endpoints served via different plugins.',
     kinds: ['inference_endpoint'],
     plugins: ['litellm'],
   },
