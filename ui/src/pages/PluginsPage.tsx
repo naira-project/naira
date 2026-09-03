@@ -1,6 +1,6 @@
 import cronstrue from 'cronstrue';
 import { AlertCircle, Play, RefreshCw, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { PluginErrorModal } from '../components/PluginErrorModal';
 import { PluginStatusBadge } from '../components/PluginStatusBadge';
@@ -21,7 +21,6 @@ export default function PluginsPage() {
 
   const {
     plugins,
-    pluginResources,
     operations,
     loading,
     runningPlugins,
@@ -33,12 +32,8 @@ export default function PluginsPage() {
     runAll,
     runSubset,
   } = usePluginsStatus();
-  const schedules = useMemo(
-    () => new Map(pluginResources.map((plugin) => [plugin.name, plugin])),
-    [pluginResources],
-  );
   const visiblePlugins = allowedPlugins
-    ? plugins.filter((p) => allowedPlugins.includes(p))
+    ? plugins.filter((plugin) => allowedPlugins.includes(plugin.name))
     : plugins;
 
   const [selectedError, setSelectedError] = useState<{
@@ -47,7 +42,7 @@ export default function PluginsPage() {
   } | null>(null);
 
   const handleRunVisible = async () => {
-    allowedPlugins ? runSubset(visiblePlugins) : runAll();
+    allowedPlugins ? runSubset(visiblePlugins.map((plugin) => plugin.name)) : runAll();
   };
 
   return (
@@ -110,7 +105,6 @@ export default function PluginsPage() {
             runningPlugins={runningPlugins}
             onRun={runOne}
             onViewError={(plugin, error) => setSelectedError({ plugin, error })}
-            schedules={schedules}
           />
         </div>
       </div>
@@ -124,13 +118,12 @@ export default function PluginsPage() {
 }
 
 interface StatusTabProps {
-  plugins: string[];
+  plugins: PluginResource[];
   operations: OperationResource[];
   loading: boolean;
   runningPlugins: Set<string>;
   onRun: (plugin: string) => void;
   onViewError: (plugin: string, error: StatusErrorResource) => void;
-  schedules: Map<string, PluginResource>;
 }
 
 function StatusTab({
@@ -140,7 +133,6 @@ function StatusTab({
   runningPlugins,
   onRun,
   onViewError,
-  schedules,
 }: StatusTabProps) {
   const latestByPlugin = latestOperationPerPlugin(operations);
 
@@ -172,12 +164,12 @@ function StatusTab({
       </thead>
       <tbody>
         {plugins.map((plugin) => {
-          const op = latestByPlugin.get(plugin);
-          const running = runningPlugins.has(plugin);
+          const op = latestByPlugin.get(plugin.name);
+          const running = runningPlugins.has(plugin.name);
 
           return (
-            <tr key={plugin} className="border-b border-gray-100 last:border-0">
-              <td className="py-3 pr-4 font-medium text-gray-900">{plugin}</td>
+            <tr key={plugin.name} className="border-b border-gray-100 last:border-0">
+              <td className="py-3 pr-4 font-medium text-gray-900">{plugin.name}</td>
               <td className="py-3 pr-4 text-gray-500">
                 {op ? formatRelativeTime(op.createdAt) : 'Never'}
               </td>
@@ -198,7 +190,7 @@ function StatusTab({
                     type="button"
                     onClick={() => {
                       if (op.error) {
-                        onViewError(plugin, op.error);
+                        onViewError(plugin.name, op.error);
                       }
                     }}
                     className="inline-flex items-center gap-1.5 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
@@ -223,12 +215,12 @@ function StatusTab({
                 )}
               </td>
               <td className="py-3 pr-4">
-                <ScheduleCell schedule={schedules.get(plugin)} />
+                <ScheduleCell schedule={plugin.schedule} />
               </td>
               <td className="py-3 text-right">
                 <button
                   type="button"
-                  onClick={() => onRun(plugin)}
+                  onClick={() => onRun(plugin.name)}
                   disabled={running}
                   className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                 >
@@ -244,11 +236,11 @@ function StatusTab({
   );
 }
 
-function ScheduleCell({ schedule }: { schedule?: PluginResource }) {
-  const friendly = schedule?.schedule ? friendlySchedule(schedule.schedule) : 'Not scheduled';
+function ScheduleCell({ schedule }: { schedule: string }) {
+  const friendly = schedule ? friendlySchedule(schedule) : 'Not scheduled';
 
   return (
-    <div className="max-w-full" title={schedule?.schedule || undefined}>
+    <div className="max-w-full" title={schedule || undefined}>
       <span className={friendly === 'Not scheduled' ? 'text-gray-400' : 'text-gray-700'}>
         {friendly}
       </span>

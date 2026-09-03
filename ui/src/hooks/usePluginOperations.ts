@@ -54,8 +54,7 @@ export interface RunErrorEntry {
  * whenever non-terminal operations exist.
  */
 interface UsePluginsStatusResult {
-  plugins: string[];
-  pluginResources: PluginResource[];
+  plugins: PluginResource[];
   operations: OperationResource[];
   loading: boolean;
   /** Set of plugin names currently executing or awaiting response. */
@@ -249,8 +248,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   );
 
   return {
-    plugins: (pluginsQuery.data ?? []).map((plugin) => plugin.name),
-    pluginResources: pluginsQuery.data ?? [],
+    plugins: pluginsQuery.data ?? [],
     operations,
     loading: pluginsQuery.isLoading || operationsQuery.isLoading,
     runningPlugins,
