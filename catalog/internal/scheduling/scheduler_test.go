@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -63,7 +64,11 @@ func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			starter := &stubStarter{calls: make(chan string, 1)}
 
-			scheduler, err := NewConfiguredScheduler(tt.schedules, starter, log.New(io.Discard, "", 0))
+			config := make(catalog.PluginConfig, len(tt.schedules))
+			for plugin, schedule := range tt.schedules {
+				config[plugin] = catalog.PluginDefinition{Address: "test", Schedule: schedule}
+			}
+			scheduler, err := NewConfiguredScheduler(config, starter, log.New(io.Discard, "", 0))
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -89,7 +94,7 @@ func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 func TestScheduler_Execution(t *testing.T) {
 	starter := &stubStarter{calls: make(chan string, 1)}
 
-	scheduler, err := NewConfiguredScheduler(map[string]string{"github": "* * * * *"}, starter, log.New(io.Discard, "", 0))
+	scheduler, err := NewConfiguredScheduler(catalog.PluginConfig{"github": {Address: "test", Schedule: "* * * * *"}}, starter, log.New(io.Discard, "", 0))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, scheduler.Stop(context.Background()))

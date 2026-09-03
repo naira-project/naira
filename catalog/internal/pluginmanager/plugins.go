@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	pluginv1 "github.com/naira-project/naira/plugins/pkg/pluginapi/proto/plugin/v1"
 	"google.golang.org/grpc"
@@ -15,21 +16,17 @@ import (
 
 // Register connects to each plugin sidecar by its configured name and gRPC
 // address and returns the registered plugins keyed by plugin name.
-func Register(plugins map[string]string, timeout time.Duration, logger *log.Logger) (map[string]pluginapi.Plugin, func(), error) {
+func Register(plugins catalog.PluginConfig, timeout time.Duration, logger *log.Logger) (map[string]pluginapi.Plugin, func(), error) {
 	registered := make(map[string]pluginapi.Plugin, len(plugins))
 	var cleanups []func()
 
-	for name, addr := range plugins {
-		if name == "" || addr == "" {
-			return nil, nil, fmt.Errorf("invalid plugin configuration: name=%q, addr=%q", name, addr)
-		}
-
-		client, cleanup, err := ConnectPlugin(name, addr, logger, timeout)
+	for name, definition := range plugins {
+		client, cleanup, err := ConnectPlugin(name, definition.Address, logger, timeout)
 		if err != nil {
 			for _, c := range cleanups {
 				c()
 			}
-			return nil, nil, fmt.Errorf("connecting to plugin %q at %q: %w", name, addr, err)
+			return nil, nil, fmt.Errorf("connecting to plugin %q at %q: %w", name, definition.Address, err)
 		}
 
 		registered[name] = client

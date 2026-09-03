@@ -15,7 +15,7 @@ type config struct {
 	Port                    int
 	ReadHeadersTimeout      time.Duration
 	ShutdownTimeout         time.Duration
-	Plugins                 map[string]catalog.PluginDefinition
+	Plugins                 catalog.PluginConfig
 	PluginConnectionTimeout time.Duration
 	PluginTimeout           time.Duration
 	KeycloakBaseURL         string
@@ -68,7 +68,7 @@ func loadConfig() (config, error) {
 	}, nil
 }
 
-func loadPluginConfig(path string) (map[string]catalog.PluginDefinition, error) {
+func loadPluginConfig(path string) (catalog.PluginConfig, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read plugin configuration file %q: %w", path, err)
@@ -79,15 +79,15 @@ func loadPluginConfig(path string) (map[string]catalog.PluginDefinition, error) 
 		return nil, fmt.Errorf("parse plugin configuration file %q: %w", path, err)
 	}
 
-	pluginDefinitions := make(map[string]catalog.PluginDefinition, len(plugins.Plugins))
+	pluginDefinitions := make(catalog.PluginConfig, len(plugins.Plugins))
 	for name, plugin := range plugins.Plugins {
-		if plugin.Address == "" {
-			return nil, fmt.Errorf("plugin %q has no address", name)
-		}
 		pluginDefinitions[name] = catalog.PluginDefinition{
 			Address:  plugin.Address,
 			Schedule: plugin.Schedule,
 		}
+	}
+	if err := pluginDefinitions.Validate(); err != nil {
+		return nil, fmt.Errorf("validate plugin configuration: %w", err)
 	}
 
 	return pluginDefinitions, nil

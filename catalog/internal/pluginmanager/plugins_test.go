@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	pluginv1 "github.com/naira-project/naira/plugins/pkg/pluginapi/proto/plugin/v1"
 	"github.com/stretchr/testify/assert"
@@ -51,7 +52,7 @@ func TestRegisterAndConnectPlugin(t *testing.T) {
 	addr := lis.Addr().String()
 	const pluginName = "mock-external-plugin"
 
-	registered, cleanup, err := Register(map[string]string{pluginName: addr}, 10*time.Second, nil)
+	registered, cleanup, err := Register(catalog.PluginConfig{pluginName: {Address: addr}}, 10*time.Second, nil)
 	require.NoError(t, err)
 	defer cleanup()
 

@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newPluginDefinitionTestRouter(t *testing.T, definitions map[string]catalog.PluginDefinition) http.Handler {
+func newPluginDefinitionTestRouter(t *testing.T, definitions catalog.PluginConfig) http.Handler {
 	t.Helper()
 
 	plugins := make(map[string]pluginrun.Plugin, len(definitions))
@@ -56,7 +56,7 @@ func serveAuthenticatedRequest(t *testing.T, router http.Handler, method, path s
 }
 
 func TestListPluginsEndpoint(t *testing.T) {
-	router := newPluginDefinitionTestRouter(t, map[string]catalog.PluginDefinition{
+	router := newPluginDefinitionTestRouter(t, catalog.PluginConfig{
 		"zeta":   {Schedule: "0 0 * * *"},
 		"alpha":  {Schedule: "*/5 * * * *"},
 		"manual": {},
@@ -104,7 +104,7 @@ func TestListPluginsEndpoint(t *testing.T) {
 }
 
 func TestGetPluginEndpoint(t *testing.T) {
-	router := newPluginDefinitionTestRouter(t, map[string]catalog.PluginDefinition{
+	router := newPluginDefinitionTestRouter(t, catalog.PluginConfig{
 		"mlflow": {Schedule: "*/5 * * * *"},
 	})
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/robfig/cron/v3"
 )
@@ -23,14 +24,14 @@ type Scheduler struct {
 	cron *cron.Cron
 }
 
-// NewConfiguredScheduler initializes default plugin schedules and starts the scheduler.
+// NewConfiguredScheduler initializes configured plugin schedules and starts the scheduler.
 // The caller must call Scheduler.Stop when the scheduler is no longer needed.
-func NewConfiguredScheduler(schedules map[string]string, starter RunStarter, logger *log.Logger) (*Scheduler, error) {
+func NewConfiguredScheduler(config catalog.PluginConfig, starter RunStarter, logger *log.Logger) (*Scheduler, error) {
 	sch := &Scheduler{
 		cron: cron.New(),
 	}
 
-	if err := sch.registerSchedules(schedules, starter, logger); err != nil {
+	if err := sch.registerSchedules(config, starter, logger); err != nil {
 		return nil, fmt.Errorf("registering schedules: %w", err)
 	}
 
@@ -38,8 +39,9 @@ func NewConfiguredScheduler(schedules map[string]string, starter RunStarter, log
 	return sch, nil
 }
 
-func (s *Scheduler) registerSchedules(schedules map[string]string, starter RunStarter, logger *log.Logger) error {
-	for plugin, expr := range schedules {
+func (s *Scheduler) registerSchedules(config catalog.PluginConfig, starter RunStarter, logger *log.Logger) error {
+	for plugin, definition := range config {
+		expr := definition.Schedule
 		if plugin == "" {
 			return ErrInvalidPlugin
 		}

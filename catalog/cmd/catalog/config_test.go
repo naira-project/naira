@@ -16,7 +16,7 @@ func TestLoadPluginConfig(t *testing.T) {
 		config      string
 		createFile  bool
 		wantErrText string
-		wantPlugins map[string]catalog.PluginDefinition
+		wantPlugins catalog.PluginConfig
 	}{
 		{
 			name:        "returns an error when the plugin configuration file is missing",
@@ -45,7 +45,7 @@ func TestLoadPluginConfig(t *testing.T) {
     schedule: "*/5 * * * *"
 `,
 			createFile: true,
-			wantPlugins: map[string]catalog.PluginDefinition{
+			wantPlugins: catalog.PluginConfig{
 				"mlflow": {
 					Address:  "localhost:50051",
 					Schedule: "*/5 * * * *",
