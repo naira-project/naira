@@ -13,7 +13,6 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
-	"github.com/naira-project/naira/catalog/internal/scheduling"
 )
 
 type routeHandler func(http.ResponseWriter, *http.Request) error
@@ -66,7 +65,7 @@ func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	message := err.Error()
 	switch {
-	case errors.Is(err, catalog.ErrNodeNotFound), errors.Is(err, operations.ErrNotFound), errors.Is(err, scheduling.ErrNotFound), errors.Is(err, errPluginResourceNotFound):
+	case errors.Is(err, catalog.ErrNodeNotFound), errors.Is(err, operations.ErrNotFound), errors.Is(err, errPluginResourceNotFound):
 		status = http.StatusNotFound
 	case errors.Is(err, pluginrun.ErrPluginAlreadyRunning):
 		// AIP-151 parallel operations: reject a run while one is in flight.

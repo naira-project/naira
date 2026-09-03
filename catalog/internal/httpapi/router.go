@@ -36,9 +36,9 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugin
 	router.Route("/v1", func(r chi.Router) {
 		r.Use(authMiddleware)
 
-		r.Post("/plugins:run", newRunAllPluginsHandler(runner))
 		r.Get("/plugins", newListPluginsHandler(plugins, logger))
 		r.Get("/plugins/{plugin}", newGetPluginHandler(plugins))
+		r.Post("/plugins:run", newRunAllPluginsHandler(runner))
 		r.Post("/plugins/{plugin}:run", newRunPluginHandler(runner))
 
 		r.Get("/operations", newListOperationsHandler(runner, logger))

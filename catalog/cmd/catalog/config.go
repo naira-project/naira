@@ -41,7 +41,7 @@ type pluginConfig struct {
 
 type pluginEntry struct {
 	Address  string `yaml:"address"`
-	Schedule string `yaml:"schedule,omitempty"`
+	Schedule string `yaml:"schedule"`
 }
 
 func loadConfig() (config, error) {
