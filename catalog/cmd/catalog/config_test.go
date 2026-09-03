@@ -60,16 +60,15 @@ func TestLoadPluginConfig(t *testing.T) {
 			if tt.createFile {
 				require.NoError(t, os.WriteFile(configPath, []byte(tt.config), 0o600))
 			}
-			t.Setenv("PLUGIN_CONFIG_FILE", configPath)
 
-			cfg, err := loadConfig()
+			plugins, err := loadPluginConfig(configPath)
 
 			if tt.wantErrText != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.wantErrText)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.wantPlugins, cfg.Plugins)
+				assert.Equal(t, tt.wantPlugins, plugins)
 			}
 		})
 	}

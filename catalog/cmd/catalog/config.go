@@ -50,32 +50,45 @@ func loadConfig() (config, error) {
 		return config{}, fmt.Errorf("load environment configuration: %w", err)
 	}
 
-	contents, err := os.ReadFile(raw.PluginConfigFile)
+	plugins, err := loadPluginConfig(raw.PluginConfigFile)
 	if err != nil {
-		return config{}, fmt.Errorf("read plugin configuration file %q: %w", raw.PluginConfigFile, err)
-	}
-
-	var plugins pluginConfig
-	if err := yaml.Unmarshal(contents, &plugins); err != nil {
-		return config{}, fmt.Errorf("parse plugin configuration file %q: %w", raw.PluginConfigFile, err)
-	}
-	pluginDefinitions := make(map[string]catalog.PluginDefinition, len(plugins.Plugins))
-	for name, plugin := range plugins.Plugins {
-		if plugin.Address == "" {
-			return config{}, fmt.Errorf("plugin %q has no address", name)
-		}
-		pluginDefinitions[name] = catalog.PluginDefinition{Address: plugin.Address, Schedule: plugin.Schedule}
+		return config{}, fmt.Errorf("load plugin configuration: %w", err)
 	}
 
 	return config{
 		Port:                    raw.Port,
 		ReadHeadersTimeout:      raw.ReadHeadersTimeout,
 		ShutdownTimeout:         raw.ShutdownTimeout,
-		Plugins:                 pluginDefinitions,
+		Plugins:                 plugins,
 		PluginConnectionTimeout: raw.PluginConnectionTimeout,
 		PluginTimeout:           raw.PluginTimeout,
 		KeycloakBaseURL:         raw.KeycloakBaseURL,
 		KeycloakRealm:           raw.KeycloakRealm,
 		KeycloakIssuer:          raw.KeycloakIssuer,
 	}, nil
+}
+
+func loadPluginConfig(path string) (map[string]catalog.PluginDefinition, error) {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read plugin configuration file %q: %w", path, err)
+	}
+
+	var plugins pluginConfig
+	if err := yaml.Unmarshal(contents, &plugins); err != nil {
+		return nil, fmt.Errorf("parse plugin configuration file %q: %w", path, err)
+	}
+
+	pluginDefinitions := make(map[string]catalog.PluginDefinition, len(plugins.Plugins))
+	for name, plugin := range plugins.Plugins {
+		if plugin.Address == "" {
+			return nil, fmt.Errorf("plugin %q has no address", name)
+		}
+		pluginDefinitions[name] = catalog.PluginDefinition{
+			Address:  plugin.Address,
+			Schedule: plugin.Schedule,
+		}
+	}
+
+	return pluginDefinitions, nil
 }
