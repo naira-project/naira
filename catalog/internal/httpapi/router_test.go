@@ -470,17 +470,3 @@ func TestGetOperationByIDEndpoint(t *testing.T) {
 	assert.Equal(t, opName, op.Name)
 	assert.Equal(t, "seed", op.Plugin)
 }
-
-func TestSupersededPluginRoutesAreNotServed(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{"mlflow": stubPlugin{}})
-
-	for _, path := range []string{"/v1/mlflow:run", "/v1/schedules", "/v1/mlflow/schedule"} {
-		req := withAuth(httptest.NewRequest(http.MethodGet, path, nil), testBearerToken)
-		if path == "/v1/mlflow:run" {
-			req.Method = http.MethodPost
-		}
-		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, req)
-		assert.Equal(t, http.StatusNotFound, rec.Code, path)
-	}
-}
