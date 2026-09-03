@@ -18,7 +18,7 @@ var errPluginResourceNotFound = errors.New("plugin resource not found")
 
 type PluginResource struct {
 	Name     string `json:"name"`
-	Schedule string `json:"schedule,omitempty"`
+	Schedule string `json:"schedule"`
 }
 
 type ListPluginsResponse struct {
