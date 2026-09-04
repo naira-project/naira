@@ -18,17 +18,29 @@ type StatusErrorResource struct {
 	Message string `json:"message"`
 }
 
+// OperationMetadataResource holds progress information about an in-flight
+// or completed operation. It never carries the operation's result.
+type OperationMetadataResource struct {
+	Plugin    string     `json:"plugin"`
+	State     string     `json:"state"`
+	StartTime time.Time  `json:"startTime"`
+	EndTime   *time.Time `json:"endTime,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+}
+
+// RunPluginResult is the successful result of a plugin run operation.
+type RunPluginResult struct {
+	NodesUpserted     int `json:"nodesUpserted"`
+	RelationsUpserted int `json:"relationsUpserted"`
+}
+
 // OperationResource is the JSON representation of an AIP-151 operation.
 type OperationResource struct {
-	Name              string               `json:"name"`
-	Plugin            string               `json:"plugin"`
-	State             string               `json:"state"`
-	StartTime         time.Time            `json:"startTime"`
-	EndTime           *time.Time           `json:"endTime,omitempty"`
-	Error             *StatusErrorResource `json:"error,omitempty"`
-	NodesUpserted     int                  `json:"nodesUpserted"`
-	RelationsUpserted int                  `json:"relationsUpserted"`
-	CreatedAt         time.Time            `json:"createdAt"`
+	Name     string                    `json:"name"`
+	Done     bool                      `json:"done"`
+	Metadata OperationMetadataResource `json:"metadata"`
+	Response *RunPluginResult          `json:"response,omitempty"`
+	Error    *StatusErrorResource      `json:"error,omitempty"`
 }
 
 type ListOperationsResponse struct {
@@ -47,24 +59,31 @@ var operationListOptionsSpec = listOptionsSpec{
 }
 
 func operationFromCatalogOperation(op operations.Operation) OperationResource {
-	var statusErr *StatusErrorResource
-	if op.Error != nil {
-		statusErr = &StatusErrorResource{
-			Message: op.Error.Message,
-		}
+	done := op.State == operations.StateSucceeded || op.State == operations.StateFailed
+
+	resource := OperationResource{
+		Name: op.Name,
+		Done: done,
+		Metadata: OperationMetadataResource{
+			Plugin:    op.Plugin,
+			State:     string(op.State),
+			StartTime: op.StartTime,
+			EndTime:   op.EndTime,
+			CreatedAt: op.CreatedAt,
+		},
 	}
 
-	return OperationResource{
-		Name:              op.Name,
-		Plugin:            op.Plugin,
-		State:             string(op.State),
-		StartTime:         op.StartTime,
-		EndTime:           op.EndTime,
-		Error:             statusErr,
-		NodesUpserted:     op.NodesUpserted,
-		RelationsUpserted: op.RelationsUpserted,
-		CreatedAt:         op.CreatedAt,
+	switch {
+	case done && op.State == operations.StateSucceeded:
+		resource.Response = &RunPluginResult{
+			NodesUpserted:     op.NodesUpserted,
+			RelationsUpserted: op.RelationsUpserted,
+		}
+	case done && op.Error != nil:
+		resource.Error = &StatusErrorResource{Message: op.Error.Message}
 	}
+
+	return resource
 }
 
 func toOperationResources(ops []operations.Operation) []OperationResource {
@@ -77,8 +96,8 @@ func toOperationResources(ops []operations.Operation) []OperationResource {
 
 func matchOperationFilter(operation OperationResource, filter *equalityFilter) (bool, error) {
 	matches, err := filter.matchesResource(map[string]string{
-		"plugin": operation.Plugin,
-		"state":  operation.State,
+		"plugin": operation.Metadata.Plugin,
+		"state":  operation.Metadata.State,
 	}, "operation")
 	if err != nil {
 		return false, fmt.Errorf("matching resource filter: %w", err)
