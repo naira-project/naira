@@ -30,6 +30,10 @@ const (
 
 	endpointTypeInternal = "internal"
 	endpointTypeExternal = "external"
+
+	endpointStatusHealthy   = "healthy"
+	endpointStatusUnhealthy = "unhealthy"
+	endpointStatusUnknown   = "unknown"
 )
 
 type inferenceEndpoint struct {
@@ -73,6 +77,16 @@ type modelInfoDetail struct {
 	MaxTokens          int64   `json:"max_tokens"`
 	InputCostPerToken  float64 `json:"input_cost_per_token"`
 	OutputCostPerToken float64 `json:"output_cost_per_token"`
+}
+
+type healthResponse struct {
+	HealthyEndpoints   []healthEndpointEntry `json:"healthy_endpoints"`
+	UnhealthyEndpoints []healthEndpointEntry `json:"unhealthy_endpoints"`
+}
+
+type healthEndpointEntry struct {
+	Model   string `json:"model"`
+	APIBase string `json:"api_base"`
 }
 
 func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[string]string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
@@ -205,11 +219,25 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context) ([]inferenceEndpoi
 		return nil, fmt.Errorf("decoding LiteLLM Model info response: %w", err)
 	}
 
+
+	statusByKey, err := p.fetchEndpointHealth(ctx)
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Printf("WARN: fetching LiteLLM endpoint health failed, marking endpoints as status unknown: %v", err)
+		}
+	}
+
 	endpoints := make([]inferenceEndpoint, 0, len(payload.Data))
 	for _, entry := range payload.Data {
+		status, ok := statusByKey[endpointHealthKey(entry.LiteLLMParams.Model, entry.LiteLLMParams.APIBase)]
+		if !ok {
+			status = endpointStatusUnknown
+		}
+
 		endpoints = append(endpoints, inferenceEndpoint{
 			Provider:     entry.LiteLLMParams.provider(),
 			EndpointType: entry.LiteLLMParams.endpointType(),
+			Status:       status,
 			EndpointURL:  entry.LiteLLMParams.APIBase,
 			Region:       entry.LiteLLMParams.RegionName,
 			ServesModel:  strings.TrimSpace(entry.ModelName),
@@ -221,4 +249,45 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context) ([]inferenceEndpoi
 	}
 
 	return endpoints, nil
+}
+
+// fetchEndpointHealth calls LiteLLM's /health endpoint and returns a map of
+// endpoint (model + api_base) to status, so it can be joined onto the
+// endpoints returned by /model/info.
+func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[string]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/health", nil)
+	if err != nil {
+		return nil, fmt.Errorf("building LiteLLM health request: %w", err)
+	}
+	p.addAuthorization(req)
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("calling LiteLLM health endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("litellm /health returned %s", resp.Status)
+	}
+
+	var payload healthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decoding LiteLLM health response: %w", err)
+	}
+
+	status := make(map[string]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
+	for _, entry := range payload.UnhealthyEndpoints {
+		status[endpointHealthKey(entry.Model, entry.APIBase)] = endpointStatusUnhealthy
+	}
+	for _, entry := range payload.HealthyEndpoints {
+		status[endpointHealthKey(entry.Model, entry.APIBase)] = endpointStatusHealthy
+	}
+
+	return status, nil
+}
+
+// it is used for mapping status into respective endpoints.
+func endpointHealthKey(model, apiBase string) string {
+	return strings.TrimSpace(model) + "|" + strings.TrimSpace(apiBase)
 }
