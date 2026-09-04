@@ -6,6 +6,10 @@
 // extracted from the Deployment, it emits a GitRepository node and a
 // deployed_from relation from the Deployment to that repository.
 //
+// TODO: For now repository - deployment relation only takes into account
+// the first container image in a Deployment. It should support multiple
+// images per Deployment.
+//
 // TODO: Implement support for private OCI registries. Source repository
 // discovery may fail for images stored in registries requiring
 // authentication.
