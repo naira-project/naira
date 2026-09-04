@@ -168,7 +168,12 @@ func TestLitellmModelsSeeded(t *testing.T) {
 	for _, n := range got.Nodes {
 		if !want[n.Path] {
 			t.Errorf("unexpected model node path %q", n.Path)
+			continue
 		}
+		delete(want, n.Path)
+	}
+	for path := range want {
+		t.Errorf("missing model node path %q", path)
 	}
 }
 

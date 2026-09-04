@@ -45,7 +45,7 @@ kind create cluster --config e2e/base/kind-config.yaml
 # → prints ENV_ID=<namespace> on success, note it for step 3
 
 # 3. Port-forward catalog + keycloak (API needs a Bearer token from keycloak)
-NS=<ENV_ID from step 2>
+NS="ENV_ID_FROM_STEP_2"  # substitute the ENV_ID printed by step 2
 kubectl -n "$NS" port-forward svc/catalog 8090:8090 &
 kubectl -n "$NS" port-forward svc/keycloak 8080:8080 &
 
