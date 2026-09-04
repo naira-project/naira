@@ -1,23 +1,14 @@
+import cronstrue from 'cronstrue';
 import { AlertCircle, Play, RefreshCw, X } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { PluginErrorModal } from '../components/PluginErrorModal';
 import { PluginStatusBadge } from '../components/PluginStatusBadge';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
-import type { OperationResource, StatusErrorResource } from '../lib/catalogApi';
+import type { OperationResource, PluginResource, StatusErrorResource } from '../lib/catalogApi';
 import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 
-/**
- * Dedicated page for managing plugin ingestion.
- *
- * Shows one row per plugin with its latest run state and a "Run All Plugins"
- * button at the top. Every "Run" button — including "Run All" — is independent:
- * triggering one plugin never disables another plugin's button, and "Run All"
- * neither blocks nor is blocked by anything triggered individually.
- *
- * Supports an optional `?only=plugin1,plugin2` query param to scope the page
- * to a subset of plugins, used by empty-state links from catalog viewpoints.
- */
+/** Dedicated page for managing plugin ingestion and schedules. */
 export default function PluginsPage() {
   const [searchParams] = useSearchParams();
   const only = searchParams.get('only');
@@ -41,9 +32,8 @@ export default function PluginsPage() {
     runAll,
     runSubset,
   } = usePluginsStatus();
-
   const visiblePlugins = allowedPlugins
-    ? plugins.filter((p) => allowedPlugins.includes(p))
+    ? plugins.filter((plugin) => allowedPlugins.includes(plugin.name))
     : plugins;
 
   const [selectedError, setSelectedError] = useState<{
@@ -52,15 +42,7 @@ export default function PluginsPage() {
   } | null>(null);
 
   const handleRunVisible = async () => {
-    if (allowedPlugins) {
-      await runSubset(visiblePlugins);
-    } else {
-      await runAll();
-    }
-  };
-
-  const handleRunSingle = async (pluginName: string) => {
-    await runOne(pluginName);
+    allowedPlugins ? runSubset(visiblePlugins.map((plugin) => plugin.name)) : runAll();
   };
 
   return (
@@ -74,9 +56,7 @@ export default function PluginsPage() {
               Run individual plugins or all at once, and inspect their latest status.
             </p>
           </div>
-
           <div className="flex-1" />
-
           <button
             type="button"
             onClick={refresh}
@@ -91,14 +71,12 @@ export default function PluginsPage() {
             type="button"
             onClick={handleRunVisible}
             disabled={runAllActive}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white disabled:opacity-60"
           >
             <RefreshCw size={14} className={runAllActive ? 'animate-spin' : ''} />
             {runAllActive ? 'Running…' : allowedPlugins ? 'Run Shown Plugins' : 'Run All Plugins'}
           </button>
         </header>
-
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {runErrors.length > 0 && (
             <div className="mb-4 space-y-2">
@@ -120,18 +98,16 @@ export default function PluginsPage() {
               ))}
             </div>
           )}
-
           <StatusTab
             plugins={visiblePlugins}
             operations={operations}
             loading={loading}
             runningPlugins={runningPlugins}
-            onRun={handleRunSingle}
+            onRun={runOne}
             onViewError={(plugin, error) => setSelectedError({ plugin, error })}
           />
         </div>
       </div>
-
       <PluginErrorModal
         pluginName={selectedError?.plugin ?? ''}
         error={selectedError?.error ?? null}
@@ -141,6 +117,15 @@ export default function PluginsPage() {
   );
 }
 
+interface StatusTabProps {
+  plugins: PluginResource[];
+  operations: OperationResource[];
+  loading: boolean;
+  runningPlugins: Set<string>;
+  onRun: (plugin: string) => void;
+  onViewError: (plugin: string, error: StatusErrorResource) => void;
+}
+
 function StatusTab({
   plugins,
   operations,
@@ -148,14 +133,7 @@ function StatusTab({
   runningPlugins,
   onRun,
   onViewError,
-}: {
-  plugins: string[];
-  operations: OperationResource[];
-  loading: boolean;
-  runningPlugins: Set<string>;
-  onRun: (plugin: string) => void;
-  onViewError: (plugin: string, error: StatusErrorResource) => void;
-}) {
+}: StatusTabProps) {
   const latestByPlugin = latestOperationPerPlugin(operations);
 
   if (plugins.length === 0 && !loading) {
@@ -165,12 +143,13 @@ function StatusTab({
   return (
     <table className="w-full table-fixed text-left text-sm">
       <colgroup>
-        <col className="w-[22%]" />
-        <col className="w-[15%]" />
-        <col className="w-[12%]" />
-        <col className="w-[17%]" />
-        <col className="w-[23%]" />
+        <col className="w-[20%]" />
+        <col className="w-[14%]" />
         <col className="w-[11%]" />
+        <col className="w-[15%]" />
+        <col className="w-[18%]" />
+        <col className="w-[12%]" />
+        <col className="w-[10%]" />
       </colgroup>
       <thead>
         <tr className="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
@@ -179,19 +158,18 @@ function StatusTab({
           <th className="py-2 pr-4 font-medium">Duration</th>
           <th className="py-2 pr-4 font-medium">Status</th>
           <th className="py-2 pr-4 font-medium">Result</th>
+          <th className="py-2 pr-4 font-medium">Schedule</th>
           <th className="py-2 text-right font-medium">Action</th>
         </tr>
       </thead>
       <tbody>
         {plugins.map((plugin) => {
-          const op = latestByPlugin.get(plugin);
-          // Hide previous status/result while running to avoid displaying stale data
-          // next to an active spinner. Resets as soon as the plugin completes.
-          const running = runningPlugins.has(plugin);
+          const op = latestByPlugin.get(plugin.name);
+          const running = runningPlugins.has(plugin.name);
 
           return (
-            <tr key={plugin} className="border-b border-gray-100 last:border-0">
-              <td className="py-3 pr-4 font-medium text-gray-900">{plugin}</td>
+            <tr key={plugin.name} className="border-b border-gray-100 last:border-0">
+              <td className="py-3 pr-4 font-medium text-gray-900">{plugin.name}</td>
               <td className="py-3 pr-4 text-gray-500">
                 {op ? formatRelativeTime(op.createdAt) : 'Never'}
               </td>
@@ -212,7 +190,7 @@ function StatusTab({
                     type="button"
                     onClick={() => {
                       if (op.error) {
-                        onViewError(plugin, op.error);
+                        onViewError(plugin.name, op.error);
                       }
                     }}
                     className="inline-flex items-center gap-1.5 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"
@@ -236,13 +214,15 @@ function StatusTab({
                   <span className="text-xs text-gray-400">—</span>
                 )}
               </td>
+              <td className="py-3 pr-4">
+                <ScheduleCell schedule={plugin.schedule} />
+              </td>
               <td className="py-3 text-right">
                 <button
                   type="button"
-                  onClick={() => onRun(plugin)}
+                  onClick={() => onRun(plugin.name)}
                   disabled={running}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                  title={`Run ${plugin} plugin`}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"
                 >
                   {running ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} />}
                   {running ? 'Running…' : 'Run'}
@@ -254,4 +234,24 @@ function StatusTab({
       </tbody>
     </table>
   );
+}
+
+function ScheduleCell({ schedule }: { schedule: string }) {
+  const friendly = schedule ? friendlySchedule(schedule) : 'Not scheduled';
+
+  return (
+    <div className="max-w-full" title={schedule || undefined}>
+      <span className={friendly === 'Not scheduled' ? 'text-gray-400' : 'text-gray-700'}>
+        {friendly}
+      </span>
+    </div>
+  );
+}
+
+function friendlySchedule(expression: string): string {
+  try {
+    return cronstrue.toString(expression, { use24HourTimeFormat: true });
+  } catch {
+    return 'Custom schedule';
+  }
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginmanager"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/scheduling"
 )
 
 func main() {
@@ -26,7 +27,7 @@ func main() {
 		logger.Fatalf("invalid configuration: %v", err)
 	}
 
-	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, config.PluginConnectionTimeout, logger)
+	registeredPlugins, cleanup, err := pluginmanager.Register(config.Plugins, config.PluginConnectionTimeout, logger)
 	if err != nil {
 		logger.Fatalf("failed to register plugins: %v", err)
 	}
@@ -39,8 +40,17 @@ func main() {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
+	scheduler, err := scheduling.NewConfiguredScheduler(config.Plugins, runner, logger)
+	if err != nil {
+		logger.Fatalf("failed to configure scheduler: %v", err)
+	}
+	defer func() {
+		if err := scheduler.Stop(ctx); err != nil {
+			logger.Printf("error stopping scheduler: %v", err)
+		}
+	}()
 
-	router, err := httpapi.NewRouter(catalogService, runner, logger, keycloak.Config{
+	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 		Issuer: config.KeycloakIssuer,
@@ -56,8 +66,8 @@ func main() {
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
-		for name, addr := range config.PluginAddresses {
-			logger.Printf("plugin %q -> %s", name, addr)
+		for name, plugin := range config.Plugins {
+			logger.Printf("plugin %q -> %s", name, plugin.Address)
 		}
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

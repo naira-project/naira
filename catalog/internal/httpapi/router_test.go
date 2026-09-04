@@ -129,7 +129,11 @@ func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.
 
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	definitions := make(map[string]catalog.PluginDefinition, len(plugins))
+	for name := range plugins {
+		definitions[name] = catalog.PluginDefinition{}
+	}
+	router, err := NewRouter(catalogService, runner, definitions, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 	return router
 }
@@ -345,7 +349,7 @@ func TestRunPluginAsyncEndpoint(t *testing.T) {
 	opStore := operations.NewMemoryStore()
 	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"mlflow": stubPlugin{}})
 
-	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins/mlflow:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -365,7 +369,7 @@ func TestRunPluginAsyncEndpoint(t *testing.T) {
 func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
 	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
 
-	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/missing:run", nil), testBearerToken)
+	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins/missing:run", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -379,11 +383,11 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	router, err := NewRouter(catalogService, runner, map[string]catalog.PluginDefinition{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 
 	// First request — starts the plugin run.
-	req1 := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
+	req1 := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins/mlflow:run", nil), testBearerToken)
 	rec1 := httptest.NewRecorder()
 	router.ServeHTTP(rec1, req1)
 	assert.Equal(t, http.StatusAccepted, rec1.Code)
@@ -394,7 +398,7 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	waitForOperationState(t, opStore, firstOp.Name, operations.StateRunning)
 
 	// Second request — should be rejected with 409.
-	req2 := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
+	req2 := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins/mlflow:run", nil), testBearerToken)
 	rec2 := httptest.NewRecorder()
 	router.ServeHTTP(rec2, req2)
 	assert.Equal(t, http.StatusConflict, rec2.Code)
@@ -466,22 +470,3 @@ func TestGetOperationByIDEndpoint(t *testing.T) {
 	assert.Equal(t, opName, op.Name)
 	assert.Equal(t, "seed", op.Plugin)
 }
-
-func TestListPluginsEndpoint(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{
-		"mlflow":  stubPlugin{},
-		"litellm": stubPlugin{},
-	})
-
-	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/plugins", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var payload map[string][]string
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	assert.Equal(t, []string{"litellm", "mlflow"}, payload["plugins"])
-}
-

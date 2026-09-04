@@ -2,17 +2,20 @@ package main
 
 import (
 	"fmt"
-	"strings"
+	"os"
 	"time"
 
+	"github.com/naira-project/naira/catalog/internal/catalog"
+
 	"go-simpler.org/env"
+	"gopkg.in/yaml.v3"
 )
 
 type config struct {
 	Port                    int
 	ReadHeadersTimeout      time.Duration
 	ShutdownTimeout         time.Duration
-	PluginAddresses         map[string]string
+	Plugins                 catalog.PluginConfig
 	PluginConnectionTimeout time.Duration
 	PluginTimeout           time.Duration
 	KeycloakBaseURL         string
@@ -24,7 +27,7 @@ type envConfig struct {
 	Port                    int           `env:"PORT" default:"8090"`
 	ReadHeadersTimeout      time.Duration `env:"READ_HEADERS_TIMEOUT" default:"5s"`
 	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" default:"5s"`
-	PluginAddresses         []string      `env:"PLUGIN_ADDRESSES"`
+	PluginConfigFile        string        `env:"PLUGIN_CONFIG_FILE" default:"/etc/catalog/plugins.yaml"`
 	PluginConnectionTimeout time.Duration `env:"PLUGIN_CONNECTION_TIMEOUT" default:"10s"`
 	PluginTimeout           time.Duration `env:"PLUGIN_TIMEOUT" default:"5m"`
 	KeycloakBaseURL         string        `env:"KEYCLOAK_BASE_URL"`
@@ -32,52 +35,60 @@ type envConfig struct {
 	KeycloakIssuer          string        `env:"KEYCLOAK_ISSUER"`
 }
 
+type pluginConfig struct {
+	Plugins map[string]pluginEntry `yaml:"plugins"`
+}
+
+type pluginEntry struct {
+	Address  string `yaml:"address"`
+	Schedule string `yaml:"schedule"`
+}
+
 func loadConfig() (config, error) {
 	var raw envConfig
-	opts := &env.Options{
-		SliceSep: ",",
-	}
-	if err := env.Load(&raw, opts); err != nil {
-		return config{}, fmt.Errorf("load config from environment: %w", err)
+	if err := env.Load(&raw, nil); err != nil {
+		return config{}, fmt.Errorf("load environment configuration: %w", err)
 	}
 
-	pluginAddresses, err := parsePluginAddresses(raw.PluginAddresses)
+	plugins, err := loadPluginConfig(raw.PluginConfigFile)
 	if err != nil {
-		return config{}, fmt.Errorf("parse plugin addresses: %w", err)
+		return config{}, fmt.Errorf("load plugin configuration: %w", err)
 	}
 
-	cfg := config{
+	return config{
 		Port:                    raw.Port,
 		ReadHeadersTimeout:      raw.ReadHeadersTimeout,
 		ShutdownTimeout:         raw.ShutdownTimeout,
-		PluginAddresses:         pluginAddresses,
+		Plugins:                 plugins,
 		PluginConnectionTimeout: raw.PluginConnectionTimeout,
 		PluginTimeout:           raw.PluginTimeout,
 		KeycloakBaseURL:         raw.KeycloakBaseURL,
 		KeycloakRealm:           raw.KeycloakRealm,
 		KeycloakIssuer:          raw.KeycloakIssuer,
-	}
-
-	return cfg, nil
+	}, nil
 }
 
-func parsePluginAddresses(raw []string) (map[string]string, error) {
-	plugins := make(map[string]string)
-	for _, entry := range raw {
-		entry = strings.TrimSpace(entry)
-		if entry == "" {
-			continue
-		}
-		name, addr, ok := strings.Cut(entry, "=")
-		if !ok {
-			return nil, fmt.Errorf("invalid plugin address entry %q: must be in name=address format", entry)
-		}
-		name = strings.TrimSpace(name)
-		addr = strings.TrimSpace(addr)
-		if name == "" || addr == "" {
-			return nil, fmt.Errorf("invalid plugin address entry %q: name and address must not be empty", entry)
-		}
-		plugins[name] = addr
+func loadPluginConfig(path string) (catalog.PluginConfig, error) {
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read plugin configuration file %q: %w", path, err)
 	}
-	return plugins, nil
+
+	var plugins pluginConfig
+	if err := yaml.Unmarshal(contents, &plugins); err != nil {
+		return nil, fmt.Errorf("parse plugin configuration file %q: %w", path, err)
+	}
+
+	pluginDefinitions := make(catalog.PluginConfig, len(plugins.Plugins))
+	for name, plugin := range plugins.Plugins {
+		pluginDefinitions[name] = catalog.PluginDefinition{
+			Address:  plugin.Address,
+			Schedule: plugin.Schedule,
+		}
+	}
+	if err := pluginDefinitions.Validate(); err != nil {
+		return nil, fmt.Errorf("validate plugin configuration: %w", err)
+	}
+
+	return pluginDefinitions, nil
 }
