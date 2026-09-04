@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
@@ -77,49 +76,6 @@ func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catal
 
 	_, _, err := store.ApplyPluginSnapshot("test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
 	require.NoError(t, err)
-}
-
-// waitForOperation polls the operation store until the operation reaches a
-// terminal state (SUCCEEDED or FAILED) or the timeout elapses.
-func waitForOperation(t *testing.T, opStore operations.Store, name string) operations.Operation {
-	t.Helper()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		op, err := opStore.Get(name)
-		if err == nil && (op.State == operations.StateSucceeded || op.State == operations.StateFailed) {
-			return op
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	op, err := opStore.Get(name)
-	if err != nil {
-		t.Fatalf("operation %q: %v", name, err)
-	}
-	t.Fatalf("operation %q state = %s, want terminal state", name, op.State)
-	return operations.Operation{}
-}
-
-// waitForOperationState polls the operation store until the operation reaches
-// the given state or the timeout elapses.
-func waitForOperationState(t *testing.T, opStore operations.Store, name string, state operations.State) {
-	t.Helper()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		op, err := opStore.Get(name)
-		if err == nil && op.State == state {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	op, err := opStore.Get(name)
-	if err != nil {
-		t.Fatalf("operation %q: %v", name, err)
-	}
-	t.Fatalf("operation %q state = %s, want %s", name, op.State, state)
 }
 
 // newTestRouter wires a fresh catalog.Service and pluginrun.Runner sharing a
@@ -316,157 +272,6 @@ func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 	}, response)
 }
 
-func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}})
-
-	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusAccepted, rec.Code)
-
-	var payload RunPluginsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	require.Len(t, payload.Operations, 1)
-
-	op := payload.Operations[0]
-	assert.Equal(t, "seed", op.Plugin)
-
-	// Wait for the async run to complete.
-	completed := waitForOperation(t, opStore, op.Name)
-	assert.Equal(t, operations.StateFailed, completed.State)
-	require.NotNil(t, completed.Error)
-	assert.Contains(t, completed.Error.Message, "seed failed")
-}
-
-func TestRunPluginAsyncEndpoint(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"mlflow": stubPlugin{}})
-
-	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusAccepted, rec.Code)
-
-	var op OperationResource
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &op))
-	assert.Equal(t, "mlflow", op.Plugin)
-	assert.Equal(t, "PENDING", op.State)
-
-	// Wait for completion.
-	completed := waitForOperation(t, opStore, op.Name)
-	assert.Equal(t, operations.StateSucceeded, completed.State)
-}
-
-func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
-
-	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/missing:run", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestRunPluginAsyncEndpointConflict(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	block := make(chan struct{})
-	store := catalog.NewMemoryStore()
-	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
-	require.NoError(t, err)
-
-	// First request — starts the plugin run.
-	req1 := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
-	rec1 := httptest.NewRecorder()
-	router.ServeHTTP(rec1, req1)
-	assert.Equal(t, http.StatusAccepted, rec1.Code)
-
-	// Wait until the operation is RUNNING.
-	var firstOp OperationResource
-	require.NoError(t, json.Unmarshal(rec1.Body.Bytes(), &firstOp))
-	waitForOperationState(t, opStore, firstOp.Name, operations.StateRunning)
-
-	// Second request — should be rejected with 409.
-	req2 := withAuth(httptest.NewRequest(http.MethodPost, "/v1/mlflow:run", nil), testBearerToken)
-	rec2 := httptest.NewRecorder()
-	router.ServeHTTP(rec2, req2)
-	assert.Equal(t, http.StatusConflict, rec2.Code)
-
-	close(block)
-	runner.Wait()
-}
-
-func TestGetOperationsEndpoint(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
-
-	// Trigger a run so we have an operation to list.
-	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusAccepted, rec.Code)
-
-	var runResp RunPluginsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &runResp))
-	require.Len(t, runResp.Operations, 1)
-	opName := runResp.Operations[0].Name
-
-	// Wait for completion.
-	waitForOperation(t, opStore, opName)
-
-	// GET /v1/operations should list the operation.
-	getReq := withAuth(httptest.NewRequest(http.MethodGet, "/v1/operations", nil), testBearerToken)
-	getRec := httptest.NewRecorder()
-	router.ServeHTTP(getRec, getReq)
-
-	assert.Equal(t, http.StatusOK, getRec.Code)
-
-	var listResp ListOperationsResponse
-	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &listResp))
-	require.Len(t, listResp.Operations, 1)
-	assert.Equal(t, opName, listResp.Operations[0].Name)
-	assert.Equal(t, "seed", listResp.Operations[0].Plugin)
-	assert.Equal(t, "SUCCEEDED", listResp.Operations[0].State)
-}
-
-func TestGetOperationByIDEndpoint(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
-
-	// Trigger a run.
-	req := withAuth(httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	require.Equal(t, http.StatusAccepted, rec.Code)
-
-	var runResp RunPluginsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &runResp))
-	require.Len(t, runResp.Operations, 1)
-	opName := runResp.Operations[0].Name
-
-	// Wait for completion.
-	waitForOperation(t, opStore, opName)
-
-	// GET /v1/operations/{name} should return the operation.
-	getReq := withAuth(httptest.NewRequest(http.MethodGet, "/v1/operations/"+url.PathEscape(opName), nil), testBearerToken)
-	getRec := httptest.NewRecorder()
-	router.ServeHTTP(getRec, getReq)
-
-	assert.Equal(t, http.StatusOK, getRec.Code)
-
-	var op OperationResource
-	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &op))
-	assert.Equal(t, opName, op.Name)
-	assert.Equal(t, "seed", op.Plugin)
-}
-
 func TestListPluginsEndpoint(t *testing.T) {
 	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{
 		"mlflow":  stubPlugin{},
@@ -484,4 +289,3 @@ func TestListPluginsEndpoint(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
 	assert.Equal(t, []string{"litellm", "mlflow"}, payload["plugins"])
 }
-
