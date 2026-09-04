@@ -14,7 +14,8 @@ stringData:
   OPENMETADATA_ADMIN_PASSWORD: admin
 ---
 # The tech radar is rendered read-only from this admin-managed config.
-# Schema reference and annotated example: docs/tech-radar.md.
+# Schema reference: plugins/cmd/tech_radar/README.md; annotated example kept
+# valid by the plugin's unit tests: plugins/cmd/tech_radar/sample_config.yaml.
 apiVersion: v1
 kind: ConfigMap
 metadata:

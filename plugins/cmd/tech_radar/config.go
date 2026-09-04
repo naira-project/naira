@@ -193,6 +193,12 @@ func parseRadarConfig(data []byte) (*radarConfig, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing YAML: %w", err)
 	}
+	// An empty or comment-only file never invokes UnmarshalYAML, leaving the
+	// zero value behind. Name the real cause instead of reporting "line 0"
+	// validation errors against a document that does not exist.
+	if cfg.line == 0 {
+		return nil, errors.New("config file is empty or contains no YAML mapping")
+	}
 
 	cfg.applyDefaults()
 	if err := cfg.validate(); err != nil {
@@ -280,6 +286,12 @@ func (c *radarConfig) validate() error {
 		ringIDs[r.ID] = true
 	}
 
+	// The entries key is required: distinguishing a deliberately empty radar
+	// ("entries: []") from an accidentally deleted block keeps a valid-looking
+	// sync from silently wiping every entry node.
+	if c.Entries == nil {
+		report(c.line, "entries: field is required (use [] for a radar without entries)")
+	}
 	entryIDs := make(map[string]bool, len(c.Entries))
 	for i, e := range c.Entries {
 		if !idPattern.MatchString(e.ID) {

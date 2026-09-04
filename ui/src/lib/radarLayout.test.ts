@@ -73,4 +73,18 @@ describe('layoutBlips', () => {
       }
     }
   });
+
+  it('separates blips crowded into the innermost ring', () => {
+    // Near the center the sector arc is shorter than a blip diameter, so the
+    // collision pass must be able to drift blips outward within the band.
+    const entries = makeEntries(5, 'models', 'adopt');
+    const blips = layoutBlips(entries, QUADRANTS, RINGS, RADIUS);
+
+    for (let i = 0; i < blips.length; i++) {
+      for (let j = i + 1; j < blips.length; j++) {
+        const distance = Math.hypot(blips[i].x - blips[j].x, blips[i].y - blips[j].y);
+        expect(distance).toBeGreaterThanOrEqual(BLIP_RADIUS * 2);
+      }
+    }
+  });
 });

@@ -229,7 +229,26 @@ entries: []
 		{
 			name:     "empty file",
 			config:   "",
-			wantErrs: []string{"schema_version: 0 is not supported"},
+			wantErrs: []string{"config file is empty or contains no YAML mapping"},
+		},
+		{
+			name:     "comment-only file",
+			config:   "# nothing here yet\n",
+			wantErrs: []string{"config file is empty or contains no YAML mapping"},
+		},
+		{
+			name: "missing entries key",
+			config: `schema_version: 1
+radar: {title: Radar, edition: v1, owner: team}
+quadrants:
+  - {id: a, name: A}
+  - {id: b, name: B}
+  - {id: c, name: C}
+  - {id: d, name: D}
+rings:
+  - {id: adopt, name: Adopt}
+`,
+			wantErrs: []string{"entries: field is required (use [] for a radar without entries)"},
 		},
 	}
 

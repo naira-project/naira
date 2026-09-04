@@ -96,7 +96,11 @@ export function parseRadarModel(
     props.rings,
     (r) => typeof r?.id === 'string' && typeof r?.name === 'string',
   );
-  if (!quadrants || !rings) {
+  // The chart geometry (quadrantStartAngle, QUADRANT_LABELS in RadarChart)
+  // hard-assumes exactly 4 quadrants, matching the plugin's validation.
+  // Reject anything else here so a version-skewed or foreign claim degrades
+  // to the not-synced state instead of crashing the page during render.
+  if (quadrants?.length !== 4 || !rings) {
     return null;
   }
 
@@ -104,8 +108,13 @@ export function parseRadarModel(
   const ringIds = new Set(rings.map((r) => r.id));
 
   const allEntries = entryNodes
-    .map((node): RadarEntry => {
-      const entryProps = nodeProps(node);
+    .map((node) => ({ node, entryProps: nodeProps(node) }))
+    // Entries are namespaced by radar id (the plugin writes a "radar" prop and
+    // prefixes paths with it). Keep only this radar's entries so a second
+    // radar's blips never leak into the view; entries without the prop are
+    // kept for backward compatibility.
+    .filter(({ entryProps }) => (entryProps.radar ?? radarNode.path) === radarNode.path)
+    .map(({ node, entryProps }): RadarEntry => {
       return {
         path: node.path,
         name: entryProps.title ?? node.path,

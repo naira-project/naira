@@ -166,29 +166,51 @@ export function layoutBlips(
 }
 
 function resolveCollisions(blips: Blip[], ringCount: number, radius: number) {
+  // Bounds and sweep direction are invariant per blip; hoist them out of the
+  // O(iterations · n²) pair loop instead of recomputing (and re-hashing the
+  // entry path) on every collision.
+  const blipBounds = blips.map((blip) =>
+    boundsFor(blip.quadrantIndex, blip.ringIndex, ringCount, radius),
+  );
+  const blipDirection = blips.map((blip) => (fnv1a(blip.entry.path) % 2 === 0 ? 1 : -1));
+
+  // Push one blip away from the other along their separation vector, clamped
+  // back into the blip's own quadrant/ring bounds. Repulsion moves blips both
+  // radially and angularly, so crowds near the center — where the sector arc
+  // is shorter than a blip diameter — can still spread across the band.
+  const push = (blip: Blip, index: number, awayFrom: Blip, distance: number) => {
+    const strength = (MIN_BLIP_DISTANCE - distance) / 2 + 0.5;
+    let dx = (blip.x - awayFrom.x) / (distance || 1);
+    let dy = (blip.y - awayFrom.y) / (distance || 1);
+    if (distance < 0.001) {
+      // Coincident blips: break the tie with the deterministic per-blip sweep
+      // direction instead of a zero-length repulsion vector.
+      dx = 0;
+      dy = blipDirection[index];
+    }
+    const nx = blip.x + dx * strength;
+    const ny = blip.y + dy * strength;
+    const bounds = blipBounds[index];
+    // atan2 yields (-180, 180]; normalize into the bounds' period so sectors
+    // beyond 180° (quadrant 3 spans 180–270°) clamp correctly.
+    const rawAngle = (Math.atan2(ny, nx) * 180) / Math.PI;
+    const angle = ((((rawAngle - bounds.minAngle) % 360) + 360) % 360) + bounds.minAngle;
+    place(blip, bounds, angle, Math.hypot(nx, ny));
+  };
+
   for (let iteration = 0; iteration < MAX_COLLISION_ITERATIONS; iteration++) {
     let moved = false;
     for (let i = 0; i < blips.length; i++) {
       for (let j = i + 1; j < blips.length; j++) {
         const a = blips[i];
         const b = blips[j];
-        if (Math.hypot(a.x - b.x, a.y - b.y) >= MIN_BLIP_DISTANCE) {
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        if (distance >= MIN_BLIP_DISTANCE) {
           continue;
         }
 
-        // Nudge the later blip along its sector arc; sweep direction flips
-        // deterministically per blip so clusters spread both ways.
-        const bounds = boundsFor(b.quadrantIndex, b.ringIndex, ringCount, radius);
-        const direction = fnv1a(b.entry.path) % 2 === 0 ? 1 : -1;
-        const step = 4 * direction * (1 + iteration / 10);
-        let nextAngle = b.angle + step;
-        if (nextAngle > bounds.maxAngle) {
-          nextAngle = bounds.minAngle + (nextAngle - bounds.maxAngle);
-        } else if (nextAngle < bounds.minAngle) {
-          nextAngle = bounds.maxAngle - (bounds.minAngle - nextAngle);
-        }
-        const currentRadius = Math.hypot(b.x, b.y);
-        place(b, bounds, nextAngle, currentRadius);
+        push(a, i, b, distance);
+        push(b, j, a, distance);
         moved = true;
       }
     }

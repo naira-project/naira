@@ -86,6 +86,47 @@ describe('parseRadarModel', () => {
     ).toBeNull();
   });
 
+  it('returns null when the taxonomy does not carry exactly 4 quadrants', () => {
+    // The chart geometry hard-assumes 4 quadrants; anything else must degrade
+    // to the not-synced state instead of crashing during render.
+    const threeQuadrants = JSON.stringify([
+      { id: 'a', name: 'A' },
+      { id: 'b', name: 'B' },
+      { id: 'c', name: 'C' },
+    ]);
+    expect(
+      parseRadarModel(radarNode({ ...validRadarProps, quadrants: threeQuadrants }), []),
+    ).toBeNull();
+  });
+
+  it('ignores entries belonging to a different radar', () => {
+    const model = parseRadarModel(radarNode(validRadarProps), [
+      entryNode('other/foreign', {
+        title: 'Foreign',
+        quadrant: 'models',
+        ring: 'adopt',
+        moved: 'none',
+        owner: 'team',
+        rationale: 'belongs to another radar',
+        index: '0',
+        radar: 'other',
+      }),
+      entryNode('naira/ours', {
+        title: 'Ours',
+        quadrant: 'models',
+        ring: 'adopt',
+        moved: 'none',
+        owner: 'team',
+        rationale: 'belongs here',
+        index: '1',
+        radar: 'naira',
+      }),
+    ]);
+
+    expect(model?.entries.map((e) => e.name)).toEqual(['Ours']);
+    expect(model?.orphans).toEqual([]);
+  });
+
   it('collects entries with unknown taxonomy ids as orphans', () => {
     const model = parseRadarModel(radarNode(validRadarProps), [
       entryNode('naira/ghost', {

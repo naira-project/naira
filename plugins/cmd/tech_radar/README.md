@@ -4,8 +4,6 @@ tech\_radar renders an admin-managed technology radar configuration file into th
 
 The radar deliberately carries no links into the catalog: it expresses the organization's target vision, not what is currently deployed or in use.
 
-This README is generated from the Go package documentation in main.go (go generate ./...).
-
 ## How it works
 
 The plugin reads the config file (default /etc/naira/techradar/radar.yaml, overridable via TECH\_RADAR\_CONFIG\_PATH) on every collect, so changes take effect on the next sync without a redeployment.
@@ -65,6 +63,3 @@ In-portal editing, historic editions, enforcement of radar decisions, multiple r
 ## Environment Variables
 
   - TECH\_RADAR\_CONFIG\_PATH (optional) - path to the radar YAML file; defaults to /etc/naira/techradar/radar.yaml.
-
----
-Readme created from Go doc with [goreadme](https://github.com/posener/goreadme)
