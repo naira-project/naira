@@ -17,9 +17,7 @@ type Repository struct {
 	Method string
 }
 
-var sourceLabelKeys = []string{
-	"org.opencontainers.image.source",
-}
+const sourceLabelKey = "org.opencontainers.image.source"
 
 // FromImage discovers a source repository from OCI image metadata, falling back
 // to inference from a GitHub Container Registry image name.
@@ -43,12 +41,9 @@ func FromImage(ctx context.Context, image string) (Repository, error) {
 
 	result := Repository{}
 	if manifest.Config.Labels != nil {
-		for _, key := range sourceLabelKeys {
-			if value := manifest.Config.Labels[key]; value != "" {
-				result.URL = value
-				result.Method = "OCI_STANDARD"
-				break
-			}
+		if value := manifest.Config.Labels[sourceLabelKey]; value != "" {
+			result.URL = value
+			result.Method = "OCI_STANDARD"
 		}
 	}
 
