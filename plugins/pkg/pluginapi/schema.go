@@ -24,4 +24,5 @@ const (
 	RelationKindDerivedFrom  = "derived_from"
 	RelationKindOwnedBy      = "owned_by"
 	RelationKindExposes      = "exposes"
+	RelationKindBuiltFrom    = "built_from"
 )

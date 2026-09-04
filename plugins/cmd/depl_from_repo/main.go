@@ -125,7 +125,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient *kubernetes.Clientset) (
 		}
 
 		relations = append(relations, pluginapi.RelationClaim{
-			Kind: pluginapi.RelationKindDeployedFrom,
+			Kind: pluginapi.RelationKindBuiltFrom,
 			From: depNodeID,
 			To:   gitNodeID,
 		})
