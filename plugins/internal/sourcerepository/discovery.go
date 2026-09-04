@@ -58,16 +58,17 @@ func FromImage(ctx context.Context, image string) (Repository, error) {
 }
 
 func inferGitHubRepository(image string) string {
-	if !strings.HasPrefix(image, "ghcr.io/") {
+	ref, err := name.ParseReference(image)
+	if err != nil {
 		return ""
 	}
-	parts := strings.Split(strings.TrimPrefix(image, "ghcr.io/"), "/")
-	if len(parts) < 2 {
+	if ref.Context().RegistryStr() != "ghcr.io" {
 		return ""
 	}
-	repo := strings.Split(strings.Split(parts[1], ":")[0], "@")[0]
-	if repo == "" {
+
+	parts := strings.Split(ref.Context().RepositoryStr(), "/")
+	if len(parts) != 2 {
 		return ""
 	}
-	return "https://github.com/" + parts[0] + "/" + repo
+	return "https://github.com/" + parts[0] + "/" + parts[1]
 }
