@@ -23,8 +23,9 @@ type Deployment struct {
 }
 
 // DiscoverDeployments scans all Deployments across target namespaces and returns
-// every deployment with its container images. For the first container it also
-// attempts to discover the source repository via OCI labels or image-name inference.
+// every deployment with its container images. Source repository discovery is
+// attempted only for Deployments with exactly one container; Deployments with
+// multiple containers are not linked to avoid ambiguous attribution.
 func DiscoverDeployments(
 	ctx context.Context,
 	k8sClient kubernetes.Interface,
@@ -57,15 +58,13 @@ func DiscoverDeployments(
 				entry.Images = append(entry.Images, container.Image)
 			}
 
-			if len(containers) > 0 {
-				repo, err := sourcerepository.FromImage(ctx, containers[0].Image)
-				if err != nil {
-					if logger != nil {
-						logger.Printf("WARN: failed to inspect image %q in deployment %s/%s: %v", containers[0].Image, namespace, deployment.Name, err)
-					}
-				} else if repo.URL != "" {
-					entry.SourceRepository = repo
+			repo, err := sourcerepository.FromImages(ctx, entry.Images)
+			if err != nil {
+				if logger != nil {
+					logger.Printf("WARN: failed to inspect image in deployment %s/%s: %v", namespace, deployment.Name, err)
 				}
+			} else if repo.URL != "" {
+				entry.SourceRepository = repo
 			}
 			results = append(results, entry)
 		}

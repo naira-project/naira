@@ -4,7 +4,9 @@ github enriches GitHub repositories discovered from Kubernetes Deployments with 
 
 The plugin only collects repositories that are both referenced by a Kubernetes Deployment and owned by the GitHub organization configured in GITHUB\_ORG. It does not enumerate or collect repositories outside that organization. The organization restriction is applied using the GITHUB\_ORG environment variable.
 
-TODO: For now repository - deployment relation only takes into account the first container image in a Deployment. It should support multiple images per Deployment.
+Deployments with more than one container are intentionally not linked to a source repository because the repository cannot be attributed unambiguously.
+
+TODO: Link deployments with more than one container to source repositories
 
 TODO: Implement support for private OCI registries. Source repository discovery may fail for images stored in registries requiring authentication.
 

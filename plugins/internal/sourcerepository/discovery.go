@@ -19,6 +19,16 @@ type Repository struct {
 
 const sourceLabelKey = "org.opencontainers.image.source"
 
+// FromImages discovers a source repository only when exactly one container image
+// is present. Deployments with multiple containers are deliberately not linked
+// because the source repository cannot be attributed unambiguously.
+func FromImages(ctx context.Context, images []string) (Repository, error) {
+	if len(images) != 1 {
+		return Repository{}, nil
+	}
+	return FromImage(ctx, images[0])
+}
+
 // FromImage discovers a source repository from OCI image metadata, falling back
 // to inference from a GitHub Container Registry image name.
 func FromImage(ctx context.Context, image string) (Repository, error) {

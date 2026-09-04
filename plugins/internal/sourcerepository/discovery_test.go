@@ -4,6 +4,16 @@ import (
 	"testing"
 )
 
+func TestFromImagesSkipsDeploymentsWithMultipleContainers(t *testing.T) {
+	repo, err := FromImages(t.Context(), []string{"ghcr.io/owner/first", "ghcr.io/owner/second"})
+	if err != nil {
+		t.Fatalf("FromImages() error = %v", err)
+	}
+	if repo != (Repository{}) {
+		t.Fatalf("FromImages() = %#v, want an empty repository", repo)
+	}
+}
+
 func TestInferGitHubRepository(t *testing.T) {
 	tests := []struct {
 		name     string
