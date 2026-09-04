@@ -1,0 +1,74 @@
+package sourcerepository
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+)
+
+// Repository is a source repository discovered from a container image.
+type Repository struct {
+	URL    string
+	Method string
+}
+
+const sourceLabelKey = "org.opencontainers.image.source"
+
+// FromImage discovers a source repository from OCI image metadata, falling back
+// to inference from a GitHub Container Registry image name.
+func FromImage(ctx context.Context, image string) (Repository, error) {
+	ref, err := name.ParseReference(image)
+	if err != nil {
+		return Repository{}, fmt.Errorf("parsing image reference: %w", err)
+	}
+	img, err := remote.Image(ref, remote.WithContext(ctx), remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithTransport(http.DefaultTransport))
+	if err != nil {
+		if inferred := inferGitHubRepository(image); inferred != "" {
+			return Repository{URL: inferred, Method: "INFERRED"}, nil
+		}
+		return Repository{}, fmt.Errorf("fetching image metadata: %w", err)
+	}
+
+	manifest, err := img.ConfigFile()
+	if err != nil {
+		return Repository{}, fmt.Errorf("reading image metadata: %w", err)
+	}
+
+	result := Repository{}
+	if manifest.Config.Labels != nil {
+		if value := manifest.Config.Labels[sourceLabelKey]; value != "" {
+			result.URL = value
+			result.Method = "OCI_STANDARD"
+		}
+	}
+
+	if result.URL == "" {
+		if inferred := inferGitHubRepository(image); inferred != "" {
+			result.URL = inferred
+			result.Method = "INFERRED"
+		}
+	}
+
+	return result, nil
+}
+
+func inferGitHubRepository(image string) string {
+	ref, err := name.ParseReference(image)
+	if err != nil {
+		return ""
+	}
+	if ref.Context().RegistryStr() != "ghcr.io" {
+		return ""
+	}
+
+	parts := strings.Split(ref.Context().RepositoryStr(), "/")
+	if len(parts) != 2 {
+		return ""
+	}
+	return "https://github.com/" + parts[0] + "/" + parts[1]
+}

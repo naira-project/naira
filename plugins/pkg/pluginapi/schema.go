@@ -9,6 +9,7 @@ const (
 	NodeKindFluxKustomization = "Kustomization.fluxcd"
 	NodeKindFluxHelmChart     = "HelmChart.fluxcd"
 	NodeKindGitRepository     = "git_repository"
+	NodeKindOwner             = "owner"
 	NodeKindMCPServer         = "mcp_server"
 	NodeKindMCPTool           = "mcp_tool"
 )
@@ -21,5 +22,6 @@ const (
 	RelationKindDescribes    = "describes"
 	RelationKindDeployedFrom = "deployed_from"
 	RelationKindDerivedFrom  = "derived_from"
+	RelationKindOwnedBy      = "owned_by"
 	RelationKindExposes      = "exposes"
 )
