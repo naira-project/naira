@@ -1,0 +1,48 @@
+# Sample tech radar configuration.
+#
+# Schema reference: plugins/cmd/tech_radar/README.md. The plugin reads the config from
+# /etc/naira/techradar/radar.yaml by default; TECH_RADAR_CONFIG_PATH overrides
+# the path. This file is parsed by the plugin's unit tests, so it is always a
+# valid, up-to-date example.
+schema_version: 1            # required; only 1 is accepted
+radar:
+  id: naira                  # optional; defaults to "default"
+  title: Naira Tech Radar    # required
+  edition: 2026-09           # required; free-form edition label
+  owner: platform-team       # required
+quadrants:                   # required; exactly 4; order = display order
+  - id: models
+    name: Models
+  - id: agentic
+    name: Agentic Patterns
+  - id: knowledge
+    name: Knowledge Techniques
+  - id: others
+    name: Others
+rings:                       # required; 1-6; order = innermost to outermost
+  - id: adopt
+    name: Adopt
+    description: Proven; default choice for new work.
+  - id: trial
+    name: Trial
+    description: Worth pursuing on projects that can absorb risk.
+  - id: assess
+    name: Assess
+    description: Explore to understand impact.
+  - id: hold
+    name: Hold
+    description: Do not start new work with this.
+entries:
+  - id: claude-sonnet
+    name: Claude Sonnet
+    quadrant: models         # must match a quadrant id
+    ring: adopt              # must match a ring id
+    moved: in                # in | out | none; defaults to none
+    owner: ml-platform
+    rationale: Default general-purpose model.
+  - id: naive-rag            # "moved" omitted here; defaults to none
+    name: Naive RAG
+    quadrant: knowledge
+    ring: hold
+    owner: ai-board
+    rationale: Superseded by hybrid retrieval.
