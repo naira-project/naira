@@ -63,13 +63,12 @@ function toFlowNode(
     <div className="flex gap-2 text-left h-full">
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
         <div className="flex min-w-0 items-center justify-between gap-2">
-          <span
-            className="truncate text-[10px] font-bold uppercase tracking-wider"
-            style={{ color: palette.stroke }}
-          >
-            {node.kind}
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="truncate text-[10px] font-bold uppercase tracking-wider">
+              {node.kind}
+            </span>
+            <DerivedDataIndicator props={node.properties} compact />
           </span>
-          <DerivedDataIndicator props={node.properties} compact />
           {!node.isRoot && (
             <button
               type="button"
