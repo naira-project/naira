@@ -1,0 +1,155 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Deploys the litellm_chatbot_to_catalog_api scenario (see e2e/README.md)
+# into an isolated namespace on a throwaway kind cluster and runs its
+# assertions against it.
+#
+# `workflow_dispatch`-only for now, deliberately: this is a new, unvalidated
+# ~7-13 minute job. Switch the `on:` block to `pull_request` once a run has
+# been observed succeeding end-to-end.
+name: E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: "PR number to test against"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  KIND_VERSION: "0.32.0"
+  KUBECTL_VERSION: "1.36.0"
+  HELM_VERSION: "4.2.0"
+  CLUSTER_NAME: naira-idp-e2e
+
+jobs:
+  e2e:
+    name: E2E · litellm_chatbot_to_catalog_api
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine PR number
+        id: pr
+        run: |
+          NUMBER="${{ inputs.pr-number }}"
+          if [ -z "${NUMBER}" ]; then
+            echo "::error::pr-number input is required." >&2
+            exit 1
+          fi
+          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ steps.pr.outputs.number }}/merge
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26"
+
+      - name: Install kind
+        run: |
+          curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v${KIND_VERSION}/kind-linux-amd64"
+          curl -Lo ./kind.sha256 "https://kind.sigs.k8s.io/dl/v${KIND_VERSION}/kind-linux-amd64.sha256sum"
+          echo "$(cut -d' ' -f1 ./kind.sha256)  ./kind" | sha256sum -c -
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Install kubectl
+        run: |
+          curl -Lo ./kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          curl -Lo ./kubectl.sha256 "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+          echo "$(cat ./kubectl.sha256)  ./kubectl" | sha256sum -c -
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
+      - name: Install helm
+        run: |
+          curl -Lo ./helm.tar.gz "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+          curl -Lo ./helm.tar.gz.sha256 "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz.sha256sum"
+          echo "$(cut -d' ' -f1 ./helm.tar.gz.sha256)  ./helm.tar.gz" | sha256sum -c -
+          tar -xzf ./helm.tar.gz
+          sudo mv ./linux-amd64/helm /usr/local/bin/helm
+
+      # Computed once, here, rather than inside create-environment.sh: if that
+      # script fails before it would derive an ID itself, the destroy step at
+      # the bottom (if: always()) still knows what to tear down.
+      - name: Compute environment ID
+        run: echo "ENV_ID=pr-${{ steps.pr.outputs.number }}-${{ github.run_id }}" >> "$GITHUB_ENV"
+
+      - name: Create kind cluster
+        run: kind create cluster --config e2e/base/kind-config.yaml
+
+      - name: Create E2E environment
+        run: |
+          ./e2e/scripts/create-environment.sh \
+            --scenario litellm_chatbot_to_catalog_api \
+            --env-id "${ENV_ID}" \
+            --tag "${{ github.sha }}" \
+            --cluster-name "${CLUSTER_NAME}"
+
+      - name: Port-forward catalog
+        run: |
+          kubectl -n "${ENV_ID}" port-forward svc/catalog 8090:8090 &
+          echo $! > /tmp/catalog-port-forward.pid
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8090/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::catalog not reachable via port-forward after 30s" >&2
+          exit 1
+
+      # The catalog API requires a Bearer token (Keycloak auth integration).
+      # E2E tests fetch their own token via KEYCLOAK_URL — see authToken() in
+      # e2e/litellm_chatbot_to_catalog_api/assert/assert_test.go.
+      - name: Port-forward keycloak
+        run: |
+          kubectl -n "${ENV_ID}" port-forward svc/keycloak 8080:8080 &
+          echo $! > /tmp/keycloak-port-forward.pid
+          # The keycloak Service only exposes the http port (8080), not the
+          # management/health port (9000) — check a realm endpoint instead of
+          # /health/ready, which isn't reachable through this forward.
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8080/realms/naira/.well-known/openid-configuration >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::keycloak not reachable via port-forward after 30s" >&2
+          exit 1
+
+      - name: Run E2E tests
+        env:
+          CATALOG_URL: http://localhost:8090
+          KEYCLOAK_URL: http://localhost:8080
+        run: go test -tags e2e -v ./e2e/litellm_chatbot_to_catalog_api/assert/...
+
+      - name: Stop port-forwards
+        if: always()
+        run: |
+          kill "$(cat /tmp/catalog-port-forward.pid)" 2>/dev/null || true
+          kill "$(cat /tmp/keycloak-port-forward.pid)" 2>/dev/null || true
+
+      - name: Collect diagnostics
+        if: failure()
+        run: |
+          kubectl logs -n "${ENV_ID}" -l app=catalog --all-containers --tail=-1 || true
+          kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
+          kubectl describe pods -n "${ENV_ID}" || true
+
+      # Deletes the namespace and the cluster-scoped resources it leaves
+      # behind. No Cleanup Job, no GC sweeper — nothing else outlives this.
+      - name: Destroy environment
+        if: always()
+        run: |
+          ./e2e/scripts/destroy-environment.sh \
+            --env-id "${ENV_ID}" \
+            --cluster-name "${CLUSTER_NAME}"

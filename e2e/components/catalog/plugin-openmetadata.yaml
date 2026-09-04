@@ -1,0 +1,25 @@
+        - name: plugin-openmetadata
+          image: openmetadata:${TAG}
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50056"
+            - name: OPENMETADATA_BASE_URL
+              value: http://openmetadata.${NAMESPACE}.svc.cluster.local:8585
+            - name: OPENMETADATA_ADMIN_EMAIL
+              value: admin@open-metadata.org
+            - name: OPENMETADATA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: OPENMETADATA_ADMIN_PASSWORD
+            - name: PATH_PREFIX
+              value: openmetadata
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

@@ -1,0 +1,109 @@
+# envsubst template — substituted variables: ${NAMESPACE}
+#
+# Opt-in component — no current scenario deploys it (see e2e/README.md).
+# Deliberately excludes llama-qwen25-05b (downloads a full-size model —
+# flakiness risk under CI network conditions) and vLLM (requires a GPU
+# node). llama-dummy-model is the CI-safe backend, though its init
+# container still fetches a small GGUF from HuggingFace on every fresh PVC.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache-pvc
+  namespace: ${NAMESPACE}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 3Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llama-dummy-model
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llama-dummy-model
+  template:
+    metadata:
+      labels:
+        app: llama-dummy-model
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        - name: download-dummy
+          image: curlimages/curl:latest@sha256:58adaa4e8dca9c988bae2aba4ab3434a0bb2da16bbe3f92dec39ec7785166777
+          command:
+            - sh
+            - -c
+            - |
+              MODEL_PATH="/models/tiny-llama3-test-q2_k.gguf"
+              if [ ! -f "$MODEL_PATH" ]; then
+                echo "Downloading Tiny Llama3 model..."
+                curl -L -o "$MODEL_PATH" "https://huggingface.co/tensorblock/tiny-llama3-test-GGUF/resolve/main/tiny-llama3-test-Q2_K.gguf"
+              else
+                echo "Tiny Llama3 model already cached."
+              fi
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server@sha256:fcca4dac388066ca93db561751e8caf5fc7d46d9df5f00a7422026db68468e31
+          args:
+            - "-m"
+            - "/models/tiny-llama3-test-q2_k.gguf"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "--metrics"
+            - "--no-ui"
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: model-cache-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llama-dummy-model
+  namespace: ${NAMESPACE}
+  labels:
+    app: llama-dummy-model
+spec:
+  selector:
+    app: llama-dummy-model
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP

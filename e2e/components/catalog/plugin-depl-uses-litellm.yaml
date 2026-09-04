@@ -1,0 +1,18 @@
+        - name: plugin-depl-uses-litellm
+          image: depl-uses-litellm:${TAG}
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50054"
+            - name: DEPL_USES_LITELLM_KUBECONFIG
+              value: ""
+            - name: DEPL_USES_LITELLM_NAMED_HOSTS
+              value: "litellm1=http://litellm.${NAMESPACE}:4000"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

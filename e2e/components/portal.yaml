@@ -1,0 +1,73 @@
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portal
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: portal
+  template:
+    metadata:
+      labels:
+        app: portal
+    spec:
+      containers:
+        - name: portal
+          image: portal:${TAG}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "3000"
+            - name: NAIRA_UI_BASE_URL
+              value: "http://localhost:3001"
+            - name: IDP_NAMES
+              value: keycloak
+            - name: BASE_DOMAINS_KEYCLOAK
+              value: localhost
+            - name: AUTH_SERVER_URL_KEYCLOAK
+              value: http://keycloak.${NAMESPACE}.svc.cluster.local:8080/realms/naira/protocol/openid-connect/auth
+            - name: TOKEN_URL_KEYCLOAK
+              value: http://keycloak.${NAMESPACE}.svc.cluster.local:8080/realms/naira/protocol/openid-connect/token
+            - name: OIDC_CLIENT_ID_KEYCLOAK
+              value: naira-portal
+            - name: OIDC_CLIENT_SECRET_KEYCLOAK
+              value: naira-e2e-test-secret
+          ports:
+            - containerPort: 3000
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: portal
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+  type: ClusterIP

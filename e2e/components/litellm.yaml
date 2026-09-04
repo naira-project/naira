@@ -1,0 +1,135 @@
+# envsubst template — substituted variables: ${NAMESPACE}
+#
+# Minimal config for the litellm_chatbot_to_catalog_api scenario: exactly the
+# 2 models it asserts on (openai, mistral). Fake provider keys are fine —
+# LiteLLM lists models via /v1/models regardless of whether the underlying
+# provider key is real. DATABASE_URL points at components/postgres.yaml:
+# unlike everything else here, LiteLLM's virtual-key management genuinely
+# needs a database (/key/generate 500s with "DB not connected" otherwise) —
+# the seed step (seed/provision_chatbot1_key.py) uses it to mint chatbot1 a
+# key scoped to just the "openai" model, so depl_uses_litellm's discovered
+# edge is exactly chatbot1 -> openai, not every model on this instance.
+#
+# LITELLM_MASTER_KEY is a real, well-formed key (matches depl_uses_litellm's
+# default ^sk-.{22}$ detection regexp) — chatbot1 (components/chatbot1.yaml)
+# authenticates to LiteLLM with the same value. depl_uses_litellm discovers
+# a Deployment by scanning for *Secret-sourced* env values matching that
+# regexp, so the master key deliberately stays a plain container env value
+# here (not sourced from litellm-secrets) — otherwise litellm's own pod,
+# which necessarily holds its own master key, would also get flagged as
+# "using" its own models, breaking the exactly-1-relation assertion.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-secrets
+  namespace: ${NAMESPACE}
+type: Opaque
+stringData:
+  OPENAI_API_KEY: change-me
+  MISTRAL_API_KEY: change-me
+  DATABASE_URL: postgresql://litellm:litellm-local-password@postgres.${NAMESPACE}.svc.cluster.local:5432/litellm
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: ${NAMESPACE}
+data:
+  config.yaml: |
+    model_list:
+      - model_name: openai
+        litellm_params:
+          model: openai/gpt-4o-mini
+          api_key: os.environ/OPENAI_API_KEY
+      - model_name: mistral
+        litellm_params:
+          model: mistral/mistral-small-latest
+          api_key: os.environ/MISTRAL_API_KEY
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      containers:
+        - name: litellm
+          image: docker.litellm.ai/berriai/litellm:v1.82.3
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config
+            - /app/config.yaml
+            - --port
+            - "4000"
+            - --host
+            - 0.0.0.0
+          env:
+            - name: LITELLM_MASTER_KEY
+              value: sk-e2elitellmmasterkey001
+          envFrom:
+            - secretRef:
+                name: litellm-secrets
+          ports:
+            - containerPort: 4000
+              name: http
+          volumeMounts:
+            - name: litellm-config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          # Same reasoning as keycloak's startupProbe (components/keycloak.yaml)
+          # — livenessProbe's ~100s kill window (40s delay + 3 failures at
+          # 20s apart) has been observed killing a still-booting litellm on
+          # CI runners under resource pressure, not a genuinely hung one.
+          startupProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1
+              memory: 2Gi
+      volumes:
+        - name: litellm-config
+          configMap:
+            name: litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+  type: ClusterIP
