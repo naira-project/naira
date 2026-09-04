@@ -1,52 +1,25 @@
 package main
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-const validConfig = `schema_version: 1
-radar:
-  id: naira
-  title: Naira Tech Radar
-  edition: 2026-09
-  owner: platform-team
-quadrants:
-  - id: models
-    name: Models
-  - id: agentic
-    name: Agentic Patterns
-  - id: knowledge
-    name: Knowledge Techniques
-  - id: others
-    name: Others
-rings:
-  - id: adopt
-    name: Adopt
-    description: Proven; default choice for new work.
-  - id: hold
-    name: Hold
-    description: Do not start new work with this.
-entries:
-  - id: claude-sonnet
-    name: Claude Sonnet
-    quadrant: models
-    ring: adopt
-    moved: in
-    owner: ml-platform
-    rationale: Default general-purpose model.
-  - id: naive-rag
-    name: Naive RAG
-    quadrant: knowledge
-    ring: hold
-    owner: ai-board
-    rationale: Superseded by hybrid retrieval.
-`
+// sampleConfig returns sample_config.yaml, the annotated example shipped in
+// this directory. Parsing it here keeps the sample valid and up to date.
+func sampleConfig(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile("sample_config.yaml")
+	require.NoError(t, err)
+	return string(data)
+}
 
 func TestParseRadarConfigValid(t *testing.T) {
-	cfg, err := parseRadarConfig([]byte(validConfig))
+	cfg, err := parseRadarConfig([]byte(sampleConfig(t)))
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, cfg.SchemaVersion)
@@ -56,7 +29,7 @@ func TestParseRadarConfigValid(t *testing.T) {
 
 	require.Len(t, cfg.Quadrants, 4)
 	assert.Equal(t, "models", cfg.Quadrants[0].ID)
-	require.Len(t, cfg.Rings, 2)
+	require.Len(t, cfg.Rings, 4)
 	assert.Equal(t, "Proven; default choice for new work.", cfg.Rings[0].Description)
 
 	require.Len(t, cfg.Entries, 2)
@@ -97,7 +70,7 @@ func TestParseRadarConfigErrors(t *testing.T) {
 		},
 		{
 			name:     "unsupported schema version",
-			config:   "schema_version: 2\n" + validConfig[len("schema_version: 1\n"):],
+			config:   strings.Replace(sampleConfig(t), "schema_version: 1", "schema_version: 2", 1),
 			wantErrs: []string{`schema_version: 2 is not supported (expected 1)`},
 		},
 		{
@@ -222,6 +195,21 @@ entries:
   - {id: e1, name: E1, quadrant: a, ring: adopt, moved: sideways, owner: o, rationale: r}
 `,
 			wantErrs: []string{`field "moved" must be one of in, out, none; got "sideways"`},
+		},
+		{
+			name: "id too long",
+			config: `schema_version: 1
+radar: {title: Radar, edition: v1, owner: team}
+quadrants:
+  - {id: ` + strings.Repeat("a", maxIDLength+1) + `, name: A}
+  - {id: b, name: B}
+  - {id: c, name: C}
+  - {id: d, name: D}
+rings:
+  - {id: adopt, name: Adopt}
+entries: []
+`,
+			wantErrs: []string{`quadrants[0]: field "id" must be at most 100 characters, got 101`},
 		},
 		{
 			name: "invalid id pattern",

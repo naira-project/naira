@@ -47,7 +47,7 @@ func TestNewValidatesConfig(t *testing.T) {
 }
 
 func TestCollectEmitsRadarAndEntries(t *testing.T) {
-	p := newTestPlugin(t, writeConfig(t, validConfig), testLogger())
+	p := newTestPlugin(t, writeConfig(t, sampleConfig(t)), testLogger())
 
 	response, err := p.Collect(t.Context())
 	require.NoError(t, err)
@@ -67,25 +67,31 @@ func TestCollectEmitsRadarAndEntries(t *testing.T) {
 		`[{"id":"models","name":"Models"},{"id":"agentic","name":"Agentic Patterns"},{"id":"knowledge","name":"Knowledge Techniques"},{"id":"others","name":"Others"}]`,
 		radar["quadrants"], "quadrant order is preserved")
 	assert.JSONEq(t,
-		`[{"id":"adopt","name":"Adopt","description":"Proven; default choice for new work."},{"id":"hold","name":"Hold","description":"Do not start new work with this."}]`,
+		`[{"id":"adopt","name":"Adopt","description":"Proven; default choice for new work."},{"id":"trial","name":"Trial","description":"Worth pursuing on projects that can absorb risk."},{"id":"assess","name":"Assess","description":"Explore to understand impact."},{"id":"hold","name":"Hold","description":"Do not start new work with this."}]`,
 		radar["rings"])
 
 	entries := nodesByKind(response, pluginapi.NodeKindTechRadarEntry)
 	require.Len(t, entries, 2)
-	require.Contains(t, entries, "naira/claude-sonnet")
-	first := entries["naira/claude-sonnet"]
-	assert.Equal(t, "Claude Sonnet", first["title"])
-	assert.Equal(t, "models", first["quadrant"])
-	assert.Equal(t, "adopt", first["ring"])
-	assert.Equal(t, "in", first["moved"])
-	assert.Equal(t, "ml-platform", first["owner"])
-	assert.Equal(t, "Default general-purpose model.", first["rationale"])
-	assert.Equal(t, "0", first["index"])
-	assert.Equal(t, "naira", first["radar"])
-
-	second := entries["naira/naive-rag"]
-	assert.Equal(t, "none", second["moved"], "omitted moved defaults to none")
-	assert.Equal(t, "1", second["index"])
+	assert.Equal(t, pluginapi.PropertyMap{
+		"title":     "Claude Sonnet",
+		"quadrant":  "models",
+		"ring":      "adopt",
+		"moved":     "in",
+		"owner":     "ml-platform",
+		"rationale": "Default general-purpose model.",
+		"index":     "0",
+		"radar":     "naira",
+	}, entries["naira/claude-sonnet"])
+	assert.Equal(t, pluginapi.PropertyMap{
+		"title":     "Naive RAG",
+		"quadrant":  "knowledge",
+		"ring":      "hold",
+		"moved":     "none", // omitted in the sample; defaults to none
+		"owner":     "ai-board",
+		"rationale": "Superseded by hybrid retrieval.",
+		"index":     "1",
+		"radar":     "naira",
+	}, entries["naira/naive-rag"])
 }
 
 func TestCollectFailsWithoutTouchingResponseOnMissingFile(t *testing.T) {
@@ -110,14 +116,14 @@ func TestCollectFailsOnInvalidConfig(t *testing.T) {
 }
 
 func TestCollectRereadsFileEveryRun(t *testing.T) {
-	path := writeConfig(t, validConfig)
+	path := writeConfig(t, sampleConfig(t))
 	p := newTestPlugin(t, path, testLogger())
 
 	first, err := p.Collect(t.Context())
 	require.NoError(t, err)
 	require.Len(t, nodesByKind(first, pluginapi.NodeKindTechRadarEntry), 2)
 
-	updated := strings.Replace(validConfig, "edition: 2026-09", "edition: 2026-12", 1)
+	updated := strings.Replace(sampleConfig(t), "edition: 2026-09", "edition: 2026-12", 1)
 	updated = strings.Replace(updated, "moved: in", "moved: out", 1)
 	require.NoError(t, os.WriteFile(path, []byte(updated), 0o600))
 
@@ -131,7 +137,7 @@ func TestCollectRereadsFileEveryRun(t *testing.T) {
 
 func TestCollectTruncatesLongRationale(t *testing.T) {
 	longRationale := strings.Repeat("ä", maxTextLength+10)
-	config := strings.Replace(validConfig, "rationale: Default general-purpose model.", "rationale: "+longRationale, 1)
+	config := strings.Replace(sampleConfig(t), "rationale: Default general-purpose model.", "rationale: "+longRationale, 1)
 
 	var logBuffer bytes.Buffer
 	p := newTestPlugin(t, writeConfig(t, config), log.New(&logBuffer, "", 0))
@@ -144,4 +150,21 @@ func TestCollectTruncatesLongRationale(t *testing.T) {
 	assert.Len(t, runes, maxTextLength+1, "truncated to the limit plus ellipsis")
 	assert.Equal(t, '…', runes[len(runes)-1])
 	assert.Contains(t, logBuffer.String(), `WARN: entry "claude-sonnet": rationale truncated`)
+}
+
+func TestCollectTruncatesLongLabels(t *testing.T) {
+	longOwner := strings.Repeat("ö", maxLabelLength+10)
+	config := strings.Replace(sampleConfig(t), "owner: ml-platform", "owner: "+longOwner, 1)
+
+	var logBuffer bytes.Buffer
+	p := newTestPlugin(t, writeConfig(t, config), log.New(&logBuffer, "", 0))
+
+	response, err := p.Collect(t.Context())
+	require.NoError(t, err)
+
+	owner := nodesByKind(response, pluginapi.NodeKindTechRadarEntry)["naira/claude-sonnet"]["owner"]
+	runes := []rune(owner)
+	assert.Len(t, runes, maxLabelLength+1, "truncated to the limit plus ellipsis")
+	assert.Equal(t, '…', runes[len(runes)-1])
+	assert.Contains(t, logBuffer.String(), `WARN: entry "claude-sonnet": owner truncated`)
 }
