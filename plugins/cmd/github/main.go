@@ -7,6 +7,10 @@
 // organization. The organization restriction is applied using the GITHUB_ORG
 // environment variable.
 //
+// TODO: Implement support for private OCI registries. Source repository
+// discovery may fail for images stored in registries requiring
+// authentication.
+//
 // # Environment Variables
 //
 //   - GITHUB_ORG (mandatory) - limits collection to repositories owned by this

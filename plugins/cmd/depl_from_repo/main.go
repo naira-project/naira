@@ -6,6 +6,10 @@
 // extracted from the Deployment, it emits a GitRepository node and a
 // deployed_from relation from the Deployment to that repository.
 //
+// TODO: Implement support for private OCI registries. Source repository
+// discovery may fail for images stored in registries requiring
+// authentication.
+//
 // # Environment Variables
 //
 //   - KUBECONFIG (optional) - path to a kubeconfig file; when unset, in-cluster
