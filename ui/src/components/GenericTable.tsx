@@ -49,6 +49,7 @@ import {
   type RelationSummary,
 } from '@/lib/kindUtils';
 import { type NodeResource, nodeProps } from '../lib/catalogApi';
+import DerivedDataIndicator from './DerivedDataIndicator';
 import EmptyState from './states/EmptyState';
 
 interface GenericTableProps {
@@ -105,11 +106,14 @@ export default function GenericTable({
         header: 'Name',
         accessorFn: (node) => parsedPaths.get(node.name)?.name ?? node.name,
         cell: (info) => (
-          <span
-            className="truncate text-sm font-medium text-foreground"
-            title={info.row.original.name}
-          >
-            {info.getValue() as string}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className="truncate text-sm font-medium text-foreground"
+              title={info.row.original.name}
+            >
+              {info.getValue() as string}
+            </span>
+            <DerivedDataIndicator props={nodeProps(info.row.original)} compact />
           </span>
         ),
       },

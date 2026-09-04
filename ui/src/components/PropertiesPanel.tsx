@@ -1,6 +1,8 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
+import { derivedDetectionMethod } from '../lib/derivedData';
 import { isComplexValue, isUrlValue, tryParseJson } from '../lib/kindUtils';
+import DerivedDataIndicator from './DerivedDataIndicator';
 
 type PropertiesLayout = 'row' | 'stacked';
 
@@ -73,6 +75,12 @@ function PropertyRow({
       }
     >
       {name}
+      {name === 'detection_method' && (
+        <DerivedDataIndicator
+          method={derivedDetectionMethod({ detection_method: value })}
+          compact
+        />
+      )}
     </span>
   );
 
@@ -104,7 +112,9 @@ function PropertyRow({
   );
 
   return (
-    <div className={`group relative px-4 py-2.5 text-sm hover:bg-gray-50`}>
+    <div
+      className={`group relative px-4 py-2.5 text-sm hover:bg-gray-50 ${name === 'detection_method' ? 'border-l-4 border-amber-400 bg-amber-50/50' : ''}`}
+    >
       {stacked ? (
         <div className="space-y-1 pr-6">
           {keyEl}
