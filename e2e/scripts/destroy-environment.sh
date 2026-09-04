@@ -33,17 +33,30 @@ if ! kubectl config use-context "kind-${CLUSTER_NAME}" 2>/dev/null; then
   exit 0
 fi
 
+FAILED=0
+
 echo "==> Deleting namespace ${ENV_ID}"
-kubectl delete namespace "${ENV_ID}" --ignore-not-found --wait=true --timeout=120s
+if ! kubectl delete namespace "${ENV_ID}" --ignore-not-found --wait=true --timeout=120s; then
+  echo "error: failed to delete namespace ${ENV_ID}" >&2
+  FAILED=1
+fi
 
 echo "==> Deleting cluster-scoped resources for ${ENV_ID}"
-kubectl delete clusterrole,clusterrolebinding -l "naira.io/env-id=${ENV_ID}" --ignore-not-found
+if ! kubectl delete clusterrole,clusterrolebinding -l "naira.io/env-id=${ENV_ID}" --ignore-not-found; then
+  echo "error: failed to delete cluster-scoped resources for ${ENV_ID}" >&2
+  FAILED=1
+fi
 
 echo "==> Verifying cleanup"
 LEFTOVER_CR="$(kubectl get clusterrole,clusterrolebinding -l "naira.io/env-id=${ENV_ID}" -o name)"
 if [ -n "${LEFTOVER_CR}" ]; then
   echo "warning: cluster-scoped resources still present after delete:" >&2
   echo "${LEFTOVER_CR}" >&2
+fi
+
+if [ "${FAILED}" -ne 0 ]; then
+  echo "==> Failed to fully destroy ${ENV_ID}" >&2
+  exit 1
 fi
 
 echo "==> Destroyed ${ENV_ID}"

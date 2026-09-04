@@ -14,8 +14,8 @@ on:
   workflow_dispatch:
     inputs:
       pr-number:
-        description: "PR number to test against (defaults to the current PR when run from one)"
-        required: false
+        description: "PR number to test against"
+        required: true
 
 permissions:
   contents: read
@@ -35,42 +35,47 @@ jobs:
     name: E2E · litellm_chatbot_to_catalog_api
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Determine PR number
+        id: pr
+        run: |
+          NUMBER="${{ inputs.pr-number }}"
+          if [ -z "${NUMBER}" ]; then
+            echo "::error::pr-number input is required." >&2
+            exit 1
+          fi
+          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ steps.pr.outputs.number }}/merge
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
 
       - name: Install kind
         run: |
           curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v${KIND_VERSION}/kind-linux-amd64"
+          curl -Lo ./kind.sha256 "https://kind.sigs.k8s.io/dl/v${KIND_VERSION}/kind-linux-amd64.sha256sum"
+          echo "$(cut -d' ' -f1 ./kind.sha256)  ./kind" | sha256sum -c -
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
 
       - name: Install kubectl
         run: |
           curl -Lo ./kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          curl -Lo ./kubectl.sha256 "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
+          echo "$(cat ./kubectl.sha256)  ./kubectl" | sha256sum -c -
           chmod +x ./kubectl
           sudo mv ./kubectl /usr/local/bin/kubectl
 
       - name: Install helm
         run: |
           curl -Lo ./helm.tar.gz "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz"
+          curl -Lo ./helm.tar.gz.sha256 "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz.sha256sum"
+          echo "$(cut -d' ' -f1 ./helm.tar.gz.sha256)  ./helm.tar.gz" | sha256sum -c -
           tar -xzf ./helm.tar.gz
           sudo mv ./linux-amd64/helm /usr/local/bin/helm
-
-      - name: Determine PR number
-        id: pr
-        run: |
-          NUMBER="${{ inputs.pr-number }}"
-          if [ -z "${NUMBER}" ]; then
-            NUMBER="${{ github.event.pull_request.number }}"
-          fi
-          if [ -z "${NUMBER}" ]; then
-            echo "::error::No PR number available — pass pr-number when running via workflow_dispatch outside a PR context." >&2
-            exit 1
-          fi
-          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
 
       # Computed once, here, rather than inside create-environment.sh: if that
       # script fails before it would derive an ID itself, the destroy step at
