@@ -24,7 +24,7 @@ jobs:
           # The manifest is intentionally left unchanged so the existing git tag
           # (e.g. v0.12.0-rc) remains a valid changelog boundary for Release Please.
           CURRENT=$(jq -r '."."' .release-please-manifest.json)
-          STABLE_VERSION=$(echo "$CURRENT" | sed 's/-rc.*//')
+          STABLE_VERSION=${CURRENT%%-rc*}
 
           # Strip only the flags that gate RC behaviour; keep versioning:prerelease
           # so Release Please can recognise bare -rc versions and graduate them correctly.

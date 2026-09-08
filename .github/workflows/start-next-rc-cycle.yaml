@@ -17,17 +17,14 @@ permissions:
 jobs:
   reset-to-rc:
     runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ inputs.release_tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: main
           persist-credentials: false
 
-      - name: Set Target Tag
-        run: echo "TAG_NAME=${INPUTS_RELEASE_TAG}" >> $GITHUB_ENV
-        env:
-          INPUTS_RELEASE_TAG: ${{ inputs.release_tag }}
-          
       - name: Revert Config to Prerelease & Silent
         run: |
           # Remove "release-as" and inject all prerelease, silent, and changelog-skipping settings back
@@ -49,12 +46,17 @@ jobs:
           
           # Branch name based on tag
           BRANCH_NAME="chore/start-next-rc-${TAG_NAME}"
+
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must have the form v1.2.3"
+            exit 1
+          fi
           
-          git checkout -b $BRANCH_NAME
+          git checkout -b "$BRANCH_NAME"
           git commit -am "chore: start next release candidate cycle after ${TAG_NAME}"
           
           # Force push to safely overwrite if a branch for this tag already exists
-          git push -f -u origin $BRANCH_NAME
+          git push -f -u origin "$BRANCH_NAME"
           
           # Create PR, ignoring failure if one is already open
           gh pr create \
