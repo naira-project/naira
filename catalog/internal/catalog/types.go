@@ -3,6 +3,7 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
@@ -21,22 +22,31 @@ type PluginConfigsByName map[string]PluginConfig
 var ErrInvalidPluginConfig = errors.New("invalid plugin configuration")
 
 func (c PluginConfigsByName) Validate() error {
-	seen := make(map[string]string, len(c))
-	for name, definition := range c {
-		normalizedName := strings.ToLower(strings.TrimSpace(name))
-		if normalizedName == "" {
-			return fmt.Errorf("plugin name %q: %w", name, ErrInvalidPluginConfig)
+	for name, config := range c {
+		if name == "" {
+			return fmt.Errorf("plugin name cannot be empty: %w", ErrInvalidPluginConfig)
 		}
-		if previous, exists := seen[normalizedName]; exists {
-			return fmt.Errorf("plugin names %q and %q normalize to the same name: %w", previous, name, ErrInvalidPluginConfig)
+		if strings.ToLower(strings.TrimSpace(name)) != name {
+			return fmt.Errorf("plugin name %q must be lowercased without leading/trailing whitespace: %w", name, ErrInvalidPluginConfig)
 		}
-		seen[normalizedName] = name
-		if strings.TrimSpace(definition.Address) == "" {
-			return fmt.Errorf("plugin %q has no address: %w", name, ErrInvalidPluginConfig)
+		if config.Schedule != strings.TrimSpace(config.Schedule) {
+			return fmt.Errorf("plugin %q schedule %q must not have leading or trailing whitespace: %w", name, config.Schedule, ErrInvalidPluginConfig)
 		}
-		if definition.Schedule != "" {
-			if _, err := cron.ParseStandard(definition.Schedule); err != nil {
-				return fmt.Errorf("plugin %q has invalid schedule %q: %w", name, definition.Schedule, ErrInvalidPluginConfig)
+		if config.Address != strings.TrimSpace(config.Address) {
+			return fmt.Errorf("plugin %q address %q must not have leading or trailing whitespace: %w", name, config.Address, ErrInvalidPluginConfig)
+		}
+
+		host, port, err := net.SplitHostPort(config.Address)
+		if err != nil || host == "" || port == "" {
+			if err == nil {
+				err = errors.New("host or port is empty")
+			}
+			return fmt.Errorf("plugin %q has invalid address (expected host:port): %v: %w", name, err, ErrInvalidPluginConfig)
+		}
+
+		if config.Schedule != "" {
+			if _, err := cron.ParseStandard(config.Schedule); err != nil {
+				return fmt.Errorf("plugin %q has invalid schedule %v: %w", name, err, ErrInvalidPluginConfig)
 			}
 		}
 	}
