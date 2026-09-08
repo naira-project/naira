@@ -49,7 +49,6 @@ func loadConfig() (config, error) {
 	if err := env.Load(&raw, nil); err != nil {
 		return config{}, fmt.Errorf("load environment configuration: %w", err)
 	}
-	raw.PluginConfigFile = "/Users/e.libera/Documents/github/reply/naira/catalog/cmd/catalog/plugins.yml"
 
 	plugins, err := loadPluginConfig(raw.PluginConfigFile)
 	if err != nil {
