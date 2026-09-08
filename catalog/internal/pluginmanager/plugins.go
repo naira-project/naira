@@ -20,13 +20,13 @@ func Register(plugins catalog.PluginConfigsByName, timeout time.Duration, logger
 	registered := make(map[string]pluginapi.Plugin, len(plugins))
 	var cleanups []func()
 
-	for name, definition := range plugins {
-		client, cleanup, err := ConnectPlugin(name, definition.Address, logger, timeout)
+	for name, config := range plugins {
+		client, cleanup, err := ConnectPlugin(name, config.Address, logger, timeout)
 		if err != nil {
 			for _, c := range cleanups {
 				c()
 			}
-			return nil, nil, fmt.Errorf("connecting to plugin %q at %q: %w", name, definition.Address, err)
+			return nil, nil, fmt.Errorf("connecting to plugin %q at %q: %w", name, config.Address, err)
 		}
 
 		registered[name] = client

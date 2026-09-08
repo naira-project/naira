@@ -49,6 +49,7 @@ func loadConfig() (config, error) {
 	if err := env.Load(&raw, nil); err != nil {
 		return config{}, fmt.Errorf("load environment configuration: %w", err)
 	}
+	raw.PluginConfigFile = "/Users/e.libera/Documents/github/reply/naira/catalog/cmd/catalog/plugins.yml"
 
 	plugins, err := loadPluginConfig(raw.PluginConfigFile)
 	if err != nil {
@@ -79,16 +80,16 @@ func loadPluginConfig(path string) (catalog.PluginConfigsByName, error) {
 		return nil, fmt.Errorf("parse plugin configuration file %q: %w", path, err)
 	}
 
-	pluginDefinitions := make(catalog.PluginConfigsByName, len(plugins.Plugins))
+	pluginConfigs := make(catalog.PluginConfigsByName, len(plugins.Plugins))
 	for name, plugin := range plugins.Plugins {
-		pluginDefinitions[name] = catalog.PluginConfig{
+		pluginConfigs[name] = catalog.PluginConfig{
 			Address:  plugin.Address,
 			Schedule: plugin.Schedule,
 		}
 	}
-	if err := pluginDefinitions.Validate(); err != nil {
+	if err := pluginConfigs.Validate(); err != nil {
 		return nil, fmt.Errorf("validate plugin configuration: %w", err)
 	}
 
-	return pluginDefinitions, nil
+	return pluginConfigs, nil
 }

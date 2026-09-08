@@ -32,37 +32,41 @@ var pluginListOptionsSpec = listOptionsSpec{
 	allowedFields: map[string]bool{},
 }
 
-func pluginResource(name string, definition catalog.PluginConfig) PluginResource {
-	return PluginResource{Name: name, Schedule: definition.Schedule}
+func newPluginResource(name string, config catalog.PluginConfig) PluginResource {
+	return PluginResource{Name: name, Schedule: config.Schedule}
 }
 
 // GET /v1/plugins lists configured plugin resources and their schedules.
-func newListPluginsHandler(definitions catalog.PluginConfigsByName, logger *log.Logger) http.HandlerFunc {
+func newListPluginsHandler(configs catalog.PluginConfigsByName, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(pluginListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-		resources := make([]PluginResource, 0, len(definitions))
-		for _, name := range slices.Sorted(maps.Keys(definitions)) {
-			resources = append(resources, pluginResource(name, definitions[name]))
+		resources := make([]PluginResource, 0, len(configs))
+		for _, name := range slices.Sorted(maps.Keys(configs)) {
+			resources = append(resources, newPluginResource(name, configs[name]))
 		}
 
 		page, nextPageToken, totalSize, err := paginate(resources, options.pageSize, options.offset, "plugins", logger)
 		if err != nil {
 			return fmt.Errorf("paginating plugins: %w", err)
 		}
-		writeJSON(w, http.StatusOK, ListPluginsResponse{Plugins: page, NextPageToken: nextPageToken, TotalSize: int32FromCount(totalSize, logger)})
+		writeJSON(w, http.StatusOK, ListPluginsResponse{
+			Plugins:       page,
+			NextPageToken: nextPageToken,
+			TotalSize:     int32FromCount(totalSize, logger),
+		})
 		return nil
 	})
 }
 
 // GET /v1/plugins/{plugin} returns one configured plugin resource.
-func newGetPluginHandler(definitions catalog.PluginConfigsByName) http.HandlerFunc {
+func newGetPluginHandler(configs catalog.PluginConfigsByName) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		plugin := chi.URLParam(r, "plugin")
-		definition, ok := definitions[plugin]
-		if ok {
-			writeJSON(w, http.StatusOK, pluginResource(plugin, definition))
-			return nil
+		config, ok := configs[plugin]
+		if !ok {
+			return fmt.Errorf("getting plugin %q: %w", plugin, errPluginResourceNotFound)
 		}
-		return fmt.Errorf("getting plugin %q: %w", plugin, errPluginResourceNotFound)
+		writeJSON(w, http.StatusOK, newPluginResource(plugin, config))
+		return nil
 	})
 }
 
