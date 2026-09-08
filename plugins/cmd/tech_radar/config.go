@@ -83,7 +83,7 @@ func (c *radarConfig) UnmarshalYAML(node *yaml.Node) error {
 	type alias radarConfig
 	decoded, line, err := decodeStrict[alias](node, "radar config")
 	if err != nil {
-		return err
+		return fmt.Errorf("in radar config: %w", err)
 	}
 	*c = radarConfig(decoded)
 	c.line = line
@@ -94,7 +94,7 @@ func (m *radarMeta) UnmarshalYAML(node *yaml.Node) error {
 	type alias radarMeta
 	decoded, line, err := decodeStrict[alias](node, "radar")
 	if err != nil {
-		return err
+		return fmt.Errorf("in radar: %w", err)
 	}
 	*m = radarMeta(decoded)
 	m.line = line
@@ -105,7 +105,7 @@ func (q *quadrant) UnmarshalYAML(node *yaml.Node) error {
 	type alias quadrant
 	decoded, line, err := decodeStrict[alias](node, "quadrant")
 	if err != nil {
-		return err
+		return fmt.Errorf("in quadrant: %w", err)
 	}
 	*q = quadrant(decoded)
 	q.line = line
@@ -116,7 +116,7 @@ func (r *ring) UnmarshalYAML(node *yaml.Node) error {
 	type alias ring
 	decoded, line, err := decodeStrict[alias](node, "ring")
 	if err != nil {
-		return err
+		return fmt.Errorf("in ring: %w", err)
 	}
 	*r = ring(decoded)
 	r.line = line
@@ -127,7 +127,7 @@ func (e *entry) UnmarshalYAML(node *yaml.Node) error {
 	type alias entry
 	decoded, line, err := decodeStrict[alias](node, "entry")
 	if err != nil {
-		return err
+		return fmt.Errorf("in entry: %w", err)
 	}
 	*e = entry(decoded)
 	e.line = line
@@ -137,13 +137,15 @@ func (e *entry) UnmarshalYAML(node *yaml.Node) error {
 // decodeStrict decodes a mapping node into T, rejecting keys that don't match
 // any yaml-tagged field of T so typos surface with their line instead of
 // being silently dropped. It returns the node's line for validation errors.
+// Callers wrap the error with their context, so the wraps here name only the
+// operation.
 func decodeStrict[T any](node *yaml.Node, context string) (T, int, error) {
 	var decoded T
 	if err := checkKnownFields(node, context, yamlFieldNames[T]()); err != nil {
-		return decoded, 0, fmt.Errorf("checking %s fields: %w", context, err)
+		return decoded, 0, fmt.Errorf("checking fields: %w", err)
 	}
 	if err := node.Decode(&decoded); err != nil {
-		return decoded, 0, fmt.Errorf("decoding %s: %w", context, err)
+		return decoded, 0, fmt.Errorf("decoding node: %w", err)
 	}
 	return decoded, node.Line, nil
 }

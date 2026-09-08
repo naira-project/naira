@@ -42,8 +42,7 @@ func nodesByKind(response pluginapi.CollectResponse, kind string) map[string]plu
 
 func TestNewValidatesConfig(t *testing.T) {
 	_, err := New(config{ConfigPath: ""}, testLogger())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "TECH_RADAR_CONFIG_PATH is empty")
+	assert.ErrorContains(t, err, "TECH_RADAR_CONFIG_PATH is empty")
 }
 
 func TestCollectEmitsRadarAndEntries(t *testing.T) {
@@ -94,25 +93,25 @@ func TestCollectEmitsRadarAndEntries(t *testing.T) {
 	}, entries["naira/naive-rag"])
 }
 
-func TestCollectFailsWithoutTouchingResponseOnMissingFile(t *testing.T) {
+// A missing or broken config must fail the collect with an error rather than
+// succeed with zero nodes: the catalog applies a successful response as a full
+// replacement snapshot, so an empty success would wipe the radar instead of
+// keeping the last known good one.
+func TestCollectFailsOnMissingFile(t *testing.T) {
 	p := newTestPlugin(t, filepath.Join(t.TempDir(), "does-not-exist.yaml"), testLogger())
 
-	response, err := p.Collect(t.Context())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "does-not-exist.yaml")
-	assert.Empty(t, response.Nodes, "a failed collect returns a zero-value response")
+	_, err := p.Collect(t.Context())
+	assert.ErrorContains(t, err, "does-not-exist.yaml")
 }
 
 func TestCollectFailsOnInvalidConfig(t *testing.T) {
 	path := writeConfig(t, "schema_version: 1\nradar:\n  bogus: field\nquadrants: []\nrings: []\nentries: []\n")
 	p := newTestPlugin(t, path, testLogger())
 
-	response, err := p.Collect(t.Context())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), path)
-	assert.Contains(t, err.Error(), `unknown field "bogus" in radar`)
-	assert.Contains(t, err.Error(), "line 3")
-	assert.Empty(t, response.Nodes)
+	_, err := p.Collect(t.Context())
+	assert.ErrorContains(t, err, path)
+	assert.ErrorContains(t, err, `unknown field "bogus" in radar`)
+	assert.ErrorContains(t, err, "line 3")
 }
 
 func TestCollectRereadsFileEveryRun(t *testing.T) {
@@ -121,7 +120,13 @@ func TestCollectRereadsFileEveryRun(t *testing.T) {
 
 	first, err := p.Collect(t.Context())
 	require.NoError(t, err)
-	require.Len(t, nodesByKind(first, pluginapi.NodeKindTechRadarEntry), 2)
+	// Pin the pre-change values: if the sample config drifted to already carry
+	// the post-change values, the assertions below would pass without any
+	// re-reading happening.
+	require.Equal(t, "2026-09", nodesByKind(first, pluginapi.NodeKindTechRadar)["naira"]["edition"])
+	firstEntry := nodesByKind(first, pluginapi.NodeKindTechRadarEntry)["naira/claude-sonnet"]
+	require.NotNil(t, firstEntry)
+	require.Equal(t, "in", firstEntry["moved"])
 
 	updated := strings.Replace(sampleConfig(t), "edition: 2026-09", "edition: 2026-12", 1)
 	updated = strings.Replace(updated, "moved: in", "moved: out", 1)

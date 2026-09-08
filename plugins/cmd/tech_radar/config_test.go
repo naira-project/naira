@@ -257,7 +257,7 @@ rings:
 			_, err := parseRadarConfig([]byte(test.config))
 			require.Error(t, err)
 			for _, want := range test.wantErrs {
-				assert.Contains(t, err.Error(), want)
+				assert.ErrorContains(t, err, want)
 			}
 		})
 	}
@@ -274,7 +274,6 @@ entries:
   - {id: e1, name: E1, quadrant: nope, ring: nope, owner: o, rationale: r}
 `
 	_, err := parseRadarConfig([]byte(config))
-	require.Error(t, err)
 
 	for _, want := range []string{
 		"schema_version: 3 is not supported",
@@ -283,6 +282,6 @@ entries:
 		"rings: between 1 and 6 rings are required, got 0",
 		`references undeclared quadrant "nope"`,
 	} {
-		assert.Contains(t, err.Error(), want)
+		assert.ErrorContains(t, err, want)
 	}
 }

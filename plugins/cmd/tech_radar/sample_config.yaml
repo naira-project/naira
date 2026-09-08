@@ -1,9 +1,8 @@
 # Sample tech radar configuration.
 #
-# Schema reference: plugins/cmd/tech_radar/README.md. The plugin reads the config from
-# /etc/naira/techradar/radar.yaml by default; TECH_RADAR_CONFIG_PATH overrides
-# the path. This file is parsed by the plugin's unit tests, so it is always a
-# valid, up-to-date example.
+# Schema reference and usage details: plugins/cmd/tech_radar/README.md.
+# This file is parsed by the plugin's unit tests, so it is always a valid,
+# up-to-date example.
 schema_version: 1            # required; only 1 is accepted
 radar:
   id: naira                  # optional; defaults to "default"
