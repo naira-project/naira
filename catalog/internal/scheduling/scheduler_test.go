@@ -13,18 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type stubStarter struct {
-	calls chan string
-	err   error
-}
-
-func (s *stubStarter) RunPluginAsync(_ context.Context, plugin string) (operations.Operation, error) {
-	if s.calls != nil {
-		s.calls <- plugin
-	}
-	return operations.Operation{Plugin: plugin}, s.err
-}
-
 func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -62,13 +50,15 @@ func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			starter := &stubStarter{calls: make(chan string, 1)}
+			noopRunFunc := func(_ context.Context, plugin string) (operations.Operation, error) {
+				return operations.Operation{Plugin: plugin}, nil
+			}
 
 			config := make(catalog.PluginConfigsByName, len(tt.schedules))
 			for plugin, schedule := range tt.schedules {
 				config[plugin] = catalog.PluginConfig{Address: "test", Schedule: schedule}
 			}
-			scheduler, err := NewConfiguredScheduler(config, starter, log.New(io.Discard, "", 0))
+			scheduler, err := NewConfiguredScheduler(config, noopRunFunc, log.New(io.Discard, "", 0))
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -92,9 +82,18 @@ func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 }
 
 func TestScheduler_Execution(t *testing.T) {
-	starter := &stubStarter{calls: make(chan string, 1)}
+	calls := make(chan string, 1)
 
-	scheduler, err := NewConfiguredScheduler(catalog.PluginConfigsByName{"github": {Address: "test", Schedule: "* * * * *"}}, starter, log.New(io.Discard, "", 0))
+	runFunc := func(_ context.Context, plugin string) (operations.Operation, error) {
+		calls <- plugin
+		return operations.Operation{Plugin: plugin}, nil
+	}
+
+	scheduler, err := NewConfiguredScheduler(
+		catalog.PluginConfigsByName{"github": {Address: "test", Schedule: "* * * * *"}},
+		runFunc,
+		log.New(io.Discard, "", 0),
+	)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, scheduler.Stop(context.Background()))
@@ -107,7 +106,7 @@ func TestScheduler_Execution(t *testing.T) {
 	entries[0].Job.Run()
 
 	select {
-	case plugin := <-starter.calls:
+	case plugin := <-calls:
 		assert.Equal(t, "github", plugin)
 	case <-time.After(time.Second):
 		t.Fatal("scheduled run was not triggered")
