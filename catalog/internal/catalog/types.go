@@ -9,18 +9,18 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// PluginDefinition is the immutable configuration for a registered plugin.
+// PluginConfig is the immutable configuration for a registered plugin.
 // An empty Schedule means that the plugin is manually triggered only.
-type PluginDefinition struct {
+type PluginConfig struct {
 	Address  string
 	Schedule string
 }
 
-type PluginConfig map[string]PluginDefinition
+type PluginConfigsByName map[string]PluginConfig
 
 var ErrInvalidPluginConfig = errors.New("invalid plugin configuration")
 
-func (c PluginConfig) Validate() error {
+func (c PluginConfigsByName) Validate() error {
 	seen := make(map[string]string, len(c))
 	for name, definition := range c {
 		normalizedName := strings.ToLower(strings.TrimSpace(name))

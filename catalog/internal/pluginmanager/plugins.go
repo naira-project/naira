@@ -16,7 +16,7 @@ import (
 
 // Register connects to each plugin sidecar by its configured name and gRPC
 // address and returns the registered plugins keyed by plugin name.
-func Register(plugins catalog.PluginConfig, timeout time.Duration, logger *log.Logger) (map[string]pluginapi.Plugin, func(), error) {
+func Register(plugins catalog.PluginConfigsByName, timeout time.Duration, logger *log.Logger) (map[string]pluginapi.Plugin, func(), error) {
 	registered := make(map[string]pluginapi.Plugin, len(plugins))
 	var cleanups []func()
 

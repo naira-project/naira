@@ -52,7 +52,7 @@ func TestRegisterAndConnectPlugin(t *testing.T) {
 	addr := lis.Addr().String()
 	const pluginName = "mock-external-plugin"
 
-	registered, cleanup, err := Register(catalog.PluginConfig{pluginName: {Address: addr}}, 10*time.Second, nil)
+	registered, cleanup, err := Register(catalog.PluginConfigsByName{pluginName: {Address: addr}}, 10*time.Second, nil)
 	require.NoError(t, err)
 	defer cleanup()
 

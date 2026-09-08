@@ -18,11 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newPluginDefinitionTestRouter(t *testing.T, definitions catalog.PluginConfig) http.Handler {
+func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) http.Handler {
 	t.Helper()
 
-	plugins := make(map[string]pluginrun.Plugin, len(definitions))
-	for name := range definitions {
+	plugins := make(map[string]pluginrun.Plugin, len(configs))
+	for name := range configs {
 		plugins[name] = stubPlugin{}
 	}
 
@@ -38,7 +38,7 @@ func newPluginDefinitionTestRouter(t *testing.T, definitions catalog.PluginConfi
 	router, err := NewRouter(
 		catalog.NewService(store),
 		runner,
-		definitions,
+		configs,
 		log.New(io.Discard, "", 0),
 		keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer},
 	)
@@ -56,7 +56,7 @@ func serveAuthenticatedRequest(t *testing.T, router http.Handler, method, path s
 }
 
 func TestListPluginsEndpoint(t *testing.T) {
-	router := newPluginDefinitionTestRouter(t, catalog.PluginConfig{
+	router := newPluginsTestRouter(t, catalog.PluginConfigsByName{
 		"zeta":   {Schedule: "0 0 * * *"},
 		"alpha":  {Schedule: "*/5 * * * *"},
 		"manual": {},
@@ -104,7 +104,7 @@ func TestListPluginsEndpoint(t *testing.T) {
 }
 
 func TestGetPluginEndpoint(t *testing.T) {
-	router := newPluginDefinitionTestRouter(t, catalog.PluginConfig{
+	router := newPluginsTestRouter(t, catalog.PluginConfigsByName{
 		"mlflow": {Schedule: "*/5 * * * *"},
 	})
 

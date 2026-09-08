@@ -15,7 +15,7 @@ type config struct {
 	Port                    int
 	ReadHeadersTimeout      time.Duration
 	ShutdownTimeout         time.Duration
-	Plugins                 catalog.PluginConfig
+	Plugins                 catalog.PluginConfigsByName
 	PluginConnectionTimeout time.Duration
 	PluginTimeout           time.Duration
 	KeycloakBaseURL         string
@@ -68,7 +68,7 @@ func loadConfig() (config, error) {
 	}, nil
 }
 
-func loadPluginConfig(path string) (catalog.PluginConfig, error) {
+func loadPluginConfig(path string) (catalog.PluginConfigsByName, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read plugin configuration file %q: %w", path, err)
@@ -79,9 +79,9 @@ func loadPluginConfig(path string) (catalog.PluginConfig, error) {
 		return nil, fmt.Errorf("parse plugin configuration file %q: %w", path, err)
 	}
 
-	pluginDefinitions := make(catalog.PluginConfig, len(plugins.Plugins))
+	pluginDefinitions := make(catalog.PluginConfigsByName, len(plugins.Plugins))
 	for name, plugin := range plugins.Plugins {
-		pluginDefinitions[name] = catalog.PluginDefinition{
+		pluginDefinitions[name] = catalog.PluginConfig{
 			Address:  plugin.Address,
 			Schedule: plugin.Schedule,
 		}

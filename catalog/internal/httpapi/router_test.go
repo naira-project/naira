@@ -129,11 +129,11 @@ func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.
 
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
-	definitions := make(map[string]catalog.PluginDefinition, len(plugins))
+	configs := make(catalog.PluginConfigsByName, len(plugins))
 	for name := range plugins {
-		definitions[name] = catalog.PluginDefinition{}
+		configs[name] = catalog.PluginConfig{}
 	}
-	router, err := NewRouter(catalogService, runner, definitions, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 	return router
 }
@@ -383,7 +383,7 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, map[string]catalog.PluginDefinition{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	router, err := NewRouter(catalogService, runner, catalog.PluginConfigsByName{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 
 	// First request — starts the plugin run.

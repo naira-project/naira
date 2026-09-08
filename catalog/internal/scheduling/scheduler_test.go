@@ -64,9 +64,9 @@ func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			starter := &stubStarter{calls: make(chan string, 1)}
 
-			config := make(catalog.PluginConfig, len(tt.schedules))
+			config := make(catalog.PluginConfigsByName, len(tt.schedules))
 			for plugin, schedule := range tt.schedules {
-				config[plugin] = catalog.PluginDefinition{Address: "test", Schedule: schedule}
+				config[plugin] = catalog.PluginConfig{Address: "test", Schedule: schedule}
 			}
 			scheduler, err := NewConfiguredScheduler(config, starter, log.New(io.Discard, "", 0))
 
@@ -94,7 +94,7 @@ func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 func TestScheduler_Execution(t *testing.T) {
 	starter := &stubStarter{calls: make(chan string, 1)}
 
-	scheduler, err := NewConfiguredScheduler(catalog.PluginConfig{"github": {Address: "test", Schedule: "* * * * *"}}, starter, log.New(io.Discard, "", 0))
+	scheduler, err := NewConfiguredScheduler(catalog.PluginConfigsByName{"github": {Address: "test", Schedule: "* * * * *"}}, starter, log.New(io.Discard, "", 0))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		require.NoError(t, scheduler.Stop(context.Background()))

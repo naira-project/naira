@@ -32,12 +32,12 @@ var pluginListOptionsSpec = listOptionsSpec{
 	allowedFields: map[string]bool{},
 }
 
-func pluginResource(name string, definition catalog.PluginDefinition) PluginResource {
+func pluginResource(name string, definition catalog.PluginConfig) PluginResource {
 	return PluginResource{Name: name, Schedule: definition.Schedule}
 }
 
 // GET /v1/plugins lists configured plugin resources and their schedules.
-func newListPluginsHandler(definitions catalog.PluginConfig, logger *log.Logger) http.HandlerFunc {
+func newListPluginsHandler(definitions catalog.PluginConfigsByName, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(pluginListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 		resources := make([]PluginResource, 0, len(definitions))
 		for _, name := range slices.Sorted(maps.Keys(definitions)) {
@@ -54,7 +54,7 @@ func newListPluginsHandler(definitions catalog.PluginConfig, logger *log.Logger)
 }
 
 // GET /v1/plugins/{plugin} returns one configured plugin resource.
-func newGetPluginHandler(definitions catalog.PluginConfig) http.HandlerFunc {
+func newGetPluginHandler(definitions catalog.PluginConfigsByName) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		plugin := chi.URLParam(r, "plugin")
 		definition, ok := definitions[plugin]

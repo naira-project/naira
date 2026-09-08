@@ -26,12 +26,12 @@ type Scheduler struct {
 
 // NewConfiguredScheduler initializes configured plugin schedules and starts the scheduler.
 // The caller must call Scheduler.Stop when the scheduler is no longer needed.
-func NewConfiguredScheduler(config catalog.PluginConfig, starter RunStarter, logger *log.Logger) (*Scheduler, error) {
+func NewConfiguredScheduler(configs catalog.PluginConfigsByName, starter RunStarter, logger *log.Logger) (*Scheduler, error) {
 	sch := &Scheduler{
 		cron: cron.New(),
 	}
 
-	if err := sch.registerSchedules(config, starter, logger); err != nil {
+	if err := sch.registerSchedules(configs, starter, logger); err != nil {
 		return nil, fmt.Errorf("registering schedules: %w", err)
 	}
 
@@ -39,9 +39,9 @@ func NewConfiguredScheduler(config catalog.PluginConfig, starter RunStarter, log
 	return sch, nil
 }
 
-func (s *Scheduler) registerSchedules(config catalog.PluginConfig, starter RunStarter, logger *log.Logger) error {
-	for plugin, definition := range config {
-		expr := definition.Schedule
+func (s *Scheduler) registerSchedules(configs catalog.PluginConfigsByName, starter RunStarter, logger *log.Logger) error {
+	for plugin, config := range configs {
+		expr := config.Schedule
 		if plugin == "" {
 			return ErrInvalidPlugin
 		}
