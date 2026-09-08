@@ -23,12 +23,13 @@ jobs:
       # Export the tag name so downstream build jobs know if they should run
       target_tag: ${{ steps.set_tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # Required to push tags later
+          persist-credentials: false
 
       - name: Run Release Please
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: release
         with:
           target-branch: main
