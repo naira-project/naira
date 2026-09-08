@@ -12,20 +12,20 @@ import (
 
 func TestLoadPluginConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		config      string
-		createFile  bool
-		wantErrText string
-		wantPlugins catalog.PluginConfigsByName
+		name             string
+		config           string
+		skipFileCreation bool
+		wantErrText      string
+		wantPlugins      catalog.PluginConfigsByName
 	}{
 		{
-			name:        "returns an error when the plugin configuration file is missing",
-			wantErrText: "read plugin configuration file",
+			name:             "returns an error when the plugin configuration file is missing",
+			skipFileCreation: true,
+			wantErrText:      "read plugin configuration file",
 		},
 		{
 			name:        "returns an error when the plugin configuration is invalid YAML",
 			config:      "plugins: [",
-			createFile:  true,
 			wantErrText: "parse plugin configuration file",
 		},
 		{
@@ -34,7 +34,6 @@ func TestLoadPluginConfig(t *testing.T) {
   mlflow:
     schedule: "*/5 * * * *"
 `,
-			createFile:  true,
 			wantErrText: `plugin "mlflow" has no address`,
 		},
 		{
@@ -44,7 +43,6 @@ func TestLoadPluginConfig(t *testing.T) {
     address: "localhost:50051"
     schedule: "*/5 * * * *"
 `,
-			createFile: true,
 			wantPlugins: catalog.PluginConfigsByName{
 				"mlflow": {
 					Address:  "localhost:50051",
@@ -57,7 +55,7 @@ func TestLoadPluginConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			configPath := filepath.Join(t.TempDir(), "plugins.yaml")
-			if tt.createFile {
+			if !tt.skipFileCreation {
 				require.NoError(t, os.WriteFile(configPath, []byte(tt.config), 0o600))
 			}
 

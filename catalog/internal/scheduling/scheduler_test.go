@@ -65,9 +65,8 @@ func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 				if tt.expectedErr != nil {
 					assert.ErrorIs(t, err, tt.expectedErr)
 				}
-				if tt.errContains != "" {
-					assert.Contains(t, err.Error(), tt.errContains)
-				}
+
+				assert.ErrorContains(t, err, tt.errContains)
 				return
 			}
 
