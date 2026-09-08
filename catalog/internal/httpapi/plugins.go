@@ -81,8 +81,8 @@ func newRunAllPluginsHandler(runner *pluginrun.Runner) http.HandlerFunc {
 	})
 }
 
-// newRunPluginHandler asynchronously runs a single plugin and
-// returns the tracking operation (AIP-151).
+// newRunPluginHandler asynchronously runs a single plugin and returns the
+// tracking operation (AIP-151).
 func newRunPluginHandler(runner *pluginrun.Runner) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		plugin := chi.URLParam(r, "plugin")

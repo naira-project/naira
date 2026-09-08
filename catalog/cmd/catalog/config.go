@@ -74,13 +74,13 @@ func loadPluginConfig(path string) (catalog.PluginConfigsByName, error) {
 		return nil, fmt.Errorf("read plugin configuration file %q: %w", path, err)
 	}
 
-	var plugins pluginConfig
-	if err := yaml.Unmarshal(contents, &plugins); err != nil {
+	var c pluginConfig
+	if err := yaml.Unmarshal(contents, &c); err != nil {
 		return nil, fmt.Errorf("parse plugin configuration file %q: %w", path, err)
 	}
 
-	pluginConfigs := make(catalog.PluginConfigsByName, len(plugins.Plugins))
-	for name, plugin := range plugins.Plugins {
+	pluginConfigs := make(catalog.PluginConfigsByName, len(c.Plugins))
+	for name, plugin := range c.Plugins {
 		pluginConfigs[name] = catalog.PluginConfig{
 			Address:  plugin.Address,
 			Schedule: plugin.Schedule,
