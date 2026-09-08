@@ -43,7 +43,7 @@ func (s *Scheduler) registerSchedules(configs catalog.PluginConfigsByName, runFu
 		if plugin == "" {
 			return ErrInvalidPlugin
 		}
-		if expr == "" {
+		if expr == catalog.ScheduleManual {
 			continue
 		}
 

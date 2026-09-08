@@ -10,8 +10,10 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// PluginConfig is the immutable configuration for a registered plugin.
 // An empty Schedule means that the plugin is manually triggered only.
+const ScheduleManual = ""
+
+// PluginConfig is the immutable configuration for a registered plugin.
 type PluginConfig struct {
 	Address  string
 	Schedule string
@@ -44,7 +46,7 @@ func (c PluginConfigsByName) Validate() error {
 			return fmt.Errorf("plugin %q has invalid address (expected host:port): %v: %w", name, err, ErrInvalidPluginConfig)
 		}
 
-		if config.Schedule != "" {
+		if config.Schedule != ScheduleManual {
 			if _, err := cron.ParseStandard(config.Schedule); err != nil {
 				return fmt.Errorf("plugin %q has invalid schedule %v: %w", name, err, ErrInvalidPluginConfig)
 			}
