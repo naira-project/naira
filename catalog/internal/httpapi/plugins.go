@@ -36,7 +36,7 @@ func newPluginResource(name string, config catalog.PluginConfig) PluginResource 
 	return PluginResource{Name: name, Schedule: config.Schedule}
 }
 
-// GET /v1/plugins lists configured plugin resources and their schedules.
+// newListPluginsHandler lists configured plugin resources and their schedules.
 func newListPluginsHandler(configs catalog.PluginConfigsByName, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(pluginListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 		resources := make([]PluginResource, 0, len(configs))
@@ -57,7 +57,7 @@ func newListPluginsHandler(configs catalog.PluginConfigsByName, logger *log.Logg
 	})
 }
 
-// GET /v1/plugins/{plugin} returns one configured plugin resource.
+// newGetPluginHandler returns one configured plugin resource.
 func newGetPluginHandler(configs catalog.PluginConfigsByName) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		plugin := chi.URLParam(r, "plugin")
@@ -70,7 +70,7 @@ func newGetPluginHandler(configs catalog.PluginConfigsByName) http.HandlerFunc {
 	})
 }
 
-// POST /v1/plugins:run asynchronously runs all registered plugins and
+// newRunAllPluginsHandler asynchronously runs all registered plugins and
 // returns the tracking operations (AIP-151).
 func newRunAllPluginsHandler(runner *pluginrun.Runner) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
@@ -81,7 +81,7 @@ func newRunAllPluginsHandler(runner *pluginrun.Runner) http.HandlerFunc {
 	})
 }
 
-// POST /v1/plugins/{plugin}:run asynchronously runs a single plugin and
+// newRunPluginHandler asynchronously runs a single plugin and
 // returns the tracking operation (AIP-151).
 func newRunPluginHandler(runner *pluginrun.Runner) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {

@@ -28,6 +28,10 @@ func (c PluginConfigsByName) Validate() error {
 		if name == "" {
 			return fmt.Errorf("plugin name cannot be empty: %w", ErrInvalidPluginConfig)
 		}
+		if config.Address == "" {
+			return fmt.Errorf("plugin %q has no address: %w", name, ErrInvalidPluginConfig)
+		}
+
 		if strings.ToLower(strings.TrimSpace(name)) != name {
 			return fmt.Errorf("plugin name %q must be lowercased without leading/trailing whitespace: %w", name, ErrInvalidPluginConfig)
 		}

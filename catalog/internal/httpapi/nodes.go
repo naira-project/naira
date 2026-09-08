@@ -62,7 +62,7 @@ func nodeName(id pluginapi.NodeID) string {
 	return fmt.Sprintf("nodes/%s/%s", id.Kind, id.Path)
 }
 
-// GET /v1/nodes lists catalog nodes.
+// newListNodesHandler lists catalog nodes.
 // Supported query params:
 // - pageSize
 // - pageToken
@@ -94,7 +94,7 @@ func newListNodesHandler(service *catalog.Service, logger *log.Logger) http.Hand
 	})
 }
 
-// GET /v1/nodes/{kind}/* returns a single catalog node.
+// newGetNodeHandler returns a single catalog node.
 func newGetNodeHandler(service *catalog.Service) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		path, err := url.PathUnescape(chi.URLParam(r, "*"))

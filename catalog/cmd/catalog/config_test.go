@@ -63,7 +63,7 @@ func TestLoadPluginConfig(t *testing.T) {
 
 			if tt.wantErrText != "" {
 				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantErrText)
+				assert.ErrorContains(t, err, tt.wantErrText)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.wantPlugins, plugins)
