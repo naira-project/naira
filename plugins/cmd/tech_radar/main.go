@@ -12,6 +12,8 @@
 //
 //   - TECH_RADAR_CONFIG_PATH (optional) - path to the radar YAML file;
 //     defaults to /etc/naira/techradar/radar.yaml.
+//
+//go:generate bash -c "goreadme -use-stdlib-markdown -title 'tech_radar plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
 
 import (

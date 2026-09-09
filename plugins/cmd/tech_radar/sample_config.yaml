@@ -1,8 +1,40 @@
 # Sample tech radar configuration.
 #
-# Schema reference and usage details: plugins/cmd/tech_radar/README.md.
 # This file is parsed by the plugin's unit tests, so it is always a valid,
-# up-to-date example.
+# up-to-date example. Usage details: plugins/cmd/tech_radar/README.md.
+#
+# Schema (version 1):
+#
+#   schema_version   required; must be 1.
+#   radar            required; the radar's metadata:
+#     id             optional; defaults to "default".
+#     title          required.
+#     edition        required; free-form edition label, e.g. a date.
+#     owner          required.
+#   quadrants        required; exactly 4; list order = display order.
+#     id, name       both required.
+#   rings            required; 1-6; list order = innermost to outermost.
+#     id, name       both required.
+#     description    optional.
+#   entries          required; use [] for a radar without entries (the key
+#                    must be present so a deleted block cannot silently wipe
+#                    the radar on the next sync).
+#     id             required.
+#     name           required.
+#     quadrant       required; must match a declared quadrant id.
+#     ring           required; must match a declared ring id.
+#     moved          optional; one of in, out, none; defaults to none.
+#     owner          required.
+#     rationale      required.
+#
+# General rules:
+#   - Every id must match ^[a-z0-9][a-z0-9_-]*$, be at most 100 characters,
+#     and be unique within its list. Ids become node paths, so keep them
+#     stable across editions.
+#   - Unknown fields are rejected, so typos fail the collect with an error
+#     naming the offending line instead of being silently dropped.
+#   - Display texts are clipped with a trailing ellipsis and a warning log:
+#     names and labels at 200 runes, descriptions and rationales at 2000.
 schema_version: 1            # required; only 1 is accepted
 radar:
   id: naira                  # optional; defaults to "default"

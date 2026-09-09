@@ -40,7 +40,7 @@ func nodesByKind(response pluginapi.CollectResponse, kind string) map[string]plu
 	return result
 }
 
-func TestNewValidatesConfig(t *testing.T) {
+func TestNewValidatesConfigPath(t *testing.T) {
 	_, err := New(config{ConfigPath: ""}, testLogger())
 	assert.ErrorContains(t, err, "TECH_RADAR_CONFIG_PATH is empty")
 }
@@ -123,10 +123,10 @@ func TestCollectRereadsFileEveryRun(t *testing.T) {
 	// Pin the pre-change values: if the sample config drifted to already carry
 	// the post-change values, the assertions below would pass without any
 	// re-reading happening.
-	require.Equal(t, "2026-09", nodesByKind(first, pluginapi.NodeKindTechRadar)["naira"]["edition"])
-	firstEntry := nodesByKind(first, pluginapi.NodeKindTechRadarEntry)["naira/claude-sonnet"]
-	require.NotNil(t, firstEntry)
-	require.Equal(t, "in", firstEntry["moved"])
+	radar := nodesByKind(first, pluginapi.NodeKindTechRadar)["naira"]
+	require.Equal(t, "2026-09", radar["edition"])
+	entry := nodesByKind(first, pluginapi.NodeKindTechRadarEntry)["naira/claude-sonnet"]
+	require.Equal(t, "in", entry["moved"])
 
 	updated := strings.Replace(sampleConfig(t), "edition: 2026-09", "edition: 2026-12", 1)
 	updated = strings.Replace(updated, "moved: in", "moved: out", 1)
@@ -134,9 +134,9 @@ func TestCollectRereadsFileEveryRun(t *testing.T) {
 
 	second, err := p.Collect(t.Context())
 	require.NoError(t, err)
-	radar := nodesByKind(second, pluginapi.NodeKindTechRadar)["naira"]
+	radar = nodesByKind(second, pluginapi.NodeKindTechRadar)["naira"]
 	assert.Equal(t, "2026-12", radar["edition"])
-	entry := nodesByKind(second, pluginapi.NodeKindTechRadarEntry)["naira/claude-sonnet"]
+	entry = nodesByKind(second, pluginapi.NodeKindTechRadarEntry)["naira/claude-sonnet"]
 	assert.Equal(t, "out", entry["moved"])
 }
 
