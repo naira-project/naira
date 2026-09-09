@@ -85,7 +85,7 @@ quadrants: []
 rings: []
 entries: []
 `,
-			wantErrs: []string{`line 6`, `unknown field "color" in radar`},
+			wantErrs: []string{`in radar`, `line 6`, `unknown field "color"`},
 		},
 		{
 			name: "missing required radar fields",

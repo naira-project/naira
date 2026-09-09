@@ -110,7 +110,8 @@ func TestCollectFailsOnInvalidConfig(t *testing.T) {
 
 	_, err := p.Collect(t.Context())
 	assert.ErrorContains(t, err, path)
-	assert.ErrorContains(t, err, `unknown field "bogus" in radar`)
+	assert.ErrorContains(t, err, "in radar")
+	assert.ErrorContains(t, err, `unknown field "bogus"`)
 	assert.ErrorContains(t, err, "line 3")
 }
 

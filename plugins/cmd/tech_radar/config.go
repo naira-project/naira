@@ -81,7 +81,7 @@ type entry struct {
 
 func (c *radarConfig) UnmarshalYAML(node *yaml.Node) error {
 	type alias radarConfig
-	decoded, line, err := decodeStrict[alias](node, "radar config")
+	decoded, line, err := decodeStrict[alias](node)
 	if err != nil {
 		return fmt.Errorf("in radar config: %w", err)
 	}
@@ -92,7 +92,7 @@ func (c *radarConfig) UnmarshalYAML(node *yaml.Node) error {
 
 func (m *radarMeta) UnmarshalYAML(node *yaml.Node) error {
 	type alias radarMeta
-	decoded, line, err := decodeStrict[alias](node, "radar")
+	decoded, line, err := decodeStrict[alias](node)
 	if err != nil {
 		return fmt.Errorf("in radar: %w", err)
 	}
@@ -103,7 +103,7 @@ func (m *radarMeta) UnmarshalYAML(node *yaml.Node) error {
 
 func (q *quadrant) UnmarshalYAML(node *yaml.Node) error {
 	type alias quadrant
-	decoded, line, err := decodeStrict[alias](node, "quadrant")
+	decoded, line, err := decodeStrict[alias](node)
 	if err != nil {
 		return fmt.Errorf("in quadrant: %w", err)
 	}
@@ -114,7 +114,7 @@ func (q *quadrant) UnmarshalYAML(node *yaml.Node) error {
 
 func (r *ring) UnmarshalYAML(node *yaml.Node) error {
 	type alias ring
-	decoded, line, err := decodeStrict[alias](node, "ring")
+	decoded, line, err := decodeStrict[alias](node)
 	if err != nil {
 		return fmt.Errorf("in ring: %w", err)
 	}
@@ -125,7 +125,7 @@ func (r *ring) UnmarshalYAML(node *yaml.Node) error {
 
 func (e *entry) UnmarshalYAML(node *yaml.Node) error {
 	type alias entry
-	decoded, line, err := decodeStrict[alias](node, "entry")
+	decoded, line, err := decodeStrict[alias](node)
 	if err != nil {
 		return fmt.Errorf("in entry: %w", err)
 	}
@@ -139,9 +139,9 @@ func (e *entry) UnmarshalYAML(node *yaml.Node) error {
 // being silently dropped. It returns the node's line for validation errors.
 // Callers wrap the error with their context, so the wraps here name only the
 // operation.
-func decodeStrict[T any](node *yaml.Node, context string) (T, int, error) {
+func decodeStrict[T any](node *yaml.Node) (T, int, error) {
 	var decoded T
-	if err := checkKnownFields(node, context, yamlFieldNames[T]()); err != nil {
+	if err := checkKnownFields(node, yamlFieldNames[T]()); err != nil {
 		return decoded, 0, fmt.Errorf("checking fields: %w", err)
 	}
 	if err := node.Decode(&decoded); err != nil {
@@ -172,17 +172,18 @@ func yamlFieldNames[T any]() map[string]bool {
 	return allowed
 }
 
-// checkKnownFields rejects mapping keys outside the allowed set.
-func checkKnownFields(node *yaml.Node, context string, allowed map[string]bool) error {
+// checkKnownFields rejects mapping keys outside the allowed set. The callers'
+// wraps name the mapping the keys belong to.
+func checkKnownFields(node *yaml.Node, allowed map[string]bool) error {
 	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d: %s must be a mapping", node.Line, context)
+		return fmt.Errorf("line %d: expected a mapping", node.Line)
 	}
 
 	var errs []error
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i]
 		if !allowed[key.Value] {
-			errs = append(errs, fmt.Errorf("line %d: unknown field %q in %s", key.Line, key.Value, context))
+			errs = append(errs, fmt.Errorf("line %d: unknown field %q", key.Line, key.Value))
 		}
 	}
 	return errors.Join(errs...)
