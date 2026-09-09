@@ -40,7 +40,7 @@ jobs:
     name: Validate · Workflow Security
     permissions:
       contents: read
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-workflow-security.yml@925ce493da6e6856791c9bafe28f852e75a48912
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-workflow-security.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d
 
   # ── 3. Go unit tests (catalog service) ────────────────────────────────────
   go-test:
