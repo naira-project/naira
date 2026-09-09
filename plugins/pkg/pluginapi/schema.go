@@ -11,6 +11,8 @@ const (
 	NodeKindGitRepository     = "git_repository"
 	NodeKindMCPServer         = "mcp_server"
 	NodeKindMCPTool           = "mcp_tool"
+	NodeKindTechRadar         = "tech_radar"
+	NodeKindTechRadarEntry    = "tech_radar_entry"
 )
 
 const (
