@@ -3,7 +3,9 @@
 //
 // TODO: add support for Bucket and other FluxCD sources kinds.
 // TODO: add support for any other resources managed by FluxCD (Services, Ingresses, thirdparty CRDs, ...)
-// TODO: also emit git repository URLs as Nodes (tricky because hostnames & IPs can be local)
+//
+// GitRepository nodes currently support GitHub URLs only. Other Git hosts are ignored.
+// TODO: add support for other Git hosts.
 package main
 
 import (
@@ -19,6 +21,7 @@ import (
 	"k8s.io/client-go/dynamic"
 
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
+	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -61,7 +64,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface) (pluginapi.CollectResponse, error) {
-	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, dyn)
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterIDDynamic(ctx, dyn)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces: %w", err)
 	}
@@ -104,11 +107,17 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	repoByPath := map[string]pluginapi.NodeID{} // "ns/name" → NodeID
 	for _, r := range repos {
 		shortPath := r.GetNamespace() + "/" + r.GetName()
+		url, _, _ := unstructured.NestedString(r.Object, "spec", "url")
+		repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(url)
+		if repoPath == "" {
+			log.Printf("%s: WARN: skipping GitRepository %s with unsupported URL %q", pluginName, shortPath, url)
+			continue
+		}
+
 		id := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindGitRepository,
-			Path: clusterID + "/" + shortPath,
+			Path: repoPath,
 		}
-		url, _, _ := unstructured.NestedString(r.Object, "spec", "url")
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: id,
 			Properties: pluginapi.PropertyMap{

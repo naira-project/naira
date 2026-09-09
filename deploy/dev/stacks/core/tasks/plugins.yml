@@ -25,6 +25,12 @@ vars:
     - name: mcp-servers
       dir: '{{.PLUGINS_BASE}}/mcp_servers'
       image: mcp-servers:local
+    - name: github
+      dir: '{{.PLUGINS_BASE}}/github'
+      image: github:local
+    - name: depl-from-repo
+      dir: '{{.PLUGINS_BASE}}/depl_from_repo'
+      image: depl-from-repo:local
 
 tasks:
   image:build:

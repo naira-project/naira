@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import '@xyflow/react/dist/style.css';
 
+import DerivedDataIndicator from '../components/DerivedDataIndicator';
 import PropertiesPanel from '../components/PropertiesPanel';
 import { Badge } from '../components/ui/badge';
 import { Card, CardContent } from '../components/ui/card';
@@ -61,12 +62,12 @@ function toFlowNode(
   const displayLabel = (
     <div className="flex gap-2 text-left h-full">
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <span
-            className="text-[10px] font-bold uppercase tracking-wider truncate"
-            style={{ color: palette.stroke }}
-          >
-            {node.kind}
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-1">
+            <span className="truncate text-[10px] font-bold uppercase tracking-wider">
+              {node.kind}
+            </span>
+            <DerivedDataIndicator props={node.properties} compact />
           </span>
           {!node.isRoot && (
             <button

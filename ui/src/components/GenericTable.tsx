@@ -49,6 +49,7 @@ import {
   type RelationSummary,
 } from '@/lib/kindUtils';
 import { type NodeResource, nodeProps } from '../lib/catalogApi';
+import DerivedDataIndicator from './DerivedDataIndicator';
 import EmptyState from './states/EmptyState';
 
 interface GenericTableProps {
@@ -69,6 +70,21 @@ const features = tableFeatures({
   sortedRowModel: createSortedRowModel(),
 });
 
+function TruncatedText({ value, className = '' }: { value: string; className?: string }) {
+  if (!value || value === '—') {
+    return <span className="text-muted-foreground/50">—</span>;
+  }
+
+  return (
+    <span
+      className={`inline-block max-w-[300px] truncate align-middle cursor-help ${className}`}
+      title={value}
+    >
+      {value}
+    </span>
+  );
+}
+
 export default function GenericTable({
   nodes,
   kind,
@@ -87,7 +103,6 @@ export default function GenericTable({
     [nodes],
   );
 
-  // inferColumns returns ['name', 'namespace', ...pluginProps]; name/namespace/relations are
   // rendered explicitly as core columns below, so only the plugin tail is needed here.
   const pluginColumns = useMemo(() => {
     const inferred = inferColumns(nodes).slice(2);
@@ -96,7 +111,6 @@ export default function GenericTable({
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
   const hasPluginColumns = pluginColCount > 0;
-  const CORE_COL_COUNT = 3; // name + namespace + relations
 
   const columnDefs = useMemo<ColumnDef<typeof features, NodeResource>[]>(
     () => [
@@ -104,26 +118,22 @@ export default function GenericTable({
         id: 'name',
         header: 'Name',
         accessorFn: (node) => parsedPaths.get(node.name)?.name ?? node.name,
-        cell: (info) => (
-          <span
-            className="truncate text-sm font-medium text-foreground"
-            title={info.row.original.name}
-          >
-            {info.getValue() as string}
-          </span>
-        ),
+        cell: (info) => {
+          const val = (info.getValue() as string) || '';
+          return (
+            <div className="flex items-center gap-1.5 max-w-[300px]">
+              <TruncatedText value={val} className="font-medium text-foreground" />
+              <DerivedDataIndicator props={nodeProps(info.row.original)} compact />
+            </div>
+          );
+        },
       },
       {
         id: namespaceLabel,
         header: namespaceLabel.charAt(0).toUpperCase() + namespaceLabel.slice(1),
         accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? '—',
         cell: (info) => (
-          <span
-            className="truncate text-sm text-muted-foreground"
-            title={parsedPaths.get(info.row.original.name)?.namespace}
-          >
-            {info.getValue() as string}
-          </span>
+          <TruncatedText value={info.getValue() as string} className="text-muted-foreground" />
         ),
       },
       {
@@ -140,15 +150,8 @@ export default function GenericTable({
           header: col,
           accessorFn: (node) => nodeProps(node)[col],
           cell: (info) => {
-            const value = info.getValue();
-            return (
-              <span
-                className="truncate text-sm italic text-muted-foreground/75"
-                title={typeof value === 'string' ? value : undefined}
-              >
-                {formatPropValue(value)}
-              </span>
-            );
+            const formatted = formatPropValue(info.getValue());
+            return <TruncatedText value={formatted} className="italic text-muted-foreground/80" />;
           },
         }),
       ),
@@ -215,7 +218,7 @@ export default function GenericTable({
                 key={column.id}
                 checked={column.getIsVisible()}
                 onCheckedChange={(checked) => column.toggleVisibility(!!checked)}
-                onSelect={(e) => e.preventDefault()} // keep menu open after each click
+                onSelect={(e) => e.preventDefault()}
               >
                 {column.id}
               </DropdownMenuCheckboxItem>
@@ -224,7 +227,7 @@ export default function GenericTable({
         </DropdownMenu>
       </div>
       <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <Table>
+        <Table className="w-full">
           <TableHeader>
             <TableRow>
               <TableHead colSpan={CORE_COL_COUNT} className="bg-gray-50">
@@ -235,7 +238,7 @@ export default function GenericTable({
                   <span className={groupText}>Plugin Properties</span>
                 </TableHead>
               )}
-              <TableHead className="bg-gray-50" /> {/* spacer over the Actions column */}
+              <TableHead className="bg-gray-50" />
             </TableRow>
 
             {table.getHeaderGroups().map((headerGroup) => (
@@ -250,17 +253,17 @@ export default function GenericTable({
                       }
                       onClick={header.column.getToggleSortingHandler()}
                     >
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 max-w-[300px]">
                         <span className={labelText}>
                           <table.FlexRender header={header} />
                         </span>
                         {header.column.getCanSort() &&
                           (sortDirection === 'asc' ? (
-                            <ArrowUp className="size-3.5" />
+                            <ArrowUp className="size-3.5 shrink-0" />
                           ) : sortDirection === 'desc' ? (
-                            <ArrowDown className="size-3.5" />
+                            <ArrowDown className="size-3.5 shrink-0" />
                           ) : (
-                            <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                            <ArrowUpDown className="size-3.5 shrink-0 text-muted-foreground" />
                           ))}
                       </div>
                     </TableHead>
@@ -274,7 +277,7 @@ export default function GenericTable({
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="max-w-[300px] truncate">
                       <table.FlexRender cell={cell} />
                     </TableCell>
                   ))}
@@ -314,7 +317,7 @@ function RelationCell({
   const relationKinds = Object.keys(summary).sort();
 
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className="flex flex-wrap gap-1 max-w-[300px]">
       {relationKinds.map((relKind) => {
         const { inbound, outbound } = summary[relKind];
         return (

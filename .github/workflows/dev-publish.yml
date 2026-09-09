@@ -132,6 +132,28 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  container-publish-plugin-depl-from-repo:
+    name: Publish · Plugin Depl From Repo
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-depl-from-repo"
+      dockerfile: "plugins/cmd/depl_from_repo/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+      
+  container-publish-plugin-github:
+    name: Publish · Plugin GitHub
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-github"
+      dockerfile: "plugins/cmd/github/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Gate: surfaces overall publish status as a single check ───────────────
   all-published:
     name: All Images Published
@@ -146,6 +168,8 @@ jobs:
       - container-publish-plugin-depl-uses-litellm
       - container-publish-plugin-openmetadata
       - container-publish-plugin-mcp-servers
+      - container-publish-plugin-depl-from-repo
+      - container-publish-plugin-github
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -162,6 +186,8 @@ jobs:
             "${{ needs.container-publish-plugin-depl-uses-litellm.result }}"
             "${{ needs.container-publish-plugin-openmetadata.result }}"
             "${{ needs.container-publish-plugin-mcp-servers.result }}"
+            "${{ needs.container-publish-plugin-depl-from-repo.result }}"
+            "${{ needs.container-publish-plugin-github.result }}"
           )
           for r in "${RESULTS[@]}"; do
             if [[ "$r" != "success" ]]; then
