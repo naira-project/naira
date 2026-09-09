@@ -15,13 +15,13 @@ import time
 import urllib.parse
 import urllib.request
 
-CATALOG_URL = os.environ.get("CATALOG_URL", "http://localhost:8090").rstrip("/")
-KEYCLOAK_URL = os.environ.get("KEYCLOAK_URL", "http://localhost:8080").rstrip("/")
-KEYCLOAK_REALM = os.environ.get("KEYCLOAK_REALM", "naira")
-KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "naira-portal")
-KEYCLOAK_CLIENT_SECRET = os.environ.get("KEYCLOAK_CLIENT_SECRET", "naira-e2e-test-secret")
-KEYCLOAK_USERNAME = os.environ.get("KEYCLOAK_USERNAME", "testuser")
-KEYCLOAK_PASSWORD = os.environ.get("KEYCLOAK_PASSWORD", "testpass")
+CATALOG_URL = os.environ["CATALOG_URL"].rstrip("/")
+KEYCLOAK_URL = os.environ["KEYCLOAK_URL"].rstrip("/")
+KEYCLOAK_REALM = "naira"
+KEYCLOAK_CLIENT_ID = "naira-portal"
+KEYCLOAK_CLIENT_SECRET = "naira-e2e-test-secret"
+KEYCLOAK_USERNAME = "testuser"
+KEYCLOAK_PASSWORD = "testpass"
 POLL_TIMEOUT_SECONDS = 120
 POLL_INTERVAL_SECONDS = 2
 

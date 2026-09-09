@@ -76,8 +76,7 @@ assertion below.
 
 `assert/assert_test.go`, run with `go test -tags e2e`:
 
-- `TestHealthz` — the catalog API is up.
-- `TestLitellmModelsSeeded` — `GET /v1/nodes?filter=kind="model"` returns
+- `TestLitellmModelsNodes` — `GET /v1/nodes?filter=kind="model"` returns
   exactly 2 nodes: `litellm1/openai` and `litellm1/mistral`.
 - `TestChatbotUsesLitellmModel` — `GET /v1/relations?filter=kind="uses_model"`
   returns exactly 1 relation, from `chatbot1`'s Deployment node to

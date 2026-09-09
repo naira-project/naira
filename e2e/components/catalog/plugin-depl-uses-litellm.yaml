@@ -4,7 +4,7 @@
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50054"
+              value: "${PLUGIN_PORT}"
             - name: DEPL_USES_LITELLM_KUBECONFIG
               value: ""
             - name: DEPL_USES_LITELLM_NAMED_HOSTS

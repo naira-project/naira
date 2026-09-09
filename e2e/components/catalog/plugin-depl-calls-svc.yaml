@@ -4,7 +4,7 @@
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50053"
+              value: "${PLUGIN_PORT}"
             - name: DEPL_CALLS_SVC_KUBECONFIG
               value: ""
           resources:

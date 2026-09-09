@@ -22,6 +22,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -55,23 +58,8 @@ type listRelationsResponse struct {
 	TotalSize int32      `json:"totalSize"`
 }
 
-func catalogURL(t *testing.T) string {
-	t.Helper()
-	if u := os.Getenv("CATALOG_URL"); u != "" {
-		return u
-	}
-	return "http://localhost:8090"
-}
-
 func httpClient() *http.Client {
 	return &http.Client{Timeout: 10 * time.Second}
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 var (
@@ -82,13 +70,12 @@ var (
 // authToken fetches an OAuth2 password-grant token from the realm/client/user
 // keycloak.yaml seeds — the catalog API requires a Bearer token on every
 // /v1/* route. Fetched once and reused across tests. Only KEYCLOAK_URL is
-// ever overridden (by create-environment.sh/e2e.yml, via port-forward) — the
-// realm/client/user are fixed by keycloak.yaml's realm import, so they're
-// literal constants rather than configurable overrides nothing ever sets.
+// overridden (by create-environment.sh/e2e.yml, via port-forward) — the
+// realm/client/user are fixed by keycloak.yaml's realm import.
 func authToken(t *testing.T) string {
 	t.Helper()
 	authTokenOnce.Do(func() {
-		keycloakURL := envOr("KEYCLOAK_URL", "http://localhost:8080")
+		keycloakURL := os.Getenv("KEYCLOAK_URL")
 		form := url.Values{
 			"grant_type":    {"password"},
 			"client_id":     {keycloakClientID},
@@ -99,20 +86,14 @@ func authToken(t *testing.T) string {
 		tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", keycloakURL, keycloakRealm)
 
 		resp, err := httpClient().Post(tokenURL, "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
-		if err != nil {
-			t.Fatalf("POST %s: %v", tokenURL, err)
-		}
+		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("POST %s: status %d", tokenURL, resp.StatusCode)
-		}
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var body struct {
 			AccessToken string `json:"access_token"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-			t.Fatalf("POST %s: decoding response: %v", tokenURL, err)
-		}
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
 		authTokenValue = body.AccessToken
 	})
 	return authTokenValue
@@ -120,61 +101,33 @@ func authToken(t *testing.T) string {
 
 func getJSON(t *testing.T, path string, out any) {
 	t.Helper()
-	fullURL := catalogURL(t) + path
+	fullURL := os.Getenv("CATALOG_URL") + path
 	req, err := http.NewRequest(http.MethodGet, fullURL, nil)
-	if err != nil {
-		t.Fatalf("GET %s: building request: %v", fullURL, err)
-	}
+	require.NoError(t, err)
 	req.Header.Set("Authorization", "Bearer "+authToken(t))
 
 	resp, err := httpClient().Do(req)
-	if err != nil {
-		t.Fatalf("GET %s: %v", fullURL, err)
-	}
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET %s: status %d", fullURL, resp.StatusCode)
-	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		t.Fatalf("GET %s: decoding response: %v", fullURL, err)
-	}
-}
-
-func TestHealthz(t *testing.T) {
-	resp, err := httpClient().Get(catalogURL(t) + "/healthz")
-	if err != nil {
-		t.Fatalf("GET /healthz: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("GET /healthz: status %d, want 200", resp.StatusCode)
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(out))
 }
 
 // The litellm plugin discovers every model litellm.yaml's static config
 // lists (see components/litellm.yaml) — exactly "openai" and "mistral",
 // under the litellm1 PATH_PREFIX both plugins in this scenario share.
-func TestLitellmModelsSeeded(t *testing.T) {
+func TestLitellmModelsNodes(t *testing.T) {
 	filter := url.QueryEscape(`kind="model"`)
-	var got listNodesResponse
-	getJSON(t, fmt.Sprintf("/v1/nodes?filter=%s", filter), &got)
+	var response listNodesResponse
+	getJSON(t, fmt.Sprintf("/v1/nodes?filter=%s", filter), &response)
 
-	want := map[string]bool{"litellm1/openai": true, "litellm1/mistral": true}
-	if len(got.Nodes) != len(want) {
-		t.Fatalf("model nodes = %d, want exactly %d (got %+v)", len(got.Nodes), len(want), got.Nodes)
+	wantPaths := []string{"litellm1/openai", "litellm1/mistral"}
+	var paths []string
+	for _, n := range response.Nodes {
+		paths = append(paths, n.Path)
 	}
-	for _, n := range got.Nodes {
-		if !want[n.Path] {
-			t.Errorf("unexpected model node path %q", n.Path)
-			continue
-		}
-		delete(want, n.Path)
-	}
-	for path := range want {
-		t.Errorf("missing model node path %q", path)
-	}
+	assert.ElementsMatchf(t, wantPaths, paths, "full response: %#v", response)
 }
 
 // depl_uses_litellm discovers chatbot1's Deployment (its Secret's key
@@ -185,14 +138,9 @@ func TestChatbotUsesLitellmModel(t *testing.T) {
 	var got listRelationsResponse
 	getJSON(t, fmt.Sprintf("/v1/relations?filter=%s", filter), &got)
 
-	if len(got.Relations) != 1 {
-		t.Fatalf("uses_model relations = %d, want exactly 1 (got %+v)", len(got.Relations), got.Relations)
-	}
+	require.Len(t, got.Relations, 1)
 	rel := got.Relations[0]
-	if !strings.HasSuffix(rel.FromNode, "/chatbot1") {
-		t.Errorf("fromNode = %q, want it to end in %q", rel.FromNode, "/chatbot1")
-	}
-	if rel.ToNode != "nodes/model/litellm1/openai" {
-		t.Errorf("toNode = %q, want %q", rel.ToNode, "nodes/model/litellm1/openai")
-	}
+	assert.Truef(t, strings.HasSuffix(rel.FromNode, "/chatbot1"),
+		"fromNode = %q, want it to end in %q", rel.FromNode, "/chatbot1")
+	assert.Equal(t, "nodes/model/litellm1/openai", rel.ToNode)
 }

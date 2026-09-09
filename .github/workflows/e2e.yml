@@ -98,6 +98,8 @@ jobs:
         run: |
           kubectl -n "${ENV_ID}" port-forward svc/catalog 8090:8090 &
           echo $! > /tmp/catalog-port-forward.pid
+          # Retry for up to 30 seconds while the port-forward and readiness
+          # probe settle.
           for _ in $(seq 1 30); do
             if curl -sf http://localhost:8090/healthz >/dev/null; then
               exit 0
@@ -117,6 +119,8 @@ jobs:
           # The keycloak Service only exposes the http port (8080), not the
           # management/health port (9000) — check a realm endpoint instead of
           # /health/ready, which isn't reachable through this forward.
+          # Retry for up to 30 seconds while the port-forward and readiness
+          # probe settle.
           for _ in $(seq 1 30); do
             if curl -sf http://localhost:8080/realms/naira/.well-known/openid-configuration >/dev/null; then
               exit 0
@@ -126,11 +130,13 @@ jobs:
           echo "::error::keycloak not reachable via port-forward after 30s" >&2
           exit 1
 
+      # -timeout bounds a single hung HTTP call (e.g. a stuck port-forward)
+      # from stalling the whole job; go test's own default is 10m.
       - name: Run E2E tests
         env:
           CATALOG_URL: http://localhost:8090
           KEYCLOAK_URL: http://localhost:8080
-        run: go test -tags e2e -v ./e2e/litellm_chatbot_to_catalog_api/assert/...
+        run: go test -tags e2e -v -timeout=5m ./e2e/litellm_chatbot_to_catalog_api/assert/...
 
       - name: Stop port-forwards
         if: always()
@@ -139,8 +145,9 @@ jobs:
           kill "$(cat /tmp/keycloak-port-forward.pid)" 2>/dev/null || true
 
       - name: Collect diagnostics
-        if: failure()
+        if: always()
         run: |
+          kubectl get pods,services -n "${ENV_ID}" -o wide || true
           kubectl logs -n "${ENV_ID}" -l app=catalog --all-containers --tail=-1 || true
           kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
           kubectl describe pods -n "${ENV_ID}" || true

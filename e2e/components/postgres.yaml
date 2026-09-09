@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:16-alpine
+          image: postgres:16.4-alpine
           imagePullPolicy: IfNotPresent
           envFrom:
             - secretRef:
