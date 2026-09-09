@@ -4,7 +4,7 @@
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50056"
+              value: "${PLUGIN_PORT}"
             - name: OPENMETADATA_BASE_URL
               value: http://openmetadata.${NAMESPACE}.svc.cluster.local:8585
             - name: OPENMETADATA_ADMIN_EMAIL

@@ -13,12 +13,6 @@
 #
 # Usage:
 #   create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG> [--cluster-name <NAME>]
-#   create-environment.sh --scenario <NAME> --pr <N> --tag <TAG> [--run-id <ID>] [--cluster-name <NAME>]
-#
-# --env-id is preferred: pass an ID the caller already computed (e.g. the
-# workflow, before this script runs) so a teardown step can find the right
-# environment even if this script fails before it would otherwise have
-# derived one. --pr/--run-id remain for local/manual convenience.
 #
 # On success, prints ENV_ID=<id> and (if GITHUB_ENV is set) appends ENV_ID and
 # NAMESPACE to it for later workflow steps.
@@ -29,8 +23,6 @@ E2E_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${E2E_DIR}/.." && pwd)"
 
 CLUSTER_NAME="naira-idp-e2e"
-RUN_ID="$(date +%s)"
-PR=""
 TAG=""
 ENV_ID=""
 SCENARIO=""
@@ -38,22 +30,17 @@ SCENARIO=""
 usage() {
   cat >&2 <<'EOF'
 Usage: create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG> [--cluster-name <NAME>]
-       create-environment.sh --scenario <NAME> --pr <N> --tag <TAG> [--run-id <ID>] [--cluster-name <NAME>]
 
 Flags:
   --scenario NAME    Required. Name of a directory under e2e/ whose
                       components.env selects what to deploy (e.g.
                       litellm_chatbot_to_catalog_api).
-  --env-id ID         Namespace/environment ID to use (preferred — see the
-                      script's header comment for why). Mutually exclusive
-                      with --pr, but one of the two is required.
-  --pr N              PR number; combined with --run-id to derive an
-                      env-id (pr-<N>-<run-id>) when --env-id isn't given.
+  --env-id ID         Required. Namespace/environment ID to use. The caller
+                      should compute this before invoking the script so a
+                      teardown step can find it even if setup fails.
   --tag TAG           Required. Image tag to build/deploy every component
                       image under.
-  --run-id ID         Suffix used with --pr to derive an env-id. Defaults
-                      to the current unix timestamp.
-  --cluster-name NAME kind cluster context to deploy into. Defaults to
+  --cluster-name NAME Kind cluster context to deploy into. Defaults to
                       naira-idp-e2e.
 EOF
 }
@@ -62,9 +49,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --scenario) SCENARIO="$2"; shift 2 ;;
     --env-id) ENV_ID="$2"; shift 2 ;;
-    --pr) PR="$2"; shift 2 ;;
     --tag) TAG="$2"; shift 2 ;;
-    --run-id) RUN_ID="$2"; shift 2 ;;
     --cluster-name) CLUSTER_NAME="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
@@ -73,8 +58,8 @@ done
 
 if [ -z "${SCENARIO}" ]; then echo "error: --scenario is required" >&2; usage; exit 1; fi
 if [ -z "${TAG}" ]; then echo "error: --tag is required" >&2; usage; exit 1; fi
-if [ -z "${ENV_ID}" ] && [ -z "${PR}" ]; then
-  echo "error: either --env-id or --pr is required" >&2
+if [ -z "${ENV_ID}" ]; then
+  echo "error: --env-id is required" >&2
   usage
   exit 1
 fi
@@ -89,9 +74,6 @@ source "${SCENARIO_DIR}/components.env"
 COMPONENTS="${COMPONENTS:-}"
 PLUGINS="${PLUGINS:-}"
 
-if [ -z "${ENV_ID}" ]; then
-  ENV_ID="pr-${PR}-${RUN_ID}"
-fi
 NAMESPACE="${ENV_ID}"
 export ENV_ID NAMESPACE TAG
 
@@ -106,30 +88,6 @@ kubectl config use-context "kind-${CLUSTER_NAME}"
 # build/apply/wait-for each one, so a scenario's components.env only ever
 # has to name what it wants.
 # ---------------------------------------------------------------------------
-plugin_image_dir() {
-  case "$1" in
-    litellm) echo "plugins/cmd/litellm" ;;
-    mlflow) echo "plugins/cmd/mlflow" ;;
-    depl-calls-svc) echo "plugins/cmd/depl_calls_svc" ;;
-    depl-uses-litellm) echo "plugins/cmd/depl_uses_litellm" ;;
-    fluxcd) echo "plugins/cmd/fluxcd" ;;
-    openmetadata) echo "plugins/cmd/openmetadata" ;;
-    *) echo "error: unknown plugin '$1'" >&2; exit 1 ;;
-  esac
-}
-
-plugin_port() {
-  case "$1" in
-    litellm) echo 50051 ;;
-    mlflow) echo 50052 ;;
-    depl-calls-svc) echo 50053 ;;
-    depl-uses-litellm) echo 50054 ;;
-    fluxcd) echo 50055 ;;
-    openmetadata) echo 50056 ;;
-    *) echo "error: unknown plugin '$1'" >&2; exit 1 ;;
-  esac
-}
-
 # Self-context build dir for components that ship their own image, or empty
 # for components that run a public image with no local build.
 component_build_dir() {
@@ -142,19 +100,12 @@ component_build_dir() {
   esac
 }
 
-component_deployment() {
-  case "$1" in
-    llamacpp) echo "llama-dummy-model" ;;
-    *) echo "$1" ;;
-  esac
-}
-
 component_wait_timeout() {
   case "$1" in
-    litellm) echo "900s" ;;
-    llamacpp) echo "600s" ;;
-    openmetadata) echo "600s" ;;
-    *) echo "180s" ;;
+    litellm) echo "15m" ;;
+    llamacpp) echo "10m" ;;
+    openmetadata) echo "10m" ;;
+    *) echo "3m" ;;
   esac
 }
 
@@ -173,36 +124,28 @@ component_wait_timeout() {
 # breaks their `COPY frontend/ ./`-style paths).
 # ---------------------------------------------------------------------------
 build_and_load() {
-  local image="$1" dockerfile_dir="$2"
+  local image="$1" dockerfile_dir="$2" build_root="${3:-$2}"
   echo "==> Building ${image}:${TAG}"
-  docker build -q -t "${image}:${TAG}" -f "${dockerfile_dir}/Dockerfile" "${REPO_ROOT}" >/dev/null
-  kind load docker-image "${image}:${TAG}" --name "${CLUSTER_NAME}"
-}
-
-build_and_load_self_context() {
-  local image="$1" dir="$2"
-  echo "==> Building ${image}:${TAG}"
-  docker build -q -t "${image}:${TAG}" "${dir}" >/dev/null
+  docker build -t "${image}:${TAG}" -f "${dockerfile_dir}/Dockerfile" "${build_root}"
   kind load docker-image "${image}:${TAG}" --name "${CLUSTER_NAME}"
 }
 
 echo "==> Building and loading images"
-build_and_load catalog "${REPO_ROOT}/catalog"
-build_and_load_self_context seed "${SCENARIO_DIR}/seed"
+build_and_load catalog "${REPO_ROOT}/catalog" "${REPO_ROOT}"
+build_and_load seed "${SCENARIO_DIR}/seed"
 for plugin in ${PLUGINS}; do
-  build_and_load "${plugin}" "${REPO_ROOT}/$(plugin_image_dir "${plugin}")"
+  build_and_load "${plugin}" "${REPO_ROOT}/plugins/cmd/${plugin//-/_}" "${REPO_ROOT}"
 done
 for component in ${COMPONENTS}; do
   build_dir="$(component_build_dir "${component}")"
   if [ -n "${build_dir}" ]; then
-    build_and_load_self_context "${component}" "${build_dir}"
+    build_and_load "${component}" "${build_dir}"
   fi
 done
 
 # ---------------------------------------------------------------------------
-# Deploy. catalog first — it creates the Namespace every other manifest
-# depends on. quota.yaml right after, before anything else lands, so nothing
-# is ever deployed unmetered even transiently.
+# Deploy the namespace and quota before any workload, so nothing is ever
+# deployed unmetered even transiently.
 # ---------------------------------------------------------------------------
 apply() {
   echo "==> Applying $(basename "$1")"
@@ -214,25 +157,29 @@ apply() {
 
 render_catalog() {
   echo "==> Rendering catalog (plugins: ${PLUGINS:-<none>})"
-  local addresses="" plugin port
+  local addresses="" plugin port=50051
   for plugin in ${PLUGINS}; do
-    port="$(plugin_port "${plugin}")"
     addresses="${addresses:+${addresses},}${plugin}=localhost:${port}"
+    port=$((port + 1))
   done
   export PLUGIN_ADDRESSES="${addresses}"
 
   {
-    cat "${E2E_DIR}/components/catalog/header.yaml"
+    envsubst '${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES}' < "${E2E_DIR}/components/catalog/header.yaml"
+    port=50051
     for plugin in ${PLUGINS}; do
-      cat "${E2E_DIR}/components/catalog/plugin-${plugin}.yaml"
+      export PLUGIN_PORT="${port}"
+      envsubst '${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES} ${PLUGIN_PORT}' < "${E2E_DIR}/components/catalog/plugin-${plugin}.yaml"
+      port=$((port + 1))
     done
-    cat "${E2E_DIR}/components/catalog/footer.yaml"
-  } | envsubst '${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES}' | kubectl apply -f -
+    envsubst '${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES}' < "${E2E_DIR}/components/catalog/footer.yaml"
+  } | kubectl apply -f -
 }
 
-render_catalog
+kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 apply "${E2E_DIR}/base/quota.yaml"
 apply "${E2E_DIR}/components/keycloak.yaml"
+render_catalog
 
 for component in ${COMPONENTS}; do
   if [ "${component}" = "openmetadata" ]; then
@@ -241,9 +188,9 @@ for component in ${COMPONENTS}; do
     helm repo update open-metadata
     apply "${E2E_DIR}/components/openmetadata-secrets.yaml"
     helm upgrade --install openmetadata-dependencies open-metadata/openmetadata-dependencies \
-      --namespace "${NAMESPACE}" --values "${E2E_DIR}/components/openmetadata-deps-values.yaml" --wait --timeout 15m
+      --version 1.13.5 --namespace "${NAMESPACE}" --values "${E2E_DIR}/components/openmetadata-deps-values.yaml" --wait --timeout 15m
     helm upgrade --install openmetadata open-metadata/openmetadata \
-      --namespace "${NAMESPACE}" --values "${E2E_DIR}/components/openmetadata-values.yaml" --wait --timeout 15m
+      --version 1.13.5 --namespace "${NAMESPACE}" --values "${E2E_DIR}/components/openmetadata-values.yaml" --wait --timeout 15m
     continue
   fi
   apply "${E2E_DIR}/components/${component}.yaml"
@@ -254,16 +201,14 @@ done
 # readinessProbe passes — no fixed sleeps anywhere in this script.
 # ---------------------------------------------------------------------------
 echo "==> Waiting for dependency rollouts"
-kubectl -n "${NAMESPACE}" rollout status deploy/keycloak --timeout=300s
-for component in ${COMPONENTS}; do
-  kubectl -n "${NAMESPACE}" rollout status "deploy/$(component_deployment "${component}")" \
+for component in keycloak ${COMPONENTS} catalog; do
+  kubectl -n "${NAMESPACE}" rollout status "deploy/${component}" \
     --timeout="$(component_wait_timeout "${component}")"
 done
-kubectl -n "${NAMESPACE}" rollout status deploy/catalog --timeout=180s
 
 echo "==> Seeding starting dataset"
 apply "${SCENARIO_DIR}/seed/seed-job.yaml"
-kubectl -n "${NAMESPACE}" wait --for=condition=complete "job/seed-${ENV_ID}" --timeout=180s
+kubectl -n "${NAMESPACE}" wait --for=condition=complete "job/seed-${ENV_ID}" --timeout=3m
 
 kubectl -n "${NAMESPACE}" get pods
 

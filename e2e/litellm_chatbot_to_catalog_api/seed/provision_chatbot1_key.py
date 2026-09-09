@@ -19,7 +19,7 @@ import os
 import ssl
 import urllib.request
 
-LITELLM_URL = os.environ.get("LITELLM_URL", "http://localhost:4000").rstrip("/")
+LITELLM_URL = os.environ["LITELLM_URL"].rstrip("/")
 LITELLM_MASTER_KEY = os.environ["LITELLM_MASTER_KEY"]
 NAMESPACE = os.environ["POD_NAMESPACE"]
 

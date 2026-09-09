@@ -4,7 +4,7 @@
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50055"
+              value: "${PLUGIN_PORT}"
           resources:
             requests:
               cpu: 50m

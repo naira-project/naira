@@ -4,7 +4,7 @@
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50051"
+              value: "${PLUGIN_PORT}"
             - name: LITELLM_BASE_URL
               value: http://litellm.${NAMESPACE}.svc.cluster.local:4000
             # Plain value, not Secret-sourced — see components/litellm.yaml's

@@ -4,7 +4,7 @@
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50052"
+              value: "${PLUGIN_PORT}"
             - name: MLFLOW_BASE_URL
               value: http://mlflow.${NAMESPACE}.svc.cluster.local:5000
             - name: PATH_PREFIX
