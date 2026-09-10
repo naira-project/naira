@@ -46,6 +46,7 @@ const (
 	// k3s and in its cache, so that it spins up fast. Verify presence with:
 	//   cid=$(docker run -d --privileged rancher/k3s:v1.28.2-k3s1 server)
 	//   docker logs -f "$cid" 2>&1 | grep -m1 "Node controller sync successful"
+	//   # Try the following a few times, may take a while to show anything:
 	//   docker exec "$cid" crictl -r unix:///run/k3s/containerd/containerd.sock images
 	//   docker rm -f "$cid"
 	tinyImage = "docker.io/rancher/mirrored-pause:3.6"
