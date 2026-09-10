@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router';
 import { type CatalogGraphResponse, useCatalogGraph } from '../hooks/useCatalogGraph';
 import { encodeCatalogPath, type NodeResource } from '../lib/catalogApi';
 import { parsePath } from '../lib/kindUtils';
-import { Card } from './ui/card';
 
 /**
  * Describes one set of neighbours reached from a node via a single relation
@@ -129,36 +128,6 @@ export default function RelatedNodes({ node, config }: RelatedNodesProps) {
     </div>
   );
 }
-
-  /*return (
-    <div>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {config.title}
-      </h3>
-      <div className="flex flex-wrap gap-3">
-        {related.map((item) => (
-          <Card key={item.name} className="w-64 overflow-hidden">
-            <button
-              type="button"
-              onClick={() => goTo(item)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50"
-            >
-              <div className="min-w-0 flex-1">
-                <span className="block w-fit rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-[0.6rem] font-medium uppercase text-muted-foreground">
-                  {item.kind}
-                </span>
-                <span className="mt-1 block truncate text-sm font-medium text-foreground">
-                  {item.displayName}
-                </span>
-              </div>
-              <ChevronRight size={15} className="shrink-0 text-muted-foreground" />
-            </button>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}*/
 
 /**
  * Resolves the related nodes out of the depth-1 graph slice: the edges of
