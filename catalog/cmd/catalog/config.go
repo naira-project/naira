@@ -50,7 +50,7 @@ func loadConfig() (config, error) {
 		return config{}, fmt.Errorf("load environment configuration: %w", err)
 	}
 
-	plugins, err := loadPluginConfig(raw.PluginConfigFile)
+	plugins, err := loadAndValidatePluginConfig(raw.PluginConfigFile)
 	if err != nil {
 		return config{}, fmt.Errorf("load plugin configuration: %w", err)
 	}
@@ -68,7 +68,7 @@ func loadConfig() (config, error) {
 	}, nil
 }
 
-func loadPluginConfig(path string) (catalog.PluginConfigsByName, error) {
+func loadAndValidatePluginConfig(path string) (catalog.PluginConfigsByName, error) {
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read plugin configuration file %q: %w", path, err)

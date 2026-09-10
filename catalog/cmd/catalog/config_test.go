@@ -29,7 +29,7 @@ func TestLoadPluginConfig(t *testing.T) {
 			wantErrText: "parse plugin configuration file",
 		},
 		{
-			name: "returns an error when a plugin has no address",
+			name: "check if validation is triggered",
 			config: `plugins:
   mlflow:
     schedule: "*/5 * * * *"
@@ -59,7 +59,7 @@ func TestLoadPluginConfig(t *testing.T) {
 				require.NoError(t, os.WriteFile(configPath, []byte(tt.config), 0o600))
 			}
 
-			plugins, err := loadPluginConfig(configPath)
+			plugins, err := loadAndValidatePluginConfig(configPath)
 
 			if tt.wantErrText != "" {
 				require.Error(t, err)
@@ -76,7 +76,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
 		plugins catalog.PluginConfigsByName
-		wantErr bool
+		err     string
 	}{
 		{
 			name: "valid configuration passes",
@@ -94,7 +94,6 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Schedule: "@daily",
 				},
 			},
-			wantErr: false,
 		},
 		{
 			name: "fails when plugin name is empty",
@@ -103,7 +102,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Address: "localhost:50051",
 				},
 			},
-			wantErr: true,
+			err: "plugin name cannot be empty",
 		},
 		{
 			name: "fails when plugin name contains uppercase characters",
@@ -112,7 +111,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Address: "localhost:50051",
 				},
 			},
-			wantErr: true,
+			err: "must be lowercased without leading/trailing whitespace",
 		},
 		{
 			name: "fails when plugin name has leading or trailing spaces",
@@ -121,7 +120,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Address: "localhost:50051",
 				},
 			},
-			wantErr: true,
+			err: "must be lowercased without leading/trailing whitespace",
 		},
 		{
 			name: "fails when schedule has leading or trailing whitespace",
@@ -131,7 +130,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Schedule: " */5 * * * * ",
 				},
 			},
-			wantErr: true,
+			err: "must not have leading or trailing whitespace",
 		},
 		{
 			name: "fails when address is missing port",
@@ -140,7 +139,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Address: "localhost",
 				},
 			},
-			wantErr: true,
+			err: "has invalid address (expected host:port)",
 		},
 		{
 			name: "fails when address includes http scheme",
@@ -149,7 +148,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Address: "http://localhost:50051",
 				},
 			},
-			wantErr: true,
+			err: "has invalid address (expected host:port)",
 		},
 		{
 			name: "fails when address is empty",
@@ -158,7 +157,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Address: "",
 				},
 			},
-			wantErr: true,
+			err: "has no address",
 		},
 		{
 			name: "fails when schedule cron format is invalid",
@@ -168,7 +167,7 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 					Schedule: "@Daily",
 				},
 			},
-			wantErr: true,
+			err: "has invalid schedule",
 		},
 	}
 
@@ -176,8 +175,8 @@ func TestPluginConfigsByName_Validate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.plugins.Validate()
 
-			if tt.wantErr {
-				require.Error(t, err)
+			if tt.err != "" {
+				assert.ErrorContains(t, err, tt.err)
 				assert.ErrorIs(t, err, catalog.ErrInvalidPluginConfig)
 			} else {
 				require.NoError(t, err)

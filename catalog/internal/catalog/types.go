@@ -25,21 +25,17 @@ var ErrInvalidPluginConfig = errors.New("invalid plugin configuration")
 
 func (c PluginConfigsByName) Validate() error {
 	for name, config := range c {
-		if name == "" {
+		switch {
+		case name == "":
 			return fmt.Errorf("plugin name cannot be empty: %w", ErrInvalidPluginConfig)
-		}
-		if config.Address == "" {
-			return fmt.Errorf("plugin %q has no address: %w", name, ErrInvalidPluginConfig)
-		}
-
-		if strings.ToLower(strings.TrimSpace(name)) != name {
+		case name != strings.ToLower(strings.TrimSpace(name)):
 			return fmt.Errorf("plugin name %q must be lowercased without leading/trailing whitespace: %w", name, ErrInvalidPluginConfig)
-		}
-		if config.Schedule != strings.TrimSpace(config.Schedule) {
-			return fmt.Errorf("plugin %q schedule %q must not have leading or trailing whitespace: %w", name, config.Schedule, ErrInvalidPluginConfig)
-		}
-		if config.Address != strings.TrimSpace(config.Address) {
+		case config.Address == "":
+			return fmt.Errorf("plugin %q has no address: %w", name, ErrInvalidPluginConfig)
+		case config.Address != strings.TrimSpace(config.Address):
 			return fmt.Errorf("plugin %q address %q must not have leading or trailing whitespace: %w", name, config.Address, ErrInvalidPluginConfig)
+		case config.Schedule != strings.TrimSpace(config.Schedule):
+			return fmt.Errorf("plugin %q schedule %q must not have leading or trailing whitespace: %w", name, config.Schedule, ErrInvalidPluginConfig)
 		}
 
 		host, port, err := net.SplitHostPort(config.Address)
