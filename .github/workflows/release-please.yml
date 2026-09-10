@@ -7,28 +7,26 @@ on:
     branches:
       - main
 
-permissions:
-  contents: write
-  pull-requests: write
-  packages: write # Required for publishing containers
-  id-token: write # Required for Cosign keyless signing
-  attestations: write # Required for provenance (if repo is public)
-  artifact-metadata: write
+permissions: {}
 
 jobs:
   # ── 1. Release Generation & Tagging ───────────────────────────────────────
   release-please:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     outputs:
       # Export the tag name so downstream build jobs know if they should run
       target_tag: ${{ steps.set_tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # Required to push tags later
+          persist-credentials: false
 
       - name: Run Release Please
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: release
         with:
           target-branch: main
@@ -48,8 +46,8 @@ jobs:
             
             # 3. ONLY trigger our custom manual tag logic if it is an RC version
             if [[ "$VERSION" == *-rc* ]]; then
-              echo "is_release=true" >> $GITHUB_OUTPUT
-              echo "version=$VERSION" >> $GITHUB_OUTPUT
+              echo "is_release=true" >> "$GITHUB_OUTPUT"
+              echo "version=$VERSION" >> "$GITHUB_OUTPUT"
               echo "RC release detected: $VERSION. Proceeding with manual tag and label cleanup."
             else
               echo "Stable release detected: $VERSION. Skipping manual tag and letting Release Please handle it natively."
@@ -60,38 +58,50 @@ jobs:
         if: steps.check_release.outputs.is_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ steps.check_release.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # Push the tag (this will NOT trigger downstream 'on: push: tags' workflows)
-          git tag v${{ steps.check_release.outputs.version }}
-          git push origin v${{ steps.check_release.outputs.version }}
+          git tag "v${RELEASE_VERSION}"
+          git push origin "v${RELEASE_VERSION}"
 
           # Find any merged Release Please PRs that are stuck in pending
-          MERGED_PRS=$(gh pr list --state merged --label "autorelease: pending" --json number --jq '.[].number')
+          mapfile -t MERGED_PRS < <(gh pr list --state merged --label "autorelease: pending" --json number --jq '.[].number')
           # Transition the labels to satisfy the Release Please state machine
-          for PR in $MERGED_PRS; do
+          for PR in "${MERGED_PRS[@]}"; do
             echo "Updating labels for PR #$PR"
-            gh pr edit $PR --remove-label "autorelease: pending" --add-label "autorelease: tagged"
+            gh pr edit "$PR" --remove-label "autorelease: pending" --add-label "autorelease: tagged"
           done
 
       - name: Export Target Tag
         id: set_tag
+        env:
+          IS_RC_RELEASE: ${{ steps.check_release.outputs.is_release }}
+          RC_VERSION: ${{ steps.check_release.outputs.version }}
+          STABLE_RELEASE_CREATED: ${{ steps.release.outputs.release_created }}
+          STABLE_TAG: ${{ steps.release.outputs.tag_name }}
         run: |
-          if [[ "${{ steps.check_release.outputs.is_release }}" == 'true' ]]; then
+          if [[ "$IS_RC_RELEASE" == 'true' ]]; then
             # Output the RC tag we just manually pushed
-            echo "tag=v${{ steps.check_release.outputs.version }}" >> $GITHUB_OUTPUT
-          elif [[ "${{ steps.release.outputs.release_created }}" == 'true' ]]; then
+            echo "tag=v${RC_VERSION}" >> "$GITHUB_OUTPUT"
+          elif [[ "$STABLE_RELEASE_CREATED" == 'true' ]]; then
             # Output the Stable tag Release Please natively created
-            echo "tag=${{ steps.release.outputs.tag_name }}" >> $GITHUB_OUTPUT
+            echo "tag=${STABLE_TAG}" >> "$GITHUB_OUTPUT"
           else
-            echo "tag=" >> $GITHUB_OUTPUT
+            echo "tag=" >> "$GITHUB_OUTPUT"
           fi
 
   # ── 2. Build & Push Artifacts (Only runs if a release tag was created) ────
   container-publish-catalog:
     name: Publish · Catalog.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
@@ -107,6 +117,12 @@ jobs:
   # ── 2. Build & push UI image ───────────────────────────────────────────────
   container-publish-ui:
     name: Publish · UI
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
@@ -122,6 +138,12 @@ jobs:
   # ── 3. Build & push Portal image ───────────────────────────────────────────
   container-publish-portal:
     name: Publish · Portal
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
@@ -137,6 +159,12 @@ jobs:
   # ── 4. Plugins ─────────────────────────────────────────────────────────────
   container-publish-plugin-mlflow:
     name: Publish · Plugin MLflow
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
@@ -151,6 +179,12 @@ jobs:
 
   container-publish-plugin-litellm:
     name: Publish · Plugin LiteLLM
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
@@ -165,6 +199,12 @@ jobs:
 
   container-publish-plugin-depl-calls-svc:
     name: Publish · Plugin Depl Calls Svc
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
@@ -179,6 +219,12 @@ jobs:
 
   container-publish-plugin-fluxcd:
     name: Publish · Plugin FluxCD
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
