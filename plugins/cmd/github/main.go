@@ -125,56 +125,59 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 	}
 
 	var resp pluginapi.CollectResponse
-	repoDone := make(map[string]bool) // repo node path -> repo already collected
+	repos := newRepoCache()
 
 	for _, entry := range entries {
-		if len(entry.Images) != 1 {
-			// Ambiguous attribution with more than one container - see the
-			// package doc TODO.
+		image, ok := singleContainerImage(entry)
+		if !ok {
+			// Ambiguous attribution with more than one container
 			continue
 		}
-
-		image := entry.Images[0]
 		if !imageReferencesOrg(image, p.config.GitHubOrg) {
 			continue
 		}
 
 		owner, name, verified, err := p.attestation.Verify(ctx, image, p.config.GitHubOrg)
 		if err != nil {
-			p.logger.Printf("github plugin: verifying attestation for %s (deployment %s/%s): %v", entry.Images[0], entry.Namespace, entry.Name, err)
+			p.logger.Printf("verifying attestation for %s (deployment %s/%s): %v", image, entry.Namespace, entry.Name, err)
 			continue
 		}
 		if !verified {
+			p.logger.Printf("attestation for %s (deployment %s/%s) not verified for org %q", image, entry.Namespace, entry.Name, p.config.GitHubOrg)
 			continue
 		}
 
 		repoNodeID := gitRepositoryNodeID(owner, name)
 
-		if !repoDone[repoNodeID.Path] {
+		if !repos.AlreadyCollected(repoNodeID) {
 			nodes, relations, err := p.collectRepo(ctx, owner, name)
 			if err != nil {
-				// One bad repo (renamed, deleted, no access) shouldn't take
-				// down the whole snapshot - log and move on.
-				p.logger.Printf("github plugin: skipping %s/%s: %v", owner, name, err)
+				p.logger.Printf("skipping %s/%s: %v", owner, name, err)
 				continue
 			}
 			resp.Nodes = append(resp.Nodes, nodes...)
 			resp.Relations = append(resp.Relations, relations...)
-			repoDone[repoNodeID.Path] = true
+			repos.MarkCollected(repoNodeID)
 		}
 
-		resp.Nodes = append(resp.Nodes, pluginapi.NodeClaim{
-			ID: entry.NodeID(),
-		})
-
-		resp.Relations = append(resp.Relations, pluginapi.RelationClaim{
+		deploymentNodeClaim := pluginapi.NodeClaim{ID: entry.NodeID()}
+		deploymentRepoRelation := pluginapi.RelationClaim{
 			Kind: pluginapi.RelationKindBuiltFrom,
 			From: entry.NodeID(),
 			To:   repoNodeID,
-		})
+		}
+		resp.Nodes = append(resp.Nodes, deploymentNodeClaim)
+		resp.Relations = append(resp.Relations, deploymentRepoRelation)
 	}
 
 	return resp, nil
+}
+
+func singleContainerImage(entry deploymentdiscovery.Deployment) (image string, ok bool) {
+	if len(entry.Images) != 1 {
+		return "", false
+	}
+	return entry.Images[0], true
 }
 
 func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
@@ -187,7 +190,6 @@ func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]plugina
 	}
 
 	repoNodeID := gitRepositoryNodeID(owner, name)
-
 	props := pluginapi.PropertyMap{
 		propertyKeyURL: repo.HTMLURL,
 	}
@@ -197,29 +199,38 @@ func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]plugina
 	if repo.Homepage != "" {
 		props[propertyKeyHomepage] = repo.Homepage
 	}
-
 	nodes := []pluginapi.NodeClaim{
 		{ID: repoNodeID, Properties: props},
 	}
-	var relations []pluginapi.RelationClaim
 
 	codeowners, found, err := p.github.GetCodeowners(ctx, owner, name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching codeowners: %w", err)
 	}
-	if found {
-		for _, owner := range parseCodeowners(codeowners) {
-			ownerNodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: owner}
-			nodes = append(nodes, pluginapi.NodeClaim{ID: ownerNodeID})
-			relations = append(relations, pluginapi.RelationClaim{
-				Kind: pluginapi.RelationKindOwnedBy,
-				From: repoNodeID,
-				To:   ownerNodeID,
-			})
-		}
+	if !found {
+		return nodes, nil, nil
 	}
 
-	return nodes, relations, nil
+	ownerNodes, ownedByRelations := codeownersClaims(repoNodeID, parseCodeowners(codeowners))
+	nodes = append(nodes, ownerNodes...)
+	return nodes, ownedByRelations, nil
+}
+
+func codeownersClaims(repoNodeID pluginapi.NodeID, handles []string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim) {
+	nodes := make([]pluginapi.NodeClaim, 0, len(handles))
+	relations := make([]pluginapi.RelationClaim, 0, len(handles))
+
+	for _, handle := range handles {
+		ownerNodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: handle}
+		nodes = append(nodes, pluginapi.NodeClaim{ID: ownerNodeID})
+		relations = append(relations, pluginapi.RelationClaim{
+			Kind: pluginapi.RelationKindOwnedBy,
+			From: repoNodeID,
+			To:   ownerNodeID,
+		})
+	}
+
+	return nodes, relations
 }
 
 func gitRepositoryNodeID(owner, name string) pluginapi.NodeID {
@@ -227,6 +238,22 @@ func gitRepositoryNodeID(owner, name string) pluginapi.NodeID {
 		Kind: pluginapi.NodeKindGitRepository,
 		Path: repositoryidentity.GitHubRepositoryNodePath(owner, name),
 	}
+}
+
+type repoCache struct {
+	collected map[string]bool // node path -> already collected
+}
+
+func newRepoCache() *repoCache {
+	return &repoCache{collected: make(map[string]bool)}
+}
+
+func (c *repoCache) AlreadyCollected(id pluginapi.NodeID) bool {
+	return c.collected[id.Path]
+}
+
+func (c *repoCache) MarkCollected(id pluginapi.NodeID) {
+	c.collected[id.Path] = true
 }
 
 func (p *Plugin) connect() (*kubernetes.Clientset, error) {
