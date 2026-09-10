@@ -47,6 +47,13 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
     columns: ['endpoint', 'description', 'instructions'],
     plugins: ['mcp-servers', 'litellm'],
   },
+  {
+    path: 'inference_endpoints',
+    heading: 'Inference Endpoints Catalog',
+    subheading: 'Inference endpoints served via different plugins.',
+    kinds: ['inference_endpoint'],
+    plugins: ['litellm'],
+  },
 ];
 
 /**

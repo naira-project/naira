@@ -11,6 +11,7 @@ const (
 	NodeKindGitRepository     = "git_repository"
 	NodeKindMCPServer         = "mcp_server"
 	NodeKindMCPTool           = "mcp_tool"
+	NodeKindInferenceEndpoint = "inference_endpoint"
 )
 
 const (
@@ -22,4 +23,6 @@ const (
 	RelationKindDeployedFrom = "deployed_from"
 	RelationKindDerivedFrom  = "derived_from"
 	RelationKindExposes      = "exposes"
+	RelationKindServesModel  = "serves_model"
+	RelationKindExposedByGateway = "exposed_by_gateway"
 )
