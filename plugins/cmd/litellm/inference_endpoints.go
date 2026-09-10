@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	propertyKeyModelID                    = "model_id"
 	propertyKeyEndpointType               = "endpoint_type"
 	propertyKeyProvider                   = "provider"
 	propertyKeyEndpointStatus             = "status"
@@ -37,6 +38,7 @@ const (
 )
 
 type inferenceEndpoint struct {
+	ModelID         string  `json:"model_id"`
 	EndpointType    string  `json:"endpoint_type"`
 	Provider        string  `json:"provider"`
 	Status          string  `json:"status"`
@@ -72,7 +74,7 @@ type modelInfoLiteLLM struct {
 }
 
 type modelInfoDetail struct {
-	ID                 string  `json:"id"`
+	ModelID                 string  `json:"id"`
 	Mode               string  `json:"mode"`
 	MaxTokens          int64   `json:"max_tokens"`
 	InputCostPerToken  float64 `json:"input_cost_per_token"`
@@ -166,6 +168,7 @@ func (m modelInfoLiteLLM) provider() string {
 func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 	properties := pluginapi.PropertyMap{}
 	for key, value := range map[string]string{
+		propertyKeyModelID:         e.ModelID,
 		propertyKeyEndpointType:    e.EndpointType,
 		propertyKeyProvider:        e.Provider,
 		propertyKeyEndpointStatus:  e.Status,
@@ -219,7 +222,6 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context) ([]inferenceEndpoi
 		return nil, fmt.Errorf("decoding LiteLLM Model info response: %w", err)
 	}
 
-
 	statusByKey, err := p.fetchEndpointHealth(ctx)
 	if err != nil {
 		if p.logger != nil {
@@ -235,6 +237,7 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context) ([]inferenceEndpoi
 		}
 
 		endpoints = append(endpoints, inferenceEndpoint{
+			ModelID:      entry.ModelInfo.ModelID,
 			Provider:     entry.LiteLLMParams.provider(),
 			EndpointType: entry.LiteLLMParams.endpointType(),
 			Status:       status,

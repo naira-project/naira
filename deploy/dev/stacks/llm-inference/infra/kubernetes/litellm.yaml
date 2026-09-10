@@ -57,6 +57,11 @@ data:
           model: openrouter/openai/gpt-3.5-turbo
           api_key: os.environ/OPENROUTER_API_KEY
           api_base: https://openrouter.ai/api/v1
+      - model_name: idp-llama-qwen25-05b
+        litellm_params:
+          # Self-hosted llama.cpp server (see llamacpp.yaml), OpenAI-compatible
+          model: openai/qwen2.5-0.5b-instruct
+          api_base: http://llama-qwen25-05b.llamacpp.svc.cluster.local:8080/v1
 
     litellm_settings:
       callbacks:
