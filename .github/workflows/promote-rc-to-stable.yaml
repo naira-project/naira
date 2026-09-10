@@ -14,7 +14,9 @@ jobs:
   trigger-promotion:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Update Release Please Config & Manifest
         run: |
@@ -22,7 +24,7 @@ jobs:
           # The manifest is intentionally left unchanged so the existing git tag
           # (e.g. v0.12.0-rc) remains a valid changelog boundary for Release Please.
           CURRENT=$(jq -r '."."' .release-please-manifest.json)
-          STABLE_VERSION=$(echo "$CURRENT" | sed 's/-rc.*//')
+          STABLE_VERSION=${CURRENT%%-rc*}
 
           # Strip only the flags that gate RC behaviour; keep versioning:prerelease
           # so Release Please can recognise bare -rc versions and graduate them correctly.
