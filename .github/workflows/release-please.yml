@@ -60,12 +60,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_VERSION: ${{ steps.check_release.outputs.version }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           # Push the tag (this will NOT trigger downstream 'on: push: tags' workflows)
-          git tag "v${RELEASE_VERSION}"
-          git push origin "v${RELEASE_VERSION}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f "ref=refs/tags/v${RELEASE_VERSION}" \
+            -f "sha=${GITHUB_SHA}"
 
           # Find any merged Release Please PRs that are stuck in pending
           mapfile -t MERGED_PRS < <(gh pr list --state merged --label "autorelease: pending" --json number --jq '.[].number')
