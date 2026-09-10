@@ -8,6 +8,7 @@ import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
 import { cn } from '../lib/utils';
 import CatalogGraph from './CatalogGraph';
+import { PersesDashboard } from '@/components/PersesDashboard';
 
 const GRAPH_TAB = 'Graph';
 const PROPERTIES_TAB = 'Properties';
@@ -109,7 +110,11 @@ export default function CatalogDetail() {
                 )}
 
                 {currentTab === PROPERTIES_TAB && (
-                  <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+                  <div className="flex flex-col gap-6">
+                    <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+
+                    <PersesDashboard modelId={nodeProps(node).model_id}/>
+                  </div>
                 )}
               </div>
             </div>

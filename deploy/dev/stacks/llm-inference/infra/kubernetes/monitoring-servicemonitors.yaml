@@ -21,6 +21,21 @@ spec:
 
 ---
 # ── LiteLLM proxy ────────────────────────────────────────────────────────────
+# LiteLLM requires the proxy master key as a bearer token on every route,
+# including /metrics, so Prometheus needs the same key litellm-secrets holds
+# in the litellm namespace. Prometheus Operator only resolves ServiceMonitor
+# secret refs from the ServiceMonitor's own namespace, so the token is
+# duplicated here in the monitoring namespace — keep it in sync with
+# LITELLM_MASTER_KEY in deploy/dev/stacks/llm-inference/infra/kubernetes/litellm.yaml.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-proxy-scrape-token
+  namespace: monitoring
+type: Opaque
+stringData:
+  token: sk-local-litellm
+---
 # LiteLLM also exposes Prometheus metrics at /metrics on its HTTP port.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -37,3 +52,7 @@ spec:
       path: /metrics
       interval: 15s
       scrapeTimeout: 10s
+      authorization:
+        credentials:
+          name: litellm-proxy-scrape-token
+          key: token
