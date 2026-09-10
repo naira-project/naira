@@ -6,6 +6,7 @@ import {
   fetchOperations,
   fetchPlugins,
   type OperationResource,
+  type PluginResource,
 } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
@@ -53,7 +54,7 @@ export interface RunErrorEntry {
  * whenever non-terminal operations exist.
  */
 interface UsePluginsStatusResult {
-  plugins: string[];
+  plugins: PluginResource[];
   operations: OperationResource[];
   loading: boolean;
   /** Set of plugin names currently executing or awaiting response. */
