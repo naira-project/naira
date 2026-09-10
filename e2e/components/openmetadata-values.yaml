@@ -1,0 +1,19 @@
+# Helm values override for the openmetadata (server) chart in per-PR E2E
+# environments. Identical to deploy/dev/stacks/mlops/infra/helm/openmetadata-values.yaml
+# — see that file for why the pipeline service client is disabled.
+openmetadata:
+  config:
+    pipelineServiceClientConfig:
+      enabled: false
+
+# The chart deliberately ships `resources: {}` (see its values.yaml comment)
+# so it doesn't impose limits on resource-constrained clusters like Minikube.
+# Our namespace has a LimitRange with a 512Mi default container limit — nowhere
+# near enough for this JVM app, and it was getting OOMKilled at startup.
+resources:
+  requests:
+    cpu: 250m
+    memory: 1Gi
+  limits:
+    cpu: "1"
+    memory: 2Gi

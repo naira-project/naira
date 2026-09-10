@@ -1,0 +1,5 @@
+# Helm values override for the openmetadata-dependencies chart in per-PR E2E
+# environments. Identical to deploy/dev/stacks/mlops/infra/helm/openmetadata-deps-values.yaml
+# — see that file for why Airflow is disabled.
+airflow:
+  enabled: false
