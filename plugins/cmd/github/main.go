@@ -1,33 +1,50 @@
-// github enriches GitHub repositories discovered from Kubernetes Deployments
-// with repository metadata and CODEOWNERS ownership information.
+// github discovers GitHub repositories that GitHub artifact attestations
+// cryptographically prove built the images running in Kubernetes
+// Deployments, then enriches those repositories with metadata and
+// CODEOWNERS ownership information.
 //
-// The plugin only collects repositories that are both referenced by a
-// Kubernetes Deployment and owned by the GitHub organization configured in
-// GITHUB_ORG. It does not enumerate or collect repositories outside that
-// organization. The organization restriction is applied using the GITHUB_ORG
-// environment variable.
+// Unlike depl_from_repo (which links Deployments to repositories using
+// unverified, self-reported signals such as an OCI label or a registry-name
+// guess), this plugin only ever links a Deployment to a repository it has
+// verified via `gh attestation verify` against a GitHub artifact
+// attestation. The resulting built_from relation is therefore a proven
+// fact, not a guess.
 //
-// Deployments with more than one container are intentionally not linked to a
-// source repository because the repository cannot be attributed unambiguously.
+// Attestation verification is attempted only for images whose reference
+// mentions the configured GITHUB_ORG (a cheap pre-filter to avoid needless
+// `gh` invocations); actual identity enforcement comes entirely from
+// `gh attestation verify --owner GITHUB_ORG`, backed by the cryptographic
+// certificate chain and Rekor transparency log, not from that pre-filter.
 //
-// TODO: Link deployments with more than one container to source repositories
+// Deployments with more than one container are not verified because the
+// repository cannot be attributed to a single image unambiguously.
 //
-// TODO: Implement support for private OCI registries. Source repository
-// discovery may fail for images stored in registries requiring
-// authentication.
+// TODO: Link deployments with more than one container to source
+// repositories, verifying each container image independently.
+//
+// TODO: Implement support for private OCI registries other than ghcr.io.
+// `gh attestation verify oci://...` requires the environment to already be
+// authenticated with the artifact's container registry; ghcr.io works out
+// of the box using GITHUB_TOKEN, other registries currently do not.
 //
 // # Environment Variables
 //
-//   - GITHUB_ORG (mandatory) - limits collection to repositories owned by this
-//     GitHub organization.
-//   - GITHUB_TOKEN (optional) - GitHub API bearer token used to access the
-//     repositories and CODEOWNERS files.
+//   - GITHUB_ORG (mandatory) - limits collection to repositories whose
+//     attestations are verified for this GitHub organization, via
+//     `gh attestation verify --owner`.
+//   - GITHUB_TOKEN (optional) - GitHub API bearer token used both for the
+//     REST API calls (repository metadata, CODEOWNERS) and, as GH_TOKEN,
+//     for `gh attestation verify`.
 //   - GITHUB_BASE_URL (optional) - GitHub API base URL; defaults to
 //     "https://api.github.com". Set this for GitHub Enterprise.
-//   - GITHUB_HTTP_TIMEOUT (optional) - GitHub API request timeout; defaults to
-//     10s.
-//   - KUBECONFIG (optional) - path to a kubeconfig file; when unset, in-cluster
-//     configuration is used.
+//   - GITHUB_HTTP_TIMEOUT (optional) - GitHub API request timeout; defaults
+//     to 10s.
+//   - GITHUB_ATTESTATION_TIMEOUT (optional) - timeout for a single
+//     `gh attestation verify` invocation; defaults to 30s.
+//   - GH_CLI_PATH (optional) - path to the `gh` binary; defaults to "gh"
+//     (resolved from PATH).
+//   - KUBECONFIG (optional) - path to a kubeconfig file; when unset,
+//     in-cluster configuration is used.
 //
 //go:generate bash -c "goreadme -use-stdlib-markdown -title 'github plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
@@ -37,13 +54,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/naira-project/naira/plugins/internal/deploymentdiscovery"
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
 	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
-	"github.com/naira-project/naira/plugins/internal/sourcerepository"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	"k8s.io/client-go/kubernetes"
@@ -56,8 +71,8 @@ const (
 )
 
 type config struct {
-	// GitHubOrg limits collection to repositories used by Deployments and owned
-	// by this GitHub organization.
+	// GitHubOrg limits collection to repositories whose attestations are
+	// verified for this GitHub organization.
 	GitHubOrg string `env:"GITHUB_ORG"`
 
 	Kubeconfig string `env:"KUBECONFIG"`
@@ -65,19 +80,24 @@ type config struct {
 	GitHubToken   string        `env:"GITHUB_TOKEN"`
 	GitHubBaseURL string        `env:"GITHUB_BASE_URL" default:"https://api.github.com"`
 	HTTPTimeout   time.Duration `env:"GITHUB_HTTP_TIMEOUT" default:"10s"`
+
+	GHCLIPath          string        `env:"GH_CLI_PATH" default:"gh"`
+	AttestationTimeout time.Duration `env:"GITHUB_ATTESTATION_TIMEOUT" default:"30s"`
 }
 
 type Plugin struct {
-	github *githubClient
-	logger *log.Logger
-	config config
+	github      *githubClient
+	attestation *attestationVerifier
+	logger      *log.Logger
+	config      config
 }
 
 func New(config config, logger *log.Logger) *Plugin {
 	return &Plugin{
-		github: newGithubClient(&http.Client{Timeout: config.HTTPTimeout}, config.GitHubBaseURL, config.GitHubToken),
-		logger: logger,
-		config: config,
+		github:      newGithubClient(&http.Client{Timeout: config.HTTPTimeout}, config.GitHubBaseURL, config.GitHubToken),
+		attestation: newAttestationVerifier(config.GHCLIPath, config.GitHubToken, config.GitHubBaseURL, config.AttestationTimeout),
+		logger:      logger,
+		config:      config,
 	}
 }
 
@@ -99,64 +119,62 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (pluginapi.CollectResponse, error) {
-	repos, err := p.resolveRepos(ctx, k8sClient)
+	entries, err := deploymentdiscovery.DiscoverDeployments(ctx, k8sClient, p.logger)
 	if err != nil {
-		return pluginapi.CollectResponse{}, fmt.Errorf("resolving repos to collect: %w", err)
+		return pluginapi.CollectResponse{}, fmt.Errorf("discovering deployments: %w", err)
 	}
 
 	var resp pluginapi.CollectResponse
+	repoDone := make(map[string]bool) // repo node path -> repo already collected
 
-	for _, ref := range repos {
-		nodes, relations, err := p.collectRepo(ctx, ref.owner, ref.name)
+	for _, entry := range entries {
+		if len(entry.Images) != 1 {
+			// Ambiguous attribution with more than one container - see the
+			// package doc TODO.
+			continue
+		}
+
+		image := entry.Images[0]
+		if !imageReferencesOrg(image, p.config.GitHubOrg) {
+			continue
+		}
+
+		owner, name, verified, err := p.attestation.Verify(ctx, image, p.config.GitHubOrg)
 		if err != nil {
-			// One bad repo (renamed, deleted, no access) shouldn't take down
-			// the whole snapshot — log and move on.
-			p.logger.Printf("git plugin: skipping %s/%s: %v", ref.owner, ref.name, err)
+			p.logger.Printf("github plugin: verifying attestation for %s (deployment %s/%s): %v", entry.Images[0], entry.Namespace, entry.Name, err)
 			continue
 		}
-		resp.Nodes = append(resp.Nodes, nodes...)
-		resp.Relations = append(resp.Relations, relations...)
-	}
-
-	return resp, nil
-}
-
-type repoRef struct {
-	owner string
-	name  string
-}
-
-// resolveRepos figures out which GitHub repos to collect by running repository discovery
-// and filtering by GitHub host and p.config.GitHubOrg if set.
-func (p *Plugin) resolveRepos(ctx context.Context, k8sClient kubernetes.Interface) ([]repoRef, error) {
-	discovered, err := discoverRepos(ctx, k8sClient, p.logger)
-	if err != nil {
-		return nil, fmt.Errorf("discovering repositories from deployments: %w", err)
-	}
-
-	var refs []repoRef
-
-	for _, repo := range discovered {
-		// Only collect GitHub repositories with valid owner/name parsed
-		owner, name, ok := repositoryidentity.ParseGitHubRepository(repo.URL)
-		if !ok {
-			continue
-		}
-		if owner == "" || name == "" {
+		if !verified {
 			continue
 		}
 
-		if p.config.GitHubOrg != "" && !strings.EqualFold(owner, p.config.GitHubOrg) {
-			continue
+		repoNodeID := gitRepositoryNodeID(owner, name)
+
+		if !repoDone[repoNodeID.Path] {
+			nodes, relations, err := p.collectRepo(ctx, owner, name)
+			if err != nil {
+				// One bad repo (renamed, deleted, no access) shouldn't take
+				// down the whole snapshot - log and move on.
+				p.logger.Printf("github plugin: skipping %s/%s: %v", owner, name, err)
+				continue
+			}
+			resp.Nodes = append(resp.Nodes, nodes...)
+			resp.Relations = append(resp.Relations, relations...)
+			repoDone[repoNodeID.Path] = true
 		}
 
-		refs = append(refs, repoRef{
-			owner: owner,
-			name:  name,
+		resp.Nodes = append(resp.Nodes, pluginapi.NodeClaim{
+			ID: entry.NodeID(),
+		})
+
+		resp.Relations = append(resp.Relations, pluginapi.RelationClaim{
+			Kind: pluginapi.RelationKindBuiltFrom,
+			From: entry.NodeID(),
+			To:   repoNodeID,
 		})
 	}
 
-	return refs, nil
+	return resp, nil
 }
 
 func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
@@ -209,25 +227,6 @@ func gitRepositoryNodeID(owner, name string) pluginapi.NodeID {
 		Kind: pluginapi.NodeKindGitRepository,
 		Path: repositoryidentity.GitHubRepositoryNodePath(owner, name),
 	}
-}
-
-// discoverRepos returns unique source repositories found in Deployments.
-func discoverRepos(ctx context.Context, client kubernetes.Interface, logger *log.Logger) ([]sourcerepository.Repository, error) {
-	entries, err := deploymentdiscovery.DiscoverDeployments(ctx, client, logger)
-	if err != nil {
-		return nil, fmt.Errorf("discovering deployment repositories: %w", err)
-	}
-	seen := map[string]bool{}
-	result := make([]sourcerepository.Repository, 0, len(entries))
-	for _, entry := range entries {
-		path := repositoryidentity.GitHubRepositoryNodePathFromURL(entry.SourceRepository.URL)
-		if path == "" || seen[path] {
-			continue
-		}
-		seen[path] = true
-		result = append(result, entry.SourceRepository)
-	}
-	return result, nil
 }
 
 func (p *Plugin) connect() (*kubernetes.Clientset, error) {
