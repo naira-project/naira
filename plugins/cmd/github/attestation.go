@@ -70,7 +70,7 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 	if runErr := cmd.Run(); runErr != nil {
 		if _, ok := errors.AsType[*exec.ExitError](runErr); ok {
 			// the command starts and finishes but verification fails
-			return "", "", false, nil
+			return "", "", false, fmt.Errorf("running gh attestation verify, stderr: %s)", strings.TrimSpace(stderr.String()))
 		}
 		// anything else (gh binary missing, ctx cancelled ...)
 		return "", "", false, fmt.Errorf("running gh attestation verify: %w (stderr: %s)", runErr, strings.TrimSpace(stderr.String()))

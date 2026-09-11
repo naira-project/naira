@@ -54,6 +54,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/naira-project/naira/plugins/internal/deploymentdiscovery"
@@ -77,6 +78,8 @@ type config struct {
 
 	Kubeconfig string `env:"KUBECONFIG"`
 
+	// Token is needed even for public repos. Without it `gh attestasttion verify` fails.
+	// For public repositories, a classic token without any selected scopes is sufficient
 	GitHubToken   string        `env:"GITHUB_TOKEN"`
 	GitHubBaseURL string        `env:"GITHUB_BASE_URL" default:"https://api.github.com"`
 	HTTPTimeout   time.Duration `env:"GITHUB_HTTP_TIMEOUT" default:"10s"`
@@ -95,7 +98,7 @@ type Plugin struct {
 func New(config config, logger *log.Logger) *Plugin {
 	return &Plugin{
 		github:      newGithubClient(&http.Client{Timeout: config.HTTPTimeout}, config.GitHubBaseURL, config.GitHubToken),
-		attestation: newAttestationVerifier(config.GHCLIPath, config.GitHubToken, config.GitHubBaseURL, config.AttestationTimeout),
+		attestation: newAttestationVerifier(config.GHCLIPath, config.GitHubToken, config.AttestationTimeout),
 		logger:      logger,
 		config:      config,
 	}
@@ -180,6 +183,15 @@ func singleContainerImage(entry deploymentdiscovery.Deployment) (image string, o
 	return entry.Images[0], true
 }
 
+// imageReferencesOrg is a filter to skip the network calls for images that are not in
+// the configured org. It is not a security check - it's an optimization
+func imageReferencesOrg(image, org string) bool {
+	if org == "" {
+		return false
+	}
+	return strings.Contains(strings.ToLower(image), strings.ToLower(org))
+}
+
 func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
 	repo, found, err := p.github.GetRepo(ctx, owner, name)
 	if err != nil {
@@ -211,7 +223,7 @@ func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]plugina
 		return nodes, nil, nil
 	}
 
-	ownerNodes, ownedByRelations := codeownersClaims(repoNodeID, parseCodeowners(codeowners))
+	ownerNodes, ownedByRelations := codeownersClaims(repoNodeID, extractDefaultCodeowners(codeowners))
 	nodes = append(nodes, ownerNodes...)
 	return nodes, ownedByRelations, nil
 }
