@@ -1,0 +1,3 @@
+Naira Catalog, UI, and Portal have been installed in namespace {{ .Release.Namespace }}.
+
+The Catalog expects Secret {{ .Values.catalog.existingSecret }} to contain its plugin credentials.

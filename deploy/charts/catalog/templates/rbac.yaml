@@ -8,7 +8,7 @@ metadata:
 rules:
   - apiGroups: ["naira.io"]
     resources: ["appidentities"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -25,7 +25,7 @@ subjects:
     name: {{ include "catalog.serviceAccountName" . }}
     namespace: {{ .Release.Namespace }}
 {{- end }}
-{{- if and .Values.rbac.create .Values.rbac.deplCallsSvc.create }}
+{{- if and .Values.rbac.create .Values.rbac.deplCallsSvc.create .Values.plugins.deplCallsSvc.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -36,10 +36,10 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["namespaces", "services"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -51,6 +51,74 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: {{ include "catalog.deplCallsSvcRoleName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "catalog.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if and .Values.rbac.create .Values.rbac.deplUsesLitellm.create .Values.plugins.deplUsesLitellm.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "catalog.deplUsesLitellmRoleName" . }}
+  labels:
+    {{- include "catalog.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "catalog.deplUsesLitellmRoleName" . }}
+  labels:
+    {{- include "catalog.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "catalog.deplUsesLitellmRoleName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "catalog.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if and .Values.rbac.create .Values.rbac.fluxcd.create .Values.plugins.fluxcd.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "catalog.fluxcdRoleName" . }}
+  labels:
+    {{- include "catalog.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+    resources: ["kustomizations"]
+    verbs: ["get", "list"]
+  - apiGroups: ["helm.toolkit.fluxcd.io"]
+    resources: ["helmreleases"]
+    verbs: ["get", "list"]
+  - apiGroups: ["source.toolkit.fluxcd.io"]
+    resources: ["gitrepositories"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "catalog.fluxcdRoleName" . }}
+  labels:
+    {{- include "catalog.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "catalog.fluxcdRoleName" . }}
 subjects:
   - kind: ServiceAccount
     name: {{ include "catalog.serviceAccountName" . }}

@@ -1,0 +1,4 @@
+The Naira UI is available through service {{ include "ui.fullname" . }} on port {{ .Values.service.port }}.
+
+To access it locally:
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "ui.fullname" . }} 3001:{{ .Values.service.port }}

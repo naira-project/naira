@@ -1,12 +1,12 @@
 {{- if .Values.httpRoute.enabled -}}
-{{- $fullName := include "ui-poc.fullname" . -}}
+{{- $fullName := include "ui.fullname" . -}}
 {{- $svcPort := .Values.service.port -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: {{ $fullName }}
   labels:
-    {{- include "ui-poc.labels" . | nindent 4 }}
+    {{- include "ui.labels" . | nindent 4 }}
   {{- with .Values.httpRoute.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
