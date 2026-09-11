@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// parseCodeowners extracts the default owners (the "*" pattern) from a CODEOWNERS file,
+// extractDefaultCodeowners extracts the default (global) owners (the "*" pattern) from a CODEOWNERS file,
 // ignoring path-specific rules, inline comments, and duplicates.
-func parseCodeowners(content string) []string {
+func extractDefaultCodeowners(content string) []string {
 	var defaultOwners []string
 
 	scanner := bufio.NewScanner(strings.NewReader(content))
