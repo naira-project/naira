@@ -25,6 +25,9 @@ vars:
     - name: mcp-servers
       dir: '{{.PLUGINS_BASE}}/mcp_servers'
       image: mcp-servers:local
+    - name: bedrock
+      dir: '{{.PLUGINS_BASE}}/bedrock'
+      image: bedrock:local
 
 tasks:
   image:build:
