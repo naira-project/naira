@@ -1,0 +1,151 @@
+# Registry-based install for the PoC cluster — what ArgoCD syncs.
+#
+# Differs from values-dev.yaml in exactly one way that matters: images come
+# from a registry instead of being built locally. That is the whole of what
+# separates the GitOps path from the inner loop.
+
+global:
+  imageRegistry: localhost:5001
+  imagePullPolicy: IfNotPresent
+
+# naira-dependencies installs into one namespace with predictable service names.
+dependencies:
+  keycloak:
+    baseUrl: http://keycloak.naira-deps.svc.cluster.local:8080
+    realm: naira
+    issuer: http://localhost:8080/realms/naira
+    authUrl: http://localhost:8080/realms/naira/protocol/openid-connect/auth
+    baseDomain: localhost
+  litellm:
+    baseUrl: http://litellm.naira-deps.svc.cluster.local:4000
+  mlflow:
+    baseUrl: http://mlflow.naira-deps.svc.cluster.local:5000
+  openmetadata:
+    baseUrl: http://openmetadata.naira-deps.svc.cluster.local:8585
+    adminEmail: admin@open-metadata.org
+  mcp:
+    endpoints: mock-knowledge-base=http://mcp-mock.naira-deps.svc.cluster.local:8080/mcp
+
+catalog:
+  secret:
+    create: true
+    data:
+      LITELLM_API_KEY: sk-local-litellm
+      OPENMETADATA_ADMIN_PASSWORD: admin
+
+  # OpenMetadata's backend is off in naira-dependencies, so its plugin is too.
+  plugins:
+    - name: litellm
+      enabled: true
+      source: litellm
+      image: {repository: naira-plugin-litellm, tag: ""}
+      port: 50051
+      schedule: "0 0 * * *"
+      pathPrefix: litellm
+      env:
+        - name: LITELLM_BASE_URL
+          value: "{{ .Values.dependencies.litellm.baseUrl }}"
+        - name: LITELLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: "{{ include \"naira.secretName\" . }}"
+              key: LITELLM_API_KEY
+    - name: mlflow
+      enabled: true
+      source: mlflow
+      image: {repository: naira-plugin-mlflow, tag: ""}
+      port: 50052
+      schedule: "0 0 * * *"
+      pathPrefix: mlflow
+      env:
+        - name: MLFLOW_BASE_URL
+          value: "{{ .Values.dependencies.mlflow.baseUrl }}"
+    - name: depl-calls-svc
+      enabled: true
+      source: depl_calls_svc
+      image: {repository: naira-plugin-depl-calls-svc, tag: ""}
+      port: 50053
+      schedule: "0 * * * *"
+      env:
+        - name: DEPL_CALLS_SVC_KUBECONFIG
+          value: ""
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces", "services"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+    - name: depl-uses-litellm
+      enabled: true
+      source: depl_uses_litellm
+      image: {repository: naira-plugin-depl-uses-litellm, tag: ""}
+      port: 50054
+      schedule: "0 * * * *"
+      env:
+        - name: DEPL_USES_LITELLM_KUBECONFIG
+          value: ""
+        - name: DEPL_USES_LITELLM_NAMED_HOSTS
+          value: "litellm={{ .Values.dependencies.litellm.baseUrl }}"
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces", "secrets"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+    - name: fluxcd
+      # Open question 1 in RFC-009: after phase 6 nothing in-house runs Flux.
+      enabled: true
+      source: fluxcd
+      image: {repository: naira-plugin-fluxcd, tag: ""}
+      port: 50055
+      schedule: "*/1 * * * *"
+      rbac:
+        rules:
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+          - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+            resources: ["kustomizations"]
+            verbs: ["get", "list"]
+          - apiGroups: ["helm.toolkit.fluxcd.io"]
+            resources: ["helmreleases"]
+            verbs: ["get", "list"]
+          - apiGroups: ["source.toolkit.fluxcd.io"]
+            resources: ["gitrepositories"]
+            verbs: ["get", "list"]
+    - name: openmetadata
+      enabled: false
+      source: openmetadata
+      image: {repository: naira-plugin-openmetadata, tag: ""}
+      port: 50056
+      pathPrefix: openmetadata
+      env:
+        - name: OPENMETADATA_BASE_URL
+          value: "{{ .Values.dependencies.openmetadata.baseUrl }}"
+        - name: OPENMETADATA_ADMIN_EMAIL
+          value: "{{ .Values.dependencies.openmetadata.adminEmail }}"
+        - name: OPENMETADATA_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: "{{ include \"naira.secretName\" . }}"
+              key: OPENMETADATA_ADMIN_PASSWORD
+    - name: mcp-servers
+      enabled: true
+      source: mcp_servers
+      image: {repository: naira-plugin-mcp-servers, tag: ""}
+      port: 50058
+      pathPrefix: mcp
+      env:
+        - name: MCP_ENDPOINTS
+          value: "{{ .Values.dependencies.mcp.endpoints }}"
+
+
+portal:
+  oidc:
+    secret:
+      create: true
+      value: naira-local-dev-secret

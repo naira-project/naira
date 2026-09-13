@@ -1,0 +1,19 @@
+# PoC cluster for the RFC-009 demo.
+#
+# Differs from deploy/dev's kind config in one way: containerdConfigPatches +
+# a local registry. RFC-009's "Consumers" section notes that ArgoCD pulls from
+# a registry and cannot see images side-loaded by `kind load`. This is what it
+# costs to make local ArgoCD work against locally-built images.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: naira-poc
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 30080
+        protocol: TCP
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"

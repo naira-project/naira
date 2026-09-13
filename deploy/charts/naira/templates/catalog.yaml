@@ -1,0 +1,103 @@
+{{- if .Values.catalog.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "naira.fullname" . }}-catalog
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    app.kubernetes.io/component: catalog
+spec:
+  replicas: {{ .Values.catalog.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "naira.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: catalog
+  template:
+    metadata:
+      labels:
+        {{- include "naira.labels" . | nindent 8 }}
+        app.kubernetes.io/component: catalog
+      annotations:
+        # Restart when the plugin list changes.
+        checksum/plugin-config: {{ include (print $.Template.BasePath "/plugin-configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "naira.serviceAccountName" . }}
+      {{/*
+      Plugins are initContainers with restartPolicy Always — the native sidecar
+      shape. They start before the catalog and stay running for the pod's life.
+      */}}
+      initContainers:
+        {{- range .Values.catalog.plugins }}
+        {{- if .enabled }}
+        - name: plugin-{{ .name }}
+          image: {{ include "naira.image" (dict "root" $ "image" .image) | quote }}
+          restartPolicy: Always
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          env:
+            - name: PORT
+              value: {{ .port | quote }}
+            {{- with .env }}
+            {{- tpl (toYaml .) $ | nindent 12 }}
+            {{- end }}
+            {{- with .pathPrefix }}
+            - name: PATH_PREFIX
+              value: {{ . | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml (default $.Values.catalog.pluginResources .resources) | nindent 12 }}
+        {{- end }}
+        {{- end }}
+      containers:
+        - name: catalog
+          image: {{ include "naira.image" (dict "root" $ "image" .Values.catalog.image) | quote }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          volumeMounts:
+            - name: plugin-config
+              mountPath: /etc/catalog/plugins.yaml
+              subPath: plugins.yaml
+              readOnly: true
+          env:
+            - name: PORT
+              value: {{ .Values.catalog.port | quote }}
+            {{- with .Values.catalog.env }}
+            {{- tpl (toYaml .) $ | nindent 12 }}
+            {{- end }}
+          ports:
+            - containerPort: {{ .Values.catalog.port }}
+              name: http
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.catalog.resources | nindent 12 }}
+      volumes:
+        - name: plugin-config
+          configMap:
+            name: {{ include "naira.fullname" . }}-plugin-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "naira.fullname" . }}-catalog
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    app.kubernetes.io/component: catalog
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "naira.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: catalog
+  ports:
+    - name: http
+      port: {{ .Values.catalog.port }}
+      targetPort: http
+{{- end }}

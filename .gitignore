@@ -3,3 +3,7 @@
 .claude
 __pycache__/
 *.pyc
+
+# RFC-009 PoC scaffolding
+deploy/poc/certs/
+deploy/poc/component-constructor.generated.yaml

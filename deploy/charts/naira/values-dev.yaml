@@ -1,0 +1,156 @@
+# Local kind loop. Tilt reads this file — both for the Helm release and to
+# decide which images to build (catalog.plugins[].source).
+#
+# This is the ONLY values file in the repo that creates Secrets. Every other
+# path supplies them (RFC-009 P4).
+
+global:
+  # Images are built by Tilt and loaded into the kind node, not pulled.
+  imageRegistry: ""
+  imagePullPolicy: IfNotPresent
+
+# naira-dependencies installs into one namespace with predictable service names.
+dependencies:
+  keycloak:
+    baseUrl: http://keycloak.naira-deps.svc.cluster.local:8080
+    realm: naira
+    issuer: http://localhost:8080/realms/naira
+    authUrl: http://localhost:8080/realms/naira/protocol/openid-connect/auth
+    baseDomain: localhost
+  litellm:
+    baseUrl: http://litellm.naira-deps.svc.cluster.local:4000
+  mlflow:
+    baseUrl: http://mlflow.naira-deps.svc.cluster.local:5000
+  openmetadata:
+    baseUrl: http://openmetadata.naira-deps.svc.cluster.local:8585
+    adminEmail: admin@open-metadata.org
+  mcp:
+    endpoints: mock-knowledge-base=http://mcp-mock.naira-deps.svc.cluster.local:8080/mcp
+
+catalog:
+  image: {repository: catalog, tag: local}
+  secret:
+    create: true
+    data:
+      LITELLM_API_KEY: sk-local-litellm
+      OPENMETADATA_ADMIN_PASSWORD: admin
+  plugins:
+    - name: litellm
+      enabled: true
+      source: litellm
+      image: {repository: litellm, tag: local}
+      port: 50051
+      schedule: "0 0 * * *"
+      pathPrefix: litellm
+      env:
+        - name: LITELLM_BASE_URL
+          value: "{{ .Values.dependencies.litellm.baseUrl }}"
+        - name: LITELLM_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: "{{ include \"naira.secretName\" . }}"
+              key: LITELLM_API_KEY
+    - name: mlflow
+      enabled: true
+      source: mlflow
+      image: {repository: mlflow, tag: local}
+      port: 50052
+      schedule: "0 0 * * *"
+      pathPrefix: mlflow
+      env:
+        - name: MLFLOW_BASE_URL
+          value: "{{ .Values.dependencies.mlflow.baseUrl }}"
+    - name: depl-calls-svc
+      enabled: true
+      source: depl_calls_svc
+      image: {repository: depl-calls-svc, tag: local}
+      port: 50053
+      schedule: "0 * * * *"
+      env:
+        - name: DEPL_CALLS_SVC_KUBECONFIG
+          value: ""
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces", "services"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+    - name: depl-uses-litellm
+      enabled: true
+      source: depl_uses_litellm
+      image: {repository: depl-uses-litellm, tag: local}
+      port: 50054
+      schedule: "0 * * * *"
+      env:
+        - name: DEPL_USES_LITELLM_KUBECONFIG
+          value: ""
+        - name: DEPL_USES_LITELLM_NAMED_HOSTS
+          value: "litellm={{ .Values.dependencies.litellm.baseUrl }}"
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces", "secrets"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+    - name: fluxcd
+      enabled: true
+      source: fluxcd
+      image: {repository: fluxcd, tag: local}
+      port: 50055
+      schedule: "*/1 * * * *"
+      rbac:
+        rules:
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+          - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+            resources: ["kustomizations"]
+            verbs: ["get", "list"]
+          - apiGroups: ["helm.toolkit.fluxcd.io"]
+            resources: ["helmreleases"]
+            verbs: ["get", "list"]
+          - apiGroups: ["source.toolkit.fluxcd.io"]
+            resources: ["gitrepositories"]
+            verbs: ["get", "list"]
+    - name: openmetadata
+      # Off on kind: OpenMetadata needs MySQL + Elasticsearch + Airflow and does
+      # not fit alongside the rest on a single kind node. Flip both this and
+      # dependencies.openmetadata.enabled together.
+      enabled: false
+      source: openmetadata
+      image: {repository: openmetadata, tag: local}
+      port: 50056
+      pathPrefix: openmetadata
+      env:
+        - name: OPENMETADATA_BASE_URL
+          value: "{{ .Values.dependencies.openmetadata.baseUrl }}"
+        - name: OPENMETADATA_ADMIN_EMAIL
+          value: "{{ .Values.dependencies.openmetadata.adminEmail }}"
+        - name: OPENMETADATA_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: "{{ include \"naira.secretName\" . }}"
+              key: OPENMETADATA_ADMIN_PASSWORD
+    - name: mcp-servers
+      enabled: true
+      source: mcp_servers
+      image: {repository: mcp-servers, tag: local}
+      port: 50058
+      pathPrefix: mcp
+      env:
+        - name: MCP_ENDPOINTS
+          value: "{{ .Values.dependencies.mcp.endpoints }}"
+
+ui:
+  image: {repository: ui, tag: local}
+
+portal:
+  image: {repository: portal, tag: local}
+  oidc:
+    secret:
+      create: true
+      value: naira-local-dev-secret

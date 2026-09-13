@@ -1,0 +1,13 @@
+apiVersion: v2
+name: naira
+description: Naira — catalog with its gRPC plugin sidecars, UI and portal
+type: application
+# Chart version tracks the product release. Release CI sets both.
+version: 0.1.0-poc
+appVersion: "0.1.0-poc"
+keywords:
+  - internal-developer-platform
+  - catalog
+home: https://github.com/naira-project/naira
+sources:
+  - https://github.com/naira-project/naira

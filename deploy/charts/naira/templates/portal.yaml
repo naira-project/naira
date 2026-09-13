@@ -1,0 +1,80 @@
+{{- if .Values.portal.enabled }}
+{{- $oidcSecret := .Values.portal.oidc.secret.existingSecret | default (printf "%s-portal-oidc" (include "naira.fullname" .)) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "naira.fullname" . }}-portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal
+spec:
+  replicas: {{ .Values.portal.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "naira.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: portal
+  template:
+    metadata:
+      labels:
+        {{- include "naira.labels" . | nindent 8 }}
+        app.kubernetes.io/component: portal
+    spec:
+      containers:
+        - name: portal
+          image: {{ include "naira.image" (dict "root" $ "image" .Values.portal.image) | quote }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          env:
+            - name: PORT
+              value: {{ .Values.portal.port | quote }}
+            - name: NAIRA_UI_BASE_URL
+              value: {{ .Values.portal.uiBaseUrl | quote }}
+            - name: IDP_NAMES
+              value: keycloak
+            - name: BASE_DOMAINS_KEYCLOAK
+              value: {{ .Values.dependencies.keycloak.baseDomain | quote }}
+            - name: AUTH_SERVER_URL_KEYCLOAK
+              value: {{ .Values.dependencies.keycloak.authUrl | quote }}
+            - name: TOKEN_URL_KEYCLOAK
+              value: {{ printf "%s/realms/%s/protocol/openid-connect/token" .Values.dependencies.keycloak.baseUrl .Values.dependencies.keycloak.realm | quote }}
+            - name: OIDC_CLIENT_ID_KEYCLOAK
+              value: {{ .Values.portal.oidc.clientId | quote }}
+            - name: OIDC_CLIENT_SECRET_KEYCLOAK
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $oidcSecret }}
+                  key: {{ .Values.portal.oidc.secret.key }}
+          ports:
+            - containerPort: {{ .Values.portal.port }}
+              name: http
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.portal.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "naira.fullname" . }}-portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "naira.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: portal
+  ports:
+    - name: http
+      port: {{ .Values.portal.port }}
+      targetPort: http
+{{- end }}

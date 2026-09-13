@@ -1,0 +1,68 @@
+{{- if and .Values.catalog.enabled .Values.catalog.rbac.create }}
+{{- $fullName := include "naira.fullname" . }}
+{{- $sa := include "naira.serviceAccountName" . }}
+{{- $ns := .Release.Namespace }}
+{{- $labels := include "naira.labels" . }}
+{{/*
+One ClusterRole per subject that needs one, not one aggregated role: least
+privilege stays visible, and a plugin's rules sit next to the plugin that
+needs them in values.yaml (RFC-009 §2).
+*/}}
+{{- with .Values.catalog.rbac.rules }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullName }}-catalog
+  labels:
+    {{- $labels | nindent 4 }}
+rules:
+  {{- toYaml . | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullName }}-catalog
+  labels:
+    {{- $labels | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullName }}-catalog
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ $ns }}
+{{- end }}
+{{- range .Values.catalog.plugins }}
+{{- if and .enabled .rbac }}
+{{- if .rbac.rules }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullName }}-plugin-{{ .name }}
+  labels:
+    {{- $labels | nindent 4 }}
+    naira.io/plugin: {{ .name }}
+rules:
+  {{- toYaml .rbac.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullName }}-plugin-{{ .name }}
+  labels:
+    {{- $labels | nindent 4 }}
+    naira.io/plugin: {{ .name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullName }}-plugin-{{ .name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ $ns }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

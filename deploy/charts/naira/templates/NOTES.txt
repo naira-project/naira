@@ -1,0 +1,16 @@
+{{ .Chart.Name }} {{ .Chart.Version }} installed as {{ .Release.Name }} in {{ .Release.Namespace }}.
+
+Catalog pod: 1 container + {{ len (include "naira.enabledPlugins" . | fromYamlArray) }} plugin sidecars.
+{{ range .Values.catalog.plugins }}{{ if .enabled }}  - {{ .name }} (localhost:{{ .port }}){{ if .schedule }}  every {{ .schedule }}{{ end }}
+{{ end }}{{ end }}
+This chart installs first-party components only. Keycloak, LiteLLM, MLflow,
+OpenMetadata and PostgreSQL must already exist — see naira-dependencies.
+Current endpoints:
+  keycloak      {{ .Values.dependencies.keycloak.baseUrl }}
+  litellm       {{ .Values.dependencies.litellm.baseUrl }}
+  mlflow        {{ .Values.dependencies.mlflow.baseUrl }}
+  openmetadata  {{ .Values.dependencies.openmetadata.baseUrl }}
+{{ if .Values.catalog.secret.create }}
+WARNING: catalog.secret.create is true. Secrets are rendered from values into
+the cluster. Development only.
+{{- end }}

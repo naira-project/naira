@@ -1,0 +1,26 @@
+{{- if .Values.catalog.enabled }}
+{{/*
+Generated from catalog.plugins — the same list that renders the sidecars.
+Hand-writing this file is how the manifest and the chart drifted (RFC-009 P2).
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "naira.fullname" . }}-plugin-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    app.kubernetes.io/component: catalog
+data:
+  plugins.yaml: |
+    plugins:
+    {{- range .Values.catalog.plugins }}
+    {{- if .enabled }}
+      {{ .name }}:
+        address: localhost:{{ .port }}
+        {{- with .schedule }}
+        schedule: {{ . | quote }}
+        {{- end }}
+    {{- end }}
+    {{- end }}
+{{- end }}
