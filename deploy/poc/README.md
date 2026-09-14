@@ -23,7 +23,7 @@ tilt up                               # inner loop, same charts
 | §2 `enabled: false` drops a plugin | `values-poc.yaml` disables `openmetadata`; the pod renders 7 containers instead of 8 |
 | §3 dual publish | `publish.sh` pushes the OCI chart and builds an OCM component version carrying 11 digest-pinned resources, transfers it to a registry, and reads it back |
 | §3 no hand-written tags | every image tag falls back to `.Chart.AppVersion`; `deploy/charts/catalog`'s `sha-9f5ef2b` is gone |
-| §4 thin derived Tiltfile | the root `Tiltfile` reads `catalog.plugins` from the chart's values and builds from it — adding a plugin touches no Tilt code |
+| §4 thin derived Tiltfile | `tilt ci` exits 0 with "All workloads are healthy" from an empty cluster: it derives the build set from `catalog.plugins`, builds 9 images, and brings the catalog up 7/7 (six plugins — `openmetadata` is disabled in `values-dev.yaml` and Tilt correctly skips it). Adding a plugin touches no Tilt code |
 | §6 ArgoCD from a released artifact | both Applications sync from `oci://…/charts/<name>:0.1.0-poc`; the catalog pod runs 8/8 from registry images, never side-loaded |
 | §7 one-shot Jobs fight auto-sync | partially — a running Job held the Application out of sync, but the OpenBao/selfHeal hazard itself is untested. See findings 4 |
 
@@ -116,6 +116,17 @@ MLflow 3.x OOMKills at 1Gi with the chart's default 4 workers, and its new
 security middleware rejects the kubelet's probes unless `--allowed-hosts` is
 set — the container restarts forever with a healthy-looking log.
 
+## Running both
+
+Tilt and ArgoCD cannot own the same namespaces at once. Running `tilt ci` while
+the Applications were auto-syncing restarted the PostgreSQL StatefulSet and
+`tilt ci` gave up on it. From an empty cluster — Applications deleted,
+namespaces gone — the same run succeeds.
+
+For the demo, pick one: either the Applications are synced, or Tilt is up.
+Switching means `tilt down --delete-namespaces` then re-applying
+`argocd/environments/poc/`, or the reverse.
+
 ## Not proven here
 
 - OpenBao and ESO. They live in the testbed cluster; the migration hazard in
@@ -125,3 +136,6 @@ set — the container restarts forever with a healthy-looking log.
 - Signing. The OCM component version is signable; no key exists yet
   (open question 6).
 - Publishing to ghcr. Everything here targets local registries.
+- Tilt's `live_update`. `tilt ci` proves the Tiltfile builds and deploys; it
+  does not exercise the fast edit-reload path, which is the reason to use Tilt
+  at all.
