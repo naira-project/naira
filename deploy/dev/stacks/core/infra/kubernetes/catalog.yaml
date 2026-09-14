@@ -122,6 +122,34 @@ subjects:
     name: catalog
     namespace: idp-system
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-plugin-config
+  namespace: idp-system
+data:
+  plugins.yaml: |
+    plugins:
+      litellm:
+        address: localhost:50051
+        schedule: "0 0 * * *"
+      mlflow:
+        address: localhost:50052
+        schedule: "0 0 * * *"
+      depl-calls-svc:
+        address: localhost:50053
+        schedule: "0 * * * *"
+      depl-uses-litellm:
+        address: localhost:50054
+        schedule: "0 * * * *"
+      fluxcd:
+        address: localhost:50055
+        schedule: "*/1 * * * *"
+      openmetadata:
+        address: localhost:50056
+      mcp-servers:
+        address: localhost:50058
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -275,6 +303,11 @@ spec:
         - name: catalog
           image: catalog:local
           imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: plugin-config
+              mountPath: /etc/catalog/plugins.yaml
+              subPath: plugins.yaml
+              readOnly: true
           env:
             - name: PORT
               value: "8090"
@@ -284,8 +317,6 @@ spec:
               value: naira
             - name: KEYCLOAK_ISSUER
               value: http://localhost:8080/realms/naira
-            - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,mcp-servers=localhost:50058"
           ports:
             - containerPort: 8090
               name: http
@@ -308,6 +339,10 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+      volumes:
+        - name: plugin-config
+          configMap:
+            name: catalog-plugin-config
 ---
 apiVersion: v1
 kind: Service

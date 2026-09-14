@@ -235,8 +235,7 @@ export default function GenericTable({
                   <span className={groupText}>Plugin Properties</span>
                 </TableHead>
               )}
-              <TableHead className="bg-gray-50" />{' '}
-              {/* spacer over the Actions column */}
+              <TableHead className="bg-gray-50" /> {/* spacer over the Actions column */}
             </TableRow>
 
             {table.getHeaderGroups().map((headerGroup) => (

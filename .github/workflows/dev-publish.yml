@@ -8,10 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
-  attestations: write
-  artifact-metadata: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,6 +17,12 @@ jobs:
   # ── 1. Build & push catalog image ─────────────────────────────────────────
   container-publish-catalog:
     name: Publish · Catalog
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-catalog"
@@ -33,6 +35,12 @@ jobs:
   # ── 2. Build & push UI image ───────────────────────────────────────────────
   container-publish-ui:
     name: Publish · UI
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-ui"
@@ -45,6 +53,12 @@ jobs:
   # ── 3. Build & push Portal image ───────────────────────────────────────────
   container-publish-portal:
     name: Publish · Portal
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-portal"
@@ -57,6 +71,12 @@ jobs:
   # ── 4. Plugins ─────────────────────────────────────────────────────────────
   container-publish-plugin-mlflow:
     name: Publish · Plugin MLflow
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-mlflow"
@@ -68,6 +88,12 @@ jobs:
 
   container-publish-plugin-litellm:
     name: Publish · Plugin LiteLLM
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-litellm"
@@ -79,6 +105,12 @@ jobs:
 
   container-publish-plugin-depl-calls-svc:
     name: Publish · Plugin Depl Calls Svc
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-depl-calls-svc"
@@ -90,6 +122,12 @@ jobs:
 
   container-publish-plugin-fluxcd:
     name: Publish · Plugin FluxCD
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-fluxcd"
@@ -101,6 +139,12 @@ jobs:
 
   container-publish-plugin-depl-uses-litellm:
     name: Publish · Plugin Depl Uses LiteLLM
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-depl-uses-litellm"
@@ -112,6 +156,12 @@ jobs:
 
   container-publish-plugin-openmetadata:
     name: Publish · Plugin OpenMetadata
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-openmetadata"
@@ -123,6 +173,12 @@ jobs:
 
   container-publish-plugin-mcp-servers:
     name: Publish · Plugin MCP Servers
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-mcp-servers"
