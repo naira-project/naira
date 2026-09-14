@@ -286,7 +286,7 @@ spec:
             - name: PATH_PREFIX
               value: bedrock
             - name: BEDROCK_REGIONS
-              value: "eu-central-1 us-east-1"
+              value: "us-east-1"
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
