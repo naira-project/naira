@@ -1,21 +1,25 @@
 # github plugin
 
-github enriches GitHub repositories discovered from Kubernetes Deployments with repository metadata and CODEOWNERS ownership information.
+github finds GitHub repositories whose artifact attestations cryptographically prove that they built images running in Kubernetes Deployments, then enriches these repositories with metadata and CODEOWNERS information.
 
-The plugin only collects repositories that are both referenced by a Kubernetes Deployment and owned by the GitHub organization configured in GITHUB\_ORG. It does not enumerate or collect repositories outside that organization. The organization restriction is applied using the GITHUB\_ORG environment variable.
+A Deployment is linked to a repository only after verification with "gh attestation verify".
 
-Deployments with more than one container are intentionally not linked to a source repository because the repository cannot be attributed unambiguously.
+Verification runs only for image references mentioning GITHUB\_ORG, to avoid unnecessary gh calls.
 
-TODO: Link deployments with more than one container to source repositories
+Deployments with more than one container are not verified because the repository cannot be attributed to a single image unambiguously.
 
-TODO: Implement support for private OCI registries. Source repository discovery may fail for images stored in registries requiring authentication.
+TODO: Link deployments with more than one container to source repositories, verifying each container image independently.
+
+TODO: Check support for private OCI registries and private GitHub repositories.
 
 ## Environment Variables
 
-  - GITHUB\_ORG (mandatory) - limits collection to repositories owned by this GitHub organization.
-  - GITHUB\_TOKEN (optional) - GitHub API bearer token used to access the repositories and CODEOWNERS files.
-  - GITHUB\_BASE\_URL (optional) - GitHub API base URL; defaults to "[https://api.github.com](https://api.github.com)". Set this for GitHub Enterprise.
-  - GITHUB\_HTTP\_TIMEOUT (optional) - GitHub API request timeout; defaults to 10s.
+  - GITHUB\_ORG (mandatory) - limits collection to repositories whose attestations are verified for this GitHub organization, via "gh attestation verify --owner".
+  - GITHUB\_TOKEN (mandatory) - GitHub API token used for repository metadata and CODEOWNERS, and passed as GH\_TOKEN to "gh attestation verify". It is required even for public repositories. A classic token with no selected scopes is sufficient.
+  - GITHUB\_BASE\_URL (optional) - GitHub API base URL; defaults to "[https://api.github.com](https://api.github.com)".
+  - GITHUB\_HTTP\_TIMEOUT (optional) - GitHub API request timeout; defaults to "10s".
+  - GITHUB\_ATTESTATION\_TIMEOUT (optional) - timeout for a single "gh attestation verify" invocation; defaults to "30s".
+  - GH\_CLI\_PATH (optional) - path to the "gh" binary; defaults to "gh" (resolved from PATH).
   - KUBECONFIG (optional) - path to a kubeconfig file; when unset, in-cluster configuration is used.
 
 ---

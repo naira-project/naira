@@ -1,20 +1,11 @@
-// github discovers GitHub repositories that GitHub artifact attestations
-// cryptographically prove built the images running in Kubernetes
-// Deployments, then enriches those repositories with metadata and
-// CODEOWNERS ownership information.
+// github finds GitHub repositories whose artifact attestations cryptographically
+// prove that they built images running in Kubernetes Deployments, then enriches
+// these repositories with metadata and CODEOWNERS information.
 //
-// Unlike depl_from_repo (which links Deployments to repositories using
-// unverified, self-reported signals such as an OCI label or a registry-name
-// guess), this plugin only ever links a Deployment to a repository it has
-// verified via `gh attestation verify` against a GitHub artifact
-// attestation. The resulting built_from relation is therefore a proven
-// fact, not a guess.
+// A Deployment is linked to a repository only after verification with "gh attestation verify".
 //
-// Attestation verification is attempted only for images whose reference
-// mentions the configured GITHUB_ORG (a cheap pre-filter to avoid needless
-// `gh` invocations); actual identity enforcement comes entirely from
-// `gh attestation verify --owner GITHUB_ORG`, backed by the cryptographic
-// certificate chain and Rekor transparency log, not from that pre-filter.
+// Verification runs only for image references mentioning GITHUB_ORG, to avoid
+// unnecessary gh calls.
 //
 // Deployments with more than one container are not verified because the
 // repository cannot be attributed to a single image unambiguously.
@@ -22,26 +13,24 @@
 // TODO: Link deployments with more than one container to source
 // repositories, verifying each container image independently.
 //
-// TODO: Implement support for private OCI registries other than ghcr.io.
-// `gh attestation verify oci://...` requires the environment to already be
-// authenticated with the artifact's container registry; ghcr.io works out
-// of the box using GITHUB_TOKEN, other registries currently do not.
+// TODO: Check support for private OCI registries and private GitHub repositories.
 //
 // # Environment Variables
 //
 //   - GITHUB_ORG (mandatory) - limits collection to repositories whose
 //     attestations are verified for this GitHub organization, via
-//     `gh attestation verify --owner`.
-//   - GITHUB_TOKEN (optional) - GitHub API bearer token used both for the
-//     REST API calls (repository metadata, CODEOWNERS) and, as GH_TOKEN,
-//     for `gh attestation verify`.
+//     "gh attestation verify --owner".
+//   - GITHUB_TOKEN (mandatory) - GitHub API token used for repository
+//     metadata and CODEOWNERS, and passed as GH_TOKEN to "gh attestation verify".
+//     It is required even for public repositories.
+//     A classic token with no selected scopes is sufficient.
 //   - GITHUB_BASE_URL (optional) - GitHub API base URL; defaults to
-//     "https://api.github.com". Set this for GitHub Enterprise.
+//     "https://api.github.com".
 //   - GITHUB_HTTP_TIMEOUT (optional) - GitHub API request timeout; defaults
-//     to 10s.
+//     to "10s".
 //   - GITHUB_ATTESTATION_TIMEOUT (optional) - timeout for a single
-//     `gh attestation verify` invocation; defaults to 30s.
-//   - GH_CLI_PATH (optional) - path to the `gh` binary; defaults to "gh"
+//     "gh attestation verify" invocation; defaults to "30s".
+//   - GH_CLI_PATH (optional) - path to the "gh" binary; defaults to "gh"
 //     (resolved from PATH).
 //   - KUBECONFIG (optional) - path to a kubeconfig file; when unset,
 //     in-cluster configuration is used.
@@ -57,7 +46,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/naira-project/naira/plugins/internal/deploymentdiscovery"
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
 	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
@@ -66,6 +54,7 @@ import (
 )
 
 const (
+	// repository property keys
 	propertyKeyURL      = "url"
 	propertyKeyLanguage = "language"
 	propertyKeyHomepage = "homepage"
@@ -78,8 +67,6 @@ type config struct {
 
 	Kubeconfig string `env:"KUBECONFIG"`
 
-	// Token is needed even for public repos. Without it `gh attestasttion verify` fails.
-	// For public repositories, a classic token without any selected scopes is sufficient
 	GitHubToken   string        `env:"GITHUB_TOKEN"`
 	GitHubBaseURL string        `env:"GITHUB_BASE_URL" default:"https://api.github.com"`
 	HTTPTimeout   time.Duration `env:"GITHUB_HTTP_TIMEOUT" default:"10s"`
@@ -109,8 +96,11 @@ func main() {
 	if app.PluginConfig.GitHubOrg == "" {
 		app.Logger.Fatal("GITHUB_ORG is required")
 	}
-
-	app.Serve(New(app.PluginConfig, app.Logger))
+	if app.PluginConfig.GitHubToken == "" {
+		app.Logger.Fatal("GITHUB_TOKEN is required")
+	}
+	p := New(app.PluginConfig, app.Logger)
+	app.Serve(p)
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
@@ -122,7 +112,11 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (pluginapi.CollectResponse, error) {
-	entries, err := deploymentdiscovery.DiscoverDeployments(ctx, k8sClient, p.logger)
+	if err := p.attestation.CheckAvailable(ctx); err != nil {
+		return pluginapi.CollectResponse{}, fmt.Errorf("checking gh CLI availability: %w", err)
+	}
+
+	entries, err := discoverDeployments(ctx, k8sClient, p.logger)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("discovering deployments: %w", err)
 	}
@@ -176,7 +170,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 	return resp, nil
 }
 
-func singleContainerImage(entry deploymentdiscovery.Deployment) (image string, ok bool) {
+func singleContainerImage(entry Deployment) (image string, ok bool) {
 	if len(entry.Images) != 1 {
 		return "", false
 	}

@@ -1,4 +1,4 @@
-package deploymentdiscovery
+package main
 
 import (
 	"context"
@@ -9,24 +9,28 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
-	"github.com/naira-project/naira/plugins/internal/sourcerepository"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
-// Deployment is a Kubernetes Deployment with its container images and,
-// optionally, a source repository discovered from those images.
+// Deployment is a Kubernetes Deployment with its container images.
 type Deployment struct {
-	ClusterID        string
-	Namespace        string
-	Name             string
-	Images           []string
-	SourceRepository sourcerepository.Repository
+	ClusterID string
+	Namespace string
+	Name      string
+	Images    []string
 }
 
-// DiscoverDeployments scans all Deployments across target namespaces and returns
-// every deployment with its container images. Source repository discovery is
-// attempted only for Deployments with exactly one container; Deployments with
-// multiple containers are not linked to avoid ambiguous attribution.
-func DiscoverDeployments(
+// NodeID returns the stable catalog NodeID for this Deployment.
+func (d Deployment) NodeID() pluginapi.NodeID {
+	return pluginapi.NodeID{
+		Kind: pluginapi.NodeKindDeployment,
+		Path: fmt.Sprintf("%s/%s/%s", d.ClusterID, d.Namespace, d.Name),
+	}
+}
+
+// discoverDeployments scans all Deployments across target namespaces and
+// returns every deployment with its container images.
+func discoverDeployments(
 	ctx context.Context,
 	k8sClient kubernetes.Interface,
 	logger *log.Logger,
@@ -56,15 +60,6 @@ func DiscoverDeployments(
 			}
 			for _, container := range containers {
 				entry.Images = append(entry.Images, container.Image)
-			}
-
-			repo, err := sourcerepository.FromImages(ctx, entry.Images)
-			if err != nil {
-				if logger != nil {
-					logger.Printf("WARN: failed to inspect image in deployment %s/%s: %v", namespace, deployment.Name, err)
-				}
-			} else if repo.URL != "" {
-				entry.SourceRepository = repo
 			}
 			results = append(results, entry)
 		}

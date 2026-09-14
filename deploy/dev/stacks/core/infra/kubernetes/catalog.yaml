@@ -280,20 +280,8 @@ spec:
               value: "50058"
             - name: GITHUB_ORG
               value: "naira-project"
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
-        - name: plugin-depl-from-repo
-          image: depl-from-repo:local
-          restartPolicy: Always
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: PORT
-              value: "50059"
+            - name: GITHUB_TOKEN
+              value: "FillIn"
           resources:
             requests:
               cpu: 50m
@@ -315,7 +303,7 @@ spec:
             - name: KEYCLOAK_ISSUER
               value: http://localhost:8080/realms/naira
             - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,mcp-servers=localhost:50057,github=localhost:50058,depl-from-repo=localhost:50059"
+              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,mcp-servers=localhost:50057,github=localhost:50058"
           ports:
             - containerPort: 8090
               name: http

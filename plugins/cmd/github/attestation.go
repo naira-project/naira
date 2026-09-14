@@ -97,3 +97,17 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 	}
 	return "", "", false, nil
 }
+
+func (v *attestationVerifier) CheckAvailable(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, v.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, v.ghPath, "--version")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("gh CLI not available at %q: %w (stderr: %s)", v.ghPath, err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
