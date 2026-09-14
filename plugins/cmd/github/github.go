@@ -77,8 +77,9 @@ func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo,
 
 // GetCodeowners tries the well-known CODEOWNERS locations, in the order
 // GitHub itself checks them, and returns the content of the first one found.
+// order of locations: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-location
 func (c *githubClient) GetCodeowners(ctx context.Context, owner, repo string) (string, bool, error) {
-	candidates := []string{"CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS"}
+	candidates := []string{".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"}
 
 	for _, path := range candidates {
 		var content ghContent

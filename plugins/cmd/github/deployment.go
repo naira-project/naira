@@ -20,7 +20,6 @@ type Deployment struct {
 	Images    []string
 }
 
-// NodeID returns the stable catalog NodeID for this Deployment.
 func (d Deployment) NodeID() pluginapi.NodeID {
 	return pluginapi.NodeID{
 		Kind: pluginapi.NodeKindDeployment,

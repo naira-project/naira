@@ -42,9 +42,8 @@ type ghCertificate struct {
 	SourceRepositoryOwnerURI string `json:"sourceRepositoryOwnerURI"`
 }
 
-// Verify checks whether image has a valid, trusted GitHub artifact
-// attestation whose source repository belongs to org, and if so returns
-// that repository's owner and name.
+// Verify checks whether an image has a trusted GitHub artifact attestation from a repository
+// in the organization and, if valid, returns the repository owner and name.
 func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (owner, name string, verified bool, err error) {
 	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
@@ -52,8 +51,6 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 	// passing gh an oci:// reference (rather than a resolved digest) means
 	// gh itself talks to the registry to resolve the digest and fetch
 	// the attestation bundle
-
-	// Question: should I use imageID from k8s?
 	cmd := exec.CommandContext(ctx, v.ghPath, "attestation", "verify",
 		"oci://"+image,
 		"--owner", org,
@@ -98,7 +95,7 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 	return "", "", false, nil
 }
 
-func (v *attestationVerifier) CheckAvailable(ctx context.Context) error {
+func (v *attestationVerifier) CheckGhAvailable(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 

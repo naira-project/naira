@@ -28,9 +28,6 @@ vars:
     - name: github
       dir: '{{.PLUGINS_BASE}}/github'
       image: github:local
-    - name: depl-from-repo
-      dir: '{{.PLUGINS_BASE}}/depl_from_repo'
-      image: depl-from-repo:local
 
 tasks:
   image:build:

@@ -25,17 +25,12 @@ func NamespacesAndClusterIDDynamic(ctx context.Context, dyn dynamic.Interface) (
 	if err != nil {
 		return nil, "", fmt.Errorf("listing namespaces: %w", err)
 	}
+
+	entries := make([]nsEntry, 0, len(list.Items))
 	for _, ns := range list.Items {
-		namespaces = append(namespaces, ns.GetName())
-		if ns.GetName() == systemNamespace {
-			clusterID = string(ns.GetUID())
-		}
+		entries = append(entries, nsEntry{name: ns.GetName(), uid: string(ns.GetUID())})
 	}
-	if clusterID == "" {
-		// should never happen - "kube-system" namespace is expected to always be present
-		return nil, "", fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
-	}
-	return namespaces, clusterID, nil
+	return namespacesAndClusterID(entries)
 }
 
 // NamespacesAndClusterID returns all namespaces names and a clusterID.
@@ -50,17 +45,31 @@ func NamespacesAndClusterID(ctx context.Context, client kubernetes.Interface) (n
 		return nil, "", fmt.Errorf("listing namespaces: %w", err)
 	}
 
+	entries := make([]nsEntry, 0, len(list.Items))
 	for _, ns := range list.Items {
-		namespaces = append(namespaces, ns.Name)
-		if ns.Name == systemNamespace {
-			clusterID = string(ns.UID)
+		entries = append(entries, nsEntry{name: ns.Name, uid: string(ns.UID)})
+	}
+	return namespacesAndClusterID(entries)
+}
+
+type nsEntry struct {
+	name string
+	uid  string
+}
+
+// namespacesAndClusterID contains the logic shared by NamespacesAndClusterID
+// and NamespacesAndClusterIDDynamic: collecting namespace names and picking
+// the clusterID from the "kube-system" namespace's UID.
+func namespacesAndClusterID(entries []nsEntry) (namespaces []string, clusterID string, err error) {
+	for _, e := range entries {
+		namespaces = append(namespaces, e.name)
+		if e.name == systemNamespace {
+			clusterID = e.uid
 		}
 	}
-
 	if clusterID == "" {
 		// should never happen - "kube-system" namespace is expected to always be present
 		return nil, "", fmt.Errorf("namespace %q not found, cannot determine cluster ID", systemNamespace)
 	}
-
 	return namespaces, clusterID, nil
 }

@@ -54,23 +54,19 @@ import (
 )
 
 const (
-	// repository property keys
+	// git_repository property keys
 	propertyKeyURL      = "url"
 	propertyKeyLanguage = "language"
 	propertyKeyHomepage = "homepage"
 )
 
 type config struct {
-	// GitHubOrg limits collection to repositories whose attestations are
-	// verified for this GitHub organization.
-	GitHubOrg string `env:"GITHUB_ORG"`
-
 	Kubeconfig string `env:"KUBECONFIG"`
 
-	GitHubToken   string        `env:"GITHUB_TOKEN"`
-	GitHubBaseURL string        `env:"GITHUB_BASE_URL" default:"https://api.github.com"`
-	HTTPTimeout   time.Duration `env:"GITHUB_HTTP_TIMEOUT" default:"10s"`
-
+	GitHubOrg          string        `env:"GITHUB_ORG"`
+	GitHubToken        string        `env:"GITHUB_TOKEN"`
+	GitHubBaseURL      string        `env:"GITHUB_BASE_URL" default:"https://api.github.com"`
+	HTTPTimeout        time.Duration `env:"GITHUB_HTTP_TIMEOUT" default:"10s"`
 	GHCLIPath          string        `env:"GH_CLI_PATH" default:"gh"`
 	AttestationTimeout time.Duration `env:"GITHUB_ATTESTATION_TIMEOUT" default:"30s"`
 }
@@ -112,7 +108,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (pluginapi.CollectResponse, error) {
-	if err := p.attestation.CheckAvailable(ctx); err != nil {
+	if err := p.attestation.CheckGhAvailable(ctx); err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("checking gh CLI availability: %w", err)
 	}
 
@@ -149,7 +145,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 		if !repos.AlreadyCollected(repoNodeID) {
 			nodes, relations, err := p.collectRepo(ctx, owner, name)
 			if err != nil {
-				p.logger.Printf("skipping %s/%s: %v", owner, name, err)
+				p.logger.Printf("collecting repo %s/%s, err: %v", owner, name, err)
 				continue
 			}
 			resp.Nodes = append(resp.Nodes, nodes...)
