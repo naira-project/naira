@@ -74,7 +74,7 @@ type modelInfoLiteLLM struct {
 }
 
 type modelInfoDetail struct {
-	ModelID                 string  `json:"id"`
+	ModelID            string  `json:"id"`
 	Mode               string  `json:"mode"`
 	MaxTokens          int64   `json:"max_tokens"`
 	InputCostPerToken  float64 `json:"input_cost_per_token"`
