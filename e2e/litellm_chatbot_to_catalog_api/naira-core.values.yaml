@@ -1,0 +1,32 @@
+# envsubst template — substituted variables: ${NAMESPACE}
+#
+# Layered on deploy/environments/e2e/naira-core.values.yaml — this scenario's
+# addition is which catalog plugins it exercises (replaces the old
+# components.env PLUGINS list). Both plugins below reach other in-cluster
+# services by this run's own namespace, so their env lists are fully
+# restated here (Helm replaces list values wholesale, it doesn't merge them
+# element-by-element) rather than layered on top of the chart defaults.
+catalog:
+  plugins:
+    litellm:
+      enabled: true
+      pathPrefix: litellm1
+      env:
+        - name: LITELLM_BASE_URL
+          value: http://litellm.${NAMESPACE}.svc.cluster.local:4000
+        # Plain value, not Secret-sourced — must equal components.values.yaml's
+        # litellm.masterKey exactly (see that file's comment on why).
+        - name: LITELLM_API_KEY
+          value: sk-e2elitellmmasterkey001
+    depl-uses-litellm:
+      enabled: true
+      env:
+        - name: DEPL_USES_LITELLM_KUBECONFIG
+          value: ""
+        # The named-hosts key becomes the prefix on this plugin's own model
+        # nodes ("<key>/<modelID>", see plugins/cmd/depl_uses_litellm/plugin.go)
+        # — it must equal litellm's pathPrefix above (litellm1) so both
+        # plugins' claims land on the same node instead of creating a
+        # second, differently-prefixed "model" node for the same model.
+        - name: DEPL_USES_LITELLM_NAMED_HOSTS
+          value: "litellm1=http://litellm.${NAMESPACE}:4000"

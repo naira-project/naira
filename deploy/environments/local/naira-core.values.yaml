@@ -1,0 +1,4 @@
+# Local kind dev target for naira-core. Chart defaults already model local
+# dev (every component and plugin on, "local"-tagged images) — nothing to
+# override here today. Kept as a file (not just relying on chart defaults)
+# so local-only knobs have an obvious home as they show up.

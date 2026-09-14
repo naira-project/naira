@@ -1,0 +1,163 @@
+# Default values for naira-core: catalog, ui, portal, mcp-mock.
+# Local dev overrides live in deploy/environments/local/naira-core.values.yaml,
+# e2e overrides in deploy/environments/e2e/naira-core.values.yaml.
+
+# Fallback image tag used by any component/plugin below that doesn't set its own.
+tag: local
+
+# Appended to cluster-scoped RBAC names (see catalog.yaml) — e2e sets this to
+# the env-id so concurrent PR environments don't collide on ClusterRoles.
+rbacSuffix: ""
+
+namespace: idp-system
+
+catalog:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: catalog
+    tag: ""
+    pullPolicy: IfNotPresent
+  service:
+    port: 8090
+  keycloak:
+    baseUrl: http://keycloak.keycloak.svc.cluster.local:8080
+    realm: naira
+    issuer: http://localhost:8080/realms/naira
+  secret:
+    stringData:
+      LITELLM_API_KEY: sk-local-litellm
+      OPENMETADATA_ADMIN_PASSWORD: admin
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  # Catalog plugins — each entry becomes an initContainer sharing catalog's pod,
+  # reachable at localhost:<port> (see CONTEXT.md's "Plugin" entry). Registering
+  # a plugin means adding it here; no other file needs to change. Keyed by name
+  # (not a list) so a scenario's values.yaml can flip just `catalog.plugins.litellm.enabled`
+  # without restating every other plugin — Helm merges maps but replaces lists wholesale.
+  plugins:
+    litellm:
+      enabled: true
+      image: { repository: litellm, tag: "" }
+      port: 50051
+      pathPrefix: litellm
+      schedule: "0 0 * * *"
+      env:
+        - name: LITELLM_BASE_URL
+          value: http://litellm.litellm.svc.cluster.local:4000
+        - name: LITELLM_API_KEY
+          valueFrom: { secretName: "", key: LITELLM_API_KEY }
+      resources: &pluginResources
+        requests: { cpu: 50m, memory: 64Mi }
+        limits: { cpu: 200m, memory: 128Mi }
+    mlflow:
+      enabled: true
+      image: { repository: mlflow, tag: "" }
+      port: 50052
+      pathPrefix: mlflow
+      schedule: "0 0 * * *"
+      env:
+        - name: MLFLOW_BASE_URL
+          value: http://mlflow.mlflow.svc.cluster.local:5000
+      resources: *pluginResources
+    depl-calls-svc:
+      enabled: true
+      image: { repository: depl-calls-svc, tag: "" }
+      port: 50053
+      schedule: "0 * * * *"
+      env:
+        - name: DEPL_CALLS_SVC_KUBECONFIG
+          value: ""
+      resources: *pluginResources
+    depl-uses-litellm:
+      enabled: true
+      image: { repository: depl-uses-litellm, tag: "" }
+      port: 50054
+      schedule: "0 * * * *"
+      env:
+        - name: DEPL_USES_LITELLM_KUBECONFIG
+          value: ""
+        - name: DEPL_USES_LITELLM_NAMED_HOSTS
+          value: "litellm=http://litellm.litellm:4000"
+      resources: *pluginResources
+    fluxcd:
+      enabled: true
+      image: { repository: fluxcd, tag: "" }
+      port: 50055
+      schedule: "*/1 * * * *"
+      resources: *pluginResources
+    openmetadata:
+      enabled: true
+      image: { repository: openmetadata, tag: "" }
+      port: 50056
+      pathPrefix: openmetadata
+      env:
+        - name: OPENMETADATA_BASE_URL
+          value: http://openmetadata.openmetadata.svc.cluster.local:8585
+        - name: OPENMETADATA_ADMIN_EMAIL
+          value: admin@open-metadata.org
+        - name: OPENMETADATA_ADMIN_PASSWORD
+          valueFrom: { secretName: "", key: OPENMETADATA_ADMIN_PASSWORD }
+      resources: *pluginResources
+    mcp-servers:
+      enabled: true
+      image: { repository: mcp-servers, tag: "" }
+      port: 50058
+      pathPrefix: mcp
+      env:
+        - name: MCP_ENDPOINTS
+          value: mock-knowledge-base=http://mcp-mock.mcp-mock.svc.cluster.local:8080/mcp
+      resources: *pluginResources
+
+ui:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ui
+    tag: ""
+    pullPolicy: IfNotPresent
+  service:
+    port: 80
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+
+portal:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: portal
+    tag: ""
+    pullPolicy: IfNotPresent
+  service:
+    port: 3000
+  uiBaseUrl: http://localhost:3001
+  keycloak:
+    baseDomain: localhost
+    authServerUrl: http://localhost:8080/realms/naira/protocol/openid-connect/auth
+    tokenUrl: http://keycloak.keycloak.svc.cluster.local:8080/realms/naira/protocol/openid-connect/token
+    clientId: naira-portal
+    clientSecret: naira-local-dev-secret
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+mcpMock:
+  enabled: true
+  namespace: mcp-mock
+  replicaCount: 1
+  image:
+    repository: mcp-mock
+    tag: ""
+    pullPolicy: IfNotPresent
+  serverName: mock-knowledge-base
+  service:
+    port: 8080
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { cpu: 200m, memory: 128Mi }

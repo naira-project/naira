@@ -1,0 +1,87 @@
+{{- if .Values.portal.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-client-secret
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  client-secret: {{ .Values.portal.keycloak.clientSecret }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portal
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.portal.replicaCount }}
+  selector:
+    matchLabels:
+      app: portal
+  template:
+    metadata:
+      labels:
+        app: portal
+    spec:
+      containers:
+        - name: portal
+          image: "{{ .Values.portal.image.repository }}:{{ .Values.portal.image.tag | default .Values.tag }}"
+          imagePullPolicy: {{ .Values.portal.image.pullPolicy }}
+          env:
+            - name: PORT
+              value: {{ .Values.portal.service.port | quote }}
+            - name: NAIRA_UI_BASE_URL
+              value: {{ .Values.portal.uiBaseUrl }}
+            - name: IDP_NAMES
+              value: keycloak
+            - name: BASE_DOMAINS_KEYCLOAK
+              value: {{ .Values.portal.keycloak.baseDomain }}
+            - name: AUTH_SERVER_URL_KEYCLOAK
+              value: {{ .Values.portal.keycloak.authServerUrl }}
+            - name: TOKEN_URL_KEYCLOAK
+              value: {{ .Values.portal.keycloak.tokenUrl }}
+            - name: OIDC_CLIENT_ID_KEYCLOAK
+              value: {{ .Values.portal.keycloak.clientId }}
+            - name: OIDC_CLIENT_SECRET_KEYCLOAK
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-client-secret
+                  key: client-secret
+          ports:
+            - containerPort: {{ .Values.portal.service.port }}
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.portal.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: portal
+  ports:
+    - name: http
+      port: {{ .Values.portal.service.port }}
+      targetPort: http
+  type: ClusterIP
+{{- end }}

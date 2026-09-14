@@ -1,0 +1,124 @@
+{{- if .Values.llamacpp.enabled }}
+{{- if ne .Values.llamacpp.namespace .Release.Namespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.llamacpp.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-cache-pvc
+  namespace: {{ .Values.llamacpp.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.llamacpp.storage }}
+---
+{{- range .Values.llamacpp.models }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.llamacpp.namespace }}
+  labels:
+    {{- include "components.labels" $ | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .name }}
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        - name: download-model
+          image: curlimages/curl:latest
+          command:
+            - sh
+            - -c
+            - |
+              MODEL_PATH="/models/{{ .modelFile }}"
+              if [ ! -f "$MODEL_PATH" ]; then
+                echo "Downloading {{ .name }} model..."
+                curl -L -o "$MODEL_PATH" "{{ .downloadUrl }}"
+              else
+                echo "{{ .name }} model already cached."
+              fi
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+      containers:
+        - name: llama-server
+          image: ghcr.io/ggml-org/llama.cpp:server
+          args:
+            - "-m"
+            - "/models/{{ .modelFile }}"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "--metrics"
+            - "--no-ui"
+            {{- if .contextSize }}
+            - "-c"
+            - {{ .contextSize | quote }}
+            {{- end }}
+            {{- if .threads }}
+            - "--threads"
+            - {{ .threads | quote }}
+            {{- end }}
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ .readinessDelay | default 2 }}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: {{ add (.readinessDelay | default 2) 3 }}
+            periodSeconds: 10
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+      volumes:
+        - name: model-storage
+          persistentVolumeClaim:
+            claimName: model-cache-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Values.llamacpp.namespace }}
+  labels:
+    app: {{ .name }}
+    {{- include "components.labels" $ | nindent 4 }}
+spec:
+  selector:
+    app: {{ .name }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP
+---
+{{- end }}
+{{- end }}

@@ -54,15 +54,16 @@ kind delete cluster --name naira-idp-e2e
 
 | Component | Notes |
 |---|---|
-| `catalog` + 2 plugin sidecars (`litellm`, `depl-uses-litellm`) | Only these 2 — see `components.env` |
+| `catalog` + 2 plugin sidecars (`litellm`, `depl-uses-litellm`) | Only these 2 — see `naira-core.values.yaml` |
 | `keycloak` | Auth — seeded with a `naira-portal` client and a `testuser`/`testpass` user |
 | `litellm` | Seeded (via static config, no seed script) with exactly 2 models: `openai`, `mistral` |
 | `postgres` | `litellm`'s backing store — needed for its virtual-key API (see below), nothing else uses it |
 | `chatbot1` | Calls `litellm`'s `openai` model — the Deployment `depl_uses_litellm` discovers |
 
 Nothing else — no MLflow, OpenMetadata, llama.cpp, UI, or portal. They're
-available in [`e2e/components/`](../components/) for other scenarios to opt
-into, but this one doesn't deploy them.
+available in [`deploy/charts/components`](../../deploy/charts/components) and
+[`deploy/charts/naira-core`](../../deploy/charts/naira-core) for other
+scenarios to opt into, but this one doesn't deploy them.
 
 `seed/provision_chatbot1_key.py` mints `chatbot1` a LiteLLM virtual key
 scoped to just the `openai` model (via `litellm`'s `/key/generate`, which
@@ -89,10 +90,10 @@ nodes or relations.
 ## Infra capacity needed
 
 Bounded by the namespace's `ResourceQuota` (`e2e/base/quota.yaml`), sized
-for the full component pool in `e2e/components/` (not just what this
-scenario deploys) — an unused ceiling costs nothing per run, so it isn't
-resized per scenario. What this scenario actually uses is small: `catalog` +
-2 sidecars, `keycloak`, `litellm`, `chatbot1`, plus the transient `seed` Job.
+for the full component pool across both charts (not just what this scenario
+deploys) — an unused ceiling costs nothing per run, so it isn't resized per
+scenario. What this scenario actually uses is small: `catalog` + 2 sidecars,
+`keycloak`, `litellm`, `chatbot1`, plus the transient `seed` Job.
 
 ## Troubleshooting
 

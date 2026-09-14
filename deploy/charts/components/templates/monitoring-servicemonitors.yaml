@@ -1,0 +1,58 @@
+{{- if .Values.monitoring.enabled }}
+{{- if ne .Values.monitoring.namespaceOverride .Release.Namespace }}
+# A pre-install/pre-upgrade hook, not a regular resource: kube-prometheus-stack's
+# own admission-webhook Job-patch hook needs the monitoring namespace to
+# already exist, and Helm runs all pre-install/pre-upgrade hooks (ours and
+# the subchart's) before any regular template is applied — so this has to
+# be a hook too, with a lower weight than the subchart's ("-5"), to land
+# first. Trade-off: as a hook, this namespace isn't tracked by the release,
+# so `helm uninstall` won't remove it — an empty leftover namespace, not a
+# functional problem.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.monitoring.namespaceOverride }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+---
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: llm-inference
+  namespace: {{ .Values.monitoring.namespaceOverride }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  selector: {}
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.vllm.namespace }}
+      - {{ .Values.llamacpp.namespace }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: litellm-proxy
+  namespace: {{ .Values.monitoring.namespaceOverride }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  selector: {}
+  namespaceSelector:
+    matchNames:
+      - {{ .Values.litellm.namespace }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+{{- end }}

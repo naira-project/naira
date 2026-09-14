@@ -4,4 +4,4 @@ name: naira-idp-e2e
 
 nodes:
   - role: control-plane
-    image: kindest/node:v1.36.1  # keep in sync with deploy/dev/stacks/core/infra/kind/kind-config.yaml
+    image: kindest/node:v1.36.1  # keep in sync with deploy/dev/kind-config.yaml

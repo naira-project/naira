@@ -6,7 +6,7 @@
 // run explicitly with `go test -tags e2e ./e2e/litellm_chatbot_to_catalog_api/assert/...`.
 //
 // This scenario deploys exactly the litellm and depl_uses_litellm plugins
-// against a fresh, empty catalog (see components.env), so these assertions
+// against a fresh, empty catalog (see naira-core.values.yaml), so these assertions
 // can be exact (a specific count, a specific edge) rather than mere
 // existence checks: nothing else is running that could add unrelated nodes
 // or relations to the graph.
@@ -29,7 +29,7 @@ import (
 
 const (
 	keycloakClientID     = "naira-portal"
-	keycloakClientSecret = "naira-e2e-test-secret"
+	keycloakClientSecret = "naira-local-dev-secret"
 	keycloakUsername     = "testuser"
 	keycloakPassword     = "testpass"
 	keycloakRealm        = "naira"
@@ -68,10 +68,10 @@ var (
 )
 
 // authToken fetches an OAuth2 password-grant token from the realm/client/user
-// keycloak.yaml seeds — the catalog API requires a Bearer token on every
+// the components chart's keycloak template seeds — the catalog API requires a Bearer token on every
 // /v1/* route. Fetched once and reused across tests. Only KEYCLOAK_URL is
 // overridden (by create-environment.sh/e2e.yml, via port-forward) — the
-// realm/client/user are fixed by keycloak.yaml's realm import.
+// realm/client/user are fixed by the components chart's realm import (deploy/charts/components/files/naira-realm.json).
 func authToken(t *testing.T) string {
 	t.Helper()
 	authTokenOnce.Do(func() {

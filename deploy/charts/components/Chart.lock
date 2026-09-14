@@ -1,0 +1,12 @@
+dependencies:
+- name: openmetadata-dependencies
+  repository: https://helm.open-metadata.org/
+  version: 1.13.5
+- name: openmetadata
+  repository: https://helm.open-metadata.org/
+  version: 1.13.5
+- name: kube-prometheus-stack
+  repository: https://prometheus-community.github.io/helm-charts
+  version: 90.0.0
+digest: sha256:23794b59faf2bd838e028a9b3872a1a500951d5db4a1076b56bb897ac6de7144
+generated: "2026-09-10T00:19:30.99317+02:00"
