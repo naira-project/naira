@@ -1,7 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import DerivedDataIndicator from '../components/DerivedDataIndicator';
 import PropertiesPanel from '../components/PropertiesPanel';
 import { detailTabsForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
@@ -67,7 +66,6 @@ export default function CatalogDetail() {
               <h1 className="truncate text-sm font-semibold text-foreground" title={node.name}>
                 {node.name}
               </h1>
-              <DerivedDataIndicator props={nodeProps(node)} />
             </>
           )}
         </header>
