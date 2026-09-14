@@ -297,6 +297,8 @@ spec:
                 secretKeyRef:
                   name: catalog-secrets
                   key: BEDROCK_AWS_SECRET_ACCESS_KEY
+            - name: BEDROCK_METRICS_LOOKBACK
+              value: "24h"
           resources:
             requests:
               cpu: 50m

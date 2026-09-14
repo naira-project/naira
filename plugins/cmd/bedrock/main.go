@@ -218,6 +218,7 @@ func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]fou
 		return nil, err
 	}
 
+	//TODO next step to do filtering by specifying the properties to fill ListFoundationModelsInput struct.
 	out, err := client.ListFoundationModels(ctx, &bedrock.ListFoundationModelsInput{})
 	if err != nil {
 		return nil, fmt.Errorf("calling Bedrock ListFoundationModels: %w", err)
@@ -240,8 +241,7 @@ func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]fou
 
 // fetchTokenUsage queries CloudWatch for the AWS/Bedrock InputTokenCount,
 // OutputTokenCount and Invocations metrics, summed over the configured
-// lookback window, so usage can be compared across regions and models (e.g.
-// eu-central-1 vs. us-east-1 token consumption).
+// lookback window, so usage can be compared across regions and models.
 func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []foundationModel) (map[string]modelUsage, error) {
 	if len(models) == 0 {
 		return map[string]modelUsage{}, nil
@@ -252,6 +252,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 		return nil, err
 	}
 
+	//TODO: use dynamic time intervals in the UI, not just from BEDROCK_METRICS_LOOKBACK
 	lookback := p.config.MetricsLookback
 	if lookback <= 0 {
 		lookback = metricLookbackWindow
@@ -259,13 +260,14 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 	endTime := time.Now().UTC()
 	startTime := endTime.Add(-lookback)
 
+	dimensionName := metricDimensionModelID
 	queries := make([]cwtypes.MetricDataQuery, 0, len(models)*3)
 	for i, model := range models {
 		modelID := strings.TrimSpace(model.ModelID)
 		if modelID == "" {
 			continue
 		}
-		dimensions := []cwtypes.Dimension{{Name: strPtr(metricDimensionModelID), Value: strPtr(modelID)}}
+		dimensions := []cwtypes.Dimension{{Name: &dimensionName, Value: &modelID}}
 
 		queries = append(queries,
 			metricQuery(fmt.Sprintf("in%d", i), metricNameInputTokens, dimensions),
@@ -305,17 +307,19 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 }
 
 func metricQuery(id, metricName string, dimensions []cwtypes.Dimension) cwtypes.MetricDataQuery {
+	namespace := metricNamespaceBedrock
+	stat := "Sum"
 	period := int32(metricPeriodSeconds)
 	return cwtypes.MetricDataQuery{
-		Id: strPtr(id),
+		Id: &id,
 		MetricStat: &cwtypes.MetricStat{
 			Metric: &cwtypes.Metric{
-				Namespace:  strPtr(metricNamespaceBedrock),
-				MetricName: strPtr(metricName),
+				Namespace:  &namespace,
+				MetricName: &metricName,
 				Dimensions: dimensions,
 			},
 			Period: &period,
-			Stat:   strPtr("Sum"),
+			Stat:   &stat,
 		},
 	}
 }
@@ -348,8 +352,4 @@ func derefString(s *string) string {
 		return ""
 	}
 	return *s
-}
-
-func strPtr(s string) *string {
-	return &s
 }

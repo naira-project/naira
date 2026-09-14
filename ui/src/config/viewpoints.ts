@@ -33,7 +33,7 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
   },
   {
     path: 'model',
-    heading: 'Model',
+    heading: 'Model Catalog',
     subheading: 'Models registered in the catalog.',
     kinds: ['model'],
     plugins: ['litellm', 'mlflow', 'bedrock'],
