@@ -1,0 +1,51 @@
+      containers:
+        - name: catalog
+          image: catalog:${TAG}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "8090"
+            - name: KEYCLOAK_BASE_URL
+              value: http://keycloak.${NAMESPACE}.svc.cluster.local:8080
+            - name: KEYCLOAK_REALM
+              value: naira
+            - name: KEYCLOAK_ISSUER
+              value: http://keycloak.${NAMESPACE}.svc.cluster.local:8080/realms/naira
+            - name: PLUGIN_ADDRESSES
+              value: "${PLUGIN_ADDRESSES}"
+          ports:
+            - containerPort: 8090
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: catalog
+  ports:
+    - name: http
+      port: 8090
+      targetPort: http
+  type: ClusterIP

@@ -1,0 +1,147 @@
+# envsubst template — substituted variables: ${NAMESPACE}
+#
+# Mirrors deploy/dev/stacks/core/infra/keycloak/keycloak.yaml, but namespaced
+# per-PR instead of a dedicated shared "keycloak" namespace, and with
+# KC_HOSTNAME set to the in-cluster Service DNS name instead of localhost:8080
+# — nothing here is an interactive browser login, so there's no dev-machine
+# hostname to accommodate; catalog, portal, and the seed job all reach this
+# same in-cluster URL directly, and it's also the issuer baked into every
+# token this instance mints.
+#
+# Realm/client/user match deploy/dev/stacks/core/infra/keycloak/naira-realm.json
+# exactly (client "naira-portal" with password-grant enabled, user "testuser")
+# so the seed job and E2E tests can obtain a token via the OAuth2 password
+# grant — no interactive login, no separate admin API calls needed. The
+# client secret is a fixed, non-sensitive placeholder: this realm is
+# recreated from scratch and torn down with every PR's namespace.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-import
+  namespace: ${NAMESPACE}
+data:
+  naira-realm.json: |
+    {
+      "realm": "naira",
+      "enabled": true,
+      "sslRequired": "none",
+      "registrationAllowed": true,
+      "clients": [
+        {
+          "clientId": "naira-portal",
+          "enabled": true,
+          "publicClient": false,
+          "secret": "naira-e2e-test-secret",
+          "protocol": "openid-connect",
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "redirectUris": ["http://localhost:3000/*", "http://localhost:3001/*"],
+          "webOrigins": ["+"]
+        }
+      ],
+      "users": [
+        {
+          "username": "testuser",
+          "enabled": true,
+          "email": "test@test.com",
+          "emailVerified": true,
+          "firstName": "Test",
+          "lastName": "User",
+          "credentials": [{"type": "password", "value": "testpass", "temporary": false}],
+          "realmRoles": ["offline_access", "uma_authorization"]
+        }
+      ]
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.6.4
+          args: ["start-dev", "--import-realm", "--health-enabled=true"]
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: admin
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              value: admin
+            - name: KC_HOSTNAME
+              value: http://keycloak.${NAMESPACE}.svc.cluster.local:8080
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9000
+              name: health
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          # Liveness has always had a tight kill window (~70-90s: 30s delay +
+          # 3 failures at 20s apart) — fine once actually up, but CI runners'
+          # CPU/network variance sometimes makes a cold JVM boot take longer
+          # than that, and liveness doesn't know "still starting" from
+          # "hung" without help. startupProbe supplies that: kubelet skips
+          # liveness/readiness entirely until this succeeds once, so a slow
+          # boot just boots instead of getting killed and restarted from
+          # zero (which is what actually caused the multi-minute flakes —
+          # not one slow boot, but repeated kill-and-restart cycles).
+          # /health/started is Keycloak's dedicated startup-gating check.
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: health
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: health
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+      volumes:
+        - name: realm-import
+          configMap:
+            name: keycloak-realm-import
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
