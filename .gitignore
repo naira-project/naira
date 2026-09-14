@@ -3,3 +3,7 @@
 .claude
 __pycache__/
 *.pyc
+
+# Helm dependency downloads — Chart.lock pins versions, `helm dependency
+# build` re-fetches these from Chart.lock; no need to vendor them.
+deploy/charts/*/charts/

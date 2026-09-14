@@ -1,0 +1,20 @@
+apiVersion: v2
+name: components
+description: Third-party components Naira's platform depends on but does not own
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+dependencies:
+  - name: openmetadata-dependencies
+    version: "1.13.5"
+    repository: https://helm.open-metadata.org/
+    condition: openmetadata.enabled
+  - name: openmetadata
+    version: "1.13.5"
+    repository: https://helm.open-metadata.org/
+    condition: openmetadata.enabled
+  - name: kube-prometheus-stack
+    version: "90.0.0"
+    repository: https://prometheus-community.github.io/helm-charts
+    alias: monitoring
+    condition: monitoring.enabled

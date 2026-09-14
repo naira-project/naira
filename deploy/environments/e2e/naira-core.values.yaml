@@ -1,0 +1,19 @@
+# e2e baseline for naira-core: catalog is always deployed (every scenario
+# exercises the thing under test), ui/portal/mcp-mock and every plugin
+# default OFF — each scenario's own e2e/<scenario>/values.yaml turns on
+# just the subset it needs (see e2e/README.md).
+ui:
+  enabled: false
+portal:
+  enabled: false
+mcpMock:
+  enabled: false
+catalog:
+  plugins:
+    litellm: { enabled: false }
+    mlflow: { enabled: false }
+    depl-calls-svc: { enabled: false }
+    depl-uses-litellm: { enabled: false }
+    fluxcd: { enabled: false }
+    openmetadata: { enabled: false }
+    mcp-servers: { enabled: false }

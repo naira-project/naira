@@ -1,0 +1,25 @@
+{{- /*
+Only template a Namespace object when it differs from the release's own
+namespace — that one is already covered by `--create-namespace`/whatever
+pre-created it, and re-templating it here would conflict with Helm's
+resource-ownership check on install (it expects to be the sole owner of
+anything it creates). e2e's runtime overlay collapses every namespace to
+the release's own, so these guards make that mode work.
+*/}}
+{{- if ne .Values.namespace .Release.Namespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+---
+{{- end }}
+{{- if and .Values.mcpMock.enabled (ne .Values.mcpMock.namespace .Release.Namespace) }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.mcpMock.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+{{- end }}

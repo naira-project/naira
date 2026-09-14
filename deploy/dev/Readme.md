@@ -2,10 +2,19 @@
 
 ### Prerequisites & Order of Execution
 
-Always run `task core:deploy` **first** before deploying any other stacks. The core module includes the Naira catalog, plugins, UI, Keycloak and cluster definitions.
+`task platform:deploy` (from the repo root) creates the kind cluster, builds
+and loads every locally-built image, and installs the two Helm charts that
+are the single source of truth for what runs locally —
+[`deploy/charts/naira-core`](../charts/naira-core) (catalog, plugins, ui,
+portal, mcp-mock) and [`deploy/charts/components`](../charts/components)
+(keycloak, postgres, litellm, llamacpp, mlflow, openmetadata, monitoring) —
+with this target's overrides from [`deploy/environments/local`](../environments/local).
 
-If you prefer to deploy a stack without the core module, you must ensure a cluster already exists by running:
-`task core:cluster:create`
+To run the steps individually: `task cluster:create`, then
+`task naira-core:deploy` and `task components:deploy` (either order — they
+don't depend on each other, though `components:deploy` includes keycloak,
+which `naira-core`'s catalog/portal need reachable to actually work end to
+end).
 
 
 

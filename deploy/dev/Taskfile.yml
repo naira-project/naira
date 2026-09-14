@@ -1,26 +1,26 @@
 version: '3'
 
 vars:
-  KEYCLOAK_REALM: naira
-  KEYCLOAK_NAMESPACE: keycloak
-  KEYCLOAK_LOCAL_PORT: '8080'
-  KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET | default "naira-local-dev-secret"}}'
-
-includes:
-  core:
-    taskfile: ./stacks/core/Taskfile.yml
-    dir: ./stacks/core
-    vars:
-      KEYCLOAK_REALM: '{{.KEYCLOAK_REALM}}'
-      KEYCLOAK_NAMESPACE: '{{.KEYCLOAK_NAMESPACE}}'
-      KEYCLOAK_LOCAL_PORT: '{{.KEYCLOAK_LOCAL_PORT}}'
-      KEYCLOAK_CLIENT_SECRET: '{{.KEYCLOAK_CLIENT_SECRET}}'
-  llm-inference:
-    taskfile: ./stacks/llm-inference/Taskfile.yml
-    dir: ./stacks/llm-inference
-  mlops:
-    taskfile: ./stacks/mlops/Taskfile.yml
-    dir: ./stacks/mlops
+  CLUSTER_NAME: naira-idp
+  KIND_CONFIG: ./kind-config.yaml
+  CHARTS_DIR: ../charts
+  ENV_DIR: ../environments/local
+  NAIRA_CORE_RELEASE: naira-core
+  COMPONENTS_RELEASE: components
+  COMPONENTS_NAMESPACE: openmetadata # components' release namespace — see deploy/charts/components/values.yaml header
+  TAG: local
+  IMAGES:
+    - { name: catalog, dir: ../../catalog, root: ../.. }
+    - { name: ui, dir: ../../ui, root: ../../ui }
+    - { name: portal, dir: ../../naira-openmfp-portal, root: ../../naira-openmfp-portal }
+    - { name: mcp-mock, dir: ./tools/mcp-mock, root: ../.. }
+    - { name: litellm, dir: ../../plugins/cmd/litellm, root: ../.. }
+    - { name: mlflow, dir: ../../plugins/cmd/mlflow, root: ../.. }
+    - { name: depl-calls-svc, dir: ../../plugins/cmd/depl_calls_svc, root: ../.. }
+    - { name: depl-uses-litellm, dir: ../../plugins/cmd/depl_uses_litellm, root: ../.. }
+    - { name: fluxcd, dir: ../../plugins/cmd/fluxcd, root: ../.. }
+    - { name: openmetadata, dir: ../../plugins/cmd/openmetadata, root: ../.. }
+    - { name: mcp-servers, dir: ../../plugins/cmd/mcp_servers, root: ../.. }
 
 tasks:
   default:
@@ -40,27 +40,90 @@ tasks:
       - docker version
       - buf --version
 
-  # Platform deployment
-  platform:deploy:
-    desc: Deploy core + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
+  # ── Cluster ─────────────────────────────────────────────────────────────
+  cluster:create:
+    desc: Create the local kind cluster
     cmds:
-      - task: core:deploy
-      - task: llm-inference:deploy
+      - |
+        if kind get clusters | grep -qx '{{.CLUSTER_NAME}}'; then
+          echo 'kind cluster {{.CLUSTER_NAME}} already exists'
+        else
+          kind delete cluster --name {{.CLUSTER_NAME}} >/dev/null 2>&1 || true
+          kind create cluster --name {{.CLUSTER_NAME}} --config {{.KIND_CONFIG}}
+        fi
+
+  cluster:delete:
+    desc: Delete the local kind cluster
+    cmds:
+      - kind delete cluster --name {{.CLUSTER_NAME}}
+
+  # ── Images ──────────────────────────────────────────────────────────────
+  images:build:
+    internal: true
+    desc: Build every locally-built image (catalog, ui, portal, mcp-mock, plugins)
+    cmds:
+      - for: { var: IMAGES }
+        cmd: docker build -t {{.ITEM.name}}:{{.TAG}} -f {{.ITEM.dir}}/Dockerfile {{.ITEM.root}}
+
+  images:load:
+    desc: Build and load every locally-built image into kind
+    deps: [images:build]
+    cmds:
+      - for: { var: IMAGES }
+        cmd: kind load docker-image {{.ITEM.name}}:{{.TAG}} --name {{.CLUSTER_NAME}}
+
+  # ── Helm charts ─────────────────────────────────────────────────────────
+  helm:deps:
+    internal: true
+    desc: Resolve the components chart's upstream Helm dependencies
+    cmds:
+      - helm dependency build {{.CHARTS_DIR}}/components
+
+  naira-core:deploy:
+    desc: Install/upgrade the naira-core chart (catalog, ui, portal, mcp-mock)
+    cmds:
+      - |
+        helm upgrade --install {{.NAIRA_CORE_RELEASE}} {{.CHARTS_DIR}}/naira-core \
+          -f {{.ENV_DIR}}/naira-core.values.yaml \
+          --set tag={{.TAG}} \
+          --namespace idp-system --create-namespace --wait --timeout 5m
+      - kubectl -n idp-system get pods
+
+  naira-core:undeploy:
+    desc: Remove the naira-core release from kind
+    cmds:
+      - helm uninstall {{.NAIRA_CORE_RELEASE}} --namespace idp-system --ignore-not-found
+
+  components:deploy:
+    desc: Install/upgrade the components chart (keycloak, postgres, litellm, llamacpp, mlflow, openmetadata, monitoring)
+    deps: [helm:deps]
+    cmds:
+      - |
+        helm upgrade --install {{.COMPONENTS_RELEASE}} {{.CHARTS_DIR}}/components \
+          -f {{.ENV_DIR}}/components.values.yaml \
+          --namespace {{.COMPONENTS_NAMESPACE}} --create-namespace --wait --timeout 15m
+
+  components:undeploy:
+    desc: Remove the components release from kind
+    cmds:
+      - helm uninstall {{.COMPONENTS_RELEASE}} --namespace {{.COMPONENTS_NAMESPACE}} --ignore-not-found
+
+  # ── Platform ────────────────────────────────────────────────────────────
+  platform:deploy:
+    desc: Deploy the full local platform (cluster + images + both charts) to kind
+    cmds:
+      - task: cluster:create
+      - task: images:load
+      - task: naira-core:deploy
+      - task: components:deploy
 
   platform:undeploy:
     desc: Remove the full platform from kind
     cmds:
-      - task: llm-inference:undeploy
-      - task: mlops:undeploy
-      - task: core:undeploy
+      - task: components:undeploy
+      - task: naira-core:undeploy
 
-  # Cluster management
-  cluster:delete:
-    desc: Remove the kind cluster entirely
-    cmds:
-      - task: core:cluster:delete
-
-  # Port-forwarding
+  # ── Port-forwarding ─────────────────────────────────────────────────────
   forward:all:
     desc: Port-forward all services
     silent: true
@@ -70,14 +133,14 @@ tasks:
       - forward:llm-inference
 
   forward:core:
-    desc: Port-forward core services (catalog, portal, ui)
+    desc: Port-forward core services (catalog, portal, ui, keycloak)
     silent: true
     deps:
       - forward:core:urls
-      - core:catalog:port-forward
-      - core:portal:port-forward
-      - core:ui:port-forward
-      - core:keycloak:port-forward
+      - forward:catalog
+      - forward:portal
+      - forward:ui
+      - forward:keycloak
 
   forward:core:urls:
     internal: true
@@ -90,13 +153,33 @@ tasks:
         echo "  Catalog: http://localhost:8090"
         echo "  Keycloak: http://localhost:8080"
 
+  forward:catalog:
+    internal: true
+    cmds:
+      - kubectl -n idp-system port-forward svc/catalog 8090:8090
+
+  forward:portal:
+    internal: true
+    cmds:
+      - kubectl -n idp-system port-forward svc/portal 3000:3000
+
+  forward:ui:
+    internal: true
+    cmds:
+      - kubectl -n idp-system port-forward svc/ui 3001:80
+
+  forward:keycloak:
+    internal: true
+    cmds:
+      - kubectl -n keycloak port-forward svc/keycloak 8080:8080
+
   forward:mlops:
     desc: Port-forward MLOps services (mlflow, openmetadata)
     silent: true
     deps:
       - forward:mlops:urls
-      - mlops:mlflow:port-forward
-      - mlops:openmetadata:port-forward
+      - forward:mlflow
+      - forward:openmetadata
 
   forward:mlops:urls:
     internal: true
@@ -107,15 +190,26 @@ tasks:
         echo "  MLflow:       http://localhost:5000"
         echo "  OpenMetadata: http://localhost:8585"
 
+  forward:mlflow:
+    internal: true
+    cmds:
+      - kubectl -n mlflow port-forward svc/mlflow 5000:5000
+
+  forward:openmetadata:
+    internal: true
+    cmds:
+      - kubectl -n openmetadata port-forward svc/openmetadata 8585:8585
+
   forward:llm-inference:
     desc: Port-forward LLM Inference services (litellm, llama, monitoring)
     silent: true
     deps:
       - forward:llm-inference:urls
-      - llm-inference:litellm:port-forward
-      - llm-inference:llamacpp:port-forward
-      - llm-inference:monitoring:port-forward
-      - llm-inference:vllm:port-forward
+      - forward:litellm
+      - forward:llamacpp
+      - forward:prometheus
+      - forward:grafana
+      - forward:vllm
 
   forward:llm-inference:urls:
     internal: true
@@ -127,9 +221,56 @@ tasks:
         echo "  Prometheus: http://localhost:9090"
         echo "  Grafana:    http://localhost:3002  (admin/admin)"
 
-  # Seeding sample data
+  forward:litellm:
+    internal: true
+    cmds:
+      - kubectl -n litellm port-forward svc/litellm 4000:4000
+
+  forward:llamacpp:
+    internal: true
+    cmds:
+      - kubectl -n llamacpp port-forward svc/llama-qwen25-05b 8080:8080
+
+  forward:vllm:
+    internal: true
+    cmds:
+      - kubectl -n vllm port-forward svc/vllm-opt125m 8001:8001
+
+  forward:prometheus:
+    internal: true
+    cmds:
+      - kubectl -n monitoring port-forward svc/components-monitoring-prometheus 9090:9090
+
+  forward:grafana:
+    internal: true
+    cmds:
+      - kubectl -n monitoring port-forward svc/components-grafana 3002:80
+
+  # ── Seeding sample data ─────────────────────────────────────────────────
   seed:all:
     desc: Seed sample data in MLflow and OpenMetadata (requires port-forward)
     cmds:
-      - task: mlops:mlflow:seed
-      - task: mlops:openmetadata:seed
+      - task: seed:mlflow
+      - task: seed:openmetadata
+
+  seed:mlflow:
+    desc: Seed a sample model in MLflow (requires port-forward)
+    vars:
+      VENV_DIR: ../../.local/venvs/mlflow-registry
+    cmds:
+      - mkdir -p ../../.local/venvs
+      - python3 -m venv '{{.VENV_DIR}}'
+      - "{{.VENV_DIR}}/bin/pip install --upgrade pip"
+      - "{{.VENV_DIR}}/bin/pip install -r ./tools/mlflow/requirements.txt"
+      - "MLFLOW_TRACKING_URI=http://127.0.0.1:5000 {{.VENV_DIR}}/bin/python ./tools/mlflow/register_dummy_model.py"
+
+  seed:openmetadata:
+    desc: Seed sample tables in OpenMetadata (requires port-forward)
+    vars:
+      VENV_DIR: ../../.local/venvs/openmetadata-seed
+    cmds:
+      - mkdir -p ../../.local/venvs
+      - python3 -m venv '{{.VENV_DIR}}'
+      - "{{.VENV_DIR}}/bin/pip install --upgrade pip"
+      - "{{.VENV_DIR}}/bin/pip install -r ./tools/openmetadata/requirements.txt"
+      - "OPENMETADATA_HOST_PORT=http://127.0.0.1:8585 {{.VENV_DIR}}/bin/python ./tools/openmetadata/seed_sample_tables.py"

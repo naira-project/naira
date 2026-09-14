@@ -1,0 +1,130 @@
+{{- if .Values.litellm.enabled }}
+{{- if ne .Values.litellm.namespace .Release.Namespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.litellm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+---
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-secrets
+  namespace: {{ .Values.litellm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  {{- if .Values.litellm.masterKeyFromSecret }}
+  LITELLM_MASTER_KEY: {{ .Values.litellm.masterKey }}
+  {{- end }}
+  {{- range $key, $value := .Values.litellm.apiKeys }}
+  {{ $key }}: {{ $value }}
+  {{- end }}
+  DATABASE_URL: {{ .Values.litellm.databaseUrl }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: {{ .Values.litellm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    model_list:
+      {{- toYaml .Values.litellm.modelList | nindent 6 }}
+
+    litellm_settings:
+      callbacks:
+        - prometheus
+      prometheus_initialize_budget_metrics: true
+    {{- if .Values.litellm.mcpServers }}
+    mcp_servers:
+      {{- toYaml .Values.litellm.mcpServers | nindent 6 }}
+    {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: {{ .Values.litellm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: litellm
+  template:
+    metadata:
+      labels:
+        app: litellm
+    spec:
+      containers:
+        - name: litellm
+          image: {{ .Values.litellm.image }}
+          imagePullPolicy: IfNotPresent
+          args: ["--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"]
+          {{- if not .Values.litellm.masterKeyFromSecret }}
+          env:
+            - name: LITELLM_MASTER_KEY
+              value: {{ .Values.litellm.masterKey | quote }}
+          {{- end }}
+          envFrom:
+            - secretRef:
+                name: litellm-secrets
+          ports:
+            - containerPort: 4000
+              name: http
+          volumeMounts:
+            - name: litellm-config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          # kubelet skips readiness/liveness until this succeeds once, so a
+          # slow cold boot on a loaded CI runner boots instead of getting
+          # killed and restarted from zero.
+          startupProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.litellm.resources | nindent 12 }}
+      volumes:
+        - name: litellm-config
+          configMap:
+            name: litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: litellm
+  namespace: {{ .Values.litellm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: litellm
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+  type: ClusterIP
+{{- end }}

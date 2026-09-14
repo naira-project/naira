@@ -1,0 +1,108 @@
+{{- if .Values.vllm.enabled }}
+{{- if ne .Values.vllm.namespace .Release.Namespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.vllm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-chat-template
+  namespace: {{ .Values.vllm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+data:
+  chat-template.jinja: |
+    {% for message in messages %}
+    {% if message['role'] == 'system' %}System: {{ "{{" }} message['content'] {{ "}}" }}
+    {% elif message['role'] == 'user' %}User: {{ "{{" }} message['content'] {{ "}}" }}
+    {% elif message['role'] == 'assistant' %}Assistant: {{ "{{" }} message['content'] {{ "}}" }}
+    {% endif %}
+    {% endfor %}
+    Assistant:
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-opt125m
+  namespace: {{ .Values.vllm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-opt125m
+  template:
+    metadata:
+      labels:
+        app: vllm-opt125m
+    spec:
+      enableServiceLinks: false
+      volumes:
+        - name: chat-template
+          configMap:
+            name: vllm-chat-template
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+      containers:
+        - name: vllm
+          image: {{ .Values.vllm.image }}
+          args:
+            - {{ .Values.vllm.model }}
+            - --served-model-name
+            - {{ .Values.vllm.servedModelName }}
+            - --chat-template
+            - /etc/vllm/chat-template.jinja
+          env:
+            - name: VLLM_CPU_KVCACHE_SPACE
+              value: "1"
+          ports:
+            - containerPort: 8000
+              name: http
+          volumeMounts:
+            - name: chat-template
+              mountPath: /etc/vllm/chat-template.jinja
+              subPath: chat-template.jinja
+              readOnly: true
+            - name: dshm
+              mountPath: /dev/shm
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+          resources:
+            {{- toYaml .Values.vllm.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-opt125m
+  namespace: {{ .Values.vllm.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: vllm-opt125m
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http
+  type: ClusterIP
+{{- end }}

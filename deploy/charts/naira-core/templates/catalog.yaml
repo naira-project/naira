@@ -1,0 +1,166 @@
+{{- if .Values.catalog.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: catalog-secrets
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  {{- toYaml .Values.catalog.secret.stringData | nindent 2 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: catalog
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+---
+{{- /*
+Cluster-scoped RBAC names get .Values.rbacSuffix appended (default: none).
+e2e sets this to the env-id so concurrent PR environments on one shared
+cluster don't fight over the same ClusterRole/ClusterRoleBinding — dev only
+ever runs one instance, so it leaves this unset and gets plain names.
+*/}}
+{{- $suffix := ternary (printf "-%s" .Values.rbacSuffix) "" (ne .Values.rbacSuffix "") }}
+{{- range $rule := list
+  (dict "name" "catalog-appidentities" "rules" (list (dict "apiGroups" (list "naira.io") "resources" (list "appidentities") "verbs" (list "get" "list"))))
+  (dict "name" "plugin-depl-calls-svc" "rules" (list (dict "apiGroups" (list "") "resources" (list "namespaces" "services") "verbs" (list "get" "list")) (dict "apiGroups" (list "apps") "resources" (list "deployments") "verbs" (list "get" "list"))))
+  (dict "name" "plugin-depl-uses-litellm" "rules" (list (dict "apiGroups" (list "") "resources" (list "namespaces" "secrets") "verbs" (list "get" "list")) (dict "apiGroups" (list "apps") "resources" (list "deployments") "verbs" (list "get" "list"))))
+  (dict "name" "plugin-fluxcd" "rules" (list (dict "apiGroups" (list "apps") "resources" (list "deployments") "verbs" (list "get" "list")) (dict "apiGroups" (list "kustomize.toolkit.fluxcd.io") "resources" (list "kustomizations") "verbs" (list "get" "list")) (dict "apiGroups" (list "helm.toolkit.fluxcd.io") "resources" (list "helmreleases") "verbs" (list "get" "list")) (dict "apiGroups" (list "source.toolkit.fluxcd.io") "resources" (list "gitrepositories") "verbs" (list "get" "list"))))
+}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $rule.name }}{{ $suffix }}
+  labels:
+    {{- include "naira-core.labels" $ | nindent 4 }}
+    {{- if ne $.Values.rbacSuffix "" }}
+    naira.io/env-id: {{ $.Values.rbacSuffix }}
+    {{- end }}
+rules:
+  {{- toYaml $rule.rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $rule.name }}{{ $suffix }}
+  labels:
+    {{- include "naira-core.labels" $ | nindent 4 }}
+    {{- if ne $.Values.rbacSuffix "" }}
+    naira.io/env-id: {{ $.Values.rbacSuffix }}
+    {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $rule.name }}{{ $suffix }}
+subjects:
+  - kind: ServiceAccount
+    name: catalog
+    namespace: {{ $.Values.namespace }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.catalog.replicaCount }}
+  selector:
+    matchLabels:
+      app: catalog
+  template:
+    metadata:
+      labels:
+        app: catalog
+    spec:
+      {{- $addrs := list }}
+      {{- range $name, $p := .Values.catalog.plugins }}
+      {{- if $p.enabled }}
+      {{- $addrs = append $addrs (printf "%s=localhost:%v" $name $p.port) }}
+      {{- end }}
+      {{- end }}
+      serviceAccountName: catalog
+      initContainers:
+        {{- range $name, $p := .Values.catalog.plugins }}
+        {{- if $p.enabled }}
+        - name: plugin-{{ $name }}
+          image: "{{ $p.image.repository }}:{{ $p.image.tag | default $.Values.tag }}"
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: {{ $p.port | quote }}
+            {{- range $p.env }}
+            - name: {{ .name }}
+              {{- if .valueFrom }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .valueFrom.secretName | default "catalog-secrets" }}
+                  key: {{ .valueFrom.key }}
+              {{- else }}
+              value: {{ .value | default "" | quote }}
+              {{- end }}
+            {{- end }}
+            {{- if $p.pathPrefix }}
+            - name: PATH_PREFIX
+              value: {{ $p.pathPrefix }}
+            {{- end }}
+          resources:
+            {{- toYaml $p.resources | nindent 12 }}
+        {{- end }}
+        {{- end }}
+      containers:
+        - name: catalog
+          image: "{{ .Values.catalog.image.repository }}:{{ .Values.catalog.image.tag | default .Values.tag }}"
+          imagePullPolicy: {{ .Values.catalog.image.pullPolicy }}
+          env:
+            - name: PORT
+              value: {{ .Values.catalog.service.port | quote }}
+            - name: KEYCLOAK_BASE_URL
+              value: {{ .Values.catalog.keycloak.baseUrl }}
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.catalog.keycloak.realm }}
+            - name: KEYCLOAK_ISSUER
+              value: {{ .Values.catalog.keycloak.issuer }}
+            - name: PLUGIN_ADDRESSES
+              value: {{ join "," $addrs | quote }}
+          ports:
+            - containerPort: {{ .Values.catalog.service.port }}
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.catalog.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: catalog
+  ports:
+    - name: http
+      port: {{ .Values.catalog.service.port }}
+      targetPort: http
+  type: ClusterIP
+{{- end }}

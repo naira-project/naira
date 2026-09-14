@@ -30,8 +30,9 @@ Ensures code quality and buildability. Gatekeeper: `All Checks Passed`.
 ---
 ## Test E2E locally
 
-See [`e2e/README.md`](../../e2e/README.md) for the full model (a shared
-component pool under `e2e/components/`, selected per scenario) and
+See [`e2e/README.md`](../../e2e/README.md) for the full model (the
+naira-core and components Helm charts, with components/plugins selected per
+scenario) and
 [`e2e/litellm_chatbot_to_catalog_api/README.md`](../../e2e/litellm_chatbot_to_catalog_api/README.md)
 for this scenario's exact run steps:
 

@@ -1,0 +1,4 @@
+# Local kind dev target for components. Chart defaults already model local
+# dev (keycloak/postgres/litellm/llamacpp/mlflow/openmetadata/monitoring on,
+# vllm off — matches deploy/dev's current default stack). Nothing to
+# override here today; kept as a file for the same reason as naira-core's.

@@ -1,0 +1,35 @@
+# Layered on deploy/environments/e2e/components.values.yaml — this scenario's
+# addition is which components it exercises (replaces the old
+# components.env COMPONENTS list) plus a minimal litellm config: exactly the
+# 2 models it asserts on (openai, mistral). Fake provider keys are fine —
+# LiteLLM lists models via /v1/models regardless of whether the underlying
+# provider key is real.
+#
+# masterKeyFromSecret: false + a plain, well-formed key (matches
+# depl_uses_litellm's default ^sk-.{22}$ detection regexp) — chatbot1
+# authenticates to LiteLLM with this same value. depl_uses_litellm discovers
+# a Deployment by scanning for *Secret-sourced* env values matching that
+# regexp, so the master key deliberately stays a plain container env value
+# here — otherwise litellm's own pod, which necessarily holds its own master
+# key, would also get flagged as "using" its own models, breaking the
+# exactly-1-relation assertion. catalog's plugin-litellm carries the same
+# value as a plain value too, for the same reason (see naira-core.values.yaml).
+#
+# chatbot1 isn't listed here: it's a scenario-only test fixture, not a
+# shared component, and stays a plain manifest applied directly by
+# create-environment.sh (see extras.env).
+postgres:
+  enabled: true # litellm's virtual-key management needs it (see litellm.databaseUrl)
+litellm:
+  enabled: true
+  image: docker.litellm.ai/berriai/litellm:v1.82.3
+  masterKey: sk-e2elitellmmasterkey001
+  masterKeyFromSecret: false
+  apiKeys:
+    OPENAI_API_KEY: change-me
+    MISTRAL_API_KEY: change-me
+  modelList:
+    - model_name: openai
+      litellm_params: { model: openai/gpt-4o-mini, api_key: os.environ/OPENAI_API_KEY }
+    - model_name: mistral
+      litellm_params: { model: mistral/mistral-small-latest, api_key: os.environ/MISTRAL_API_KEY }

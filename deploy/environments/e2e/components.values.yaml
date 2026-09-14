@@ -1,0 +1,18 @@
+# e2e baseline for components: nothing on by default — a scenario opts in
+# to only the components it actually needs via its own values.yaml.
+keycloak:
+  enabled: true # every scenario needs auth to reach catalog
+postgres:
+  enabled: false
+litellm:
+  enabled: false
+llamacpp:
+  enabled: false
+vllm:
+  enabled: false
+mlflow:
+  enabled: false
+openmetadata:
+  enabled: false
+monitoring:
+  enabled: false

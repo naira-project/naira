@@ -1,0 +1,105 @@
+{{- if .Values.mlflow.enabled }}
+{{- if ne .Values.mlflow.namespace .Release.Namespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.mlflow.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mlflow-data
+  namespace: {{ .Values.mlflow.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.mlflow.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  namespace: {{ .Values.mlflow.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      initContainers:
+        - name: init-mlflow-storage
+          image: busybox:1.36
+          command: ["sh", "-c", "mkdir -p /mlflow-data/backend /mlflow-data/artifacts"]
+          volumeMounts:
+            - name: mlflow-data
+              mountPath: /mlflow-data
+      containers:
+        - name: mlflow
+          image: {{ .Values.mlflow.image }}
+          imagePullPolicy: IfNotPresent
+          args:
+            - mlflow
+            - server
+            - --host
+            - 0.0.0.0
+            - --port
+            - "5000"
+            - --backend-store-uri
+            - sqlite:////mlflow-data/backend/mlflow.db
+            - --artifacts-destination
+            - /mlflow-data/artifacts
+            - --serve-artifacts
+          ports:
+            - containerPort: 5000
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.mlflow.resources | nindent 12 }}
+          volumeMounts:
+            - name: mlflow-data
+              mountPath: /mlflow-data
+      volumes:
+        - name: mlflow-data
+          persistentVolumeClaim:
+            claimName: mlflow-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+  namespace: {{ .Values.mlflow.namespace }}
+  labels:
+    {{- include "components.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: mlflow
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http
+  type: ClusterIP
+{{- end }}
