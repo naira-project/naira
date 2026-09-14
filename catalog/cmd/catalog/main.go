@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/Nerzal/gocloak/v13"
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
@@ -16,6 +18,7 @@ import (
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginmanager"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/scheduling"
 )
 
 func main() {
@@ -26,7 +29,7 @@ func main() {
 		logger.Fatalf("invalid configuration: %v", err)
 	}
 
-	registeredPlugins, cleanup, err := pluginmanager.Register(config.PluginAddresses, config.PluginConnectionTimeout, logger)
+	registeredPlugins, cleanup, err := pluginmanager.Register(config.Plugins, config.PluginConnectionTimeout, logger)
 	if err != nil {
 		logger.Fatalf("failed to register plugins: %v", err)
 	}
@@ -39,8 +42,12 @@ func main() {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
+	scheduler, err := scheduling.NewConfiguredScheduler(config.Plugins, runner.RunPluginAsync, logger)
+	if err != nil {
+		logger.Fatalf("failed to configure scheduler: %v", err)
+	}
 
-	router, err := httpapi.NewRouter(catalogService, runner, logger, keycloak.Config{
+	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 		Issuer: config.KeycloakIssuer,
@@ -56,8 +63,8 @@ func main() {
 
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
-		for name, addr := range config.PluginAddresses {
-			logger.Printf("plugin %q -> %s", name, addr)
+		for name, plugin := range config.Plugins {
+			logger.Printf("plugin %q -> %s", name, plugin.Address)
 		}
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -68,14 +75,36 @@ func main() {
 	<-ctx.Done()
 	logger.Println("shutting down catalog service...")
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), config.ShutdownTimeout)
+	shutdown(server, scheduler, runner, config.ShutdownTimeout, logger)
+	logger.Println("catalog service stopped")
+}
+
+func shutdown(
+	server *http.Server,
+	scheduler *scheduling.Scheduler,
+	runner *pluginrun.Runner,
+	timeout time.Duration,
+	logger *log.Logger,
+) {
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		logger.Printf("error during server shutdown: %v", err)
-	}
+	var wg sync.WaitGroup
+
+	wg.Go(func() {
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			logger.Printf("error during server shutdown: %v", err)
+		}
+	})
+
+	wg.Go(func() {
+		if err := scheduler.Stop(shutdownCtx); err != nil {
+			logger.Printf("error stopping scheduler: %v", err)
+		}
+	})
+
+	wg.Wait()
 
 	// Wait for any in-flight plugin runs to finish before exiting.
 	runner.Wait()
-	logger.Println("catalog service stopped")
 }

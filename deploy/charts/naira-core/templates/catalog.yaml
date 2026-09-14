@@ -62,6 +62,29 @@ subjects:
     namespace: {{ $.Values.namespace }}
 ---
 {{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-plugin-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "naira-core.labels" . | nindent 4 }}
+data:
+  # Consumed by PLUGIN_CONFIG_FILE (catalog/cmd/catalog/config.go) — required,
+  # no PLUGIN_ADDRESSES env fallback exists. `schedule` is a standard cron
+  # expression; omitting it means the plugin only runs on manual trigger.
+  plugins.yaml: |
+    plugins:
+      {{- range $name, $p := .Values.catalog.plugins }}
+      {{- if $p.enabled }}
+      {{ $name }}:
+        address: localhost:{{ $p.port }}
+        {{- if $p.schedule }}
+        schedule: {{ $p.schedule | quote }}
+        {{- end }}
+      {{- end }}
+      {{- end }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -79,12 +102,6 @@ spec:
       labels:
         app: catalog
     spec:
-      {{- $addrs := list }}
-      {{- range $name, $p := .Values.catalog.plugins }}
-      {{- if $p.enabled }}
-      {{- $addrs = append $addrs (printf "%s=localhost:%v" $name $p.port) }}
-      {{- end }}
-      {{- end }}
       serviceAccountName: catalog
       initContainers:
         {{- range $name, $p := .Values.catalog.plugins }}
@@ -119,6 +136,11 @@ spec:
         - name: catalog
           image: "{{ .Values.catalog.image.repository }}:{{ .Values.catalog.image.tag | default .Values.tag }}"
           imagePullPolicy: {{ .Values.catalog.image.pullPolicy }}
+          volumeMounts:
+            - name: plugin-config
+              mountPath: /etc/catalog/plugins.yaml
+              subPath: plugins.yaml
+              readOnly: true
           env:
             - name: PORT
               value: {{ .Values.catalog.service.port | quote }}
@@ -128,8 +150,6 @@ spec:
               value: {{ .Values.catalog.keycloak.realm }}
             - name: KEYCLOAK_ISSUER
               value: {{ .Values.catalog.keycloak.issuer }}
-            - name: PLUGIN_ADDRESSES
-              value: {{ join "," $addrs | quote }}
           ports:
             - containerPort: {{ .Values.catalog.service.port }}
               name: http
@@ -147,6 +167,10 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.catalog.resources | nindent 12 }}
+      volumes:
+        - name: plugin-config
+          configMap:
+            name: catalog-plugin-config
 ---
 apiVersion: v1
 kind: Service

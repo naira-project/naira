@@ -46,6 +46,7 @@ catalog:
       image: { repository: litellm, tag: "" }
       port: 50051
       pathPrefix: litellm
+      schedule: "0 0 * * *"
       env:
         - name: LITELLM_BASE_URL
           value: http://litellm.litellm.svc.cluster.local:4000
@@ -59,6 +60,7 @@ catalog:
       image: { repository: mlflow, tag: "" }
       port: 50052
       pathPrefix: mlflow
+      schedule: "0 0 * * *"
       env:
         - name: MLFLOW_BASE_URL
           value: http://mlflow.mlflow.svc.cluster.local:5000
@@ -67,6 +69,7 @@ catalog:
       enabled: true
       image: { repository: depl-calls-svc, tag: "" }
       port: 50053
+      schedule: "0 * * * *"
       env:
         - name: DEPL_CALLS_SVC_KUBECONFIG
           value: ""
@@ -75,6 +78,7 @@ catalog:
       enabled: true
       image: { repository: depl-uses-litellm, tag: "" }
       port: 50054
+      schedule: "0 * * * *"
       env:
         - name: DEPL_USES_LITELLM_KUBECONFIG
           value: ""
@@ -85,6 +89,7 @@ catalog:
       enabled: true
       image: { repository: fluxcd, tag: "" }
       port: 50055
+      schedule: "*/1 * * * *"
       resources: *pluginResources
     openmetadata:
       enabled: true
