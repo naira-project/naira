@@ -148,6 +148,8 @@ data:
       openmetadata:
         address: localhost:50056
       mcp-servers:
+        address: localhost:50057
+      github:
         address: localhost:50058
 ---
 apiVersion: apps/v1
