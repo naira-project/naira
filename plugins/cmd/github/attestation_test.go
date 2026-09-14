@@ -29,6 +29,7 @@ func attestationJSON(repositoryURL string) string {
 func TestAttestationVerifier_Verify(t *testing.T) {
 	tests := []struct {
 		name       string
+		ghPath     string
 		output     string
 		exitCode   int
 		org        string
@@ -75,15 +76,21 @@ func TestAttestationVerifier_Verify(t *testing.T) {
 			org:     "naira-project",
 			wantErr: "parsing gh attestation verify output",
 		},
+		{
+			name:    "returns an error when gh cannot be started",
+			ghPath:  filepath.Join("/tmp", "missing-gh"),
+			org:     "naira-project",
+			wantErr: "failed to run gh attestation verify for image",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			verifier := newAttestationVerifier(
-				fakeGh(t, tt.output, tt.exitCode),
-				"token",
-				5*time.Second,
-			)
+			ghPath := tt.ghPath
+			if ghPath == "" {
+				ghPath = fakeGh(t, tt.output, tt.exitCode)
+			}
+			verifier := newAttestationVerifier(ghPath, "token", 5*time.Second)
 
 			owner, name, verified, err := verifier.Verify(
 				context.Background(),
