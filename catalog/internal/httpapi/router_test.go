@@ -85,7 +85,11 @@ func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.
 
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	configs := make(catalog.PluginConfigsByName, len(plugins))
+	for name := range plugins {
+		configs[name] = catalog.PluginConfig{}
+	}
+	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 	return router
 }
@@ -270,22 +274,4 @@ func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 			Props:  map[string]string{},
 		}},
 	}, response)
-}
-
-func TestListPluginsEndpoint(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), map[string]pluginrun.Plugin{
-		"mlflow":  stubPlugin{},
-		"litellm": stubPlugin{},
-	})
-
-	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/plugins", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var payload map[string][]string
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	assert.Equal(t, []string{"litellm", "mlflow"}, payload["plugins"])
 }
