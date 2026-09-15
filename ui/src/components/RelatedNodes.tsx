@@ -78,7 +78,6 @@ export default function RelatedNodes({ node, config }: RelatedNodesProps) {
   const goTo = (item: RelatedNode) =>
     navigate(`/catalog/${encodeURIComponent(item.kind)}/${encodeCatalogPath(item.path)}`);
 
- 
   const Icon = config.icon ?? ChevronRight;
   const itemLabel = related.length === 1 ? config.title.replace(/s$/, '') : config.title;
 

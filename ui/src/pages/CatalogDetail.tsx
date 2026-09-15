@@ -30,6 +30,7 @@ export default function CatalogDetail() {
 
   // Kind-specific tabs come from configuration;
   const kindTabs = detailTabsForKind(decodedKind);
+  const relatedConfig = relatedCardForKind(decodedKind);
   const landingTab = kindTabs.find((tab) => tab.primary)?.value ?? GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 
@@ -115,9 +116,7 @@ export default function CatalogDetail() {
                   <div className="flex flex-col gap-6">
                     <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
 
-                    {relatedCardForKind(decodedKind) && (
-                      <RelatedNodes node={node} config={relatedCardForKind(decodedKind)!} />
-                    )}
+                    {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
                   </div>
                 )}
               </div>

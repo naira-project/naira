@@ -1,4 +1,4 @@
-import { Wrench, BrainCircuit, Cloud } from 'lucide-react';
+import { BrainCircuit, Cloud, Wrench } from 'lucide-react';
 import type { RelatedNodesConfig } from '../components/RelatedNodes';
 
 export const MCP_SERVER_KIND = 'mcp_server';
@@ -46,7 +46,7 @@ export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
 };
 
 export const KIND_DETAIL_TABS: Record<string, KindDetailTab[]> = {
-  [MCP_SERVER_KIND]: [{ value: 'Tools', config: RELATED_CARDS_BY_KIND["mcp_server"], primary: true }],
+  [MCP_SERVER_KIND]: [{ value: 'Tools', config: RELATED_CARDS_BY_KIND.mcp_server, primary: true }],
 };
 
 export function detailTabsForKind(kind: string): KindDetailTab[] {
