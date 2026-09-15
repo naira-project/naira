@@ -458,6 +458,9 @@ spec:
         - name: plugin-config
           configMap:
             name: catalog-plugin-config
+        - name: tech-radar-config
+          configMap:
+            name: tech-radar-config
 ---
 apiVersion: v1
 kind: Service
