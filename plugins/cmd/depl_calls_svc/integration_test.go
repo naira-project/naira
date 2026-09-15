@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -138,9 +139,15 @@ func TestDeplCallsSvc_Integration(t *testing.T) {
 
 	// Build and start catalog.
 	catalogPort := findFreePort(t)
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(fmt.Sprintf(`
+plugins:
+  depl_calls_svc:
+    address: "%s"
+`, pluginAddr)), 0o600), "writing config.yaml")
 	buildAndStart(t, ctx, "github.com/naira-project/naira/catalog/cmd/catalog", []string{
 		"PORT=" + fmt.Sprint(catalogPort),
-		"PLUGIN_ADDRESSES=depl_calls_svc=" + pluginAddr,
+		"PLUGIN_CONFIG_FILE=" + configPath,
 		"PLUGIN_CONNECTION_TIMEOUT=" + pluginConnectionTimeout.String(),
 		"PLUGIN_TIMEOUT=" + pluginRunTimeout.String(),
 		"KEYCLOAK_BASE_URL=" + oidc.BaseURL,
@@ -332,8 +339,8 @@ type apiOperation struct {
 func requestPluginRun(t *testing.T, ctx context.Context, catalogBaseURL, token string) string {
 	t.Helper()
 
-	op, status := doJSON[apiOperation](t, ctx, http.MethodPost, catalogBaseURL+"/v1/depl_calls_svc:run", token)
-	require.Equal(t, http.StatusAccepted, status, "POST /v1/depl_calls_svc:run")
+	op, status := doJSON[apiOperation](t, ctx, http.MethodPost, catalogBaseURL+"/v1/plugins/depl_calls_svc:run", token)
+	require.Equal(t, http.StatusAccepted, status, "POST /v1/plugins/depl_calls_svc:run")
 	require.NotEmpty(t, op.Name)
 	return op.Name
 }
@@ -359,6 +366,8 @@ func doJSON[T any](t require.TestingT, ctx context.Context, method, url, token s
 	defer resp.Body.Close()
 
 	var v T
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&v))
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err, "reading response body: %s", string(body))
+	require.NoError(t, json.Unmarshal(body, &v), "unmarshaling response body: %s", string(body))
 	return v, resp.StatusCode
 }
