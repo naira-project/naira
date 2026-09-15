@@ -60,12 +60,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_VERSION: ${{ steps.check_release.outputs.version }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           # Push the tag (this will NOT trigger downstream 'on: push: tags' workflows)
-          git tag "v${RELEASE_VERSION}"
-          git push origin "v${RELEASE_VERSION}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f "ref=refs/tags/v${RELEASE_VERSION}" \
+            -f "sha=${GITHUB_SHA}"
 
           # Find any merged Release Please PRs that are stuck in pending
           mapfile -t MERGED_PRS < <(gh pr list --state merged --label "autorelease: pending" --json number --jq '.[].number')
@@ -232,6 +230,20 @@ jobs:
     with:
       image-name: "naira-plugin-fluxcd"
       dockerfile: "plugins/cmd/fluxcd/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-tech-radar:
+    name: Publish · Plugin Tech Radar
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-tech-radar"
+      dockerfile: "plugins/cmd/tech_radar/Dockerfile"
       context: "."
       platforms: "linux/amd64,linux/arm64"
     secrets:

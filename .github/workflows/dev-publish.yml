@@ -188,8 +188,25 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  container-publish-plugin-tech-radar:
+    name: Publish · Plugin Tech Radar
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-tech-radar"
+      dockerfile: "plugins/cmd/tech_radar/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   container-publish-plugin-github:
     name: Publish · Plugin GitHub
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
     with:
       image-name: "naira-plugin-github"
@@ -213,6 +230,7 @@ jobs:
       - container-publish-plugin-depl-uses-litellm
       - container-publish-plugin-openmetadata
       - container-publish-plugin-mcp-servers
+      - container-publish-plugin-tech-radar
       - container-publish-plugin-github
     if: always()
     runs-on: ubuntu-latest
@@ -230,6 +248,7 @@ jobs:
             "${{ needs.container-publish-plugin-depl-uses-litellm.result }}"
             "${{ needs.container-publish-plugin-openmetadata.result }}"
             "${{ needs.container-publish-plugin-mcp-servers.result }}"
+            "${{ needs.container-publish-plugin-tech-radar.result }}"
             "${{ needs.container-publish-plugin-github.result }}"
           )
           for r in "${RESULTS[@]}"; do
