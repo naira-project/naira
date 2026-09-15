@@ -1,4 +1,5 @@
 import { cn } from '../lib/utils';
+import { Button } from './ui/button';
 
 interface KindSelectorProps {
   kinds: string[];
@@ -31,19 +32,21 @@ export default function KindSelector({ kinds, activeKind, onSelect, loading }: K
   return (
     <div className="flex flex-wrap gap-2">
       {kinds.map((kind) => (
-        <button
+        <Button
           type="button"
           key={kind}
+          variant="ghost"
+          size="sm"
           onClick={() => onSelect(kind)}
           className={cn(
             'rounded-lg px-4 py-1.5 text-sm transition-colors',
             activeKind === kind
-              ? 'bg-primary font-semibold text-white'
+              ? 'bg-primary font-semibold text-white hover:bg-primary/80'
               : 'bg-gray-100 font-normal text-foreground hover:bg-gray-200',
           )}
         >
           {kind}
-        </button>
+        </Button>
       ))}
     </div>
   );

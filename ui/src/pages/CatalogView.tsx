@@ -6,6 +6,7 @@ import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
 import EmptyState from '../components/states/EmptyState';
 import PluginSyncState from '../components/states/PluginSyncState';
+import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { useKinds } from '../hooks/useKinds';
@@ -134,13 +135,15 @@ export default function CatalogView({
               {kindsError && (
                 <div className="mb-4 flex items-center gap-2 text-sm text-red-500">
                   <span>{kindsError}</span>
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
+                    size="xs"
                     onClick={refreshKinds}
-                    className="underline hover:no-underline"
+                    className="h-auto p-0 text-sm font-normal text-red-500 underline hover:text-red-500 hover:no-underline"
                   >
                     Retry
-                  </button>
+                  </Button>
                 </div>
               )}
 
