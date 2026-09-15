@@ -225,6 +225,8 @@ data:
         address: localhost:50056
       mcp-servers:
         address: localhost:50058
+      bedrock:
+        address: localhost:50059
 ---
 apiVersion: apps/v1
 kind: Deployment
