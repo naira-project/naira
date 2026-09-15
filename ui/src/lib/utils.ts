@@ -26,7 +26,7 @@ export function formatRelativeTime(iso: string): string {
 export function latestOperation(operations: OperationResource[]): OperationResource | null {
   if (operations.length === 0) return null;
   return [...operations].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a, b) => new Date(b.metadata.createdAt).getTime() - new Date(a.metadata.createdAt).getTime(),
   )[0];
 }
 
@@ -37,12 +37,12 @@ export function latestOperationPerPlugin(
   operations: OperationResource[],
 ): Map<string, OperationResource> {
   const sorted = [...operations].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a, b) => new Date(b.metadata.createdAt).getTime() - new Date(a.metadata.createdAt).getTime(),
   );
   const latest = new Map<string, OperationResource>();
   for (const op of sorted) {
-    if (!latest.has(op.plugin)) {
-      latest.set(op.plugin, op);
+    if (!latest.has(op.metadata.plugin)) {
+      latest.set(op.metadata.plugin, op);
     }
   }
   return latest;

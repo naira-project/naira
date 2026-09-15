@@ -171,13 +171,13 @@ function StatusTab({
             <tr key={plugin.name} className="border-b border-gray-100 last:border-0">
               <td className="py-3 pr-4 font-medium text-gray-900">{plugin.name}</td>
               <td className="py-3 pr-4 text-gray-500">
-                {op ? formatRelativeTime(op.createdAt) : 'Never'}
+                {op ? formatRelativeTime(op.metadata.createdAt) : 'Never'}
               </td>
               <td className="py-3 pr-4 text-gray-500">
                 {running ? (
                   <span className="text-xs text-gray-400">—</span>
-                ) : op?.startTime && op?.endTime ? (
-                  formatDuration(op.startTime, op.endTime)
+                ) : op?.metadata.startTime && op?.metadata.endTime ? (
+                  formatDuration(op.metadata.startTime, op.metadata.endTime)
                 ) : (
                   <span className="text-xs text-gray-400">—</span>
                 )}
@@ -185,7 +185,7 @@ function StatusTab({
               <td className="py-3 pr-4">
                 {running ? (
                   <span className="text-xs text-gray-400">—</span>
-                ) : op && op.state === 'FAILED' && op.error ? (
+                ) : op && op.metadata.state === 'FAILED' && op.error ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -200,7 +200,7 @@ function StatusTab({
                     <span className="underline ml-0.5">Details</span>
                   </button>
                 ) : op ? (
-                  <PluginStatusBadge state={op.state} />
+                  <PluginStatusBadge state={op.metadata.state} />
                 ) : (
                   <span className="text-xs text-gray-400">Not run yet</span>
                 )}
@@ -208,8 +208,8 @@ function StatusTab({
               <td className="py-3 pr-4 text-gray-500">
                 {running ? (
                   <span className="text-xs text-gray-400">—</span>
-                ) : op && op.state === 'SUCCEEDED' ? (
-                  `${op.nodesUpserted} node(s), ${op.relationsUpserted} relation(s)`
+                ) : op?.response ? (
+                  `${op.response.nodesUpserted} node(s), ${op.response.relationsUpserted} relation(s)`
                 ) : (
                   <span className="text-xs text-gray-400">—</span>
                 )}

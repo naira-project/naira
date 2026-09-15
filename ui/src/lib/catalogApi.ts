@@ -169,16 +169,25 @@ export interface StatusErrorResource {
   message: string;
 }
 
-export interface OperationResource {
-  name: string;
+export interface OperationMetadataResource {
   plugin: string;
   state: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
   startTime: string;
   endTime?: string;
-  error?: StatusErrorResource;
+  createdAt: string;
+}
+
+export interface RunPluginResult {
   nodesUpserted: number;
   relationsUpserted: number;
-  createdAt: string;
+}
+
+export interface OperationResource {
+  name: string;
+  done: boolean;
+  metadata: OperationMetadataResource;
+  response?: RunPluginResult;
+  error?: StatusErrorResource;
 }
 
 interface RunPluginsResponse {

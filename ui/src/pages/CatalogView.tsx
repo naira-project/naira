@@ -79,7 +79,8 @@ export default function CatalogView({
     () =>
       operations.some(
         (op) =>
-          op.state === 'SUCCEEDED' && (!viewpointPlugins || viewpointPlugins.includes(op.plugin)),
+          op.metadata.state === 'SUCCEEDED' &&
+          (!viewpointPlugins || viewpointPlugins.includes(op.metadata.plugin)),
       ),
     [operations, viewpointPlugins],
   );
@@ -109,7 +110,7 @@ export default function CatalogView({
           {/* Compact last-sync indicator */}
           {lastSync && (
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span>Last sync: {formatRelativeTime(lastSync.createdAt)}</span>
+              <span>Last sync: {formatRelativeTime(lastSync.metadata.createdAt)}</span>
             </div>
           )}
         </header>

@@ -19,7 +19,7 @@ type StatusErrorResource struct {
 }
 
 // OperationMetadataResource holds progress information about an in-flight
-// or completed operation. It never carries the operation's result.
+// or completed operation.
 type OperationMetadataResource struct {
 	Plugin    string     `json:"plugin"`
 	State     string     `json:"state"`
