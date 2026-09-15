@@ -21,16 +21,6 @@ export function formatRelativeTime(iso: string): string {
 }
 
 /**
- * Returns the most recent operation from a list of operations.
- */
-export function latestOperation(operations: OperationResource[]): OperationResource | null {
-  if (operations.length === 0) return null;
-  return [...operations].sort(
-    (a, b) => new Date(b.metadata.createdAt).getTime() - new Date(a.metadata.createdAt).getTime(),
-  )[0];
-}
-
-/**
  * Returns a map of plugin name → most recent operation for each plugin.
  */
 export function latestOperationPerPlugin(

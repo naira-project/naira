@@ -64,7 +64,7 @@ export default function Overview() {
 
           <div className="ml-12 grid grid-cols-[repeat(auto-fill,16rem)] gap-4">
             {filteredCards.map((card) => (
-              <Card key={card.path} className="cursor-pointer transition-shadow hover:shadow-md">
+              <Card key={card.path}>
                 <CardContent>
                   <h3 className="text-sm text-center font-semibold text-foreground">
                     {card.heading}
