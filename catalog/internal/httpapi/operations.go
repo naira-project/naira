@@ -87,7 +87,7 @@ func matchOperationFilter(operation OperationResource, filter *equalityFilter) (
 	return matches, nil
 }
 
-// GET /v1/operations lists plugin run operations.
+// newListOperationsHandler lists plugin run operations.
 // Supported query params:
 // - pageSize
 // - pageToken
@@ -122,7 +122,7 @@ func newListOperationsHandler(runner *pluginrun.Runner, logger *log.Logger) http
 	})
 }
 
-// GET /v1/operations/{operationId} returns a single operation.
+// newGetOperationHandler returns a single operation.
 func newGetOperationHandler(runner *pluginrun.Runner) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		op, err := runner.GetOperation(r.Context(), chi.URLParam(r, "operationId"))

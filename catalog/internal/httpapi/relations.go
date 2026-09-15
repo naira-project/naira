@@ -63,7 +63,7 @@ func relationName(kind string, from pluginapi.NodeID, to pluginapi.NodeID) strin
 	return fmt.Sprintf("relations/%s/%s|%s", kind, url.PathEscape(nodeName(from)), url.PathEscape(nodeName(to)))
 }
 
-// GET /v1/relations lists catalog relations.
+// newListRelationsHandler lists catalog relations.
 // Supported query params:
 // - pageSize
 // - pageToken

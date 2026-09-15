@@ -12,6 +12,8 @@ const (
 	NodeKindMCPServer         = "mcp_server"
 	NodeKindMCPTool           = "mcp_tool"
 	NodeKindInferenceEndpoint = "inference_endpoint"
+	NodeKindTechRadar         = "tech_radar"
+	NodeKindTechRadarEntry    = "tech_radar_entry"
 )
 
 const (
