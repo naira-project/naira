@@ -290,7 +290,8 @@ func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[string]string, er
 	return status, nil
 }
 
-// it is used for mapping status into respective endpoints.
+// It is used for mapping status into respective endpoints. 
+// There are three status states now; healthy, unhealthy, and unknown.
 func endpointHealthKey(model, apiBase string) string {
 	return strings.TrimSpace(model) + "|" + strings.TrimSpace(apiBase)
 }
