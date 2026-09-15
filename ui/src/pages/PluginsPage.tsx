@@ -194,7 +194,7 @@ function StatusTab({
                   <Button
                     type="button"
                     variant="destructive"
-                    size="xs"
+                    size="sm"
                     onClick={() => {
                       if (op.error) {
                         onViewError(plugin.name, op.error);
@@ -227,7 +227,7 @@ function StatusTab({
               <td className="py-3 text-right">
                 <Button
                   type="button"
-                  size="xs"
+                  size="sm"
                   onClick={() => onRun(plugin.name)}
                   disabled={running}
                   className="rounded-md bg-primary px-2.5 py-1.5 text-xs text-white hover:bg-primary/80 disabled:opacity-50"
