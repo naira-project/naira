@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,36 +29,35 @@ func TestGithubClient_GetRepo(t *testing.T) {
 }
 
 func TestGithubClient_GetCodeowners(t *testing.T) {
-	codeowners := "* @acme/team\n"
-	encoded := base64.StdEncoding.EncodeToString([]byte(codeowners))
+	const codeownersBody = "* @acme/team\n"
+	base64Body := base64.StdEncoding.EncodeToString([]byte(codeownersBody))
 
 	tests := []struct {
 		name         string
-		foundAt      string
-		encoding     string
-		content      string
-		wantFound    bool
+		responses    map[string]ghContent // path -> server response
 		wantContent  string
-		wantRequests []string
+		wantErr      error
+		wantRequests []string // queried paths in chronological order
 	}{
 		{
-			name:         "uses the first available location",
-			foundAt:      "/repos/acme/service/contents/CODEOWNERS",
-			encoding:     "base64",
-			content:      encoded,
-			wantFound:    true,
-			wantContent:  codeowners,
-			wantRequests: []string{".github/CODEOWNERS", "CODEOWNERS"},
+			name: "found at first location",
+			responses: map[string]ghContent{
+				".github/CODEOWNERS": {Content: base64Body, Encoding: "base64"},
+			},
+			wantContent:  codeownersBody,
+			wantRequests: []string{".github/CODEOWNERS"},
 		},
 		{
-			name:         "returns not found when no location exists",
+			name:         "not found anywhere",
+			wantErr:      errGithubResourceNotFound,
 			wantRequests: []string{".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"},
 		},
 		{
-			name:         "skips unsupported encoding and continues",
-			foundAt:      "/repos/acme/service/contents/docs/CODEOWNERS",
-			encoding:     "text",
-			content:      codeowners,
+			name: "skips unsupported encoding and keeps looking",
+			responses: map[string]ghContent{
+				"docs/CODEOWNERS": {Content: codeownersBody, Encoding: "text"},
+			},
+			wantErr:      errGithubResourceNotFound,
 			wantRequests: []string{".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"},
 		},
 	}
@@ -65,33 +65,38 @@ func TestGithubClient_GetCodeowners(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var requests []string
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests = append(requests, r.URL.Path)
-				if r.URL.Path != tt.foundAt {
-					w.WriteHeader(http.StatusNotFound)
-					return
-				}
-				_, _ = fmt.Fprintf(w, `{"content":%q,"encoding":%q}`, tt.content, tt.encoding)
-			}))
-			t.Cleanup(srv.Close)
+			srv := newFakeGithubContentsServer(t, "acme", "service", tt.responses, &requests)
 
 			got, err := newGithubClient(srv.Client(), srv.URL, "").GetCodeowners(context.Background(), "acme", "service")
-			if tt.wantFound {
-				require.NoError(t, err)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
 			} else {
-				require.Error(t, err)
-				assert.True(t, errors.Is(err, errGithubResourceNotFound))
+				require.NoError(t, err)
 			}
 			assert.Equal(t, tt.wantContent, got)
-			assert.Equal(t, expectedCodeownersPaths(tt.wantRequests), requests)
+			assert.Equal(t, tt.wantRequests, requests)
 		})
 	}
 }
 
-func expectedCodeownersPaths(names []string) []string {
-	paths := make([]string, 0, len(names))
-	for _, name := range names {
-		paths = append(paths, "/repos/acme/service/contents/"+name)
-	}
-	return paths
+// newFakeGithubContentsServer simulates GET /repos/{owner}/{repo}/contents/{path}:
+// records each requested path (relative to CODEOWNERS) into *requests and responds
+// with content from `responses` for the given path, or 404 if not found
+func newFakeGithubContentsServer(t *testing.T, owner, repo string, responses map[string]ghContent, requests *[]string) *httptest.Server {
+	t.Helper()
+	prefix := fmt.Sprintf("/repos/%s/%s/contents/", owner, repo)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		relPath := strings.TrimPrefix(r.URL.Path, prefix)
+		*requests = append(*requests, relPath)
+
+		content, ok := responses[relPath]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(content)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
 }
