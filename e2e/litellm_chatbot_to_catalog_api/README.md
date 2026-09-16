@@ -31,12 +31,10 @@ kind create cluster --config e2e/base/kind-config.yaml
   --env-id local --tag localtest --cluster-name naira-idp-e2e
 ```
 
-It prints `ENV_ID=<namespace>` on success — you'll need that for the next
-steps.
-
 ```bash
-# 3. Port-forward catalog and keycloak (the API requires an auth token)
-NS=<ENV_ID from step 2>
+# 3. Port-forward catalog and keycloak (the API requires an auth token) —
+# the namespace is "local", the --env-id passed above
+NS=local
 kubectl -n "$NS" port-forward svc/catalog 8090:8090 &
 kubectl -n "$NS" port-forward svc/keycloak 8080:8080 &
 

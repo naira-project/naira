@@ -56,13 +56,25 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
+          # Fast, frequent startupProbe (postgres:16-alpine is typically ready
+          # in a couple of seconds) instead of a fixed initialDelaySeconds on
+          # readiness — becomes ready as soon as it actually is rather than
+          # waiting out a worst-case delay on every run. Once it succeeds
+          # once, readiness/liveness take over with no delay of their own.
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 2
+            failureThreshold: 30
           readinessProbe:
             exec:
               command:
                 - sh
                 - -c
                 - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             exec:
@@ -70,7 +82,6 @@ spec:
                 - sh
                 - -c
                 - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-            initialDelaySeconds: 30
             periodSeconds: 20
           resources:
             requests:

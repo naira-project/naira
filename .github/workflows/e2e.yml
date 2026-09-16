@@ -25,9 +25,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  KIND_VERSION: "0.32.0"
-  KUBECTL_VERSION: "1.36.0"
-  HELM_VERSION: "4.2.0"
   CLUSTER_NAME: naira-idp-e2e
 
 jobs:
@@ -56,29 +53,12 @@ jobs:
         with:
           go-version: "1.26"
 
-      - name: Install kind
-        run: |
-          curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v${KIND_VERSION}/kind-linux-amd64"
-          curl -Lo ./kind.sha256 "https://kind.sigs.k8s.io/dl/v${KIND_VERSION}/kind-linux-amd64.sha256sum"
-          echo "$(cut -d' ' -f1 ./kind.sha256)  ./kind" | sha256sum -c -
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-
-      - name: Install kubectl
-        run: |
-          curl -Lo ./kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-          curl -Lo ./kubectl.sha256 "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl.sha256"
-          echo "$(cat ./kubectl.sha256)  ./kubectl" | sha256sum -c -
-          chmod +x ./kubectl
-          sudo mv ./kubectl /usr/local/bin/kubectl
-
-      - name: Install helm
-        run: |
-          curl -Lo ./helm.tar.gz "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz"
-          curl -Lo ./helm.tar.gz.sha256 "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz.sha256sum"
-          echo "$(cut -d' ' -f1 ./helm.tar.gz.sha256)  ./helm.tar.gz" | sha256sum -c -
-          tar -xzf ./helm.tar.gz
-          sudo mv ./linux-amd64/helm /usr/local/bin/helm
+      # kind/kubectl/helm versions come from mise.toml — the same source of
+      # truth used for local dev — instead of a second, separately hardcoded
+      # set of versions here that could drift from it.
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install_args: kind kubectl helm
 
       # Computed once, here, rather than inside create-environment.sh: if that
       # script fails before it would derive an ID itself, the destroy step at
@@ -144,14 +124,14 @@ jobs:
       - name: Stop port-forwards
         if: always()
         run: |
-          kill "$(cat /tmp/catalog-port-forward.pid)" 2>/dev/null || true
-          kill "$(cat /tmp/keycloak-port-forward.pid)" 2>/dev/null || true
+          kill "$(cat /tmp/catalog-port-forward.pid)" || true
+          kill "$(cat /tmp/keycloak-port-forward.pid)" || true
 
       - name: Collect diagnostics
         if: always()
         run: |
           kubectl get pods,services -n "${ENV_ID}" -o wide || true
-          kubectl logs -n "${ENV_ID}" -l app=catalog --all-containers --tail=-1 || true
+          kubectl logs -n "${ENV_ID}" -l app=catalog --all-containers --tail=-1 --prefix=true || true
           kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
           kubectl describe pods -n "${ENV_ID}" || true
 

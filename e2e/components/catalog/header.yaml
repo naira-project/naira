@@ -1,4 +1,4 @@
-# envsubst template — substituted variables: ${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES}
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
 #
 # First fragment of the catalog Deployment. scripts/create-environment.sh
 # concatenates this with one plugin-<name>.yaml per entry in the scenario's
@@ -11,15 +11,16 @@
 # Parameterized copy of deploy/dev/stacks/core/infra/kubernetes/catalog.yaml for
 # per-PR E2E environments. Every namespace reference (including the Namespace
 # object itself and the ClusterRoleBinding subjects) is templated, and all
-# ClusterRole/ClusterRoleBinding names are suffixed with ${ENV_ID} to avoid
-# collisions between concurrent PR environments on a shared cluster.
+# ClusterRole/ClusterRoleBinding names are suffixed with ${NAMESPACE} — these
+# are cluster-scoped, so the suffix is what avoids collisions between
+# concurrent PR environments sharing one cluster.
 apiVersion: v1
 kind: Namespace
 metadata:
   name: ${NAMESPACE}
   labels:
     naira.io/environment: e2e
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
     naira.io/managed-by: environment-script
 ---
 apiVersion: v1
@@ -40,9 +41,9 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: catalog-appidentities-${ENV_ID}
+  name: catalog-appidentities-${NAMESPACE}
   labels:
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
 rules:
   - apiGroups: ["naira.io"]
     resources: ["appidentities"]
@@ -51,9 +52,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: plugin-depl-calls-svc-${ENV_ID}
+  name: plugin-depl-calls-svc-${NAMESPACE}
   labels:
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
 rules:
   - apiGroups: [""]
     resources: ["namespaces", "services"]
@@ -65,9 +66,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: plugin-depl-uses-litellm-${ENV_ID}
+  name: plugin-depl-uses-litellm-${NAMESPACE}
   labels:
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
 rules:
   - apiGroups: [""]
     resources: ["namespaces", "secrets"]
@@ -79,9 +80,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: plugin-fluxcd-${ENV_ID}
+  name: plugin-fluxcd-${NAMESPACE}
   labels:
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
@@ -99,13 +100,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: plugin-depl-calls-svc-${ENV_ID}
+  name: plugin-depl-calls-svc-${NAMESPACE}
   labels:
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: plugin-depl-calls-svc-${ENV_ID}
+  name: plugin-depl-calls-svc-${NAMESPACE}
 subjects:
   - kind: ServiceAccount
     name: catalog
@@ -114,13 +115,13 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: plugin-depl-uses-litellm-${ENV_ID}
+  name: plugin-depl-uses-litellm-${NAMESPACE}
   labels:
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: plugin-depl-uses-litellm-${ENV_ID}
+  name: plugin-depl-uses-litellm-${NAMESPACE}
 subjects:
   - kind: ServiceAccount
     name: catalog
@@ -129,13 +130,13 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: catalog-appidentities-${ENV_ID}
+  name: catalog-appidentities-${NAMESPACE}
   labels:
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: catalog-appidentities-${ENV_ID}
+  name: catalog-appidentities-${NAMESPACE}
 subjects:
   - kind: ServiceAccount
     name: catalog
@@ -144,13 +145,13 @@ subjects:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: plugin-fluxcd-${ENV_ID}
+  name: plugin-fluxcd-${NAMESPACE}
   labels:
-    naira.io/env-id: ${ENV_ID}
+    naira.io/env-id: ${NAMESPACE}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: plugin-fluxcd-${ENV_ID}
+  name: plugin-fluxcd-${NAMESPACE}
 subjects:
   - kind: ServiceAccount
     name: catalog
