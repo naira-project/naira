@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 )
+
+var errGithubResourceNotFound = errors.New("github resource not found")
 
 type githubClient struct {
 	httpClient *http.Client
@@ -46,10 +49,10 @@ func newGithubClient(httpClient *http.Client, baseURL, token string) *githubClie
 	}
 }
 
-func (c *githubClient) get(ctx context.Context, path string, out any) (bool, error) {
+func (c *githubClient) get(ctx context.Context, path string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {
-		return false, fmt.Errorf("building github request for %s: %w", path, err)
+		return fmt.Errorf("building github request for %s: %w", path, err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	if c.token != "" {
@@ -58,58 +61,58 @@ func (c *githubClient) get(ctx context.Context, path string, out any) (bool, err
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return false, fmt.Errorf("calling github api %s: %w", path, err)
+		return fmt.Errorf("calling github api %s: %w", path, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
+		return errGithubResourceNotFound
 	}
 	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("github api %s returned status %d", path, resp.StatusCode)
+		return fmt.Errorf("github api %s returned status %d", path, resp.StatusCode)
 	}
 
 	if out != nil {
 		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-			return false, fmt.Errorf("decoding github api response for %s: %w", path, err)
+			return fmt.Errorf("decoding github api response for %s: %w", path, err)
 		}
 	}
-	return true, nil
+	return nil
 }
 
-func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo, bool, error) {
+func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo, error) {
 	var githubRepo ghRepo
-	found, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &githubRepo)
+	err := c.get(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &githubRepo)
 	if err != nil {
-		return ghRepo{}, false, fmt.Errorf("getting repo %s/%s: %w", owner, repo, err)
+		return ghRepo{}, fmt.Errorf("getting repo %s/%s: %w", owner, repo, err)
 	}
-	return githubRepo, found, nil
+	return githubRepo, nil
 }
 
 // GetCodeowners tries the well-known CODEOWNERS locations, in the order
 // GitHub itself checks them, and returns the content of the first one found.
 // order of locations: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-location
-func (c *githubClient) GetCodeowners(ctx context.Context, owner, repo string) (string, bool, error) {
+func (c *githubClient) GetCodeowners(ctx context.Context, owner, repo string) (string, error) {
 	candidates := []string{".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"}
 
 	for _, path := range candidates {
 		var content ghContent
-		found, err := c.get(ctx, fmt.Sprintf("/repos/%s/%s/contents/%s", url.PathEscape(owner), url.PathEscape(repo), path), &content)
-		if err != nil {
-			return "", false, fmt.Errorf("getting %s for %s/%s: %w", path, owner, repo, err)
-		}
-		if !found {
+		err := c.get(ctx, fmt.Sprintf("/repos/%s/%s/contents/%s", url.PathEscape(owner), url.PathEscape(repo), path), &content)
+		if errors.Is(err, errGithubResourceNotFound) {
 			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("getting %s for %s/%s: %w", path, owner, repo, err)
 		}
 		if content.Encoding != "base64" {
 			continue
 		}
 		decoded, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(content.Content, "\n", ""))
 		if err != nil {
-			return "", false, fmt.Errorf("decoding %s for %s/%s: %w", path, owner, repo, err)
+			return "", fmt.Errorf("decoding %s for %s/%s: %w", path, owner, repo, err)
 		}
-		return string(decoded), true, nil
+		return string(decoded), nil
 	}
 
-	return "", false, nil
+	return "", errGithubResourceNotFound
 }

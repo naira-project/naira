@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -21,9 +22,8 @@ func TestGithubClient_GetRepo(t *testing.T) {
 	defer srv.Close()
 
 	c := newGithubClient(srv.Client(), srv.URL, "secret-token")
-	repo, found, err := c.GetRepo(context.Background(), "acme", "service")
+	repo, err := c.GetRepo(context.Background(), "acme", "service")
 	require.NoError(t, err)
-	assert.True(t, found)
 	assert.Equal(t, "Go", repo.Language)
 }
 
@@ -38,7 +38,6 @@ func TestGithubClient_GetCodeowners(t *testing.T) {
 		content      string
 		wantFound    bool
 		wantContent  string
-		wantErr      bool
 		wantRequests []string
 	}{
 		{
@@ -76,9 +75,13 @@ func TestGithubClient_GetCodeowners(t *testing.T) {
 			}))
 			t.Cleanup(srv.Close)
 
-			got, found, err := newGithubClient(srv.Client(), srv.URL, "").GetCodeowners(context.Background(), "acme", "service")
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantFound, found)
+			got, err := newGithubClient(srv.Client(), srv.URL, "").GetCodeowners(context.Background(), "acme", "service")
+			if tt.wantFound {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.True(t, errors.Is(err, errGithubResourceNotFound))
+			}
 			assert.Equal(t, tt.wantContent, got)
 			assert.Equal(t, expectedCodeownersPaths(tt.wantRequests), requests)
 		})

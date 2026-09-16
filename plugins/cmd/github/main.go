@@ -40,6 +40,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -174,12 +175,9 @@ func imageReferencesOrg(image, org string) bool {
 }
 
 func (p *Plugin) collectRepo(ctx context.Context, repo ownerAndName) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
-	githubRepo, found, err := p.github.GetRepo(ctx, repo.owner, repo.name)
+	githubRepo, err := p.github.GetRepo(ctx, repo.owner, repo.name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching repo: %w", err)
-	}
-	if !found {
-		return nil, nil, fmt.Errorf("repo not found or not accessible")
 	}
 
 	repoNodeID := repo.ToNodeID()
@@ -196,12 +194,12 @@ func (p *Plugin) collectRepo(ctx context.Context, repo ownerAndName) ([]pluginap
 		{ID: repoNodeID, Properties: props},
 	}
 
-	codeowners, found, err := p.github.GetCodeowners(ctx, repo.owner, repo.name)
+	codeowners, err := p.github.GetCodeowners(ctx, repo.owner, repo.name)
+	if errors.Is(err, errGithubResourceNotFound) {
+		return nodes, nil, nil
+	}
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching codeowners: %w", err)
-	}
-	if !found {
-		return nodes, nil, nil
 	}
 
 	ownerNodes, ownedByRelations := codeownersClaims(repoNodeID, extractDefaultCodeowners(codeowners))
