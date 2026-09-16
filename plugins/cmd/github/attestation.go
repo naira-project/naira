@@ -43,7 +43,7 @@ var ErrAttestationMissing = errors.New("attestation not found for given image")
 
 // Verify checks whether an image has a trusted GitHub artifact attestation from a repository
 // in the organization and, if valid, returns the repository owner and name.
-func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (owner, name string, err error) {
+func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ownerAndName, error) {
 	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 
@@ -66,13 +66,13 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 	if runErr := cmd.Run(); runErr != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](runErr); ok {
 			// the command started, but verification failed
-			return "", "", fmt.Errorf(
+			return ownerAndName{}, fmt.Errorf(
 				"gh attestation verify failed (exit code %d) for image %q: %s",
 				exitErr.ExitCode(), image, strings.TrimSpace(stderr.String()),
 			)
 		}
 		// anything else: gh binary missing, failed to start, etc.
-		return "", "", fmt.Errorf(
+		return ownerAndName{}, fmt.Errorf(
 			"failed to run gh attestation verify for image %q: %w (stderr: %s)",
 			image, runErr, strings.TrimSpace(stderr.String()),
 		)
@@ -80,7 +80,7 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 
 	var entries []ghAttestationEntry
 	if err := json.Unmarshal(stdout.Bytes(), &entries); err != nil {
-		return "", "", fmt.Errorf("parsing gh attestation verify output: %w", err)
+		return ownerAndName{}, fmt.Errorf("parsing gh attestation verify output: %w", err)
 	}
 
 	for _, entry := range entries {
@@ -95,9 +95,9 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 		if !strings.EqualFold(ownerFromCert, org) {
 			continue
 		}
-		return ownerFromCert, nameFromCert, nil
+		return ownerAndName{owner: ownerFromCert, name: nameFromCert}, nil
 	}
-	return "", "", ErrAttestationMissing
+	return ownerAndName{}, ErrAttestationMissing
 }
 
 func (v *attestationVerifier) CheckGhAvailable(ctx context.Context) error {

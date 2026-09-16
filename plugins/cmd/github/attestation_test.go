@@ -91,7 +91,7 @@ func TestAttestationVerifier_Verify(t *testing.T) {
 			}
 			verifier := newAttestationVerifier(ghPath, "token", 5*time.Second)
 
-			owner, name, err := verifier.Verify(
+			repo, err := verifier.Verify(
 				context.Background(),
 				"ghcr.io/naira-project/service:latest",
 				tt.org,
@@ -103,8 +103,8 @@ func TestAttestationVerifier_Verify(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantOwner, owner)
-			assert.Equal(t, tt.wantName, name)
+			assert.Equal(t, tt.wantOwner, repo.owner)
+			assert.Equal(t, tt.wantName, repo.name)
 		})
 	}
 }

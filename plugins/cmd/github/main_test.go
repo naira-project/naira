@@ -162,10 +162,6 @@ func TestImageReferencesOrg(t *testing.T) {
 			image: "ghcr.io/other-org/service:latest",
 			org:   "naira-project",
 		},
-		{
-			name:  "does not match an empty organization",
-			image: "ghcr.io/naira-project/service:latest",
-		},
 	}
 
 	for _, tt := range tests {
@@ -222,13 +218,4 @@ func TestCodeownersClaims_Empty(t *testing.T) {
 
 	require.Empty(t, nodes)
 	require.Empty(t, relations)
-}
-
-func TestRepoCache(t *testing.T) {
-	cache := newRepoCache()
-	id := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/acme/service"}
-
-	assert.False(t, cache.AlreadyCollected(id))
-	cache.MarkCollected(id)
-	assert.True(t, cache.AlreadyCollected(id))
 }

@@ -118,7 +118,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 	}
 
 	var resp pluginapi.CollectResponse
-	repos := newRepoCache()
+	repos := make(map[ownerAndName]bool)
 
 	for _, entry := range entries {
 		image, ok := singleContainerImage(entry)
@@ -130,30 +130,28 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 			continue
 		}
 
-		owner, name, err := p.attestation.Verify(ctx, image, p.config.GitHubOrg)
+		repo, err := p.attestation.Verify(ctx, image, p.config.GitHubOrg)
 		if err != nil {
 			p.logger.Printf("verifying attestation for %s (deployment %s/%s): %v", image, entry.Namespace, entry.Name, err)
 			continue
 		}
 
-		repoNodeID := gitRepositoryNodeID(owner, name)
-
-		if !repos.AlreadyCollected(repoNodeID) {
-			nodes, relations, err := p.collectRepo(ctx, owner, name)
+		if !repos[repo] {
+			nodes, relations, err := p.collectRepo(ctx, repo)
 			if err != nil {
-				p.logger.Printf("collecting repo %s/%s, err: %v", owner, name, err)
+				p.logger.Printf("collecting repo %s/%s, err: %v", repo.owner, repo.name, err)
 				continue
 			}
 			resp.Nodes = append(resp.Nodes, nodes...)
 			resp.Relations = append(resp.Relations, relations...)
-			repos.MarkCollected(repoNodeID)
+			repos[repo] = true
 		}
 
 		deploymentNodeClaim := pluginapi.NodeClaim{ID: entry.NodeID()}
 		deploymentRepoRelation := pluginapi.RelationClaim{
 			Kind: pluginapi.RelationKindBuiltFrom,
 			From: entry.NodeID(),
-			To:   repoNodeID,
+			To:   repo.ToNodeID(),
 		}
 		resp.Nodes = append(resp.Nodes, deploymentNodeClaim)
 		resp.Relations = append(resp.Relations, deploymentRepoRelation)
@@ -175,8 +173,8 @@ func imageReferencesOrg(image, org string) bool {
 	return strings.Contains(strings.ToLower(image), strings.ToLower(org))
 }
 
-func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
-	repo, found, err := p.github.GetRepo(ctx, owner, name)
+func (p *Plugin) collectRepo(ctx context.Context, repo ownerAndName) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
+	githubRepo, found, err := p.github.GetRepo(ctx, repo.owner, repo.name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching repo: %w", err)
 	}
@@ -184,21 +182,21 @@ func (p *Plugin) collectRepo(ctx context.Context, owner, name string) ([]plugina
 		return nil, nil, fmt.Errorf("repo not found or not accessible")
 	}
 
-	repoNodeID := gitRepositoryNodeID(owner, name)
+	repoNodeID := repo.ToNodeID()
 	props := pluginapi.PropertyMap{
-		propertyKeyURL: repo.HTMLURL,
+		propertyKeyURL: githubRepo.HTMLURL,
 	}
-	if repo.Language != "" {
-		props[propertyKeyLanguage] = repo.Language
+	if githubRepo.Language != "" {
+		props[propertyKeyLanguage] = githubRepo.Language
 	}
-	if repo.Homepage != "" {
-		props[propertyKeyHomepage] = repo.Homepage
+	if githubRepo.Homepage != "" {
+		props[propertyKeyHomepage] = githubRepo.Homepage
 	}
 	nodes := []pluginapi.NodeClaim{
 		{ID: repoNodeID, Properties: props},
 	}
 
-	codeowners, found, err := p.github.GetCodeowners(ctx, owner, name)
+	codeowners, found, err := p.github.GetCodeowners(ctx, repo.owner, repo.name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching codeowners: %w", err)
 	}
@@ -228,27 +226,16 @@ func codeownersClaims(repoNodeID pluginapi.NodeID, handles []string) ([]pluginap
 	return nodes, relations
 }
 
-func gitRepositoryNodeID(owner, name string) pluginapi.NodeID {
+type ownerAndName struct {
+	owner string
+	name  string
+}
+
+func (r ownerAndName) ToNodeID() pluginapi.NodeID {
 	return pluginapi.NodeID{
 		Kind: pluginapi.NodeKindGitRepository,
-		Path: repositoryidentity.GitHubRepositoryNodePath(owner, name),
+		Path: repositoryidentity.GitHubRepositoryNodePath(r.owner, r.name),
 	}
-}
-
-type repoCache struct {
-	collected map[string]bool // node path -> already collected
-}
-
-func newRepoCache() *repoCache {
-	return &repoCache{collected: make(map[string]bool)}
-}
-
-func (c *repoCache) AlreadyCollected(id pluginapi.NodeID) bool {
-	return c.collected[id.Path]
-}
-
-func (c *repoCache) MarkCollected(id pluginapi.NodeID) {
-	c.collected[id.Path] = true
 }
 
 func (p *Plugin) connect() (*kubernetes.Clientset, error) {
