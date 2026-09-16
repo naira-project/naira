@@ -176,6 +176,9 @@ apply() {
 # from header.yaml + one plugin-<name>.yaml per scenario plugin + footer.yaml.
 render_catalog() {
   echo "==> Rendering catalog (plugins: ${PLUGINS:-<none>})"
+  HAS_PLUGINS="false"
+  [ -n "${PLUGINS:-}" ] && HAS_PLUGINS="true"
+  export HAS_PLUGINS
 
   {
     echo "apiVersion: v1"
@@ -201,7 +204,7 @@ render_catalog() {
       envsubst '${NAMESPACE} ${TAG} ${PLUGIN_PORT}' < "${E2E_DIR}/components/catalog/plugin-${plugin}.yaml"
       port=$((port + 1))
     done
-    envsubst '${NAMESPACE} ${TAG}' < "${E2E_DIR}/components/catalog/footer.yaml"
+    envsubst '${NAMESPACE} ${TAG} ${HAS_PLUGINS}' < "${E2E_DIR}/components/catalog/footer.yaml"
   } | kubectl apply -f -
 }
 
