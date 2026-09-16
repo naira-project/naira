@@ -28,41 +28,40 @@ func attestationJSON(repositoryURL string) string {
 
 func TestAttestationVerifier_Verify(t *testing.T) {
 	tests := []struct {
-		name       string
-		ghPath     string
-		output     string
-		exitCode   int
-		org        string
-		wantOwner  string
-		wantName   string
-		wantVerify bool
-		wantErr    string
+		name      string
+		ghPath    string
+		output    string
+		exitCode  int
+		org       string
+		wantOwner string
+		wantName  string
+		wantErr   string
 	}{
 		{
-			name:       "returns repository from a valid attestation",
-			output:     attestationJSON("https://github.com/naira-project/service"),
-			org:        "naira-project",
-			wantOwner:  "naira-project",
-			wantName:   "service",
-			wantVerify: true,
+			name:      "returns repository from a valid attestation",
+			output:    attestationJSON("https://github.com/naira-project/service"),
+			org:       "naira-project",
+			wantOwner: "naira-project",
+			wantName:  "service",
 		},
 		{
-			name:       "matches organization case insensitively",
-			output:     attestationJSON("https://github.com/Naira-Project/service"),
-			org:        "naira-project",
-			wantOwner:  "Naira-Project",
-			wantName:   "service",
-			wantVerify: true,
+			name:      "matches organization case insensitively",
+			output:    attestationJSON("https://github.com/Naira-Project/service"),
+			org:       "naira-project",
+			wantOwner: "Naira-Project",
+			wantName:  "service",
 		},
 		{
-			name:   "rejects a different organization",
-			output: attestationJSON("https://github.com/other-org/service"),
-			org:    "naira-project",
+			name:    "rejects a different organization",
+			output:  attestationJSON("https://github.com/other-org/service"),
+			org:     "naira-project",
+			wantErr: ErrAttestationMissing.Error(),
 		},
 		{
-			name:   "rejects an empty result",
-			output: "[]",
-			org:    "naira-project",
+			name:    "rejects an empty result",
+			output:  "[]",
+			org:     "naira-project",
+			wantErr: ErrAttestationMissing.Error(),
 		},
 		{
 			name:     "returns an error when gh fails",
@@ -92,7 +91,7 @@ func TestAttestationVerifier_Verify(t *testing.T) {
 			}
 			verifier := newAttestationVerifier(ghPath, "token", 5*time.Second)
 
-			owner, name, verified, err := verifier.Verify(
+			owner, name, err := verifier.Verify(
 				context.Background(),
 				"ghcr.io/naira-project/service:latest",
 				tt.org,
@@ -100,12 +99,10 @@ func TestAttestationVerifier_Verify(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
-				assert.False(t, verified)
 				return
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantVerify, verified)
 			assert.Equal(t, tt.wantOwner, owner)
 			assert.Equal(t, tt.wantName, name)
 		})

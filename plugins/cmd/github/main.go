@@ -130,13 +130,9 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 			continue
 		}
 
-		owner, name, verified, err := p.attestation.Verify(ctx, image, p.config.GitHubOrg)
+		owner, name, err := p.attestation.Verify(ctx, image, p.config.GitHubOrg)
 		if err != nil {
 			p.logger.Printf("verifying attestation for %s (deployment %s/%s): %v", image, entry.Namespace, entry.Name, err)
-			continue
-		}
-		if !verified {
-			p.logger.Printf("attestation for %s (deployment %s/%s) not verified for org %q", image, entry.Namespace, entry.Name, p.config.GitHubOrg)
 			continue
 		}
 

@@ -34,17 +34,16 @@ type ghAttestationEntry struct {
 	} `json:"verificationResult"`
 }
 
-// signature.certificate is populated directly from the OpenID Connect token that GitHub has generated
-// so it's properties contain values that cannot be manipulated by the workflow that originated the attestation.
-// see more "gh help attestation verify"
 type ghCertificate struct {
 	SourceRepositoryURI      string `json:"sourceRepositoryURI"`
 	SourceRepositoryOwnerURI string `json:"sourceRepositoryOwnerURI"`
 }
 
+var ErrAttestationMissing = errors.New("attestation not found for given image")
+
 // Verify checks whether an image has a trusted GitHub artifact attestation from a repository
 // in the organization and, if valid, returns the repository owner and name.
-func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (owner, name string, verified bool, err error) {
+func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (owner, name string, err error) {
 	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 
@@ -67,13 +66,13 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 	if runErr := cmd.Run(); runErr != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](runErr); ok {
 			// the command started, but verification failed
-			return "", "", false, fmt.Errorf(
+			return "", "", fmt.Errorf(
 				"gh attestation verify failed (exit code %d) for image %q: %s",
 				exitErr.ExitCode(), image, strings.TrimSpace(stderr.String()),
 			)
 		}
 		// anything else: gh binary missing, failed to start, etc.
-		return "", "", false, fmt.Errorf(
+		return "", "", fmt.Errorf(
 			"failed to run gh attestation verify for image %q: %w (stderr: %s)",
 			image, runErr, strings.TrimSpace(stderr.String()),
 		)
@@ -81,7 +80,7 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 
 	var entries []ghAttestationEntry
 	if err := json.Unmarshal(stdout.Bytes(), &entries); err != nil {
-		return "", "", false, fmt.Errorf("parsing gh attestation verify output: %w", err)
+		return "", "", fmt.Errorf("parsing gh attestation verify output: %w", err)
 	}
 
 	for _, entry := range entries {
@@ -96,9 +95,9 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 		if !strings.EqualFold(ownerFromCert, org) {
 			continue
 		}
-		return ownerFromCert, nameFromCert, true, nil
+		return ownerFromCert, nameFromCert, nil
 	}
-	return "", "", false, nil
+	return "", "", ErrAttestationMissing
 }
 
 func (v *attestationVerifier) CheckGhAvailable(ctx context.Context) error {
