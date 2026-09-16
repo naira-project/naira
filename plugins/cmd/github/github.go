@@ -16,14 +16,25 @@ type githubClient struct {
 	token      string
 }
 
+// ghRepo is information retrived from the GitHub API about a repository
+// from GET /repos/{owner}/{repo}
+// See: https://docs.github.com/en/rest/repos/repos#get-a-repository
 type ghRepo struct {
+	// HTMLURL - github repo url
 	HTMLURL  string `json:"html_url"`
 	Language string `json:"language"`
+	// Homepage - project website. e.g. "https://naira-project.github.io/"
 	Homepage string `json:"homepage"`
 }
 
+// ghContent represents a file response from GET /repos/{owner}/{repo}/contents/{path}.
+// See: https://docs.github.com/en/rest/repos/contents#get-repository-content
 type ghContent struct {
-	Content  string `json:"content"` // base64, when Encoding == "base64"
+	// Content contains the base64-encoded file payload (punctuated with newlines '\n').
+	Content string `json:"content"`
+
+	// Encoding describes the content encoding scheme.
+	// "base64" for files <= 1MB
 	Encoding string `json:"encoding"`
 }
 
