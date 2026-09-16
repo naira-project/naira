@@ -102,7 +102,6 @@ type dailyActivityRecord struct {
 	Breakdown dailyActivityBreakdown `json:"breakdown"`
 }
 
-
 type dailyActivityBreakdown struct {
 	ModelGroups map[string]dailyActivityModelEntry `json:"model_groups"`
 }
@@ -342,7 +341,7 @@ func endpointHealthKey(model, apiBase string) string {
 // configured lookback window, without a user_id filter, so the master key
 // gets api_requests summed across all users for each model.
 // TODO: configure fetch mechanism to be scoped to a specific id, however it is to be talked
-// together with the authorization mechanism within Naira (i.e. how to map LiteLLM credentials with Naira user). 
+// together with the authorization mechanism within Naira (i.e. how to map LiteLLM credentials with Naira user).
 func (p *Plugin) fetchModelInvocations(ctx context.Context) (map[string]int64, error) {
 	lookback := p.config.MetricsLookback
 	if lookback <= 0 {
