@@ -172,9 +172,6 @@ func singleContainerImage(entry Deployment) (image string, ok bool) {
 // imageReferencesOrg is a filter to skip the network calls for images that are not in
 // the configured org. It is not a security check - it's an optimization
 func imageReferencesOrg(image, org string) bool {
-	if org == "" {
-		return false
-	}
 	return strings.Contains(strings.ToLower(image), strings.ToLower(org))
 }
 

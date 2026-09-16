@@ -66,10 +66,9 @@ func validate(rawOwner, rawRepo string) (owner, name string, ok bool) {
 }
 
 // GitHubRepositoryNodePath returns a stable node path for a GitHub repository.
+// owner and name must be non-empty and must not contain "/" — e.g. as
+// returned by ParseGitHubRepository.
 func GitHubRepositoryNodePath(owner, name string) string {
-	if owner == "" || name == "" {
-		return ""
-	}
 	return "github.com/" + strings.ToLower(owner+"/"+name)
 }
 
