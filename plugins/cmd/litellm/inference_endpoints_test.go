@@ -11,9 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// startLiteLLMModelInfo serves /model/info and /health with the given
-// payloads, mirroring the two endpoints listInferenceEndpoints depends on.
-func startLiteLLMModelInfo(t *testing.T, modelInfo modelInfoResponse, health *healthResponse) string {
+// startLiteLLMModelInfo serves /model/info, /health and /user/daily/activity
+// with the given payloads, mirroring the endpoints listInferenceEndpoints
+// depends on. invocationsByModel maps model name to api_requests; a model
+// missing from it is treated as having received no traffic.
+func startLiteLLMModelInfo(t *testing.T, modelInfo modelInfoResponse, health *healthResponse, invocationsByModel map[string]int64) string {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -28,6 +30,16 @@ func startLiteLLMModelInfo(t *testing.T, modelInfo modelInfoResponse, health *he
 		}
 		w.Header().Set("Content-Type", "application/json")
 		require.NoError(t, json.NewEncoder(w).Encode(health))
+	})
+	mux.HandleFunc("/user/daily/activity", func(w http.ResponseWriter, _ *http.Request) {
+		modelGroups := make(map[string]dailyActivityModelEntry, len(invocationsByModel))
+		for modelName, count := range invocationsByModel {
+			modelGroups[modelName] = dailyActivityModelEntry{Metrics: dailyActivityMetrics{APIRequests: count}}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(dailyActivityResponse{
+			Results: []dailyActivityRecord{{Breakdown: dailyActivityBreakdown{ModelGroups: modelGroups}}},
+		}))
 	})
 
 	httpServer := httptest.NewServer(mux)
@@ -55,6 +67,7 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 		&healthResponse{HealthyEndpoints: []healthEndpointEntry{
 			{Model: "anthropic/claude-3-5-sonnet-latest", APIBase: "https://api.anthropic.com"},
 		}},
+		map[string]int64{"idp-claude-sonnet": 7},
 	)
 
 	nodes, relations, err := testPlugin(t, baseURL).
@@ -67,6 +80,7 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 
 	endpoint := endpoints["litellm/idp-claude-sonnet-us-east-1"]
 	assert.Equal(t, "model-1", endpoint[propertyKeyModelID])
+	assert.Equal(t, "7", endpoint[propertyKeyInvocations])
 	assert.Equal(t, "anthropic", endpoint[propertyKeyProvider])
 	assert.Equal(t, endpointTypeExternal, endpoint[propertyKeyEndpointType])
 	assert.Equal(t, endpointStatusHealthy, endpoint[propertyKeyEndpointStatus])
@@ -84,10 +98,24 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 	assert.Equal(t, pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "litellm/idp-claude-sonnet"}, relations[0].To)
 }
 
+func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
+	baseURL := startLiteLLMModelInfo(t,
+		modelInfoResponse{Data: []modelInfoEntry{{ModelName: "idp-unused-model"}}},
+		&healthResponse{HealthyEndpoints: []healthEndpointEntry{{Model: "idp-unused-model"}}},
+		nil,
+	)
+
+	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, nodes, "/model/info lists every configured deployment, not just ones actually receiving traffic")
+	assert.Empty(t, relations)
+}
+
 func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
 	baseURL := startLiteLLMModelInfo(t,
 		modelInfoResponse{Data: []modelInfoEntry{{ModelName: "  "}}},
 		&healthResponse{},
+		nil,
 	)
 
 	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
@@ -100,6 +128,7 @@ func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testin
 	baseURL := startLiteLLMModelInfo(t,
 		modelInfoResponse{Data: []modelInfoEntry{{ModelName: "idp-model"}}},
 		nil,
+		map[string]int64{"idp-model": 1},
 	)
 
 	nodes, _, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)

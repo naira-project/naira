@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
@@ -28,6 +29,7 @@ const (
 	propertyKeyMaxTokens                  = "max_tokens"
 	propertyKeyInputCostPerMillionTokens  = "input_cost_per_million_tokens"
 	propertyKeyOutputCostPerMillionTokens = "output_cost_per_million_tokens"
+	propertyKeyInvocations                = "invocations_total"
 
 	endpointTypeInternal = "internal"
 	endpointTypeExternal = "external"
@@ -54,6 +56,7 @@ type inferenceEndpoint struct {
 	MaxTokens       int64   `json:"max_tokens"`
 	InputCost       float64 `json:"input_cost_per_token"`
 	OutputCost      float64 `json:"output_cost_per_token"`
+	Invocations     int64   `json:"-"`
 }
 
 type modelInfoResponse struct {
@@ -91,10 +94,39 @@ type healthEndpointEntry struct {
 	APIBase string `json:"api_base"`
 }
 
+type dailyActivityResponse struct {
+	Results []dailyActivityRecord `json:"results"`
+}
+
+type dailyActivityRecord struct {
+	Breakdown dailyActivityBreakdown `json:"breakdown"`
+}
+
+
+type dailyActivityBreakdown struct {
+	ModelGroups map[string]dailyActivityModelEntry `json:"model_groups"`
+}
+
+type dailyActivityModelEntry struct {
+	Metrics dailyActivityMetrics `json:"metrics"`
+}
+
+type dailyActivityMetrics struct {
+	APIRequests int64 `json:"api_requests"`
+}
+
 func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[string]string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
 	endpoints, err := p.fetchInferenceEndpoints(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing inference endpoints: %w", err)
+	}
+
+	invocations, err := p.fetchModelInvocations(ctx)
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Printf("WARN: fetching LiteLLM daily activity failed, continuing without invocation counts: %v", err)
+		}
+		invocations = map[string]int64{}
 	}
 
 	var (
@@ -110,6 +142,13 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[st
 			}
 			continue
 		}
+
+		// Only models with recorded API requests in the lookback window are
+		// treated as actively serving endpoints.
+		if invocations[modelName] == 0 {
+			continue
+		}
+		endpoint.Invocations = invocations[modelName]
 
 		endpoint.OwnedBy = ownedByModel[modelName]
 
@@ -195,6 +234,9 @@ func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 	}
 	if e.OutputCost != 0 {
 		properties[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(e.OutputCost*1_000_000, 'f', 4, 64)
+	}
+	if e.Invocations != 0 {
+		properties[propertyKeyInvocations] = strconv.FormatInt(e.Invocations, 10)
 	}
 
 	return properties
@@ -290,8 +332,56 @@ func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[string]string, er
 	return status, nil
 }
 
-// It is used for mapping status into respective endpoints. 
+// It is used for mapping status into respective endpoints.
 // There are three status states now; healthy, unhealthy, and unknown.
 func endpointHealthKey(model, apiBase string) string {
 	return strings.TrimSpace(model) + "|" + strings.TrimSpace(apiBase)
+}
+
+// fetchModelInvocations queries LiteLLM's /user/daily/activity for the
+// configured lookback window, without a user_id filter, so the master key
+// gets api_requests summed across all users for each model.
+// TODO: configure fetch mechanism to be scoped to a specific id, however it is to be talked
+// together with the authorization mechanism within Naira (i.e. how to map LiteLLM credentials with Naira user). 
+func (p *Plugin) fetchModelInvocations(ctx context.Context) (map[string]int64, error) {
+	lookback := p.config.MetricsLookback
+	if lookback <= 0 {
+		lookback = 24 * time.Hour
+	}
+	endDate := time.Now().UTC()
+	startDate := endDate.Add(-lookback)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/user/daily/activity", nil)
+	if err != nil {
+		return nil, fmt.Errorf("building LiteLLM daily activity request: %w", err)
+	}
+	query := req.URL.Query()
+	query.Set("start_date", startDate.Format("2006-01-02"))
+	query.Set("end_date", endDate.Format("2006-01-02"))
+	req.URL.RawQuery = query.Encode()
+	p.addAuthorization(req)
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("calling LiteLLM daily activity endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("litellm /user/daily/activity returned %s", resp.Status)
+	}
+
+	var payload dailyActivityResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("decoding LiteLLM daily activity response: %w", err)
+	}
+
+	invocations := make(map[string]int64)
+	for _, record := range payload.Results {
+		for modelName, entry := range record.Breakdown.ModelGroups {
+			invocations[modelName] += entry.Metrics.APIRequests
+		}
+	}
+
+	return invocations, nil
 }
