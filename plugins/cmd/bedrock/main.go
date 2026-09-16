@@ -29,13 +29,20 @@ const (
 	propertyKeyInputTokens      = "input_tokens_total"
 	propertyKeyOutputTokens     = "output_tokens_total"
 	propertyKeyInvocations      = "invocations_total"
+	propertyKeyEndpointStatus   = "status"
 
 	providerNameBedrock = "bedrock"
+
+	endpointStatusHealthy   = "healthy"
+	endpointStatusUnhealthy = "unhealthy"
 
 	metricNamespaceBedrock = "AWS/Bedrock"
 	metricNameInputTokens  = "InputTokenCount"
 	metricNameOutputTokens = "OutputTokenCount"
 	metricNameInvocations  = "Invocations"
+	metricNameClientErrors = "InvocationClientErrors"
+	metricNameServerErrors = "InvocationServerErrors"
+	metricNameThrottles    = "InvocationThrottles"
 	metricDimensionModelID = "ModelId"
 	metricLookbackWindow   = 24 * time.Hour
 	metricPeriodSeconds    = 3600
@@ -153,8 +160,20 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 		}
 		nodes = append(nodes, modelNode)
 
+		// Only models with recorded invocations in the lookback window are
+		// treated as active inference endpoints; ListFoundationModels returns
+		// every model available in the region, not ones actually serving traffic.
+		if usage[modelID].Invocations == 0 {
+			continue
+		}
+
+		// The region is folded into the path's last segment, alongside the
+		// model ID, rather than inserted as its own segment: the UI reads the
+		// second-to-last path segment as the endpoint's "source", and that
+		// must stay "bedrock" (matching the litellm plugin's endpoint paths),
+		// not the region.
 		endpointNode := pluginapi.NodeClaim{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: p.config.PathPrefix + "/" + region + "/" + modelID},
+			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: p.config.PathPrefix + "/" + modelID + "-" + region},
 			Properties: model.properties(region, usage[modelID]),
 		}
 		nodes = append(nodes, endpointNode)
@@ -182,6 +201,18 @@ type modelUsage struct {
 	InputTokens  float64
 	OutputTokens float64
 	Invocations  float64
+	ClientErrors float64
+	ServerErrors float64
+	Throttles    float64
+}
+
+// status reports whether the model showed any client errors, server errors
+// or throttles in the lookback window. This is for active inference endpoints.
+func (u modelUsage) status() string {
+	if u.ClientErrors != 0 || u.ServerErrors != 0 || u.Throttles != 0 {
+		return endpointStatusUnhealthy
+	}
+	return endpointStatusHealthy
 }
 
 func (m foundationModel) properties(region string, usage modelUsage) pluginapi.PropertyMap {
@@ -190,7 +221,7 @@ func (m foundationModel) properties(region string, usage modelUsage) pluginapi.P
 		propertyKeyRegion:   region,
 	}
 	for key, value := range map[string]string{
-		propertyKeyLifecycleStatus:  m.LifecycleStatus,
+		propertyKeyLifecycleStatus:  strings.ToLower(m.LifecycleStatus),
 		propertyKeyInputModalities:  strings.Join(m.InputModalities, ","),
 		propertyKeyOutputModalities: strings.Join(m.OutputModalities, ","),
 	} {
@@ -207,6 +238,7 @@ func (m foundationModel) properties(region string, usage modelUsage) pluginapi.P
 	}
 	if usage.Invocations != 0 {
 		properties[propertyKeyInvocations] = strconv.FormatFloat(usage.Invocations, 'f', 0, 64)
+		properties[propertyKeyEndpointStatus] = usage.status()
 	}
 
 	return properties
@@ -230,7 +262,7 @@ func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]fou
 			ModelID:          derefString(summary.ModelId),
 			ModelName:        derefString(summary.ModelName),
 			ProviderName:     derefString(summary.ProviderName),
-			LifecycleStatus:  string(lifecycleStatus(summary.ModelLifecycle)),
+			LifecycleStatus:  strings.ToLower(string(lifecycleStatus(summary.ModelLifecycle))),
 			InputModalities:  modalitiesToStrings(summary.InputModalities),
 			OutputModalities: modalitiesToStrings(summary.OutputModalities),
 		})
@@ -240,8 +272,10 @@ func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]fou
 }
 
 // fetchTokenUsage queries CloudWatch for the AWS/Bedrock InputTokenCount,
-// OutputTokenCount and Invocations metrics, summed over the configured
-// lookback window, so usage can be compared across regions and models.
+// OutputTokenCount, Invocations, InvocationClientErrors,
+// InvocationServerErrors and InvocationThrottles metrics, summed over the
+// configured lookback window, so usage and health can be compared across
+// regions and models.
 func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []foundationModel) (map[string]modelUsage, error) {
 	if len(models) == 0 {
 		return map[string]modelUsage{}, nil
@@ -261,7 +295,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 	startTime := endTime.Add(-lookback)
 
 	dimensionName := metricDimensionModelID
-	queries := make([]cwtypes.MetricDataQuery, 0, len(models)*3)
+	queries := make([]cwtypes.MetricDataQuery, 0, len(models)*6)
 	for i, model := range models {
 		modelID := strings.TrimSpace(model.ModelID)
 		if modelID == "" {
@@ -273,6 +307,9 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 			metricQuery(fmt.Sprintf("in%d", i), metricNameInputTokens, dimensions),
 			metricQuery(fmt.Sprintf("out%d", i), metricNameOutputTokens, dimensions),
 			metricQuery(fmt.Sprintf("inv%d", i), metricNameInvocations, dimensions),
+			metricQuery(fmt.Sprintf("cerr%d", i), metricNameClientErrors, dimensions),
+			metricQuery(fmt.Sprintf("serr%d", i), metricNameServerErrors, dimensions),
+			metricQuery(fmt.Sprintf("thr%d", i), metricNameThrottles, dimensions),
 		)
 	}
 
@@ -300,6 +337,9 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 			InputTokens:  usageByQueryID[fmt.Sprintf("in%d", i)],
 			OutputTokens: usageByQueryID[fmt.Sprintf("out%d", i)],
 			Invocations:  usageByQueryID[fmt.Sprintf("inv%d", i)],
+			ClientErrors: usageByQueryID[fmt.Sprintf("cerr%d", i)],
+			ServerErrors: usageByQueryID[fmt.Sprintf("serr%d", i)],
+			Throttles:    usageByQueryID[fmt.Sprintf("thr%d", i)],
 		}
 	}
 
@@ -342,7 +382,7 @@ func lifecycleStatus(lifecycle *bedrocktypes.FoundationModelLifecycle) bedrockty
 func modalitiesToStrings(modalities []bedrocktypes.ModelModality) []string {
 	result := make([]string, 0, len(modalities))
 	for _, m := range modalities {
-		result = append(result, string(m))
+		result = append(result, strings.ToLower(string(m)))
 	}
 	return result
 }

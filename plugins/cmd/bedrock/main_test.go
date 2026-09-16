@@ -65,6 +65,13 @@ func TestCollect(t *testing.T) {
 		},
 	}
 	noUsage := &cloudwatch.GetMetricDataOutput{}
+	usageAtIndex1 := &cloudwatch.GetMetricDataOutput{
+		MetricDataResults: []cwtypes.MetricDataResult{
+			{Id: strp("in1"), Values: []float64{3}},
+			{Id: strp("out1"), Values: []float64{5}},
+			{Id: strp("inv1"), Values: []float64{1}},
+		},
+	}
 
 	tests := []struct {
 		name    string
@@ -86,59 +93,42 @@ func TestCollect(t *testing.T) {
 						Properties: pluginapi.PropertyMap{"owned_by": "Amazon"},
 					},
 					{
-						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.nova-micro-v1:0"},
+						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
 						Properties: pluginapi.PropertyMap{
-							"provider": "bedrock", "region": "us-east-1", "lifecycle_status": "ACTIVE",
-							"input_modalities": "TEXT", "output_modalities": "TEXT",
+							"provider": "bedrock", "region": "us-east-1", "lifecycle_status": "active",
+							"input_modalities": "text", "output_modalities": "text",
 							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
+							"status": "healthy",
 						},
 					},
 				},
 				Relations: []pluginapi.RelationClaim{{
 					Kind: pluginapi.RelationKindServesModel,
-					From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.nova-micro-v1:0"},
+					From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
 					To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.nova-micro-v1:0"},
 				}},
 			},
 		},
 		{
-			name:    "no CloudWatch data omits usage properties",
+			name:    "no CloudWatch usage means the model node is kept but no endpoint is created",
 			regions: []string{"us-east-1"},
 			models:  []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
 			cw:      noUsage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
-					{
-						ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.titan-text-express-v1"},
-						Properties: pluginapi.PropertyMap{"provider": "bedrock", "region": "us-east-1"},
-					},
 				},
-				Relations: []pluginapi.RelationClaim{{
-					Kind: pluginapi.RelationKindServesModel,
-					From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.titan-text-express-v1"},
-					To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"},
-				}},
 			},
 		},
 		{
-			name:    "CloudWatch failure falls back to no usage instead of failing Collect",
+			name:    "CloudWatch failure falls back to no usage, so no endpoint is created",
 			regions: []string{"us-east-1"},
 			models:  []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
 			cwErr:   assert.AnError,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
-					{
-						ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.titan-text-express-v1"},
-						Properties: pluginapi.PropertyMap{"provider": "bedrock", "region": "us-east-1"},
-					},
 				},
-				Relations: []pluginapi.RelationClaim{{
-					Kind: pluginapi.RelationKindServesModel,
-					From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.titan-text-express-v1"},
-					To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"},
-				}},
 			},
 		},
 		{
@@ -148,49 +138,61 @@ func TestCollect(t *testing.T) {
 				{ModelId: strp("  ")},
 				{ModelId: strp("amazon.titan-text-express-v1")},
 			},
-			cw: noUsage,
+			cw: usageAtIndex1,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.titan-text-express-v1"},
-						Properties: pluginapi.PropertyMap{"provider": "bedrock", "region": "us-east-1"},
+						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
+						Properties: pluginapi.PropertyMap{
+							"provider": "bedrock", "region": "us-east-1",
+							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
+							"status": "healthy",
+						},
 					},
 				},
 				Relations: []pluginapi.RelationClaim{{
 					Kind: pluginapi.RelationKindServesModel,
-					From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.titan-text-express-v1"},
+					From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
 					To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"},
 				}},
 			},
 		},
 		{
-			name:    "the same model in multiple regions produces one endpoint per region",
+			name:    "the same invoked model in multiple regions produces one endpoint per region",
 			regions: []string{"us-east-1", "eu-central-1"},
 			models:  []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
-			cw:      noUsage,
+			cw:      usage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.titan-text-express-v1"},
-						Properties: pluginapi.PropertyMap{"provider": "bedrock", "region": "us-east-1"},
+						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
+						Properties: pluginapi.PropertyMap{
+							"provider": "bedrock", "region": "us-east-1",
+							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
+							"status": "healthy",
+						},
 					},
 					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/eu-central-1/amazon.titan-text-express-v1"},
-						Properties: pluginapi.PropertyMap{"provider": "bedrock", "region": "eu-central-1"},
+						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-eu-central-1"},
+						Properties: pluginapi.PropertyMap{
+							"provider": "bedrock", "region": "eu-central-1",
+							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
+							"status": "healthy",
+						},
 					},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{
 						Kind: pluginapi.RelationKindServesModel,
-						From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/us-east-1/amazon.titan-text-express-v1"},
+						From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
 						To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"},
 					},
 					{
 						Kind: pluginapi.RelationKindServesModel,
-						From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/eu-central-1/amazon.titan-text-express-v1"},
+						From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-eu-central-1"},
 						To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"},
 					},
 				},
@@ -235,6 +237,51 @@ func TestCollect_ListFoundationModelsErrorIsReportedPerRegion(t *testing.T) {
 
 	got, err := p.Collect(context.Background())
 	require.Error(t, err, "the eu-central-1 failure should be surfaced")
-	require.Len(t, got.Nodes, 2, "us-east-1 should still be collected despite eu-central-1 failing")
-	assert.Equal(t, "bedrock/us-east-1/amazon.titan-text-express-v1", got.Nodes[1].ID.Path)
+	require.Len(t, got.Nodes, 1, "us-east-1 should still be collected despite eu-central-1 failing")
+	assert.Equal(t, "bedrock/amazon.titan-text-express-v1", got.Nodes[0].ID.Path)
+}
+
+func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
+	tests := []struct {
+		name string
+		cw   *cloudwatch.GetMetricDataOutput
+	}{
+		{
+			name: "client errors",
+			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
+				{Id: strp("inv0"), Values: []float64{5}},
+				{Id: strp("cerr0"), Values: []float64{2}},
+			}},
+		},
+		{
+			name: "server errors",
+			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
+				{Id: strp("inv0"), Values: []float64{5}},
+				{Id: strp("serr0"), Values: []float64{1}},
+			}},
+		},
+		{
+			name: "throttles",
+			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
+				{Id: strp("inv0"), Values: []float64{5}},
+				{Id: strp("thr0"), Values: []float64{3}},
+			}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bc := &fakeBedrockClient{output: &bedrock.ListFoundationModelsOutput{
+				ModelSummaries: []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
+			}}
+			cw := &fakeCloudWatchClient{output: tt.cw}
+			p := newTestPlugin([]string{"us-east-1"}, bc, cw, nil)
+
+			got, err := p.Collect(context.Background())
+			require.NoError(t, err)
+
+			require.Len(t, got.Nodes, 2)
+			assert.Equal(t, endpointStatusUnhealthy, got.Nodes[1].Properties["status"])
+		})
+	}
 }
