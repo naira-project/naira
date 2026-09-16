@@ -103,7 +103,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
@@ -121,7 +121,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-catalog]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-catalog.outputs.image-name }}
       image-digest: ${{ needs.container-publish-catalog.outputs.image-digest }}
@@ -141,7 +141,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-ui"
       dockerfile: "ui/Dockerfile"
@@ -159,7 +159,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-ui]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-ui.outputs.image-name }}
       image-digest: ${{ needs.container-publish-ui.outputs.image-digest }}
@@ -179,7 +179,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-portal"
       dockerfile: "naira-openmfp-portal/Dockerfile"
@@ -197,7 +197,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-portal]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-portal.outputs.image-name }}
       image-digest: ${{ needs.container-publish-portal.outputs.image-digest }}
@@ -217,7 +217,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-plugin-mlflow"
       dockerfile: "plugins/cmd/mlflow/Dockerfile"
@@ -235,7 +235,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-plugin-mlflow]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-plugin-mlflow.outputs.image-name }}
       image-digest: ${{ needs.container-publish-plugin-mlflow.outputs.image-digest }}
@@ -254,7 +254,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-plugin-litellm"
       dockerfile: "plugins/cmd/litellm/Dockerfile"
@@ -272,7 +272,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-plugin-litellm]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-plugin-litellm.outputs.image-name }}
       image-digest: ${{ needs.container-publish-plugin-litellm.outputs.image-digest }}
@@ -291,7 +291,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-plugin-depl-calls-svc"
       dockerfile: "plugins/cmd/depl_calls_svc/Dockerfile"
@@ -309,7 +309,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-plugin-depl-calls-svc]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-plugin-depl-calls-svc.outputs.image-name }}
       image-digest: ${{ needs.container-publish-plugin-depl-calls-svc.outputs.image-digest }}
@@ -328,7 +328,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-plugin-fluxcd"
       dockerfile: "plugins/cmd/fluxcd/Dockerfile"
@@ -346,7 +346,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-plugin-fluxcd]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-plugin-fluxcd.outputs.image-name }}
       image-digest: ${{ needs.container-publish-plugin-fluxcd.outputs.image-digest }}
@@ -365,7 +365,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-plugin-tech-radar"
       dockerfile: "plugins/cmd/tech_radar/Dockerfile"
@@ -383,7 +383,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-plugin-tech-radar]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-plugin-tech-radar.outputs.image-name }}
       image-digest: ${{ needs.container-publish-plugin-tech-radar.outputs.image-digest }}
@@ -402,7 +402,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-plugin-openmetadata"
       dockerfile: "plugins/cmd/openmetadata/Dockerfile"
@@ -420,7 +420,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-plugin-openmetadata]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-plugin-openmetadata.outputs.image-name }}
       image-digest: ${{ needs.container-publish-plugin-openmetadata.outputs.image-digest }}
@@ -439,7 +439,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-plugin-mcp-servers"
       dockerfile: "plugins/cmd/mcp_servers/Dockerfile"
@@ -457,7 +457,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-plugin-mcp-servers]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-plugin-mcp-servers.outputs.image-name }}
       image-digest: ${{ needs.container-publish-plugin-mcp-servers.outputs.image-digest }}
@@ -476,7 +476,7 @@ jobs:
     needs: release-please
     # Only run if the release-please job successfully output a tag
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: "naira-plugin-depl-uses-litellm"
       dockerfile: "plugins/cmd/depl_uses_litellm/Dockerfile"
@@ -494,7 +494,7 @@ jobs:
       id-token: write
     needs: [release-please, container-publish-plugin-depl-uses-litellm]
     if: needs.release-please.outputs.target_tag != ''
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@8c67a4db452f8f3f4d7aa45d62740632e3bf0d2d # main
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@95dabc4a5530137f66d4e39a54a0916ab0f00592 # main
     with:
       image-name: ${{ needs.container-publish-plugin-depl-uses-litellm.outputs.image-name }}
       image-digest: ${{ needs.container-publish-plugin-depl-uses-litellm.outputs.image-digest }}
