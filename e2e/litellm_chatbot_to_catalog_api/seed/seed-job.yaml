@@ -1,4 +1,4 @@
-# envsubst template — substituted variables: ${NAMESPACE} ${ENV_ID} ${TAG}
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
 #
 # This scenario's litellm models come from litellm.yaml's static config, not
 # a seed script — this Job mints chatbot1 a model-scoped LiteLLM key (see
@@ -38,7 +38,7 @@ subjects:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: seed-${ENV_ID}
+  name: seed-${NAMESPACE}
   namespace: ${NAMESPACE}
 spec:
   backoffLimit: 2

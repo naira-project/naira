@@ -102,6 +102,11 @@ spec:
           # zero (which is what actually caused the multi-minute flakes —
           # not one slow boot, but repeated kill-and-restart cycles).
           # /health/started is Keycloak's dedicated startup-gating check.
+          #
+          # readiness/liveness carry no initialDelaySeconds of their own:
+          # startupProbe has already proven the container is up by the time
+          # they start being evaluated at all, so an additional delay here
+          # would just be dead wait time stacked on top.
           startupProbe:
             httpGet:
               path: /health/started
@@ -112,14 +117,12 @@ spec:
             httpGet:
               path: /health/ready
               port: health
-            initialDelaySeconds: 20
             periodSeconds: 10
             failureThreshold: 12
           livenessProbe:
             httpGet:
               path: /health/live
               port: health
-            initialDelaySeconds: 30
             periodSeconds: 20
           resources:
             requests:

@@ -14,13 +14,28 @@
 # Usage:
 #   create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG> [--cluster-name <NAME>]
 #
-# On success, prints ENV_ID=<id> and (if GITHUB_ENV is set) appends ENV_ID and
-# NAMESPACE to it for later workflow steps.
+# On success, prints ENV_ID=<id>. On failure, dumps pod/job state and logs
+# for the namespace before exiting, so a failed run is debuggable without
+# having to reproduce it against a still-live cluster.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 E2E_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_ROOT="$(cd "${E2E_DIR}/.." && pwd)"
+
+dump_diagnostics() {
+  local status=$?
+  [ -n "${NAMESPACE:-}" ] || return "${status}"
+  echo "==> Environment setup failed — dumping diagnostics for namespace ${NAMESPACE}" >&2
+  kubectl -n "${NAMESPACE}" get pods,jobs -o wide || true
+  kubectl -n "${NAMESPACE}" get events --sort-by=.lastTimestamp || true
+  local pod
+  for pod in $(kubectl -n "${NAMESPACE}" get pods -o name); do
+    kubectl -n "${NAMESPACE}" logs "${pod}" --all-containers --tail=-1 --prefix=true || true
+  done
+  return "${status}"
+}
+trap dump_diagnostics ERR
 
 CLUSTER_NAME="naira-idp-e2e"
 TAG=""
@@ -75,7 +90,7 @@ COMPONENTS="${COMPONENTS:-}"
 PLUGINS="${PLUGINS:-}"
 
 NAMESPACE="${ENV_ID}"
-export ENV_ID NAMESPACE TAG
+export NAMESPACE TAG
 
 echo "==> Environment: ${ENV_ID} (namespace: ${NAMESPACE}, image tag: ${TAG}, scenario: ${SCENARIO})"
 echo "==> Components: ${COMPONENTS:-<none>} · Plugins: ${PLUGINS:-<none>}"
@@ -152,27 +167,41 @@ apply() {
   # Restrict substitution to our template vars — manifests embed shell
   # snippets (e.g. postgres.yaml's $POSTGRES_DB) with their own $VAR syntax
   # that an unrestricted envsubst would blank out.
-  envsubst '${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES}' < "$1" | kubectl apply -f -
+  envsubst '${NAMESPACE} ${TAG}' < "$1" | kubectl apply -f -
 }
 
+# Renders and applies the catalog-plugin-config ConfigMap (consumed by
+# PLUGIN_CONFIG_FILE — catalog/cmd/catalog/config.go — required, no
+# PLUGIN_ADDRESSES env fallback exists) plus the catalog Deployment, built
+# from header.yaml + one plugin-<name>.yaml per scenario plugin + footer.yaml.
 render_catalog() {
   echo "==> Rendering catalog (plugins: ${PLUGINS:-<none>})"
-  local addresses="" plugin port=50051
-  for plugin in ${PLUGINS}; do
-    addresses="${addresses:+${addresses},}${plugin}=localhost:${port}"
-    port=$((port + 1))
-  done
-  export PLUGIN_ADDRESSES="${addresses}"
 
   {
-    envsubst '${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES}' < "${E2E_DIR}/components/catalog/header.yaml"
+    echo "apiVersion: v1"
+    echo "kind: ConfigMap"
+    echo "metadata:"
+    echo "  name: catalog-plugin-config"
+    echo "  namespace: ${NAMESPACE}"
+    echo "data:"
+    echo "  plugins.yaml: |"
+    echo "    plugins:"
+    local plugin port=50051
+    for plugin in ${PLUGINS}; do
+      echo "      ${plugin}:"
+      echo "        address: localhost:${port}"
+      port=$((port + 1))
+    done
+    echo "---"
+
+    envsubst '${NAMESPACE} ${TAG}' < "${E2E_DIR}/components/catalog/header.yaml"
     port=50051
     for plugin in ${PLUGINS}; do
       export PLUGIN_PORT="${port}"
-      envsubst '${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES} ${PLUGIN_PORT}' < "${E2E_DIR}/components/catalog/plugin-${plugin}.yaml"
+      envsubst '${NAMESPACE} ${TAG} ${PLUGIN_PORT}' < "${E2E_DIR}/components/catalog/plugin-${plugin}.yaml"
       port=$((port + 1))
     done
-    envsubst '${NAMESPACE} ${ENV_ID} ${TAG} ${PLUGIN_ADDRESSES}' < "${E2E_DIR}/components/catalog/footer.yaml"
+    envsubst '${NAMESPACE} ${TAG}' < "${E2E_DIR}/components/catalog/footer.yaml"
   } | kubectl apply -f -
 }
 
@@ -208,14 +237,9 @@ done
 
 echo "==> Seeding starting dataset"
 apply "${SCENARIO_DIR}/seed/seed-job.yaml"
-kubectl -n "${NAMESPACE}" wait --for=condition=complete "job/seed-${ENV_ID}" --timeout=3m
+kubectl -n "${NAMESPACE}" wait --for=condition=complete "job/seed-${NAMESPACE}" --timeout=3m
 
 kubectl -n "${NAMESPACE}" get pods
-
-if [ -n "${GITHUB_ENV:-}" ]; then
-  echo "ENV_ID=${ENV_ID}" >> "${GITHUB_ENV}"
-  echo "NAMESPACE=${NAMESPACE}" >> "${GITHUB_ENV}"
-fi
 
 echo "==> Ready"
 echo "ENV_ID=${ENV_ID}"

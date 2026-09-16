@@ -2,6 +2,11 @@
         - name: catalog
           image: catalog:${TAG}
           imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: plugin-config
+              mountPath: /etc/catalog/plugins.yaml
+              subPath: plugins.yaml
+              readOnly: true
           env:
             - name: PORT
               value: "8090"
@@ -11,8 +16,6 @@
               value: naira
             - name: KEYCLOAK_ISSUER
               value: http://keycloak.${NAMESPACE}.svc.cluster.local:8080/realms/naira
-            - name: PLUGIN_ADDRESSES
-              value: "${PLUGIN_ADDRESSES}"
           ports:
             - containerPort: 8090
               name: http
@@ -35,6 +38,10 @@
             limits:
               cpu: 500m
               memory: 256Mi
+      volumes:
+        - name: plugin-config
+          configMap:
+            name: catalog-plugin-config
 ---
 apiVersion: v1
 kind: Service

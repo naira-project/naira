@@ -12,9 +12,9 @@ import os
 import requests
 import streamlit as st
 
-LITELLM_API_URL = os.environ.get("LITELLM_API_URL", "http://localhost:4000")
-LITELLM_API_KEY = os.environ.get("LITELLM_API_KEY", "")
-MODEL = os.environ.get("LITELLM_MODEL", "openai")
+LITELLM_API_URL = os.environ["LITELLM_API_URL"]
+LITELLM_API_KEY = os.environ["LITELLM_API_KEY"]
+MODEL = os.environ["LITELLM_MODEL"]
 
 st.set_page_config(page_title="chatbot1", layout="centered")
 st.title("chatbot1")
