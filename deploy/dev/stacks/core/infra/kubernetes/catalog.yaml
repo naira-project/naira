@@ -223,6 +223,8 @@ data:
         schedule: "*/1 * * * *"
       openmetadata:
         address: localhost:50056
+      tech-radar:
+        address: localhost:50057
       mcp-servers:
         address: localhost:50058
       bedrock:
@@ -409,7 +411,7 @@ spec:
             - name: PATH_PREFIX
               value: bedrock
             - name: BEDROCK_REGIONS
-              value: "us-east-1"
+              value: "us-east-1 eu-central-1"
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -422,10 +424,6 @@ spec:
                   key: BEDROCK_AWS_SECRET_ACCESS_KEY
             - name: BEDROCK_METRICS_LOOKBACK
               value: "24h"
-      volumes:
-        - name: tech-radar-config
-          configMap:
-            name: tech-radar-config
       containers:
         - name: catalog
           image: catalog:local
@@ -470,6 +468,9 @@ spec:
         - name: plugin-config
           configMap:
             name: catalog-plugin-config
+        - name: tech-radar-config
+          configMap:
+            name: tech-radar-config
 ---
 apiVersion: v1
 kind: Service
