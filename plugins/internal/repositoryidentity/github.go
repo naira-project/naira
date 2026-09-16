@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	// Format SCP: git@github.com:owner/repo[.git]
+	// scp-like syntax: git@github.com:owner/repo[.git]
+	// taken from: https://git-scm.com/docs/git-clone#_git_urls
 	scpPattern = regexp.MustCompile(`^git@github\.com:([^/]+)/([^/]+)$`)
 )
 
@@ -64,7 +65,7 @@ func validate(rawOwner, rawRepo string) (owner, name string, ok bool) {
 	return rawOwner, repo, true
 }
 
-// GitHubRepositoryNodePath returns the stable graph path for a GitHub repository.
+// GitHubRepositoryNodePath returns a stable node path for a GitHub repository.
 func GitHubRepositoryNodePath(owner, name string) string {
 	if owner == "" || name == "" {
 		return ""
@@ -72,7 +73,7 @@ func GitHubRepositoryNodePath(owner, name string) string {
 	return "github.com/" + strings.ToLower(owner+"/"+name)
 }
 
-// GitHubRepositoryNodePathFromURL returns the stable graph path for a GitHub
+// GitHubRepositoryNodePathFromURL returns a stable node path for a GitHub
 // repository URL, or an empty string when the URL is unsupported.
 func GitHubRepositoryNodePathFromURL(rawURL string) string {
 	owner, name, ok := ParseGitHubRepository(rawURL)
