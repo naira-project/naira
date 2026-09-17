@@ -8,8 +8,20 @@ import (
 
 var (
 	// scp-like syntax: git@github.com:owner/repo[.git]
-	// taken from: https://git-scm.com/docs/git-clone#_git_urls
+	// Taken from: https://git-scm.com/docs/git-clone#_git_urls
+
 	scpPattern = regexp.MustCompile(`^git@github\.com:([^/]+)/([^/]+)$`)
+
+	// Handle rules: max 39 chars, alphanumeric + single hyphens (not at start or end)
+	// Taken from: https://github.com/signup
+	handlePattern = regexp.MustCompile(`^[a-zA-Z0-9]+(-[a-zA-Z0-9]+)*$`)
+	handleMaxLen  = 39
+
+	// Repo name pattern: max 100 chars, ASCII letters, digits, '.', '-', '_'
+	// Taken from: https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository#creating-a-new-repository-from-the-web-ui
+	// Repo name "." and ".." is not allowed according to "https://github.com/new"
+	repoPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+	repoMaxLen  = 100
 )
 
 // ParseGitHubRepository returns the owner and repository name from a GitHub URL.
@@ -59,10 +71,18 @@ func ParseGitHubRepository(rawURL string) (owner, name string, ok bool) {
 
 func validate(rawOwner, rawRepo string) (owner, name string, ok bool) {
 	repo := strings.TrimSuffix(rawRepo, ".git")
-	if repo == "." || repo == ".." {
+	if !isValidHandle(rawOwner) || !isValidRepoName(repo) {
 		return "", "", false
 	}
 	return rawOwner, repo, true
+}
+
+func isValidHandle(h string) bool {
+	return len(h) <= handleMaxLen && handlePattern.MatchString(h)
+}
+
+func isValidRepoName(r string) bool {
+	return r != "." && r != ".." && len(r) <= repoMaxLen && repoPattern.MatchString(r)
 }
 
 // GitHubRepositoryNodePath returns a stable node path for a GitHub repository.

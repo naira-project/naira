@@ -91,7 +91,8 @@ func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo,
 
 // GetCodeowners tries the well-known CODEOWNERS locations, in the order
 // GitHub itself checks them, and returns the content of the first one found.
-// order of locations: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-location
+// Order of locations: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-file-location
+// This function doesn't support files bigger than 1MB, as it would require handling a different encoding than base64.
 func (c *githubClient) GetCodeowners(ctx context.Context, owner, repo string) (string, error) {
 	candidates := []string{".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"}
 
