@@ -138,35 +138,53 @@ func deploymentWithImages(namespace, name string, images ...string) *appsv1.Depl
 	}
 }
 
-func TestImageReferencesOrg(t *testing.T) {
+func TestShouldVerifyImage(t *testing.T) {
 	tests := []struct {
-		name  string
-		image string
-		org   string
-		want  bool
+		name      string
+		image     string
+		githubOrg string
+		want      bool
 	}{
 		{
-			name:  "matches organization",
-			image: "ghcr.io/naira-project/service:latest",
-			org:   "naira-project",
-			want:  true,
+			name:      "ghcr.io matching organization",
+			image:     "ghcr.io/naira-project/service:latest",
+			githubOrg: "naira-project",
+			want:      true,
 		},
 		{
-			name:  "matches case insensitively",
-			image: "ghcr.io/Naira-Project/service:latest",
-			org:   "naira-project",
-			want:  true,
+			name:      "ghcr.io matching case-insensitively",
+			image:     "ghcr.io/Naira-Project/service:latest",
+			githubOrg: "naira-project",
+			want:      true,
 		},
 		{
-			name:  "does not match another organization",
-			image: "ghcr.io/other-org/service:latest",
-			org:   "naira-project",
+			name:      "ghcr.io belonging to another organization",
+			image:     "ghcr.io/other-org/service:latest",
+			githubOrg: "naira-project",
+			want:      false,
+		},
+		{
+			name:      "non-ghcr registry returns true",
+			image:     "123456789.dkr.ecr.eu-west-1.amazonaws.com/my-service:v1.0",
+			githubOrg: "naira-project",
+			want:      true,
+		},
+		{
+			name:      "docker hub registry returns true",
+			image:     "docker.io/library/redis:alpine",
+			githubOrg: "naira-project",
+			want:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, imageReferencesOrg(tt.image, tt.org))
+			p := &Plugin{
+				config: config{
+					GitHubOrg: tt.githubOrg,
+				},
+			}
+			assert.Equal(t, tt.want, p.shouldVerifyImage(tt.image))
 		})
 	}
 }

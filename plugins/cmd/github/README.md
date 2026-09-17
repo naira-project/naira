@@ -4,11 +4,13 @@ github finds GitHub repositories whose artifact attestations cryptographically p
 
 A Deployment is linked to a repository only after verification with "gh attestation verify".
 
-Verification runs only for image references mentioning GITHUB\_ORG, to avoid unnecessary gh calls.
+Verification is skipped for ghcr.io images that do not belong to GITHUB\_ORG to avoid unnecessary "gh" CLI calls. Images hosted on other OCI registries are always passed to verification because path conventions vary across providers.
 
 Deployments with more than one container are not verified because the repository cannot be attributed to a single image unambiguously.
 
 TODO: Link deployments with more than one container to source repositories, verifying each container image independently.
+
+TODO(optimization): Support filtering images for verification on registries other than ghcr.io (e.g. via AllowedImagePrefixes in the plugin configuration) to avoid verifying images that do not belong to GITHUB\_ORG.
 
 TODO: Check support for private OCI registries and private GitHub repositories.
 

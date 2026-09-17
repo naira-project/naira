@@ -4,14 +4,19 @@
 //
 // A Deployment is linked to a repository only after verification with "gh attestation verify".
 //
-// Verification runs only for image references mentioning GITHUB_ORG, to avoid
-// unnecessary gh calls.
+// Verification is skipped for ghcr.io images that do not belong to GITHUB_ORG
+// to avoid unnecessary "gh" CLI calls. Images hosted on other OCI registries are
+// always passed to verification because path conventions vary across providers.
 //
 // Deployments with more than one container are not verified because the
 // repository cannot be attributed to a single image unambiguously.
 //
 // TODO: Link deployments with more than one container to source
 // repositories, verifying each container image independently.
+//
+// TODO(optimization): Support filtering images for verification on registries other than ghcr.io
+// (e.g. via AllowedImagePrefixes in the plugin configuration) to avoid verifying
+// images that do not belong to GITHUB_ORG.
 //
 // TODO: Check support for private OCI registries and private GitHub repositories.
 //
@@ -127,7 +132,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 			// Ambiguous attribution with more than one container
 			continue
 		}
-		if !imageReferencesOrg(image, p.config.GitHubOrg) {
+		if !p.shouldVerifyImage(image) {
 			continue
 		}
 
@@ -168,10 +173,22 @@ func singleContainerImage(entry Deployment) (image string, ok bool) {
 	return entry.Images[0], true
 }
 
-// imageReferencesOrg is a filter to skip the network calls for images that are not in
-// the configured org. It is not a security check - it's an optimization
-func imageReferencesOrg(image, org string) bool {
-	return strings.Contains(strings.ToLower(image), strings.ToLower(org))
+// shouldVerifyImage reports whether the given image reference is a candidate
+// for attestation verification based on its registry prefix.
+//
+// For ghcr.io images, it checks if the path starts with ghcr.io/<GitHubOrg>/.
+// For all other registries, it returns true by default.
+func (p *Plugin) shouldVerifyImage(image string) bool {
+	imageLower := strings.ToLower(image)
+
+	// Fast-path for ghcr.io based on the ghcr.io/<org>/<repo> naming convention.
+	if strings.HasPrefix(imageLower, "ghcr.io/") {
+		orgLower := strings.ToLower(p.config.GitHubOrg)
+		ghcrPrefix := fmt.Sprintf("ghcr.io/%s/", orgLower)
+		return strings.HasPrefix(imageLower, ghcrPrefix)
+	}
+
+	return true
 }
 
 func (p *Plugin) collectRepo(ctx context.Context, repo ownerAndName) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
