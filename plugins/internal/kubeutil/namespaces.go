@@ -33,13 +33,13 @@ func NamespacesAndClusterIDDynamic(ctx context.Context, dyn dynamic.Interface) (
 	return namespacesAndClusterID(entries)
 }
 
-// NamespacesAndClusterID returns all namespaces names and a clusterID.
+// NamespacesAndClusterIDFromClientset returns all namespaces names and a clusterID.
 //
 // The clusterID returned is really the UID of the "kube-system" system
 // namespace. This is a common workaround for the absence of a builtin explicit
 // cluster identifier property.
 // See e.g.: https://opentelemetry.io/docs/specs/semconv/resource/k8s/#cluster
-func NamespacesAndClusterID(ctx context.Context, client kubernetes.Interface) (namespaces []string, clusterID string, err error) {
+func NamespacesAndClusterIDFromClientset(ctx context.Context, client kubernetes.Interface) (namespaces []string, clusterID string, err error) {
 	list, err := client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, "", fmt.Errorf("listing namespaces: %w", err)

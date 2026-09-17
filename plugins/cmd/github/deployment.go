@@ -34,7 +34,7 @@ func discoverDeployments(
 	k8sClient kubernetes.Interface,
 	logger *log.Logger,
 ) ([]Deployment, error) {
-	namespaces, clusterID, err := kubeutil.NamespacesAndClusterID(ctx, k8sClient)
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterIDFromClientset(ctx, k8sClient)
 	if err != nil {
 		return nil, fmt.Errorf("getting namespaces and cluster ID: %w", err)
 	}
