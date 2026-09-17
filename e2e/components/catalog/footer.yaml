@@ -1,55 +1,18 @@
-        # Appended to header.yaml's initContainers list (already open at
-        # this point — no initContainers: key here, or it would silently
-        # replace that list wholesale instead of extending it).
-        #
-        # A CI run showed catalog starting with zero plugins registered,
-        # silently — /etc/catalog/plugins.yaml was empty at the moment
-        # catalog read it, despite the ConfigMap existing server-side by
-        # then and both local runs mounting it correctly. Most likely a
-        # kubelet volume-sync race on a brand-new pod. Rather than let
-        # catalog start against a stale/empty view, wait here for the
-        # mount to actually contain what the ConfigMap was rendered with —
-        # kubelet's periodic ConfigMap resync (~1 min) self-heals a stale
-        # initial mount within this window if that's the cause.
-        - name: wait-for-plugin-config
-          image: busybox:1.36
-          volumeMounts:
-            - name: plugin-config
-              mountPath: /etc/catalog/plugins.yaml
-              subPath: plugins.yaml
-              readOnly: true
-          # The HAS_PLUGINS check below is resolved by envsubst at
-          # manifest-render time, same as every other variable in this
-          # file — not read from the container's own environment, so no
-          # env: block is needed to pass it in.
-          command:
-            - sh
-            - -c
-            - |
-              if [ "${HAS_PLUGINS}" != "true" ]; then
-                exit 0
-              fi
-              for i in $(seq 1 60); do
-                if grep -q "address:" /etc/catalog/plugins.yaml; then
-                  echo "plugins.yaml ready:"
-                  cat /etc/catalog/plugins.yaml
-                  exit 0
-                fi
-                sleep 1
-              done
-              echo "plugins.yaml still has no plugin entries after 60s:" >&2
-              cat /etc/catalog/plugins.yaml >&2
-              exit 1
       containers:
         - name: catalog
           image: catalog:${TAG}
           imagePullPolicy: IfNotPresent
+          # Mounted as a directory (not via subPath onto a single file) so
+          # catalog's whole plugin-config volume uses the standard,
+          # symlink-swap ConfigMap update mechanism. PLUGIN_CONFIG_FILE
+          # points catalog at the file inside it.
           volumeMounts:
             - name: plugin-config
-              mountPath: /etc/catalog/plugins.yaml
-              subPath: plugins.yaml
+              mountPath: /etc/catalog-config
               readOnly: true
           env:
+            - name: PLUGIN_CONFIG_FILE
+              value: /etc/catalog-config/plugins.yaml
             - name: PORT
               value: "8090"
             - name: KEYCLOAK_BASE_URL
