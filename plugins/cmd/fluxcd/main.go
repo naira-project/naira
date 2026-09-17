@@ -1,11 +1,11 @@
-// Plugin fluxcd collects FluxCD Kustomization & HelmRelease objects,
-// the Deployments they manage, and the GitRepositories they source from.
-//
-// TODO: add support for Bucket and other FluxCD sources kinds.
-// TODO: add support for any other resources managed by FluxCD (Services, Ingresses, thirdparty CRDs, ...)
+// Plugin fluxcd collects FluxCD Kustomization, HelmRelease & GitRepositories
+// objects, the Deployments they manage, and the remote GitRepositories the FluxCD
+// GitRepositories reference.
 //
 // GitRepository nodes currently support GitHub URLs only. Other Git hosts are ignored.
 // TODO: add support for other Git hosts.
+// TODO: add support for Bucket and other FluxCD source kinds.
+// TODO: add support for any other resources managed by FluxCD (Services, Ingresses, third-party CRDs, ...)
 package main
 
 import (

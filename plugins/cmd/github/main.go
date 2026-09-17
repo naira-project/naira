@@ -69,8 +69,8 @@ const (
 type config struct {
 	Kubeconfig string `env:"KUBECONFIG"`
 
-	GitHubOrg          string        `env:"GITHUB_ORG"`
-	GitHubToken        string        `env:"GITHUB_TOKEN"`
+	GitHubOrg          string        `env:"GITHUB_ORG,required"`
+	GitHubToken        string        `env:"GITHUB_TOKEN,required"`
 	GitHubBaseURL      string        `env:"GITHUB_BASE_URL" default:"https://api.github.com"`
 	HTTPTimeout        time.Duration `env:"GITHUB_HTTP_TIMEOUT" default:"10s"`
 	GHCLIPath          string        `env:"GH_CLI_PATH" default:"gh"`
@@ -95,12 +95,6 @@ func New(config config, logger *log.Logger) *Plugin {
 
 func main() {
 	app := pluginmain.New[config]()
-	if app.PluginConfig.GitHubOrg == "" {
-		app.Logger.Fatal("GITHUB_ORG is required")
-	}
-	if app.PluginConfig.GitHubToken == "" {
-		app.Logger.Fatal("GITHUB_TOKEN is required")
-	}
 	p := New(app.PluginConfig, app.Logger)
 	app.Serve(p)
 }

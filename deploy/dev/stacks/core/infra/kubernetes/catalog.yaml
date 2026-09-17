@@ -406,7 +406,7 @@ spec:
             - name: GITHUB_ORG
               value: "naira-project"
             - name: GITHUB_TOKEN
-              value: "FillIn"
+              value: "REPLACE_ME"
           resources:
             requests:
               cpu: 50m
