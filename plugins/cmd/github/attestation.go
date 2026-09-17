@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -56,7 +57,7 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 		"--format", "json",
 	)
 	if v.token != "" {
-		cmd.Env = append(cmd.Env, "GH_TOKEN="+v.token)
+		cmd.Env = append(os.Environ(), "GH_TOKEN="+v.token)
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -105,11 +106,9 @@ func (v *attestationVerifier) CheckGhAvailable(ctx context.Context) error {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, v.ghPath, "--version")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("gh CLI not available at %q: %w (stderr: %s)", v.ghPath, err, strings.TrimSpace(stderr.String()))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("gh CLI not available at %q: %w (output: %s)", v.ghPath, err, strings.TrimSpace(string(out)))
 	}
+
 	return nil
 }
