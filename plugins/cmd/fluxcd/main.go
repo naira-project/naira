@@ -103,28 +103,40 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	var nodes []pluginapi.NodeClaim
 	var relations []pluginapi.RelationClaim
 
-	// Phase 1: GitRepository nodes.
-	repoByPath := map[string]pluginapi.NodeID{} // "ns/name" → NodeID
+	// Phase 1: GitRepository nodes and their external repository references.
+	repoByPath := map[string]pluginapi.NodeID{} // "ns/name" → Flux GitRepository NodeID
 	for _, r := range repos {
 		shortPath := r.GetNamespace() + "/" + r.GetName()
 		url, _, _ := unstructured.NestedString(r.Object, "spec", "url")
-		repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(url)
-		if repoPath == "" {
-			log.Printf("%s: WARN: skipping GitRepository %s with unsupported URL %q", pluginName, shortPath, url)
-			continue
-		}
-
-		id := pluginapi.NodeID{
-			Kind: pluginapi.NodeKindGitRepository,
-			Path: repoPath,
+		fluxGitRepoID := pluginapi.NodeID{
+			Kind: pluginapi.NodeKindFluxGitRepository,
+			Path: clusterID + "/" + shortPath,
 		}
 		nodes = append(nodes, pluginapi.NodeClaim{
-			ID: id,
+			ID: fluxGitRepoID,
 			Properties: pluginapi.PropertyMap{
 				"url": url,
 			},
 		})
-		repoByPath[shortPath] = id
+
+		if repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(url); repoPath != "" {
+			gitRepoID := pluginapi.NodeID{
+				Kind: pluginapi.NodeKindGitRepository,
+				Path: repoPath,
+			}
+			nodes = append(nodes, pluginapi.NodeClaim{
+				ID: gitRepoID,
+				Properties: pluginapi.PropertyMap{
+					"url": url,
+				},
+			})
+			relations = append(relations, pluginapi.RelationClaim{
+				Kind: pluginapi.RelationKindReferences,
+				From: fluxGitRepoID,
+				To:   gitRepoID,
+			})
+		}
+		repoByPath[shortPath] = fluxGitRepoID
 	}
 
 	type nodeAndRepoIDs struct {
