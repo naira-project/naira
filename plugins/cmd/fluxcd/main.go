@@ -3,7 +3,7 @@
 // GitRepositories reference.
 //
 // GitRepository nodes currently support GitHub URLs only. Other Git hosts are ignored.
-// TODO: add support for other Git hosts.
+// TODO: git repository Nodes could support other Git hosts then Github (tricky because hostnames & IPs can be local)
 // TODO: add support for Bucket and other FluxCD source kinds.
 // TODO: add support for any other resources managed by FluxCD (Services, Ingresses, third-party CRDs, ...)
 package main

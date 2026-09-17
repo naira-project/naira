@@ -26,7 +26,12 @@ func newAttestationVerifier(ghPath, token string, timeout time.Duration) *attest
 	return &attestationVerifier{ghPath: ghPath, token: token, timeout: timeout}
 }
 
-// `gh attestation verify --format json` output
+// ghAttestationEntry is used with `gh attestation verify --format json` output
+//
+// ghAttestationEntry uses signature.certificate, which contains values that cannot be
+// manipulated, even if someone gains access to the GitHub Actions workflow creating
+// attestations. Before trusting other fields from the verify output (like statement.predicate),
+// see the security notes in: `gh help attestation verify`
 type ghAttestationEntry struct {
 	VerificationResult struct {
 		Signature struct {
