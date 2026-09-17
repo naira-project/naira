@@ -79,8 +79,8 @@ func TestCollect(t *testing.T) {
 				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
 				return pluginapi.CollectResponse{
 					Nodes: []pluginapi.NodeClaim{
-						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 						fluxRepoNode,
+						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 						gitRepoNode,
 					},
 					Relations: []pluginapi.RelationClaim{
@@ -102,8 +102,8 @@ func TestCollect(t *testing.T) {
 				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
 				return pluginapi.CollectResponse{
 					Nodes: []pluginapi.NodeClaim{
-						{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
 						fluxRepoNode,
+						{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
 						gitRepoNode,
 					},
 					Relations: []pluginapi.RelationClaim{
@@ -128,9 +128,9 @@ func TestCollect(t *testing.T) {
 				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
 				return pluginapi.CollectResponse{
 					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
 						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 						{ID: nodeID("deployment", "team-a/app")},
-						fluxRepoNode,
 						gitRepoNode,
 					},
 					Relations: []pluginapi.RelationClaim{
@@ -157,9 +157,9 @@ func TestCollect(t *testing.T) {
 				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
 				return pluginapi.CollectResponse{
 					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
 						{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
 						{ID: nodeID("deployment", "team-a/app")},
-						fluxRepoNode,
 						gitRepoNode,
 					},
 					Relations: []pluginapi.RelationClaim{
@@ -184,8 +184,8 @@ func TestCollect(t *testing.T) {
 				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
 				return pluginapi.CollectResponse{
 					Nodes: []pluginapi.NodeClaim{
-						{ID: nodeID("Kustomization.fluxcd", "team-a/my-app")},
 						fluxRepoNode,
+						{ID: nodeID("Kustomization.fluxcd", "team-a/my-app")},
 						gitRepoNode,
 					},
 					Relations: []pluginapi.RelationClaim{
@@ -210,10 +210,10 @@ func TestCollect(t *testing.T) {
 				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
 				return pluginapi.CollectResponse{
 					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
 						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 						{ID: nodeID("deployment", "team-a/depl1")},
 						{ID: nodeID("deployment", "team-a/depl2")},
-						fluxRepoNode,
 						gitRepoNode,
 					},
 					Relations: []pluginapi.RelationClaim{
@@ -290,9 +290,9 @@ func TestCollect(t *testing.T) {
 				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
 				return pluginapi.CollectResponse{
 					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
 						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 						{ID: nodeID("deployment", "team-a/app")},
-						fluxRepoNode,
 						gitRepoNode,
 					},
 					Relations: []pluginapi.RelationClaim{
@@ -313,7 +313,7 @@ func TestCollect(t *testing.T) {
 			}
 			result, err := New(config{}).collect(context.Background(), disc, dynClient)
 			require.NoError(t, err)
-			assert.Equal(t, sortedByIDs(tt.want), sortedByIDs(result))
+			assert.Equal(t, tt.want, sortedByIDs(result))
 		})
 	}
 }
