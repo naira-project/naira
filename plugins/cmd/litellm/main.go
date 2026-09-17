@@ -27,10 +27,11 @@ const (
 )
 
 type config struct {
-	PathPrefix  string        `env:"PATH_PREFIX" default:"litellm"`
-	BaseURL     string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
-	APIKey      string        `env:"LITELLM_API_KEY"`
-	HTTPTimeout time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`
+	PathPrefix      string        `env:"PATH_PREFIX" default:"litellm"`
+	BaseURL         string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
+	APIKey          string        `env:"LITELLM_API_KEY"`
+	HTTPTimeout     time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`
+	MetricsLookback time.Duration `env:"LITELLM_METRICS_LOOKBACK" default:"24h"`
 }
 
 type Plugin struct {
@@ -69,6 +70,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	seenRelations := make(map[string]struct{})
 	collectErrors := make([]error, 0)
 
+	ownerByModelID := make(map[string]string, len(models))
 	for _, model := range models {
 		node := pluginapi.NodeClaim{
 			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + model.ID},
@@ -78,6 +80,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 		nodes = append(nodes, node)
 		modelKeys[model.ID] = node
+		ownerByModelID[model.ID] = model.OwnedBy
 	}
 
 	mcpNodes, mcpRelations, err := p.collectMCPServers(ctx)
@@ -86,6 +89,13 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	}
 	nodes = append(nodes, mcpNodes...)
 	relations = append(relations, mcpRelations...)
+
+	endpointNodes, endpointRelations, err := p.listInferenceEndpoints(ctx, ownerByModelID)
+	if err != nil {
+		collectErrors = append(collectErrors, err)
+	}
+	nodes = append(nodes, endpointNodes...)
+	relations = append(relations, endpointRelations...)
 
 	if p.appIdentityProvider == nil {
 		return pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}, errors.Join(collectErrors...)

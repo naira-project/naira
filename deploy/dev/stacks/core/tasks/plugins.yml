@@ -28,6 +28,9 @@ vars:
     - name: tech-radar
       dir: '{{.PLUGINS_BASE}}/tech_radar'
       image: tech-radar:local
+    - name: bedrock
+      dir: '{{.PLUGINS_BASE}}/bedrock'
+      image: bedrock:local
 
 tasks:
   image:build:

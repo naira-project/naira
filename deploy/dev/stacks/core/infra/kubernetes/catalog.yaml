@@ -12,6 +12,11 @@ type: Opaque
 stringData:
   LITELLM_API_KEY: sk-local-litellm
   OPENMETADATA_ADMIN_PASSWORD: admin
+  # Local/kind dev only. In a real cluster, drop these two keys and instead
+  # annotate the "catalog" ServiceAccount with an IAM role ARN (IRSA) so the
+  # AWS SDK's default credential chain picks up temporary credentials instead.
+  BEDROCK_AWS_ACCESS_KEY_ID: ""
+  BEDROCK_AWS_SECRET_ACCESS_KEY: ""
 ---
 # The tech radar is rendered read-only from this admin-managed config.
 # Schema reference: plugins/cmd/tech_radar/README.md; annotated example kept
@@ -218,8 +223,12 @@ data:
         schedule: "*/1 * * * *"
       openmetadata:
         address: localhost:50056
+      tech-radar:
+        address: localhost:50057
       mcp-servers:
         address: localhost:50058
+      bedrock:
+        address: localhost:50059
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -392,10 +401,29 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
-      volumes:
-        - name: tech-radar-config
-          configMap:
-            name: tech-radar-config
+        - name: plugin-bedrock
+          image: bedrock:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50059"
+            - name: PATH_PREFIX
+              value: bedrock
+            - name: BEDROCK_REGIONS
+              value: "us-east-1 eu-central-1"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: BEDROCK_AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: BEDROCK_AWS_SECRET_ACCESS_KEY
+            - name: BEDROCK_METRICS_LOOKBACK
+              value: "24h"
       containers:
         - name: catalog
           image: catalog:local
@@ -440,6 +468,9 @@ spec:
         - name: plugin-config
           configMap:
             name: catalog-plugin-config
+        - name: tech-radar-config
+          configMap:
+            name: tech-radar-config
 ---
 apiVersion: v1
 kind: Service
