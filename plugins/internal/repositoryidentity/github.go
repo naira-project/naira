@@ -25,6 +25,8 @@ var (
 )
 
 // ParseGitHubRepository returns the owner and repository name from a GitHub URL.
+// It accepts HTTPS URLs, GitHub's scp-like SSH syntax, and URLs using the SSH
+// scheme with the conventional git user.
 func ParseGitHubRepository(rawURL string) (owner, name string, ok bool) {
 	input := strings.TrimSpace(rawURL)
 	if input == "" {
@@ -49,9 +51,11 @@ func ParseGitHubRepository(rawURL string) (owner, name string, ok bool) {
 	}
 
 	switch {
-	case u.Scheme != "http" && u.Scheme != "https":
+	case u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "ssh":
 		return "", "", false
-	case u.User != nil:
+	case u.Scheme == "ssh" && (u.User == nil || u.User.Username() != "git"):
+		return "", "", false
+	case u.Scheme != "ssh" && u.User != nil:
 		return "", "", false
 	case u.Port() != "":
 		return "", "", false

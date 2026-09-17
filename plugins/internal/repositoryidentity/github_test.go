@@ -45,6 +45,13 @@ func TestParseGitHubRepository(t *testing.T) {
 			wantOK:    true,
 		},
 		{
+			name:      "SSH URL",
+			rawURL:    "ssh://git@github.com/octocat/Hello-World.git",
+			wantOwner: "octocat",
+			wantName:  "Hello-World",
+			wantOK:    true,
+		},
+		{
 			name:      "Valid owner with a single hyphen",
 			rawURL:    "https://github.com/good-handle/repo",
 			wantOwner: "good-handle",
@@ -134,6 +141,11 @@ func TestParseGitHubRepository(t *testing.T) {
 		{
 			name:   "URL with query parameters",
 			rawURL: "https://github.com/owner/repo?ref=main",
+			wantOK: false,
+		},
+		{
+			name:   "SSH URL with a non-git user",
+			rawURL: "ssh://alice@github.com/owner/repo",
 			wantOK: false,
 		},
 	}
