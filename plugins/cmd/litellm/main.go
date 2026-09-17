@@ -70,7 +70,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	seenRelations := make(map[string]struct{})
 	collectErrors := make([]error, 0)
 
-	ownedByModel := make(map[string]string, len(models))
+	ownerByModelID := make(map[string]string, len(models))
 	for _, model := range models {
 		node := pluginapi.NodeClaim{
 			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + model.ID},
@@ -80,7 +80,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 		nodes = append(nodes, node)
 		modelKeys[model.ID] = node
-		ownedByModel[model.ID] = model.OwnedBy
+		ownerByModelID[model.ID] = model.OwnedBy
 	}
 
 	mcpNodes, mcpRelations, err := p.collectMCPServers(ctx)
@@ -90,7 +90,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	nodes = append(nodes, mcpNodes...)
 	relations = append(relations, mcpRelations...)
 
-	endpointNodes, endpointRelations, err := p.listInferenceEndpoints(ctx, ownedByModel)
+	endpointNodes, endpointRelations, err := p.listInferenceEndpoints(ctx, ownerByModelID)
 	if err != nil {
 		collectErrors = append(collectErrors, err)
 	}

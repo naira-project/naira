@@ -17,14 +17,14 @@ const (
 )
 
 const (
-	RelationKindTrainedOn    = "trained_on"
-	RelationKindUsesModel    = "uses_model"
-	RelationKindCalls        = "calls"
-	RelationKindSourcedFrom  = "sourced_from"
-	RelationKindDescribes    = "describes"
-	RelationKindDeployedFrom = "deployed_from"
-	RelationKindDerivedFrom  = "derived_from"
-	RelationKindExposes      = "exposes"
-	RelationKindServesModel  = "serves_model"
+	RelationKindTrainedOn        = "trained_on"
+	RelationKindUsesModel        = "uses_model"
+	RelationKindCalls            = "calls"
+	RelationKindSourcedFrom      = "sourced_from"
+	RelationKindDescribes        = "describes"
+	RelationKindDeployedFrom     = "deployed_from"
+	RelationKindDerivedFrom      = "derived_from"
+	RelationKindExposes          = "exposes"
+	RelationKindServesModel      = "serves_model"
 	RelationKindExposedByGateway = "exposed_by_gateway"
 )

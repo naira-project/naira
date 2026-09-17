@@ -94,6 +94,8 @@ type healthEndpointEntry struct {
 	APIBase string `json:"api_base"`
 }
 
+type modelAndAPIBase struct{ model, apiBase string }
+
 type dailyActivityResponse struct {
 	Results []dailyActivityRecord `json:"results"`
 }
@@ -114,8 +116,16 @@ type dailyActivityMetrics struct {
 	APIRequests int64 `json:"api_requests"`
 }
 
-func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[string]string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
-	endpoints, err := p.fetchInferenceEndpoints(ctx)
+func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[string]string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
+
+	statusByKey, err := p.fetchEndpointHealth(ctx)
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Printf("WARN: fetching LiteLLM endpoint health failed, marking endpoints as status unknown: %v", err)
+		}
+	}
+
+	endpoints, err := p.fetchInferenceEndpoints(ctx, statusByKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing inference endpoints: %w", err)
 	}
@@ -149,7 +159,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownedByModel map[st
 		}
 		endpoint.Invocations = invocations[modelName]
 
-		endpoint.OwnedBy = ownedByModel[modelName]
+		endpoint.OwnedBy = ownerByModelID[modelName]
 
 		endpointKey := modelName
 		if region := strings.TrimSpace(endpoint.Region); region != "" {
@@ -241,38 +251,45 @@ func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 	return properties
 }
 
-func (p *Plugin) fetchInferenceEndpoints(ctx context.Context) ([]inferenceEndpoint, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/model/info", nil)
+// getLiteLLMJSON issues an authorized GET against urlStr and decodes the JSON
+// response body into out. name and path identify the endpoint in error
+// messages, e.g. name "health" and path "/health".
+func (p *Plugin) getLiteLLMJSON(ctx context.Context, urlStr, name, path string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
-		return nil, fmt.Errorf("building LiteLLM Model info request: %w", err)
+		return fmt.Errorf("building LiteLLM %s request: %w", name, err)
 	}
 	p.addAuthorization(req)
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("calling LiteLLM Model info endpoint: %w", err)
+		return fmt.Errorf("calling LiteLLM %s endpoint: %w", name, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("litellm /model/info returned %s", resp.Status)
+		return fmt.Errorf("litellm %s returned %s", path, resp.Status)
 	}
 
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("decoding LiteLLM %s response: %w", name, err)
+	}
+
+	return nil
+}
+
+func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[modelAndAPIBase]string) ([]inferenceEndpoint, error) {
 	var payload modelInfoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decoding LiteLLM Model info response: %w", err)
-	}
-
-	statusByKey, err := p.fetchEndpointHealth(ctx)
-	if err != nil {
-		if p.logger != nil {
-			p.logger.Printf("WARN: fetching LiteLLM endpoint health failed, marking endpoints as status unknown: %v", err)
-		}
+	if err := p.getLiteLLMJSON(ctx, p.config.BaseURL+"/model/info", "Model info", "/model/info", &payload); err != nil {
+		return nil, err
 	}
 
 	endpoints := make([]inferenceEndpoint, 0, len(payload.Data))
 	for _, entry := range payload.Data {
-		status, ok := statusByKey[endpointHealthKey(entry.LiteLLMParams.Model, entry.LiteLLMParams.APIBase)]
+		status, ok := statusByKey[modelAndAPIBase{
+			model:   strings.TrimSpace(entry.LiteLLMParams.Model),
+			apiBase: strings.TrimSpace(entry.LiteLLMParams.APIBase),
+		}]
 		if !ok {
 			status = endpointStatusUnknown
 		}
@@ -298,43 +315,27 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context) ([]inferenceEndpoi
 // fetchEndpointHealth calls LiteLLM's /health endpoint and returns a map of
 // endpoint (model + api_base) to status, so it can be joined onto the
 // endpoints returned by /model/info.
-func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[string]string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/health", nil)
-	if err != nil {
-		return nil, fmt.Errorf("building LiteLLM health request: %w", err)
-	}
-	p.addAuthorization(req)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("calling LiteLLM health endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("litellm /health returned %s", resp.Status)
-	}
-
+func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[modelAndAPIBase]string, error) {
 	var payload healthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decoding LiteLLM health response: %w", err)
+	if err := p.getLiteLLMJSON(ctx, p.config.BaseURL+"/health", "health", "/health", &payload); err != nil {
+		return nil, err
 	}
 
-	status := make(map[string]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
+	status := make(map[modelAndAPIBase]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
 	for _, entry := range payload.UnhealthyEndpoints {
-		status[endpointHealthKey(entry.Model, entry.APIBase)] = endpointStatusUnhealthy
+		status[modelAndAPIBase{
+			model:   strings.TrimSpace(entry.Model),
+			apiBase: strings.TrimSpace(entry.APIBase),
+		}] = endpointStatusUnhealthy
 	}
 	for _, entry := range payload.HealthyEndpoints {
-		status[endpointHealthKey(entry.Model, entry.APIBase)] = endpointStatusHealthy
+		status[modelAndAPIBase{
+			model:   strings.TrimSpace(entry.Model),
+			apiBase: strings.TrimSpace(entry.APIBase),
+		}] = endpointStatusHealthy
 	}
 
 	return status, nil
-}
-
-// It is used for mapping status into respective endpoints.
-// There are three status states now; healthy, unhealthy, and unknown.
-func endpointHealthKey(model, apiBase string) string {
-	return strings.TrimSpace(model) + "|" + strings.TrimSpace(apiBase)
 }
 
 // fetchModelInvocations queries LiteLLM's /user/daily/activity for the
@@ -350,29 +351,18 @@ func (p *Plugin) fetchModelInvocations(ctx context.Context) (map[string]int64, e
 	endDate := time.Now().UTC()
 	startDate := endDate.Add(-lookback)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/user/daily/activity", nil)
+	requestURL, err := url.Parse(p.config.BaseURL + "/user/daily/activity")
 	if err != nil {
 		return nil, fmt.Errorf("building LiteLLM daily activity request: %w", err)
 	}
-	query := req.URL.Query()
+	query := requestURL.Query()
 	query.Set("start_date", startDate.Format("2006-01-02"))
 	query.Set("end_date", endDate.Format("2006-01-02"))
-	req.URL.RawQuery = query.Encode()
-	p.addAuthorization(req)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("calling LiteLLM daily activity endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("litellm /user/daily/activity returned %s", resp.Status)
-	}
+	requestURL.RawQuery = query.Encode()
 
 	var payload dailyActivityResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decoding LiteLLM daily activity response: %w", err)
+	if err := p.getLiteLLMJSON(ctx, requestURL.String(), "daily activity", "/user/daily/activity", &payload); err != nil {
+		return nil, err
 	}
 
 	invocations := make(map[string]int64)
