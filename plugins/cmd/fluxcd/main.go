@@ -107,11 +107,11 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	repoByPath := map[string]pluginapi.NodeID{} // "ns/name" → Flux GitRepository NodeID
 	for _, r := range repos {
 		shortPath := r.GetNamespace() + "/" + r.GetName()
-		url, _, _ := unstructured.NestedString(r.Object, "spec", "url")
 		fluxGitRepoID := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindFluxGitRepository,
 			Path: clusterID + "/" + shortPath,
 		}
+		url, _, _ := unstructured.NestedString(r.Object, "spec", "url")
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: fluxGitRepoID,
 			Properties: pluginapi.PropertyMap{
