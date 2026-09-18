@@ -103,42 +103,42 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	var nodes []pluginapi.NodeClaim
 	var relations []pluginapi.RelationClaim
 
-	// Phase 1: GitRepository nodes and their external repository references.
+	// Phase 1: Fluxcd GitRepository nodes and their external repository references.
 	repoByPath := map[string]pluginapi.NodeID{}         // "ns/name" -> GitRepository.fluxcd NodeID
 	externalRepoByPath := map[string]pluginapi.NodeID{} // "ns/name" -> git_repository NodeID
 	for _, r := range repos {
 		shortPath := r.GetNamespace() + "/" + r.GetName()
-		fluxGitRepoID := pluginapi.NodeID{
+		fluxRepoID := pluginapi.NodeID{
 			Kind: pluginapi.NodeKindFluxGitRepository,
 			Path: clusterID + "/" + shortPath,
 		}
 		url, _, _ := unstructured.NestedString(r.Object, "spec", "url")
 		nodes = append(nodes, pluginapi.NodeClaim{
-			ID: fluxGitRepoID,
+			ID: fluxRepoID,
 			Properties: pluginapi.PropertyMap{
 				"url": url,
 			},
 		})
 
 		if repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(url); repoPath != "" {
-			gitRepoID := pluginapi.NodeID{
+			externalRepoID := pluginapi.NodeID{
 				Kind: pluginapi.NodeKindGitRepository,
 				Path: repoPath,
 			}
 			nodes = append(nodes, pluginapi.NodeClaim{
-				ID: gitRepoID,
+				ID: externalRepoID,
 				Properties: pluginapi.PropertyMap{
 					"url": url,
 				},
 			})
 			relations = append(relations, pluginapi.RelationClaim{
 				Kind: pluginapi.RelationKindReferences,
-				From: fluxGitRepoID,
-				To:   gitRepoID,
+				From: fluxRepoID,
+				To:   externalRepoID,
 			})
-			externalRepoByPath[shortPath] = gitRepoID
+			externalRepoByPath[shortPath] = externalRepoID
 		}
-		repoByPath[shortPath] = fluxGitRepoID
+		repoByPath[shortPath] = fluxRepoID
 	}
 
 	type nodeAndRepoIDs struct {
