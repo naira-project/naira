@@ -136,7 +136,7 @@ func TestCollect(t *testing.T) {
 					Relations: []pluginapi.RelationClaim{
 						{Kind: "deployed_from",
 							From: nodeID("deployment", "team-a/app"),
-							To:   fluxRepoNode.ID},
+							To:   gitRepoNode.ID},
 						{Kind: "describes",
 							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
 							To:   nodeID("deployment", "team-a/app")},
@@ -171,7 +171,7 @@ func TestCollect(t *testing.T) {
 					Relations: []pluginapi.RelationClaim{
 						{Kind: "deployed_from",
 							From: nodeID("deployment", "team-a/app"),
-							To:   fluxRepoNode.ID},
+							To:   gitRepoNode.ID},
 						{Kind: "describes",
 							From: nodeID("HelmChart.fluxcd", "flux-system/my-chart"),
 							To:   nodeID("deployment", "team-a/app")},
@@ -233,10 +233,10 @@ func TestCollect(t *testing.T) {
 					Relations: []pluginapi.RelationClaim{
 						{Kind: "deployed_from",
 							From: nodeID("deployment", "team-a/depl1"),
-							To:   fluxRepoNode.ID},
+							To:   gitRepoNode.ID},
 						{Kind: "deployed_from",
 							From: nodeID("deployment", "team-a/depl2"),
-							To:   fluxRepoNode.ID},
+							To:   gitRepoNode.ID},
 						{Kind: "describes",
 							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
 							To:   nodeID("deployment", "team-a/depl1")},
@@ -322,7 +322,7 @@ func TestCollect(t *testing.T) {
 					Relations: []pluginapi.RelationClaim{
 						{Kind: "deployed_from",
 							From: nodeID("deployment", "team-a/app"),
-							To:   fluxRepoNode.ID},
+							To:   gitRepoNode.ID},
 						{Kind: "describes",
 							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
 							To:   nodeID("deployment", "team-a/app")},

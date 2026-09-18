@@ -104,7 +104,8 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	var relations []pluginapi.RelationClaim
 
 	// Phase 1: GitRepository nodes and their external repository references.
-	repoByPath := map[string]pluginapi.NodeID{} // "ns/name" → Flux GitRepository NodeID
+	repoByPath := map[string]pluginapi.NodeID{}         // "ns/name" -> GitRepository.fluxcd NodeID
+	externalRepoByPath := map[string]pluginapi.NodeID{} // "ns/name" -> git_repository NodeID
 	for _, r := range repos {
 		shortPath := r.GetNamespace() + "/" + r.GetName()
 		fluxGitRepoID := pluginapi.NodeID{
@@ -135,13 +136,15 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				From: fluxGitRepoID,
 				To:   gitRepoID,
 			})
+			externalRepoByPath[shortPath] = gitRepoID
 		}
 		repoByPath[shortPath] = fluxGitRepoID
 	}
 
 	type nodeAndRepoIDs struct {
-		node pluginapi.NodeID
-		repo pluginapi.NodeID
+		node         pluginapi.NodeID
+		fluxRepo     pluginapi.NodeID
+		externalRepo pluginapi.NodeID
 	}
 	zeroNodeID := pluginapi.NodeID{}
 
@@ -154,22 +157,25 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				Kind: pluginapi.NodeKindFluxKustomization,
 				Path: clusterID + "/" + shortPath,
 			},
-			repo: repoFromKustomization(k, repoByPath),
+		}
+		if srcPath, ok := kustomizationSourceRepoPath(k); ok {
+			ids.fluxRepo = repoByPath[srcPath]
+			ids.externalRepo = externalRepoByPath[srcPath]
 		}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: ids.node,
 		})
-		if ids.repo != zeroNodeID {
+		if ids.fluxRepo != zeroNodeID {
 			relations = append(relations, pluginapi.RelationClaim{
 				Kind: pluginapi.RelationKindSourcedFrom,
 				From: ids.node,
-				To:   ids.repo,
+				To:   ids.fluxRepo,
 			})
 		}
 		kustByPath[shortPath] = ids
 	}
 
-	// Phase 3: HelmRelease nodes + sourced_from relations.
+	// Phase 3: HelmRelease nodes + "sourced_from" relations.
 	helmByPath := map[string]nodeAndRepoIDs{}
 	for _, h := range helms {
 		shortPath := h.GetNamespace() + "/" + h.GetName()
@@ -178,16 +184,19 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				Kind: pluginapi.NodeKindFluxHelmChart,
 				Path: clusterID + "/" + shortPath,
 			},
-			repo: repoFromHelm(h, repoByPath),
+		}
+		if srcPath, ok := helmSourceRepoPath(h); ok {
+			ids.fluxRepo = repoByPath[srcPath]
+			ids.externalRepo = externalRepoByPath[srcPath]
 		}
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID: ids.node,
 		})
-		if ids.repo != zeroNodeID {
+		if ids.fluxRepo != zeroNodeID {
 			relations = append(relations, pluginapi.RelationClaim{
 				Kind: pluginapi.RelationKindSourcedFrom,
 				From: ids.node,
-				To:   ids.repo,
+				To:   ids.fluxRepo,
 			})
 		}
 		helmByPath[shortPath] = ids
@@ -223,11 +232,11 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 					To:   depID,
 				})
 			}
-			if ids.repo != zeroNodeID {
+			if ids.externalRepo != zeroNodeID {
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDeployedFrom,
 					From: depID,
-					To:   ids.repo,
+					To:   ids.externalRepo,
 				})
 			}
 		}
@@ -242,11 +251,11 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 					To:   depID,
 				})
 			}
-			if ids.repo != zeroNodeID {
+			if ids.externalRepo != zeroNodeID {
 				relations = append(relations, pluginapi.RelationClaim{
 					Kind: pluginapi.RelationKindDeployedFrom,
 					From: depID,
-					To:   ids.repo,
+					To:   ids.externalRepo,
 				})
 			}
 		}
@@ -255,24 +264,28 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
 }
 
-func repoFromKustomization(kust unstructured.Unstructured, repos map[string]pluginapi.NodeID) pluginapi.NodeID {
+// kustomizationSourceRepoPath returns the "ns/name" path of the GitRepository a Kustomization
+// is sourced from. ok is false when the sourceRef isn't a GitRepository.
+func kustomizationSourceRepoPath(kust unstructured.Unstructured) (path string, ok bool) {
 	srcKind, _, _ := unstructured.NestedString(kust.Object, "spec", "sourceRef", "kind")
 	if srcKind != "GitRepository" {
-		return pluginapi.NodeID{}
+		return "", false
 	}
 	srcName, _, _ := unstructured.NestedString(kust.Object, "spec", "sourceRef", "name")
 	srcNs, _, _ := unstructured.NestedString(kust.Object, "spec", "sourceRef", "namespace")
-	return repos[nsOrFallback(srcNs, kust.GetNamespace())+"/"+srcName]
+	return nsOrFallback(srcNs, kust.GetNamespace()) + "/" + srcName, true
 }
 
-func repoFromHelm(helm unstructured.Unstructured, repos map[string]pluginapi.NodeID) pluginapi.NodeID {
+// helmSourceRepoPath returns the "ns/name" path of the GitRepository a HelmRelease's chart is
+// sourced from. ok is false when the sourceRef isn't a GitRepository.
+func helmSourceRepoPath(helm unstructured.Unstructured) (path string, ok bool) {
 	srcKind, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "kind")
 	if srcKind != "GitRepository" {
-		return pluginapi.NodeID{}
+		return "", false
 	}
 	srcName, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "name")
 	srcNs, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "namespace")
-	return repos[nsOrFallback(srcNs, helm.GetNamespace())+"/"+srcName]
+	return nsOrFallback(srcNs, helm.GetNamespace()) + "/" + srcName, true
 }
 
 // listGroupKind returns all resources of the given API group + kind across all
