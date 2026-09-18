@@ -75,18 +75,20 @@ func TestCollect(t *testing.T) {
 				kustomization("flux-system", "my-app",
 					sourceRef("GitRepository", "", "my-repo")),
 			},
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
-					{ID: nodeID("git_repository", "flux-system/my-repo"),
-						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "sourced_from",
-						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-				},
-			},
+			want: func() pluginapi.CollectResponse {
+				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
+				return pluginapi.CollectResponse{
+					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
+						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
+						gitRepoNode,
+					},
+					Relations: []pluginapi.RelationClaim{
+						refRel,
+						{Kind: "sourced_from", From: nodeID("Kustomization.fluxcd", "flux-system/my-app"), To: fluxRepoNode.ID},
+					},
+				}
+			}(),
 		},
 		{
 			name: `HelmRelease with GitRepository source produces Nodes and "sourced_from" Relation`,
@@ -96,18 +98,20 @@ func TestCollect(t *testing.T) {
 				helmRelease("flux-system", "my-chart",
 					helmSourceRef("GitRepository", "", "my-repo")),
 			},
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
-					{ID: nodeID("git_repository", "flux-system/my-repo"),
-						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "sourced_from",
-						From: nodeID("HelmChart.fluxcd", "flux-system/my-chart"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-				},
-			},
+			want: func() pluginapi.CollectResponse {
+				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
+				return pluginapi.CollectResponse{
+					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
+						{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
+						gitRepoNode,
+					},
+					Relations: []pluginapi.RelationClaim{
+						refRel,
+						{Kind: "sourced_from", From: nodeID("HelmChart.fluxcd", "flux-system/my-chart"), To: fluxRepoNode.ID},
+					},
+				}
+			}(),
 		},
 		{
 			name: `Deployment with Kustomization label produces "deployed_from" and (reverse) "describes" Relations`,
@@ -120,25 +124,29 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "app",
 					kustLabel("flux-system", "my-app")),
 			},
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
-					{ID: nodeID("deployment", "team-a/app")},
-					{ID: nodeID("git_repository", "flux-system/my-repo"),
-						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/app"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-					{Kind: "describes",
-						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
-						To:   nodeID("deployment", "team-a/app")},
-					{Kind: "sourced_from",
-						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-				},
-			},
+			want: func() pluginapi.CollectResponse {
+				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
+				return pluginapi.CollectResponse{
+					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
+						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
+						{ID: nodeID("deployment", "team-a/app")},
+						gitRepoNode,
+					},
+					Relations: []pluginapi.RelationClaim{
+						{Kind: "deployed_from",
+							From: nodeID("deployment", "team-a/app"),
+							To:   gitRepoNode.ID},
+						{Kind: "describes",
+							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+							To:   nodeID("deployment", "team-a/app")},
+						refRel,
+						{Kind: "sourced_from",
+							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+							To:   fluxRepoNode.ID},
+					},
+				}
+			}(),
 		},
 		{
 			name: `Deployment with HelmRelease label produces "deployed_from" and (reverse) "describes" Relations`,
@@ -151,25 +159,29 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "app",
 					helmLabel("flux-system", "my-chart")),
 			},
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
-					{ID: nodeID("deployment", "team-a/app")},
-					{ID: nodeID("git_repository", "flux-system/my-repo"),
-						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/app"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-					{Kind: "describes",
-						From: nodeID("HelmChart.fluxcd", "flux-system/my-chart"),
-						To:   nodeID("deployment", "team-a/app")},
-					{Kind: "sourced_from",
-						From: nodeID("HelmChart.fluxcd", "flux-system/my-chart"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-				},
-			},
+			want: func() pluginapi.CollectResponse {
+				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
+				return pluginapi.CollectResponse{
+					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
+						{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
+						{ID: nodeID("deployment", "team-a/app")},
+						gitRepoNode,
+					},
+					Relations: []pluginapi.RelationClaim{
+						{Kind: "deployed_from",
+							From: nodeID("deployment", "team-a/app"),
+							To:   gitRepoNode.ID},
+						{Kind: "describes",
+							From: nodeID("HelmChart.fluxcd", "flux-system/my-chart"),
+							To:   nodeID("deployment", "team-a/app")},
+						refRel,
+						{Kind: "sourced_from",
+							From: nodeID("HelmChart.fluxcd", "flux-system/my-chart"),
+							To:   fluxRepoNode.ID},
+					},
+				}
+			}(),
 		},
 		{
 			name: "Kustomization with cross-namespace GitRepository source detected from explicit sourceRef namespace",
@@ -180,18 +192,22 @@ func TestCollect(t *testing.T) {
 				kustomization("team-a", "my-app",
 					sourceRef("GitRepository", "flux-system", "my-repo")),
 			},
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "team-a/my-app")},
-					{ID: nodeID("git_repository", "flux-system/my-repo"),
-						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "sourced_from",
-						From: nodeID("Kustomization.fluxcd", "team-a/my-app"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-				},
-			},
+			want: func() pluginapi.CollectResponse {
+				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
+				return pluginapi.CollectResponse{
+					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
+						{ID: nodeID("Kustomization.fluxcd", "team-a/my-app")},
+						gitRepoNode,
+					},
+					Relations: []pluginapi.RelationClaim{
+						refRel,
+						{Kind: "sourced_from",
+							From: nodeID("Kustomization.fluxcd", "team-a/my-app"),
+							To:   fluxRepoNode.ID},
+					},
+				}
+			}(),
 		},
 		{
 			name: "one Kustomization can be linked to multiple Deployments",
@@ -204,32 +220,36 @@ func TestCollect(t *testing.T) {
 				deployment("team-a", "depl1", kustLabel("flux-system", "my-app")),
 				deployment("team-a", "depl2", kustLabel("flux-system", "my-app")),
 			},
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
-					{ID: nodeID("deployment", "team-a/depl1")},
-					{ID: nodeID("deployment", "team-a/depl2")},
-					{ID: nodeID("git_repository", "flux-system/my-repo"),
-						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/depl1"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/depl2"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-					{Kind: "describes",
-						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
-						To:   nodeID("deployment", "team-a/depl1")},
-					{Kind: "describes",
-						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
-						To:   nodeID("deployment", "team-a/depl2")},
-					{Kind: "sourced_from",
-						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-				},
-			},
+			want: func() pluginapi.CollectResponse {
+				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
+				return pluginapi.CollectResponse{
+					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
+						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
+						{ID: nodeID("deployment", "team-a/depl1")},
+						{ID: nodeID("deployment", "team-a/depl2")},
+						gitRepoNode,
+					},
+					Relations: []pluginapi.RelationClaim{
+						{Kind: "deployed_from",
+							From: nodeID("deployment", "team-a/depl1"),
+							To:   gitRepoNode.ID},
+						{Kind: "deployed_from",
+							From: nodeID("deployment", "team-a/depl2"),
+							To:   gitRepoNode.ID},
+						{Kind: "describes",
+							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+							To:   nodeID("deployment", "team-a/depl1")},
+						{Kind: "describes",
+							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+							To:   nodeID("deployment", "team-a/depl2")},
+						refRel,
+						{Kind: "sourced_from",
+							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+							To:   fluxRepoNode.ID},
+					},
+				}
+			}(),
 		},
 		{
 			// TODO: could be improved in the future to also handle Buckets etc.
@@ -290,25 +310,29 @@ func TestCollect(t *testing.T) {
 					return false, nil, nil
 				})
 			},
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
-					{ID: nodeID("deployment", "team-a/app")},
-					{ID: nodeID("git_repository", "flux-system/my-repo"),
-						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/app"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-					{Kind: "describes",
-						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
-						To:   nodeID("deployment", "team-a/app")},
-					{Kind: "sourced_from",
-						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
-						To:   nodeID("git_repository", "flux-system/my-repo")},
-				},
-			},
+			want: func() pluginapi.CollectResponse {
+				fluxRepoNode, gitRepoNode, refRel := githubRepoFixture("flux-system", "my-repo", "example", "repo")
+				return pluginapi.CollectResponse{
+					Nodes: []pluginapi.NodeClaim{
+						fluxRepoNode,
+						{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
+						{ID: nodeID("deployment", "team-a/app")},
+						gitRepoNode,
+					},
+					Relations: []pluginapi.RelationClaim{
+						{Kind: "deployed_from",
+							From: nodeID("deployment", "team-a/app"),
+							To:   gitRepoNode.ID},
+						{Kind: "describes",
+							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+							To:   nodeID("deployment", "team-a/app")},
+						refRel,
+						{Kind: "sourced_from",
+							From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+							To:   fluxRepoNode.ID},
+					},
+				}
+			}(),
 		},
 	}
 	for _, tt := range tests {
@@ -320,6 +344,78 @@ func TestCollect(t *testing.T) {
 			result, err := New(config{}).collect(context.Background(), disc, dynClient)
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, sortedByIDs(result))
+		})
+	}
+}
+
+func TestCollect_ExternalGitRepositoryNode(t *testing.T) {
+	tests := []struct {
+		name string
+		objs []runtime.Object
+		want pluginapi.CollectResponse
+	}{
+		{
+			name: "GitHub URL produces external node and references relation",
+			objs: []runtime.Object{
+				namespace("flux-system"),
+				gitRepository("flux-system", "my-repo", "https://github.com/example/repo"),
+			},
+			want: func() pluginapi.CollectResponse {
+				fluxRepoNode, gitRepoNode, referencesRelation := githubRepoFixture("flux-system", "my-repo", "example", "repo")
+				return pluginapi.CollectResponse{
+					Nodes:     []pluginapi.NodeClaim{fluxRepoNode, gitRepoNode},
+					Relations: []pluginapi.RelationClaim{referencesRelation},
+				}
+			}(),
+		},
+		{
+			name: "non-GitHub URL produces no external node",
+			objs: []runtime.Object{
+				namespace("flux-system"),
+				gitRepository("flux-system", "my-repo", "https://gitlab.com/example/repo"),
+			},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{{
+					ID:         nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
+					Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"},
+				}},
+			},
+		},
+		{
+			name: "empty URL produces no external node",
+			objs: []runtime.Object{
+				namespace("flux-system"),
+				gitRepository("flux-system", "my-repo", ""),
+			},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{{
+					ID:         nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
+					Properties: pluginapi.PropertyMap{"url": ""},
+				}},
+			},
+		},
+		{
+			name: "invalid GitHub URL produces no external node",
+			objs: []runtime.Object{
+				namespace("flux-system"),
+				gitRepository("flux-system", "my-repo", "https://github.com/example"),
+			},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{{
+					ID:         nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
+					Properties: pluginapi.PropertyMap{"url": "https://github.com/example"},
+				}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dynClient, disc := fakeClients(tt.objs...)
+
+			result, err := New(config{}).collect(context.Background(), disc, dynClient)
+			require.NoError(t, err)
+			assert.Equal(t, sortedByIDs(tt.want), sortedByIDs(result))
 		})
 	}
 }
@@ -384,6 +480,19 @@ func sortedByIDs(r pluginapi.CollectResponse) pluginapi.CollectResponse {
 
 func nodeID(kind, path string) pluginapi.NodeID {
 	return pluginapi.NodeID{Kind: kind, Path: testClusterID + "/" + path}
+}
+
+// githubRepoFixture returns the boilerplate produced when a Flux GitRepository
+// points to GitHub: the GitRepository.fluxcd node, the external git_repository node, and the
+// references relation connecting them.
+func githubRepoFixture(ns, name, owner, repo string) (pluginapi.NodeClaim, pluginapi.NodeClaim, pluginapi.RelationClaim) {
+	url := "https://github.com/" + owner + "/" + repo
+	fluxID := nodeID("GitRepository.fluxcd", ns+"/"+name)
+	gitRepoID := pluginapi.NodeID{Kind: "git_repository", Path: "github.com/" + owner + "/" + repo}
+	fluxRepoNode := pluginapi.NodeClaim{ID: fluxID, Properties: pluginapi.PropertyMap{"url": url}}
+	gitRepoNode := pluginapi.NodeClaim{ID: gitRepoID, Properties: pluginapi.PropertyMap{"url": url}}
+	rel := pluginapi.RelationClaim{Kind: "references", From: fluxID, To: gitRepoID}
+	return fluxRepoNode, gitRepoNode, rel
 }
 
 func namespace(name string) *corev1.Namespace {
