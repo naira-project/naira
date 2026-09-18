@@ -405,8 +405,9 @@ spec:
               value: "50059"
             - name: GITHUB_ORG
               value: "naira-project"
+            # replace with a real PAT before running locally
             - name: GITHUB_TOKEN
-              value: "REPLACE_ME"
+              value: ""
           resources:
             requests:
               cpu: 50m

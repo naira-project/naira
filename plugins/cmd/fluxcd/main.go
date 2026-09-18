@@ -3,7 +3,7 @@
 // GitRepositories reference.
 //
 // GitRepository nodes currently support GitHub URLs only. Other Git hosts are ignored.
-// TODO: git repository Nodes could support other Git hosts then Github (tricky because hostnames & IPs can be local)
+// TODO: git repository Nodes could support other Git hosts then GitHub (tricky because hostnames & IPs can be local)
 // TODO: add support for Bucket and other FluxCD source kinds.
 // TODO: add support for any other resources managed by FluxCD (Services, Ingresses, third-party CRDs, ...)
 package main
@@ -64,7 +64,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface) (pluginapi.CollectResponse, error) {
-	namespaces, clusterID, err := kubeutil.NamespacesAndClusterIDDynamic(ctx, dyn)
+	namespaces, clusterID, err := kubeutil.NamespacesAndClusterIDFromDynamic(ctx, dyn)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces: %w", err)
 	}
