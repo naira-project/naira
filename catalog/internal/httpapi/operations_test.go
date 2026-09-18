@@ -157,16 +157,22 @@ func TestGetOperationsEndpoint(t *testing.T) {
 	rec := doRequest(t, router, http.MethodGet, "/v1/operations")
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var listResp ListOperationsResponse
+	var listResp struct {
+		Operations []json.RawMessage `json:"operations"`
+	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listResp))
 	require.Len(t, listResp.Operations, 1)
 
-	op := listResp.Operations[0]
-	assert.Equal(t, opName, op.Name)
-	assert.Equal(t, "seed", op.Metadata.Plugin)
-	assert.Equal(t, "SUCCEEDED", op.Metadata.State)
-	assert.True(t, op.Done)
-	assert.NotNil(t, op.Response)
+	wantJSON := `{
+		"name": "{{NAME}}",
+		"done": true,
+		"metadata": {
+			"plugin": "seed", "state": "SUCCEEDED",
+			"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
+		},
+		"response": {"nodesUpserted": 0, "relationsUpserted": 0}
+	}`
+	assertOperationJSON(t, wantJSON, listResp.Operations[0])
 }
 
 // --- helpers -----------------------------------------------------------
