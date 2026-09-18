@@ -2,9 +2,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "ui-poc.fullname" . }}
+  name: {{ include "ui.fullname" . }}
   labels:
-    {{- include "ui-poc.labels" . | nindent 4 }}
+    {{- include "ui.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -35,7 +35,7 @@ spec:
             {{- end }}
             backend:
               service:
-                name: {{ include "ui-poc.fullname" $ }}
+                name: {{ include "ui.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}

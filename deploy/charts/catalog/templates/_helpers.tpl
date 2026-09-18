@@ -81,3 +81,13 @@ Create the name of the depl_calls_svc RBAC resources.
 {{- define "catalog.deplCallsSvcRoleName" -}}
 {{- default (printf "%s-depl-calls-svc" (include "catalog.fullname" .)) .Values.rbac.deplCallsSvc.name }}
 {{- end }}
+
+{{/* Create the name of the deployment-uses-LiteLLM RBAC resources. */}}
+{{- define "catalog.deplUsesLitellmRoleName" -}}
+{{- default (printf "%s-depl-uses-litellm" (include "catalog.fullname" .)) .Values.rbac.deplUsesLitellm.name }}
+{{- end }}
+
+{{/* Create the name of the FluxCD RBAC resources. */}}
+{{- define "catalog.fluxcdRoleName" -}}
+{{- default (printf "%s-fluxcd" (include "catalog.fullname" .)) .Values.rbac.fluxcd.name }}
+{{- end }}

@@ -34,6 +34,40 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+        {{- range $key := list "litellm" "mlflow" "deplCallsSvc" "deplUsesLitellm" "fluxcd" "openmetadata" }}
+        {{- $plugin := index $.Values.plugins $key }}
+        {{- if $plugin.enabled }}
+        - name: plugin-{{ $plugin.name }}
+          image: "{{ $plugin.image.repository }}:{{ $plugin.image.tag }}"
+          imagePullPolicy: {{ $plugin.image.pullPolicy }}
+          restartPolicy: Always
+          env:
+            - name: PORT
+              value: {{ $plugin.port | quote }}
+            {{- with $plugin.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- if eq $key "litellm" }}
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecret is required when the LiteLLM plugin is enabled" $.Values.existingSecret }}
+                  key: {{ $.Values.secretKeys.litellmApiKey }}
+            {{- end }}
+            {{- if eq $key "openmetadata" }}
+            - name: OPENMETADATA_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecret is required when the OpenMetadata plugin is enabled" $.Values.existingSecret }}
+                  key: {{ $.Values.secretKeys.openmetadataAdminPassword }}
+            {{- end }}
+          {{- with $plugin.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- end }}
       containers:
         - name: {{ .Values.containerName | default .Chart.Name }}
           {{- with .Values.securityContext }}
@@ -46,19 +80,19 @@ spec:
             - name: http
               containerPort: {{ .Values.service.port }}
               protocol: TCP
-          {{- if or .Values.env .Values.secretEnv }}
           env:
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-            {{- range .Values.secretEnv }}
-            - name: {{ .name }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ default (include "catalog.secretName" $) .secretName }}
-                  key: {{ .key }}
+            {{- $addresses := list }}
+            {{- range $key := list "litellm" "mlflow" "deplCallsSvc" "deplUsesLitellm" "fluxcd" "openmetadata" }}
+            {{- $plugin := index $.Values.plugins $key }}
+            {{- if $plugin.enabled }}
+            {{- $addresses = append $addresses (printf "%s=localhost:%v" $plugin.name $plugin.port) }}
             {{- end }}
-          {{- end }}
+            {{- end }}
+            - name: PLUGIN_ADDRESSES
+              value: {{ join "," $addresses | quote }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}

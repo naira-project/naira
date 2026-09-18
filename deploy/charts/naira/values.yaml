@@ -1,0 +1,17 @@
+# Default values for the Naira application stack.
+
+catalog:
+  fullnameOverride: catalog
+  # -- Existing Secret that must be created in the release namespace with the Catalog plugin credential keys.
+  existingSecret: catalog-secrets
+
+ui:
+  fullnameOverride: ui
+  catalog:
+    url: http://catalog:8090
+
+portal:
+  fullnameOverride: portal
+  env:
+    PORT: "3000"
+    NAIRA_UI_BASE_URL: http://localhost:3001

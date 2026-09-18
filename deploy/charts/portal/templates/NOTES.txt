@@ -1,0 +1,4 @@
+The Naira Portal is available through service {{ include "portal.fullname" . }} on port {{ .Values.service.port }}.
+
+To access it locally:
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/{{ include "portal.fullname" . }} 3000:{{ .Values.service.port }}
