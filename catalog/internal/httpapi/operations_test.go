@@ -82,7 +82,7 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 				"mlflow": tt.pluginImpl,
 			})
 
-			rec := postAuthorized(t, router, "/v1/plugins/mlflow:run")
+			rec := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
 			require.Equal(t, http.StatusAccepted, rec.Code)
 
 			var opRes OperationResource
@@ -96,9 +96,9 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 				return
 			}
 
-			completed := waitForOperation(t, opStore, opRes.Name)
+			completed := waitForTerminalState(t, opStore, opRes.Name)
 
-			getRec := getAuthorized(t, router, "/v1/operations/"+url.PathEscape(completed.Name))
+			getRec := doRequest(t, router, http.MethodGet, "/v1/operations/"+url.PathEscape(completed.Name))
 			require.Equal(t, http.StatusOK, getRec.Code)
 			assertOperationJSON(t, tt.wantTerminalJSON, getRec.Body.Bytes())
 		})
@@ -108,7 +108,7 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
 	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
 
-	rec := postAuthorized(t, router, "/v1/plugins/missing:run")
+	rec := doRequest(t, router, http.MethodPost, "/v1/plugins/missing:run")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
@@ -121,14 +121,17 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	router, err := NewRouter(catalogService, runner, catalog.PluginConfigsByName{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 
-	rec1 := postAuthorized(t, router, "/v1/plugins/mlflow:run")
+	rec1 := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
 	assert.Equal(t, http.StatusAccepted, rec1.Code)
 
 	var firstOp OperationResource
 	require.NoError(t, json.Unmarshal(rec1.Body.Bytes(), &firstOp))
-	waitForRunning(t, opStore, firstOp.Name)
 
-	rec2 := postAuthorized(t, router, "/v1/plugins/mlflow:run")
+	waitForState(t, opStore, firstOp.Name, func(op operations.Operation) bool {
+		return op.State == operations.StateRunning
+	})
+
+	rec2 := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
 	assert.Equal(t, http.StatusConflict, rec2.Code)
 
 	close(block)
@@ -139,9 +142,19 @@ func TestGetOperationsEndpoint(t *testing.T) {
 	opStore := operations.NewMemoryStore()
 	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
-	opName := runSeedAndWait(t, router, opStore)
+	// Trigger "seed" plugin flow
+	runRec := doRequest(t, router, http.MethodPost, "/v1/plugins:run")
+	require.Equal(t, http.StatusAccepted, runRec.Code)
 
-	rec := getAuthorized(t, router, "/v1/operations")
+	var runResp RunPluginsResponse
+	require.NoError(t, json.Unmarshal(runRec.Body.Bytes(), &runResp))
+	require.Len(t, runResp.Operations, 1)
+
+	opName := runResp.Operations[0].Name
+	waitForTerminalState(t, opStore, opName)
+
+	// Fetch operations list
+	rec := doRequest(t, router, http.MethodGet, "/v1/operations")
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	var listResp ListOperationsResponse
@@ -149,86 +162,40 @@ func TestGetOperationsEndpoint(t *testing.T) {
 	require.Len(t, listResp.Operations, 1)
 
 	op := listResp.Operations[0]
-	assertSucceededSeedOperation(t, op, opName)
+	assert.Equal(t, opName, op.Name)
+	assert.Equal(t, "seed", op.Metadata.Plugin)
+	assert.Equal(t, "SUCCEEDED", op.Metadata.State)
+	assert.True(t, op.Done)
 	assert.NotNil(t, op.Response)
 }
 
 // --- helpers -----------------------------------------------------------
 
-// postAuthorized sends an authenticated POST request with no body.
-func postAuthorized(t *testing.T, router http.Handler, path string) *httptest.ResponseRecorder {
+// doRequest executes an authenticated HTTP request against the provided router.
+func doRequest(t *testing.T, router http.Handler, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := withAuth(httptest.NewRequest(http.MethodPost, path, nil), testBearerToken)
+	req := withAuth(httptest.NewRequest(method, path, nil), testBearerToken)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	return rec
 }
 
-// getAuthorized sends an authenticated GET request.
-func getAuthorized(t *testing.T, router http.Handler, path string) *httptest.ResponseRecorder {
+// waitForTerminalState polls until the operation reaches SUCCEEDED or FAILED.
+func waitForTerminalState(t *testing.T, opStore operations.Store, name string) operations.Operation {
 	t.Helper()
-	req := withAuth(httptest.NewRequest(http.MethodGet, path, nil), testBearerToken)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	return rec
-}
-
-// runSeedAndWait triggers the "seed" plugin via POST /v1/plugins:run and
-// waits for its operation to reach a terminal state, returning the
-// operation's name.
-func runSeedAndWait(t *testing.T, router http.Handler, opStore operations.Store) string {
-	t.Helper()
-
-	rec := postAuthorized(t, router, "/v1/plugins:run")
-	require.Equal(t, http.StatusAccepted, rec.Code)
-
-	var runResp RunPluginsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &runResp))
-	require.Len(t, runResp.Operations, 1)
-
-	opName := runResp.Operations[0].Name
-	waitForOperation(t, opStore, opName)
-	return opName
-}
-
-// assertSucceededSeedOperation asserts the common fields of a completed
-// "seed" plugin operation resource.
-func assertSucceededSeedOperation(t *testing.T, op OperationResource, wantName string) {
-	t.Helper()
-	assert.Equal(t, wantName, op.Name)
-	assert.Equal(t, "seed", op.Metadata.Plugin)
-	assert.Equal(t, "SUCCEEDED", op.Metadata.State)
-	assert.True(t, op.Done)
-}
-
-// waitForOperation polls the operation store until the operation reaches a
-// terminal state (SUCCEEDED or FAILED) or the timeout elapses.
-func waitForOperation(t *testing.T, opStore operations.Store, name string) operations.Operation {
-	t.Helper()
-	return waitForOperationState(t, opStore, name, func(op operations.Operation) bool {
+	return waitForState(t, opStore, name, func(op operations.Operation) bool {
 		return op.State == operations.StateSucceeded || op.State == operations.StateFailed
-	}, "a terminal state")
+	})
 }
 
-// waitForRunning polls the operation store until the operation reaches the
-// RUNNING state or the timeout elapses.
-func waitForRunning(t *testing.T, opStore operations.Store, name string) operations.Operation {
-	t.Helper()
-	return waitForOperationState(t, opStore, name, func(op operations.Operation) bool {
-		return op.State == operations.StateRunning
-	}, string(operations.StateRunning))
-}
-
-// waitForOperationState polls the operation store until want(op) is true or
-// the timeout elapses, failing the test with a description of what it was
-// waiting for otherwise.
-func waitForOperationState(t *testing.T, opStore operations.Store, name string, want func(operations.Operation) bool, wantDescription string) operations.Operation {
+// waitForState polls until condition is met or times out.
+func waitForState(t *testing.T, opStore operations.Store, name string, condition func(operations.Operation) bool) operations.Operation {
 	t.Helper()
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		op, err := opStore.Get(name)
-		if err == nil && want(op) {
+		if err == nil && condition(op) {
 			return op
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -236,18 +203,11 @@ func waitForOperationState(t *testing.T, opStore operations.Store, name string, 
 
 	op, err := opStore.Get(name)
 	require.NoError(t, err, "operation %q not found", name)
-	t.Fatalf("operation %q state = %s, want %s", name, op.State, wantDescription)
+	t.Fatalf("timed out waiting for operation %q; final state = %s", name, op.State)
 	return operations.Operation{}
 }
 
-// assertOperationJSON compares actual JSON against wantTemplate.
-//
-// Dynamic placeholders ({{NAME}}, {{START}}, {{END}}, {{CREATED}}) represent
-// unpredictable values such as server-generated IDs or timestamps. These placeholders
-// are populated directly from the actual JSON payload.
-//
-// This validates the overall schema and predictable values without asserting on dynamic
-// runtime identifiers or wall-clock times.
+// assertOperationJSON compares actual JSON against wantTemplate replacing dynamic placeholders.
 func assertOperationJSON(t *testing.T, wantTemplate string, actual []byte) {
 	t.Helper()
 
