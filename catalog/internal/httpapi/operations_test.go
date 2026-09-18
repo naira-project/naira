@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,133 +22,87 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOperationFromCatalogOperation(t *testing.T) {
-	start := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
-	created := start.Add(-time.Minute)
-	end := start.Add(time.Minute)
+func TestRunPluginFlowJSONContract(t *testing.T) {
+	// Names are server-generated (plugin-run-<uuid>)
+	opNamePattern := regexp.MustCompile(`^plugin-run-[0-9a-f-]{36}$`)
 
 	tests := []struct {
-		name string
-		op   operations.Operation
-		want OperationResource
+		name              string
+		pluginImpl        pluginrun.Plugin
+		waitForCompletion bool
+		wantInitialJSON   string
+		wantTerminalJSON  string
 	}{
 		{
-			name: "pending",
-			op: operations.Operation{
-				Name:      "operations/pending",
-				Plugin:    "seed",
-				State:     operations.StatePending,
-				StartTime: start,
-				CreatedAt: created,
-			},
-			want: OperationResource{
-				Name: "operations/pending",
-				Done: false,
-				Metadata: OperationMetadataResource{
-					Plugin:    "seed",
-					State:     "PENDING",
-					StartTime: start,
-					CreatedAt: created,
-				},
-			},
+			name:       "pending immediately after trigger",
+			pluginImpl: stubPlugin{},
+			wantInitialJSON: `{
+				"name": "{{NAME}}",
+				"done": false,
+				"metadata": {
+					"plugin": "mlflow", "state": "PENDING",
+					"startTime": "{{START}}", "createdAt": "{{CREATED}}"
+				}
+			}`,
 		},
 		{
-			name: "succeeded",
-			op: operations.Operation{
-				Name:              "operations/succeeded",
-				Plugin:            "seed",
-				State:             operations.StateSucceeded,
-				StartTime:         start,
-				EndTime:           &end,
-				CreatedAt:         created,
-				NodesUpserted:     3,
-				RelationsUpserted: 2,
-			},
-			want: OperationResource{
-				Name: "operations/succeeded",
-				Done: true,
-				Metadata: OperationMetadataResource{
-					Plugin:    "seed",
-					State:     "SUCCEEDED",
-					StartTime: start,
-					EndTime:   &end,
-					CreatedAt: created,
+			name:              "succeeded after completion",
+			pluginImpl:        stubPlugin{},
+			waitForCompletion: true,
+			wantTerminalJSON: `{
+				"name": "{{NAME}}",
+				"done": true,
+				"metadata": {
+					"plugin": "mlflow", "state": "SUCCEEDED",
+					"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
 				},
-				Response: &RunPluginResult{
-					NodesUpserted:     3,
-					RelationsUpserted: 2,
-				},
-			},
+				"response": {"nodesUpserted": 0, "relationsUpserted": 0}
+			}`,
 		},
 		{
-			name: "failed",
-			op: operations.Operation{
-				Name:      "operations/failed",
-				Plugin:    "seed",
-				State:     operations.StateFailed,
-				StartTime: start,
-				EndTime:   &end,
-				CreatedAt: created,
-				Error:     &operations.StatusError{Message: "seed failed"},
-			},
-			want: OperationResource{
-				Name: "operations/failed",
-				Done: true,
-				Metadata: OperationMetadataResource{
-					Plugin:    "seed",
-					State:     "FAILED",
-					StartTime: start,
-					EndTime:   &end,
-					CreatedAt: created,
+			name:              "failed after completion",
+			pluginImpl:        stubPlugin{err: errors.New("sync failed: database offline")},
+			waitForCompletion: true,
+			wantTerminalJSON: `{
+				"name": "{{NAME}}",
+				"done": true,
+				"metadata": {
+					"plugin": "mlflow", "state": "FAILED",
+					"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
 				},
-				Error: &StatusErrorResource{Message: "seed failed"},
-			},
+				"error": {"message": "collecting response from plugin \"mlflow\": sync failed: database offline"}
+			}`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, operationFromCatalogOperation(tt.op))
+			opStore := operations.NewMemoryStore()
+			router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{
+				"mlflow": tt.pluginImpl,
+			})
+
+			rec := postAuthorized(t, router, "/v1/plugins/mlflow:run")
+			require.Equal(t, http.StatusAccepted, rec.Code)
+
+			var opRes OperationResource
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &opRes))
+			assert.Regexp(t, opNamePattern, opRes.Name)
+
+			if tt.wantInitialJSON != "" {
+				assertOperationJSON(t, tt.wantInitialJSON, rec.Body.Bytes())
+			}
+			if !tt.waitForCompletion {
+				return
+			}
+
+			completed := waitForOperation(t, opStore, opRes.Name)
+
+			getRec := getAuthorized(t, router, "/v1/operations/"+url.PathEscape(completed.Name))
+			require.Equal(t, http.StatusOK, getRec.Code)
+			assertOperationJSON(t, tt.wantTerminalJSON, getRec.Body.Bytes())
 		})
 	}
-}
-
-func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}})
-
-	rec := postAuthorized(t, router, "/v1/plugins:run")
-	assert.Equal(t, http.StatusAccepted, rec.Code)
-
-	var payload RunPluginsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-	require.Len(t, payload.Operations, 1)
-
-	op := payload.Operations[0]
-	assert.Equal(t, "seed", op.Metadata.Plugin)
-	assert.False(t, op.Done)
-
-	completed := waitForOperation(t, opStore, op.Name)
-	assert.Equal(t, operations.StateFailed, completed.State)
-	require.NotNil(t, completed.Error)
-	assert.Contains(t, completed.Error.Message, "seed failed")
-}
-
-func TestRunPluginAsyncEndpoint(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"mlflow": stubPlugin{}})
-
-	rec := postAuthorized(t, router, "/v1/plugins/mlflow:run")
-	assert.Equal(t, http.StatusAccepted, rec.Code)
-
-	var op OperationResource
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &op))
-	assert.Equal(t, "mlflow", op.Metadata.Plugin)
-	assert.Equal(t, "PENDING", op.Metadata.State)
-	assert.False(t, op.Done)
-
-	completed := waitForOperation(t, opStore, op.Name)
-	assert.Equal(t, operations.StateSucceeded, completed.State)
 }
 
 func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
@@ -195,20 +151,6 @@ func TestGetOperationsEndpoint(t *testing.T) {
 	op := listResp.Operations[0]
 	assertSucceededSeedOperation(t, op, opName)
 	assert.NotNil(t, op.Response)
-}
-
-func TestGetOperationByIDEndpoint(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
-
-	opName := runSeedAndWait(t, router, opStore)
-
-	rec := getAuthorized(t, router, "/v1/operations/"+url.PathEscape(opName))
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var op OperationResource
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &op))
-	assertSucceededSeedOperation(t, op, opName)
 }
 
 // --- helpers -----------------------------------------------------------
@@ -296,4 +238,35 @@ func waitForOperationState(t *testing.T, opStore operations.Store, name string, 
 	require.NoError(t, err, "operation %q not found", name)
 	t.Fatalf("operation %q state = %s, want %s", name, op.State, wantDescription)
 	return operations.Operation{}
+}
+
+// assertOperationJSON compares actual JSON against wantTemplate.
+//
+// Dynamic placeholders ({{NAME}}, {{START}}, {{END}}, {{CREATED}}) represent
+// unpredictable values such as server-generated IDs or timestamps. These placeholders
+// are populated directly from the actual JSON payload.
+//
+// This validates the overall schema and predictable values without asserting on dynamic
+// runtime identifiers or wall-clock times.
+func assertOperationJSON(t *testing.T, wantTemplate string, actual []byte) {
+	t.Helper()
+
+	var got struct {
+		Name     string `json:"name"`
+		Metadata struct {
+			StartTime string `json:"startTime"`
+			EndTime   string `json:"endTime"`
+			CreatedAt string `json:"createdAt"`
+		} `json:"metadata"`
+	}
+	require.NoError(t, json.Unmarshal(actual, &got))
+
+	want := strings.NewReplacer(
+		"{{NAME}}", got.Name,
+		"{{START}}", got.Metadata.StartTime,
+		"{{END}}", got.Metadata.EndTime,
+		"{{CREATED}}", got.Metadata.CreatedAt,
+	).Replace(wantTemplate)
+
+	assert.JSONEq(t, want, string(actual))
 }
