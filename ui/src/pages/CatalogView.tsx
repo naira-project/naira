@@ -1,4 +1,4 @@
-import { Layers, Search } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import GenericTable from '@/components/GenericTable';
@@ -6,14 +6,13 @@ import KindSelector from '../components/KindSelector';
 import PluginTabs from '../components/PluginTabs';
 import EmptyState from '../components/states/EmptyState';
 import PluginSyncState from '../components/states/PluginSyncState';
-import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
 import { useCatalogNodes } from '../hooks/useCatalogNodes';
 import { useKinds } from '../hooks/useKinds';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
 import { useRelationSummaries } from '../hooks/useRelationSummaries';
 import type { NodeResource } from '../lib/catalogApi';
 import { derivePlugins } from '../lib/kindUtils';
-import { formatRelativeTime, latestOperation } from '../lib/utils';
 
 interface CatalogViewProps {
   viewpointKinds?: string[];
@@ -37,7 +36,6 @@ export default function CatalogView({
   viewpointColumns,
 }: CatalogViewProps) {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
 
   // Kind discovery & selection
   const { kinds, kindsLoading, kindsError, activeKind, setActiveKind, refreshKinds } =
@@ -64,13 +62,8 @@ export default function CatalogView({
   // Relation summaries — computed whenever the filtered node set changes
   const { relationSummaries } = useRelationSummaries(filteredNodes);
 
-  // Plugin run operations (used only for the compact "last sync" indicator)
+  // Plugin run operations are used to determine whether the viewpoint has synced.
   const { operations } = usePluginsStatus();
-
-  // Filter kinds by search
-  const filteredKinds = kinds.filter((k) => k.toLowerCase().includes(search.toLowerCase()));
-
-  const lastSync = useMemo(() => latestOperation(operations), [operations]);
 
   // Whether a specific viewpoint's plugin(s) have completed at least one successful sync.
   // Distinguishes "never synced" (show PluginSyncState) from "synced, but no data present"
@@ -79,7 +72,8 @@ export default function CatalogView({
     () =>
       operations.some(
         (op) =>
-          op.state === 'SUCCEEDED' && (!viewpointPlugins || viewpointPlugins.includes(op.plugin)),
+          op.metadata.state === 'SUCCEEDED' &&
+          (!viewpointPlugins || viewpointPlugins.includes(op.metadata.plugin)),
       ),
     [operations, viewpointPlugins],
   );
@@ -94,26 +88,6 @@ export default function CatalogView({
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
-          <Input
-            startAdornment={<Search size={16} />}
-            placeholder="Search kinds..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="max-w-[320px]"
-          />
-
-          <div className="flex-1" />
-
-          {/* Compact last-sync indicator */}
-          {lastSync && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <span>Last sync: {formatRelativeTime(lastSync.createdAt)}</span>
-            </div>
-          )}
-        </header>
-
         <div className="flex flex-1 flex-col overflow-y-auto px-6 py-4">
           {!kindsError && !kindsLoading && kinds.length === 0 ? (
             hasSyncedViewpointPlugin ? (
@@ -133,25 +107,27 @@ export default function CatalogView({
               {kindsError && (
                 <div className="mb-4 flex items-center gap-2 text-sm text-red-500">
                   <span>{kindsError}</span>
-                  <button
+                  <Button
                     type="button"
+                    variant="link"
+                    size="xs"
                     onClick={refreshKinds}
-                    className="underline hover:no-underline"
+                    className="h-auto p-0 text-sm font-normal text-red-500 underline hover:text-red-500 hover:no-underline"
                   >
                     Retry
-                  </button>
+                  </Button>
                 </div>
               )}
 
-              {!kindsError && filteredKinds.length === 0 && !kindsLoading && (
+              {!kindsError && kinds.length === 0 && !kindsLoading && (
                 <div className="mb-4 flex flex-col items-center gap-2 py-6 text-muted-foreground">
                   <Layers size={32} className="opacity-40" />
-                  <p className="text-sm">No kinds match your search.</p>
+                  <p className="text-sm">No kinds available.</p>
                 </div>
               )}
               {(!viewpointKinds || viewpointKinds.length > 1) && (
                 <KindSelector
-                  kinds={filteredKinds}
+                  kinds={kinds}
                   activeKind={activeKind}
                   onSelect={setActiveKind}
                   loading={kindsLoading}
