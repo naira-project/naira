@@ -3,13 +3,16 @@
 One ClusterRole per subject that needs one: least privilege stays visible and a
 plugin's rules sit next to the plugin in values.yaml. Cluster-scoped, so names
 carry the release name; concurrent releases on one cluster do not collide.
+All bindings target the one catalog ServiceAccount, so the split documents
+what each plugin needs; it does not isolate plugins from each other at
+runtime (sidecars share the pod's token).
 */}}
 {{- $roles := dict }}
 {{- with .Values.catalog.rbac.rules }}
 {{- $_ := set $roles "catalog" . }}
 {{- end }}
 {{- range $name, $p := .Values.catalog.plugins }}
-{{- if and $p.enabled $p.rbac }}
+{{- if and $p.enabled $p.rbac $p.rbac.rules }}
 {{- $_ := set $roles (printf "plugin-%s" $name) $p.rbac.rules }}
 {{- end }}
 {{- end }}

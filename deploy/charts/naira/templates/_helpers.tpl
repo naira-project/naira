@@ -7,14 +7,21 @@ app.kubernetes.io/part-of: naira
 
 {{/* Usage: include "naira.selector" (dict "root" $ "name" "catalog") */}}
 {{- define "naira.selector" -}}
-app.kubernetes.io/name: {{ .name }}
-app.kubernetes.io/instance: {{ .root.Release.Name }}
+app.kubernetes.io/name: {{ .name | quote }}
+app.kubernetes.io/instance: {{ .root.Release.Name | quote }}
 {{- end -}}
 
-{{/* Usage: include "naira.image" (dict "root" $ "image" .Values.catalog.image) */}}
+{{/*
+Usage: include "naira.image" (dict "root" $ "image" .Values.catalog.image "context" "catalog")
+"context" is the values path used in the error when image.repository is
+missing (validate.yaml cannot guard this in time: templates render in file
+order, and catalog.yaml dereferences .image before validate.yaml runs).
+*/}}
 {{- define "naira.image" -}}
-{{- $tag := .image.tag | default .root.Values.image.tag | default .root.Chart.AppVersion -}}
-{{- $ref := printf "%s:%s" .image.repository $tag -}}
+{{- $img := .image | default dict -}}
+{{- $repo := required (printf "%s.image.repository is required" .context) $img.repository -}}
+{{- $tag := $img.tag | default .root.Values.image.tag | default .root.Chart.AppVersion -}}
+{{- $ref := printf "%s:%s" $repo $tag -}}
 {{- if .root.Values.image.registry -}}
 {{- printf "%s/%s" .root.Values.image.registry $ref -}}
 {{- else -}}

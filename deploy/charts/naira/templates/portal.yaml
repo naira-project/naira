@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: portal
-          image: {{ include "naira.image" (dict "root" $ "image" .Values.portal.image) | quote }}
+          image: {{ include "naira.image" (dict "root" $ "image" .Values.portal.image "context" "portal") | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: PORT

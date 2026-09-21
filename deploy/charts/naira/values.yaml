@@ -114,6 +114,9 @@ catalog:
       env:
         DEPL_USES_LITELLM_KUBECONFIG: ""
         DEPL_USES_LITELLM_NAMED_HOSTS: "litellm={{ .Values.dependencies.litellm.baseUrl }}"
+      # Cluster-wide get/list on Secrets: the plugin reads every key of the
+      # Secrets that Deployments reference, to find LiteLLM keys. Disable the
+      # plugin if that is not acceptable.
       rbac:
         rules:
           - apiGroups: [""]
@@ -180,6 +183,9 @@ ui:
   image: {repository: naira-ui, tag: ""}
   port: 80
   # Empty -> http://catalog.<release namespace>.svc.cluster.local:<catalog.port>
+  # Set on the UI container but not read by the UI image yet: ui/nginx.conf.template
+  # still proxies to catalog.idp-system. Until that changes, install into
+  # namespace idp-system for a working UI.
   catalogUpstream: ""
   resources:
     requests: {cpu: 50m, memory: 64Mi}

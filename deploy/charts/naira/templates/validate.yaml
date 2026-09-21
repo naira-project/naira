@@ -9,6 +9,9 @@ silently does nothing.
 {{- if and .Values.portal.oidc.secret.existingSecret .Values.portal.oidc.secret.create }}
 {{- fail "portal.oidc.secret: set existingSecret or create, not both" }}
 {{- end }}
+{{- if and .Values.catalog.secret.create (not .Values.catalog.secret.data) }}
+{{- fail "catalog.secret.create is true but catalog.secret.data is empty" }}
+{{- end }}
 {{- $ports := dict }}
 {{- range $name, $p := .Values.catalog.plugins }}
 {{- if $p.enabled }}
@@ -19,6 +22,11 @@ silently does nothing.
 {{- $_ := set $ports $port $name }}
 {{- if and $p.config (not $p.config.existingConfigMap) (not $p.config.data) }}
 {{- fail (printf "catalog.plugins.%s.config: set existingConfigMap or data" $name) }}
+{{- end }}
+{{- range $var, $v := $p.env }}
+{{- if and (kindIs "map" $v) (not $v.secretKeyRef.key) }}
+{{- fail (printf "catalog.plugins.%s.env.%s: secretKeyRef.key is required" $name $var) }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

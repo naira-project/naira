@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: ui
-          image: {{ include "naira.image" (dict "root" $ "image" .Values.ui.image) | quote }}
+          image: {{ include "naira.image" (dict "root" $ "image" .Values.ui.image "context" "ui") | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
             - name: CATALOG_UPSTREAM

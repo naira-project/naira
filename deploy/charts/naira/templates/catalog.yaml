@@ -25,7 +25,7 @@ spec:
         {{- range $name, $p := .Values.catalog.plugins }}
         {{- if $p.enabled }}
         - name: plugin-{{ $name }}
-          image: {{ include "naira.image" (dict "root" $ "image" $p.image) | quote }}
+          image: {{ include "naira.image" (dict "root" $ "image" $p.image "context" (printf "catalog.plugins.%s" $name)) | quote }}
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           restartPolicy: Always
           env:
@@ -48,7 +48,7 @@ spec:
         {{- end }}
       containers:
         - name: catalog
-          image: {{ include "naira.image" (dict "root" $ "image" .Values.catalog.image) | quote }}
+          image: {{ include "naira.image" (dict "root" $ "image" .Values.catalog.image "context" "catalog") | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           volumeMounts:
             - {name: plugin-config, mountPath: /etc/catalog/plugins.yaml, subPath: plugins.yaml, readOnly: true}

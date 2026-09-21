@@ -61,9 +61,9 @@ check "plugin secret env defaults to catalog-secrets" "catalog-secrets/LITELLM_A
   "$(render | yq "$LITELLM_ENV | select(.name == \"LITELLM_API_KEY\") | .valueFrom.secretKeyRef | .name + \"/\" + .key")"
 check "plugin resources default" "128Mi" \
   "$(render | yq "$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .resources.limits.memory")"
-check "plugin resources override merges" "256Mi 50m" \
+check "plugin resources override merges" "256Mi 200m 50m" \
   "$(render --set catalog.plugins.litellm.resources.limits.memory=256Mi \
-     | yq "$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .resources | .limits.memory + \" \" + .requests.cpu")"
+     | yq "$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .resources | .limits.memory + \" \" + .limits.cpu + \" \" + .requests.cpu")"
 check "plugins.yaml entry" "localhost:50051 0 0 * * *" \
   "$(render | yq "$PLUGINS_YAML" | yq '.plugins.litellm | .address + " " + .schedule')"
 check "plugins.yaml omits schedule when unset" "null" \
@@ -178,5 +178,17 @@ check "dev: radar file is main's" "Naira Tech Radar" \
   "$(render_raw "${DEV[@]}" | yq 'select(.kind == "ConfigMap" and .metadata.name == "plugin-tech-radar-config") | .data["radar.yaml"]' | yq '.radar.title')"
 check "helm lint ci values" "ok" "$(helm lint "$CHART" "${BASE[@]}" >/dev/null && echo ok)"
 check "helm lint dev" "ok" "$(helm lint "$CHART" "${DEV[@]}" >/dev/null && echo ok)"
+
+# ── Task 9: fix-pass regressions (F2, F3, F4) ────────────────────────────────
+check "numeric release name renders a string label" "string" \
+  "$(helm template 123 "$CHART" --namespace naira "${BASE[@]}" | yq 'select(.kind == "Deployment" and .metadata.name == "catalog") | .metadata.labels["app.kubernetes.io/instance"] | tag' | sed 's/!!//;s/str/string/')"
+check "rbac without rules renders no ClusterRole" "" \
+  "$(render --set catalog.plugins.mlflow.rbac.foo=bar | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-mlflow") | .metadata.name')"
+must_fail "plugin without an image" "image.repository is required" \
+  --set catalog.plugins.newone.enabled=true --set catalog.plugins.newone.port=50099
+must_fail "secretKeyRef without key" "secretKeyRef.key is required" \
+  --set catalog.plugins.litellm.env.LITELLM_API_KEY.secretKeyRef.key=null
+RENDER=render_raw must_fail "create with empty data" "catalog.secret.data is empty" \
+  --set portal.enabled=false --set catalog.secret.create=true
 
 exit $fail

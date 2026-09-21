@@ -18,7 +18,68 @@ catalog:
       enabled: true
       config:
         data:
-          radar.yaml: "schema_version: 1            # required; only 1 accepted\nradar:\n  id: naira                  # optional, default \"default\"\n  title: Naira Tech Radar    # required\n  edition: 2026-09           # required; free-form edition label\n  owner: platform-team       # required\nquadrants:                   # required; exactly 4; order = display order\n  - id: models\n    name: Models\n  - id: agentic\n    name: Agentic Patterns\n  - id: knowledge\n    name: Knowledge Techniques\n  - id: others\n    name: Others\nrings:                       # required; 1-6; order = innermost to outermost\n  - id: adopt\n    name: Adopt\n    description: Proven; default choice for new work.\n  - id: trial\n    name: Trial\n    description: Worth pursuing on projects that can absorb risk.\n  - id: assess\n    name: Assess\n    description: Explore to understand impact.\n  - id: hold\n    name: Hold\n    description: Do not start new work with this.\nentries:\n  - id: claude-sonnet\n    name: Claude Sonnet\n    quadrant: models         # must match a quadrant id\n    ring: adopt              # must match a ring id\n    moved: in                # in | out | none; default none\n    owner: ml-platform\n    rationale: >\n      Default general-purpose model; served through the central gateway.\n  - id: react-agents\n    name: ReAct Agents\n    quadrant: agentic\n    ring: trial\n    owner: ai-board\n    rationale: >\n      Promising for tool-using workflows; evaluate on internal projects first.\n  - id: hybrid-retrieval\n    name: Hybrid Retrieval\n    quadrant: knowledge\n    ring: assess\n    moved: in\n    owner: ai-board\n    rationale: >\n      Combines dense and sparse retrieval; explore impact on answer quality.\n  - id: naive-rag\n    name: Naive RAG\n    quadrant: knowledge\n    ring: hold\n    moved: out\n    owner: ai-board\n    rationale: >\n      Superseded by hybrid retrieval; migrate existing pipelines.\n\n"
+          radar.yaml: |+
+            schema_version: 1            # required; only 1 accepted
+            radar:
+              id: naira                  # optional, default "default"
+              title: Naira Tech Radar    # required
+              edition: 2026-09           # required; free-form edition label
+              owner: platform-team       # required
+            quadrants:                   # required; exactly 4; order = display order
+              - id: models
+                name: Models
+              - id: agentic
+                name: Agentic Patterns
+              - id: knowledge
+                name: Knowledge Techniques
+              - id: others
+                name: Others
+            rings:                       # required; 1-6; order = innermost to outermost
+              - id: adopt
+                name: Adopt
+                description: Proven; default choice for new work.
+              - id: trial
+                name: Trial
+                description: Worth pursuing on projects that can absorb risk.
+              - id: assess
+                name: Assess
+                description: Explore to understand impact.
+              - id: hold
+                name: Hold
+                description: Do not start new work with this.
+            entries:
+              - id: claude-sonnet
+                name: Claude Sonnet
+                quadrant: models         # must match a quadrant id
+                ring: adopt              # must match a ring id
+                moved: in                # in | out | none; default none
+                owner: ml-platform
+                rationale: >
+                  Default general-purpose model; served through the central gateway.
+              - id: react-agents
+                name: ReAct Agents
+                quadrant: agentic
+                ring: trial
+                owner: ai-board
+                rationale: >
+                  Promising for tool-using workflows; evaluate on internal projects first.
+              - id: hybrid-retrieval
+                name: Hybrid Retrieval
+                quadrant: knowledge
+                ring: assess
+                moved: in
+                owner: ai-board
+                rationale: >
+                  Combines dense and sparse retrieval; explore impact on answer quality.
+              - id: naive-rag
+                name: Naive RAG
+                quadrant: knowledge
+                ring: hold
+                moved: out
+                owner: ai-board
+                rationale: >
+                  Superseded by hybrid retrieval; migrate existing pipelines.
+
 portal:
   oidc:
     secret:
