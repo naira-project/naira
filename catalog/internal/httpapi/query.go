@@ -166,7 +166,7 @@ func encodePageToken(offset int, scope string, logger *log.Logger) (string, erro
 		if logger != nil {
 			logger.Printf("encoding page token payload for scope %q at offset %d: %v", scope, offset, err)
 		}
-		return "", errPageTokenEncoding
+		return "", errPageTokenEncoding // nolint // no need to wrap error, it's unique
 	}
 
 	return base64.RawURLEncoding.EncodeToString(buf.Bytes()), nil
@@ -180,12 +180,12 @@ func decodePageToken(pageToken string, scope string) (int, error) {
 
 	decoded, err := base64.RawURLEncoding.DecodeString(trimmed)
 	if err != nil {
-		return 0, errInvalidPageToken
+		return 0, fmt.Errorf("decoding base64 page token: %w", errInvalidPageToken)
 	}
 
 	var payload pageTokenPayload
 	if err := gob.NewDecoder(bytes.NewReader(decoded)).Decode(&payload); err != nil {
-		return 0, errInvalidPageToken
+		return 0, fmt.Errorf("decoding page token payload: %w", errInvalidPageToken)
 	}
 	if payload.Scope != scope {
 		return 0, fmt.Errorf("validating page token scope: %w", errInvalidPageToken)
