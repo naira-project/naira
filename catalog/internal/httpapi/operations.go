@@ -27,19 +27,21 @@ type OperationMetadataResource struct {
 	CreatedAt time.Time  `json:"createdAt"`
 }
 
-// RunPluginResult is the successful result of a plugin run operation.
-type RunPluginResult struct {
+// RunPluginResponse is the successful result of a plugin run operation.
+type RunPluginResponse struct {
 	NodesUpserted     int `json:"nodesUpserted"`
 	RelationsUpserted int `json:"relationsUpserted"`
 }
 
 // OperationResource is the JSON representation of an AIP-151 operation.
+// See https://github.com/googleapis/googleapis/blob/0c516dc746bccd2e0f29a44e4b4e72a216bfc82a/google/longrunning/operations.proto#L121
+// for documentation of fields.
 type OperationResource struct {
 	Name     string                    `json:"name"`
-	Done     bool                      `json:"done"`
 	Metadata OperationMetadataResource `json:"metadata"`
-	Response *RunPluginResult          `json:"response,omitempty"`
+	Done     bool                      `json:"done"`
 	Error    *StatusErrorResource      `json:"error,omitempty"`
+	Response *RunPluginResponse        `json:"response,omitempty"`
 }
 
 type ListOperationsResponse struct {
@@ -74,7 +76,7 @@ func operationFromCatalogOperation(op operations.Operation) OperationResource {
 
 	switch {
 	case done && op.State == operations.StateSucceeded:
-		resource.Response = &RunPluginResult{
+		resource.Response = &RunPluginResponse{
 			NodesUpserted:     op.NodesUpserted,
 			RelationsUpserted: op.RelationsUpserted,
 		}

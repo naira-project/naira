@@ -177,7 +177,7 @@ export interface OperationMetadataResource {
   createdAt: string;
 }
 
-export interface RunPluginResult {
+export interface RunPluginResponse {
   nodesUpserted: number;
   relationsUpserted: number;
 }
@@ -186,7 +186,7 @@ export interface OperationResource {
   name: string;
   done: boolean;
   metadata: OperationMetadataResource;
-  response?: RunPluginResult;
+  response?: RunPluginResponse;
   error?: StatusErrorResource;
 }
 
