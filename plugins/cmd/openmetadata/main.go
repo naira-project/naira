@@ -172,7 +172,7 @@ func (p *Plugin) collectLineage(ctx context.Context, tables []tableItem, nodeByE
 	return relations, nil
 }
 
-func (p *Plugin) fetchTableLineage(ctx context.Context, tableID string, token string) ([]lineageEdge, error) {
+func (p *Plugin) fetchTableLineage(ctx context.Context, tableID, token string) ([]lineageEdge, error) {
 	endpoint, err := url.Parse(p.config.BaseURL + "/api/v1/lineage/table/" + url.PathEscape(tableID))
 	if err != nil {
 		return nil, fmt.Errorf("building API URL: %w", err)
