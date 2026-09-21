@@ -113,7 +113,7 @@ check "tech-radar registered in plugins.yaml" "localhost:50057" \
   "$(render "${TR[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.tech-radar.address')"
 
 # ── Task 5: secrets ──────────────────────────────────────────────────────────
-n=$(render | yq 'select(.kind == "Secret") | .metadata.name' | rg -c . || true)   # rg exits 1 on no match
+n=$(render | yq 'select(.kind == "Secret") | .metadata.name' | grep -c . || true)   # grep exits 1 on no match
 check "no Secrets by default" "0" "${n:-0}"
 check "catalog Secret when create=true" "k1" \
   "$(render_raw --set portal.enabled=false --set catalog.secret.create=true --set catalog.secret.data.LITELLM_API_KEY=k1 \
