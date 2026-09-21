@@ -81,7 +81,7 @@ func TestDeplCallsSvc_Integration(t *testing.T) {
 
 	// Start kubernetes (k3s), with a Service and a Deployment. The
 	// Deployment's Env points to the Service.
-	kubeconfigPath, clusterID := startK3s(t, ctx,
+	kubeconfigPath, clusterID := startK3s(ctx, t,
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "sample-svc",
@@ -128,7 +128,7 @@ func TestDeplCallsSvc_Integration(t *testing.T) {
 
 	// Build and start the plugin.
 	pluginPort := findFreePort(t)
-	buildAndStart(t, ctx, "github.com/naira-project/naira/plugins/cmd/depl_calls_svc", []string{
+	buildAndStart(ctx, t, "github.com/naira-project/naira/plugins/cmd/depl_calls_svc", []string{
 		"PORT=" + fmt.Sprint(pluginPort),
 		"DEPL_CALLS_SVC_KUBECONFIG=" + kubeconfigPath,
 	})
@@ -145,7 +145,7 @@ plugins:
   depl_calls_svc:
     address: "%s"
 `, pluginAddr)), 0o600), "writing config.yaml")
-	buildAndStart(t, ctx, "github.com/naira-project/naira/catalog/cmd/catalog", []string{
+	buildAndStart(ctx, t, "github.com/naira-project/naira/catalog/cmd/catalog", []string{
 		"PORT=" + fmt.Sprint(catalogPort),
 		"PLUGIN_CONFIG_FILE=" + configPath,
 		"PLUGIN_CONNECTION_TIMEOUT=" + pluginConnectionTimeout.String(),
@@ -164,9 +164,9 @@ plugins:
 
 	// Trigger a run of the plugin through the catalog, and wait for the
 	// operation to succeed.
-	operationID := requestPluginRun(t, ctx, catalogBaseURL, token)
+	operationID := requestPluginRun(ctx, t, catalogBaseURL, token)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		op, status := doJSON[apiOperation](c, ctx, http.MethodGet, catalogBaseURL+"/v1/operations/"+operationID, token)
+		op, status := doJSON[apiOperation](ctx, c, http.MethodGet, catalogBaseURL+"/v1/operations/"+operationID, token)
 		assert.Equal(c, http.StatusOK, status, "GET /v1/operations/%s", operationID)
 		assert.Equal(c, "SUCCEEDED", op.State, operationErrorMessage(op))
 	}, readinessTimeout, pollInterval, "operation %q didn't succeed", operationID)
@@ -187,7 +187,7 @@ plugins:
 	}
 	nodes, status := doJSON[struct {
 		Nodes []node `json:"nodes"`
-	}](t, ctx, http.MethodGet, catalogBaseURL+"/v1/nodes", token)
+	}](ctx, t, http.MethodGet, catalogBaseURL+"/v1/nodes", token)
 	assert.Equal(t, http.StatusOK, status, "GET /v1/nodes")
 	// TODO: when catalog API allows filtering by path prefix, switch to assert.ElementsMatch
 	// (Currently, there are extra namespaces and nodes from k8s in the response.)
@@ -203,7 +203,7 @@ plugins:
 	}
 	relations, status := doJSON[struct {
 		Relations []relation `json:"relations"`
-	}](t, ctx, http.MethodGet, catalogBaseURL+"/v1/relations", token)
+	}](ctx, t, http.MethodGet, catalogBaseURL+"/v1/relations", token)
 	assert.Equal(t, http.StatusOK, status, "GET /v1/relations")
 	assert.ElementsMatch(t, relations.Relations, []relation{
 		{
@@ -217,7 +217,7 @@ plugins:
 // startK3s starts a k3s container seeded with objs, and returns a kubeconfig
 // file path for that cluster plus its cluster ID (the kube-system namespace
 // UID).
-func startK3s(t *testing.T, ctx context.Context, objs ...runtime.Object) (kubeconfigPath, clusterID string) {
+func startK3s(ctx context.Context, t *testing.T, objs ...runtime.Object) (kubeconfigPath, clusterID string) {
 	t.Helper()
 
 	k3sContainer, err := k3s.Run(ctx, k3sImage,
@@ -266,7 +266,7 @@ func startK3s(t *testing.T, ctx context.Context, objs ...runtime.Object) (kubeco
 // Dockerfiles, then starts the resulting binary as a background process with
 // extraEnv appended to the current environment. The process is killed if ctx
 // is done or on test cleanup.
-func buildAndStart(t *testing.T, ctx context.Context, pkg string, extraEnv []string) {
+func buildAndStart(ctx context.Context, t *testing.T, pkg string, extraEnv []string) {
 	t.Helper()
 
 	binary := filepath.Join(t.TempDir(), filepath.Base(pkg))
@@ -336,10 +336,10 @@ type apiOperation struct {
 	} `json:"error,omitempty"`
 }
 
-func requestPluginRun(t *testing.T, ctx context.Context, catalogBaseURL, token string) string {
+func requestPluginRun(ctx context.Context, t *testing.T, catalogBaseURL, token string) string {
 	t.Helper()
 
-	op, status := doJSON[apiOperation](t, ctx, http.MethodPost, catalogBaseURL+"/v1/plugins/depl_calls_svc:run", token)
+	op, status := doJSON[apiOperation](ctx, t, http.MethodPost, catalogBaseURL+"/v1/plugins/depl_calls_svc:run", token)
 	require.Equal(t, http.StatusAccepted, status, "POST /v1/plugins/depl_calls_svc:run")
 	require.NotEmpty(t, op.Name)
 	return op.Name
@@ -352,7 +352,7 @@ func operationErrorMessage(op apiOperation) string {
 	return op.Error.Message
 }
 
-func doJSON[T any](t require.TestingT, ctx context.Context, method, url, token string) (T, int) {
+func doJSON[T any](ctx context.Context, t require.TestingT, method, url, token string) (T, int) {
 	if h, ok := t.(interface{ Helper() }); ok {
 		h.Helper()
 	}

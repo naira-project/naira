@@ -75,7 +75,7 @@ func main() {
 func parseEndpoints(raw string, bearerToken string) ([]mcputil.Target, error) {
 	entries, err := util.ParseNamedValues(raw)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing named values: %w", err)
 	}
 	if len(entries) == 0 {
 		return nil, fmt.Errorf("no endpoints configured")

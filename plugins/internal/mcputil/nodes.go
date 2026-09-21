@@ -60,8 +60,8 @@ func ToolNodeID(prefix, serverName, toolName string) pluginapi.NodeID {
 	return pluginapi.NodeID{Kind: pluginapi.NodeKindMCPTool, Path: prefix + "/" + serverName + "/" + toolName}
 }
 
-// Extracts catalog nodes and relations, so that
-// An inspectErr still yields a server node, marked unreachable
+// Graph extracts catalog nodes and relations, so that
+// an inspectErr still yields a server node, marked unreachable.
 func Graph(prefix string, target Target, inventory Inventory, inspectErr error, extra pluginapi.PropertyMap) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim) {
 	serverID := ServerNodeID(prefix, target.Name)
 
