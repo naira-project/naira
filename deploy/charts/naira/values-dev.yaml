@@ -1,0 +1,26 @@
+# kind + Tilt (N5). The only values file in this repo that creates Secrets.
+
+image:
+  # Tilt builds the images and loads them into kind under their plain names.
+  registry: ""
+catalog:
+  secret:
+    create: true
+    data:
+      # Equals test-dependencies values-dev.yaml secrets.litellmMasterkey.value.
+      LITELLM_API_KEY: sk-local-litellm
+      OPENMETADATA_ADMIN_PASSWORD: admin
+  plugins:
+    openmetadata:
+      # OpenMetadata is off in test-dependencies values-dev.yaml.
+      enabled: false
+    tech-radar:
+      enabled: true
+      config:
+        data:
+          radar.yaml: "schema_version: 1            # required; only 1 accepted\nradar:\n  id: naira                  # optional, default \"default\"\n  title: Naira Tech Radar    # required\n  edition: 2026-09           # required; free-form edition label\n  owner: platform-team       # required\nquadrants:                   # required; exactly 4; order = display order\n  - id: models\n    name: Models\n  - id: agentic\n    name: Agentic Patterns\n  - id: knowledge\n    name: Knowledge Techniques\n  - id: others\n    name: Others\nrings:                       # required; 1-6; order = innermost to outermost\n  - id: adopt\n    name: Adopt\n    description: Proven; default choice for new work.\n  - id: trial\n    name: Trial\n    description: Worth pursuing on projects that can absorb risk.\n  - id: assess\n    name: Assess\n    description: Explore to understand impact.\n  - id: hold\n    name: Hold\n    description: Do not start new work with this.\nentries:\n  - id: claude-sonnet\n    name: Claude Sonnet\n    quadrant: models         # must match a quadrant id\n    ring: adopt              # must match a ring id\n    moved: in                # in | out | none; default none\n    owner: ml-platform\n    rationale: >\n      Default general-purpose model; served through the central gateway.\n  - id: react-agents\n    name: ReAct Agents\n    quadrant: agentic\n    ring: trial\n    owner: ai-board\n    rationale: >\n      Promising for tool-using workflows; evaluate on internal projects first.\n  - id: hybrid-retrieval\n    name: Hybrid Retrieval\n    quadrant: knowledge\n    ring: assess\n    moved: in\n    owner: ai-board\n    rationale: >\n      Combines dense and sparse retrieval; explore impact on answer quality.\n  - id: naive-rag\n    name: Naive RAG\n    quadrant: knowledge\n    ring: hold\n    moved: out\n    owner: ai-board\n    rationale: >\n      Superseded by hybrid retrieval; migrate existing pipelines.\n\n"
+portal:
+  oidc:
+    secret:
+      create: true
+      value: naira-local-dev-secret

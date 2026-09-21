@@ -164,4 +164,19 @@ check "a plugin naming its own Secret needs no catalog Secret" "ok" \
 check "disabled plugin may share a port" "ok" \
   "$(render --set catalog.plugins.mlflow.port=50051 --set catalog.plugins.mlflow.enabled=false >/dev/null && echo ok)"
 
+# ── Task 8: dev values ───────────────────────────────────────────────────────
+DEV=(-f "$CHART/values-dev.yaml")
+check "dev: local image names" "naira-catalog:0.1.0" "$(render_raw "${DEV[@]}" | yq "$CAT | .containers[0].image")"
+check "dev: sidecars (openmetadata off, tech-radar on)" \
+  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-tech-radar" \
+  "$(render_raw "${DEV[@]}" | yq ea "[$CAT | .initContainers[].name] | join(\",\")")"
+check "dev: catalog Secret matches test-dependencies master key" "sk-local-litellm" \
+  "$(render_raw "${DEV[@]}" | yq 'select(.kind == "Secret" and .metadata.name == "catalog-secrets") | .stringData.LITELLM_API_KEY')"
+check "dev: portal Secret" "naira-local-dev-secret" \
+  "$(render_raw "${DEV[@]}" | yq 'select(.kind == "Secret" and .metadata.name == "portal-oidc") | .stringData["client-secret"]')"
+check "dev: radar file is main's" "Naira Tech Radar" \
+  "$(render_raw "${DEV[@]}" | yq 'select(.kind == "ConfigMap" and .metadata.name == "plugin-tech-radar-config") | .data["radar.yaml"]' | yq '.radar.title')"
+check "helm lint ci values" "ok" "$(helm lint "$CHART" "${BASE[@]}" >/dev/null && echo ok)"
+check "helm lint dev" "ok" "$(helm lint "$CHART" "${DEV[@]}" >/dev/null && echo ok)"
+
 exit $fail
