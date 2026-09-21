@@ -1,0 +1,44 @@
+{{- if .Values.catalog.enabled }}
+{{- /*
+One ClusterRole per subject that needs one: least privilege stays visible and a
+plugin's rules sit next to the plugin in values.yaml. Cluster-scoped, so names
+carry the release name; concurrent releases on one cluster do not collide.
+*/}}
+{{- $roles := dict }}
+{{- with .Values.catalog.rbac.rules }}
+{{- $_ := set $roles "catalog" . }}
+{{- end }}
+{{- range $name, $p := .Values.catalog.plugins }}
+{{- if and $p.enabled $p.rbac }}
+{{- $_ := set $roles (printf "plugin-%s" $name) $p.rbac.rules }}
+{{- end }}
+{{- end }}
+{{- range $suffix, $rules := $roles }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $.Release.Name }}-{{ $suffix }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+    {{- include "naira.selector" (dict "root" $ "name" "catalog") | nindent 4 }}
+rules:
+  {{- toYaml $rules | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $.Release.Name }}-{{ $suffix }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+    {{- include "naira.selector" (dict "root" $ "name" "catalog") | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $.Release.Name }}-{{ $suffix }}
+subjects:
+  - kind: ServiceAccount
+    name: catalog
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}

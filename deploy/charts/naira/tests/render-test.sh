@@ -79,4 +79,18 @@ check "checksum changes with plugins" "different" \
         "$(render --set catalog.plugins.litellm.enabled=false | yq 'select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.template.metadata.annotations["checksum/plugin-config"]')" ] \
       && echo different || echo same)"
 
+# ── Task 3: RBAC ─────────────────────────────────────────────────────────────
+check "ClusterRoles are release-prefixed" "t-catalog,t-plugin-depl-calls-svc,t-plugin-depl-uses-litellm,t-plugin-fluxcd" \
+  "$(render | yq ea '[select(.kind == "ClusterRole") | .metadata.name] | sort | join(",")')"
+check "bindings match roles" "t-catalog,t-plugin-depl-calls-svc,t-plugin-depl-uses-litellm,t-plugin-fluxcd" \
+  "$(render | yq ea '[select(.kind == "ClusterRoleBinding") | .roleRef.name] | sort | join(",")')"
+check "binding subject is the catalog SA in the release namespace" "catalog/naira" \
+  "$(render | yq 'select(.kind == "ClusterRoleBinding" and .metadata.name == "t-plugin-fluxcd") | .subjects[0] | .name + "/" + .namespace')"
+check "plugin rules copied" "namespaces,services" \
+  "$(render | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-depl-calls-svc") | .rules[0].resources | join(",")')"
+check "disabled plugin: no RBAC" "" \
+  "$(render --set catalog.plugins.fluxcd.enabled=false | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-fluxcd") | .metadata.name')"
+check "two releases do not collide" "u-catalog" \
+  "$(helm template u "$CHART" --namespace other "${BASE[@]}" | yq 'select(.kind == "ClusterRole" and .metadata.name == "u-catalog") | .metadata.name')"
+
 exit $fail
