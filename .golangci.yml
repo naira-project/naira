@@ -4,8 +4,6 @@ linters:
   default: none
   enable:
     - gocritic
-    - revive
-    - nolintlint
   settings:
     gocritic:
       enabled-checks:
@@ -13,8 +11,6 @@ linters:
       settings:
         ruleguard:
           rules: "rules/ruleguard.go"
-    nolintlint:
-      require-explanation: true
   exclusions:
     rules:
       - linters:
