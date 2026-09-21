@@ -124,4 +124,24 @@ check "portal Secret when create=true" "s3" \
   "$(render_raw --set catalog.enabled=false --set portal.oidc.secret.create=true --set portal.oidc.secret.value=s3 \
      | yq 'select(.kind == "Secret" and .metadata.name == "portal-oidc") | .stringData["client-secret"]')"
 
+# ── Task 6: ui and portal ────────────────────────────────────────────────────
+UI='select(.kind == "Deployment" and .metadata.name == "ui") | .spec.template.spec.containers[0]'
+PORTAL='select(.kind == "Deployment" and .metadata.name == "portal") | .spec.template.spec.containers[0]'
+check "ui catalog upstream follows the release namespace" "http://catalog.naira.svc.cluster.local:8090" \
+  "$(render | yq "$UI | .env[] | select(.name == \"CATALOG_UPSTREAM\") | .value")"
+check "ui catalog upstream override" "http://x:1" \
+  "$(render --set ui.catalogUpstream=http://x:1 | yq "$UI | .env[] | select(.name == \"CATALOG_UPSTREAM\") | .value")"
+check "ui image" "ghcr.io/naira-project/naira-ui:0.1.0" "$(render | yq "$UI | .image")"
+check "ui Service" "ui 80" \
+  "$(render | yq 'select(.kind == "Service" and .metadata.name == "ui") | .metadata.name + " " + (.spec.ports[0].port | tostring)')"
+check "portal token URL from keycloak baseUrl and realm" \
+  "http://keycloak.naira-deps.svc.cluster.local:8080/realms/naira/protocol/openid-connect/token" \
+  "$(render | yq "$PORTAL | .env[] | select(.name == \"TOKEN_URL_KEYCLOAK\") | .value")"
+check "portal client secret from portal-oidc" "portal-oidc/client-secret" \
+  "$(render | yq "$PORTAL | .env[] | select(.name == \"OIDC_CLIENT_SECRET_KEYCLOAK\") | .valueFrom.secretKeyRef | .name + \"/\" + .key")"
+check "portal Service" "portal 3000" \
+  "$(render | yq 'select(.kind == "Service" and .metadata.name == "portal") | .metadata.name + " " + (.spec.ports[0].port | tostring)')"
+check "ui disabled" "" \
+  "$(render --set ui.enabled=false | yq 'select(.kind == "Deployment" and .metadata.name == "ui") | .metadata.name')"
+
 exit $fail
