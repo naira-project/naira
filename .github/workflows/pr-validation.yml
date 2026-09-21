@@ -145,8 +145,10 @@ jobs:
         with:
           fetch-depth: 0 # ct lint diffs against the target branch
           persist-credentials: false
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-      - uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
       - name: helm lint
         run: |
           helm lint deploy/charts/naira -f deploy/charts/naira/ci/default-values.yaml
