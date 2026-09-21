@@ -144,4 +144,24 @@ check "portal Service" "portal 3000" \
 check "ui disabled" "" \
   "$(render --set ui.enabled=false | yq 'select(.kind == "Deployment" and .metadata.name == "ui") | .metadata.name')"
 
+# ── Task 7: guards ───────────────────────────────────────────────────────────
+must_fail "duplicate plugin port" "both use port 50051" --set catalog.plugins.mlflow.port=50051
+must_fail "catalog secret: existing and create" "catalog.secret: set existingSecret or create, not both" \
+  --set catalog.secret.existingSecret=x --set catalog.secret.create=true
+must_fail "portal secret: existing and create" "portal.oidc.secret: set existingSecret or create, not both" \
+  --set portal.oidc.secret.existingSecret=x --set portal.oidc.secret.create=true
+must_fail "tech-radar on without a radar file" "catalog.plugins.tech-radar.config: set existingConfigMap or data" \
+  --set catalog.plugins.tech-radar.enabled=true
+RENDER=render_raw must_fail "no catalog Secret source" \
+  "catalog.plugins.litellm reads LITELLM_API_KEY from the catalog Secret: set catalog.secret.existingSecret or catalog.secret.create" \
+  --set portal.enabled=false
+RENDER=render_raw must_fail "no portal Secret source" "portal reads its OIDC client secret: set portal.oidc.secret.existingSecret or portal.oidc.secret.create" \
+  --set catalog.secret.existingSecret=x
+check "no Secret needed when nothing reads one" "ok" \
+  "$(render_raw --set portal.enabled=false --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false >/dev/null && echo ok)"
+check "a plugin naming its own Secret needs no catalog Secret" "ok" \
+  "$(render_raw --set portal.enabled=false --set catalog.plugins.openmetadata.enabled=false --set catalog.plugins.litellm.env.LITELLM_API_KEY.secretKeyRef.name=own >/dev/null && echo ok)"
+check "disabled plugin may share a port" "ok" \
+  "$(render --set catalog.plugins.mlflow.port=50051 --set catalog.plugins.mlflow.enabled=false >/dev/null && echo ok)"
+
 exit $fail

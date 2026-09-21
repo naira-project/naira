@@ -1,0 +1,44 @@
+{{- /*
+Renders no objects; fails the render on invalid values. Must not be a `_*.tpl`
+partial: Helm never executes a partial's top-level content, so `fail` there
+silently does nothing.
+*/}}
+{{- if and .Values.catalog.secret.existingSecret .Values.catalog.secret.create }}
+{{- fail "catalog.secret: set existingSecret or create, not both" }}
+{{- end }}
+{{- if and .Values.portal.oidc.secret.existingSecret .Values.portal.oidc.secret.create }}
+{{- fail "portal.oidc.secret: set existingSecret or create, not both" }}
+{{- end }}
+{{- $ports := dict }}
+{{- range $name, $p := .Values.catalog.plugins }}
+{{- if $p.enabled }}
+{{- $port := toString $p.port }}
+{{- if hasKey $ports $port }}
+{{- fail (printf "catalog.plugins: %s and %s both use port %s" (get $ports $port) $name $port) }}
+{{- end }}
+{{- $_ := set $ports $port $name }}
+{{- if and $p.config (not $p.config.existingConfigMap) (not $p.config.data) }}
+{{- fail (printf "catalog.plugins.%s.config: set existingConfigMap or data" $name) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- /*
+No Secret source. Without these the render succeeds and the pod sits in
+CreateContainerConfigError; fail here with the fix instead.
+*/}}
+{{- $s := .Values.catalog.secret }}
+{{- if and .Values.catalog.enabled (not $s.existingSecret) (not $s.create) }}
+{{- range $name, $p := .Values.catalog.plugins }}
+{{- if $p.enabled }}
+{{- range $var, $v := $p.env }}
+{{- if and (kindIs "map" $v) (not $v.secretKeyRef.name) }}
+{{- fail (printf "catalog.plugins.%s reads %s from the catalog Secret: set catalog.secret.existingSecret or catalog.secret.create" $name $var) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $o := .Values.portal.oidc.secret }}
+{{- if and .Values.portal.enabled (not $o.existingSecret) (not $o.create) }}
+{{- fail "portal reads its OIDC client secret: set portal.oidc.secret.existingSecret or portal.oidc.secret.create" }}
+{{- end }}
