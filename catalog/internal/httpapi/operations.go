@@ -21,7 +21,6 @@ type StatusErrorResource struct {
 // or completed operation.
 type OperationMetadataResource struct {
 	Plugin    string     `json:"plugin"`
-	State     string     `json:"state"`
 	StartTime time.Time  `json:"startTime"`
 	EndTime   *time.Time `json:"endTime,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
@@ -56,7 +55,7 @@ type RunPluginsResponse struct {
 
 var operationListOptionsSpec = listOptionsSpec{
 	scope:         "operations",
-	allowedFields: map[string]bool{"plugin": true, "state": true},
+	allowedFields: map[string]bool{"plugin": true},
 }
 
 func operationFromCatalogOperation(op operations.Operation) OperationResource {
@@ -67,7 +66,6 @@ func operationFromCatalogOperation(op operations.Operation) OperationResource {
 		Done: done,
 		Metadata: OperationMetadataResource{
 			Plugin:    op.Plugin,
-			State:     string(op.State),
 			StartTime: op.StartTime,
 			EndTime:   op.EndTime,
 			CreatedAt: op.CreatedAt,
@@ -80,8 +78,12 @@ func operationFromCatalogOperation(op operations.Operation) OperationResource {
 			NodesUpserted:     op.NodesUpserted,
 			RelationsUpserted: op.RelationsUpserted,
 		}
-	case done && op.Error != nil:
-		resource.Error = &StatusErrorResource{Message: op.Error.Message}
+	case done && op.State == operations.StateFailed:
+		message := "operation failed without an error"
+		if op.Error != nil {
+			message = op.Error.Message
+		}
+		resource.Error = &StatusErrorResource{Message: message}
 	}
 
 	return resource
@@ -95,10 +97,9 @@ func toOperationResources(ops []operations.Operation) []OperationResource {
 	return result
 }
 
-func matchOperationFilter(operation OperationResource, filter *equalityFilter) (bool, error) {
+func matchOperationFilter(operation operations.Operation, filter *equalityFilter) (bool, error) {
 	matches, err := filter.matchesResource(map[string]string{
-		"plugin": operation.Metadata.Plugin,
-		"state":  operation.Metadata.State,
+		"plugin": operation.Plugin,
 	}, "operation")
 	if err != nil {
 		return false, fmt.Errorf("matching resource filter: %w", err)
@@ -112,7 +113,7 @@ func matchOperationFilter(operation OperationResource, filter *equalityFilter) (
 // - pageSize
 // - pageToken
 // - filter: only field="value" equality filters
-// Supported operation filter fields: plugin, state.
+// Supported operation filter fields: plugin.
 func newListOperationsHandler(runner *pluginrun.Runner, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(operationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 		listed, err := runner.ListOperations(r.Context(), operations.Filter{})
@@ -122,13 +123,12 @@ func newListOperationsHandler(runner *pluginrun.Runner, logger *log.Logger) http
 
 		result := make([]OperationResource, 0)
 		for _, op := range listed {
-			resource := operationFromCatalogOperation(op)
-			matches, err := matchOperationFilter(resource, options.filter)
+			matches, err := matchOperationFilter(op, options.filter)
 			if err != nil {
 				return fmt.Errorf("matching operation filter: %w", err)
 			}
 			if matches {
-				result = append(result, resource)
+				result = append(result, operationFromCatalogOperation(op))
 			}
 		}
 

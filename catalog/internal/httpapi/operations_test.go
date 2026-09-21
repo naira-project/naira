@@ -40,7 +40,7 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 				"name": "{{NAME}}",
 				"done": false,
 				"metadata": {
-					"plugin": "mlflow", "state": "PENDING",
+					"plugin": "mlflow",
 					"startTime": "{{START}}", "createdAt": "{{CREATED}}"
 				}
 			}`,
@@ -53,7 +53,7 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 				"name": "{{NAME}}",
 				"done": true,
 				"metadata": {
-					"plugin": "mlflow", "state": "SUCCEEDED",
+					"plugin": "mlflow",
 					"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
 				},
 				"response": {"nodesUpserted": 0, "relationsUpserted": 0}
@@ -67,7 +67,7 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 				"name": "{{NAME}}",
 				"done": true,
 				"metadata": {
-					"plugin": "mlflow", "state": "FAILED",
+					"plugin": "mlflow",
 					"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
 				},
 				"error": {"message": "collecting response from plugin \"mlflow\": sync failed: database offline"}
@@ -103,6 +103,18 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 			assertOperationJSON(t, tt.wantTerminalJSON, getRec.Body.Bytes())
 		})
 	}
+}
+
+func TestOperationFromCatalogOperationFailedWithoutError(t *testing.T) {
+	resource := operationFromCatalogOperation(operations.Operation{
+		Name:  "plugin-run-missing-error",
+		State: operations.StateFailed,
+	})
+
+	assert.True(t, resource.Done)
+	assert.Nil(t, resource.Response)
+	require.NotNil(t, resource.Error)
+	assert.Equal(t, "operation failed without an error", resource.Error.Message)
 }
 
 func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
@@ -167,7 +179,7 @@ func TestGetOperationsEndpoint(t *testing.T) {
 		"name": "{{NAME}}",
 		"done": true,
 		"metadata": {
-			"plugin": "seed", "state": "SUCCEEDED",
+			"plugin": "seed",
 			"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
 		},
 		"response": {"nodesUpserted": 0, "relationsUpserted": 0}
