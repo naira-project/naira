@@ -1,0 +1,10 @@
+apiVersion: v2
+name: naira
+description: Naira — catalog with its plugin sidecars, UI and portal
+type: application
+# Release CI sets both.
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/naira-project/naira
+sources:
+  - https://github.com/naira-project/naira

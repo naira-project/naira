@@ -1,0 +1,205 @@
+# Naira — first-party components only (RFC-009 §1). Keycloak, LiteLLM, MLflow,
+# OpenMetadata and MCP servers come from the test-dependencies chart or the
+# operator's own; this chart only needs their addresses (`dependencies`).
+
+image:
+  # Chart-local, not a Helm global. Empty for images loaded into kind.
+  registry: ghcr.io/naira-project
+  # Empty -> .Chart.AppVersion. A per-image tag wins over this one.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Defaults match test-dependencies installed into namespace naira-deps.
+dependencies:
+  keycloak:
+    baseUrl: http://keycloak.naira-deps.svc.cluster.local:8080
+    realm: naira
+    # Browser-facing. Differs from baseUrl wherever the browser cannot resolve
+    # cluster DNS, i.e. every environment reached by port-forward.
+    issuer: http://localhost:8080/realms/naira
+    authUrl: http://localhost:8080/realms/naira/protocol/openid-connect/auth
+    baseDomain: localhost
+  litellm:
+    baseUrl: http://litellm.naira-deps.svc.cluster.local:4000
+  mlflow:
+    baseUrl: http://mlflow.naira-deps.svc.cluster.local:5000
+  openmetadata:
+    baseUrl: http://openmetadata.naira-deps.svc.cluster.local:8585
+    adminEmail: admin@open-metadata.org
+  mcp:
+    endpoints: mock-knowledge-base=http://mcp-mock.naira-deps.svc.cluster.local:8080/mcp
+
+catalog:
+  enabled: true
+  replicas: 1
+  image: {repository: naira-catalog, tag: ""}
+  port: 8090
+
+  # Secret `catalog-secrets` (or existingSecret) holding LITELLM_API_KEY and
+  # OPENMETADATA_ADMIN_PASSWORD. Supplied by the operator; create is for kind.
+  secret:
+    existingSecret: ""
+    create: false
+    data: {}
+
+  rbac:
+    rules:
+      - apiGroups: ["naira.io"]
+        resources: ["appidentities"]
+        verbs: ["get", "list"]
+
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
+  pluginDefaults:
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 200m, memory: 128Mi}
+
+  # Plugin sidecars (ADR-005), keyed by name so an overlay changes one field.
+  # One entry drives: the sidecar, its line in plugins.yaml, its RBAC and its
+  # config ConfigMap. The catalog connects to every enabled plugin at startup
+  # and exits if one is unreachable.
+  #
+  #   image       naira-plugin-<name>; built from plugins/cmd/<name, - as _>
+  #   port        unique within the pod
+  #   schedule    cron; omit for manual trigger only
+  #   env         NAME: "value, tpl-rendered" | NAME: {secretKeyRef: {name?, key}}
+  #               (secretKeyRef.name defaults to the catalog Secret)
+  #   resources   merged over pluginDefaults.resources
+  #   rbac.rules  ClusterRole rules, only for plugins that read the cluster
+  #   config      {mountPath, existingConfigMap | data}: files mounted as a directory
+  plugins:
+    litellm:
+      enabled: true
+      image: {repository: naira-plugin-litellm, tag: ""}
+      port: 50051
+      schedule: "0 0 * * *"
+      pathPrefix: litellm
+      env:
+        LITELLM_BASE_URL: "{{ .Values.dependencies.litellm.baseUrl }}"
+        LITELLM_API_KEY: {secretKeyRef: {key: LITELLM_API_KEY}}
+
+    mlflow:
+      enabled: true
+      image: {repository: naira-plugin-mlflow, tag: ""}
+      port: 50052
+      schedule: "0 0 * * *"
+      pathPrefix: mlflow
+      env:
+        MLFLOW_BASE_URL: "{{ .Values.dependencies.mlflow.baseUrl }}"
+
+    depl-calls-svc:
+      enabled: true
+      image: {repository: naira-plugin-depl-calls-svc, tag: ""}
+      port: 50053
+      schedule: "0 * * * *"
+      env:
+        DEPL_CALLS_SVC_KUBECONFIG: ""
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces", "services"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+
+    depl-uses-litellm:
+      enabled: true
+      image: {repository: naira-plugin-depl-uses-litellm, tag: ""}
+      port: 50054
+      schedule: "0 * * * *"
+      env:
+        DEPL_USES_LITELLM_KUBECONFIG: ""
+        DEPL_USES_LITELLM_NAMED_HOSTS: "litellm={{ .Values.dependencies.litellm.baseUrl }}"
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces", "secrets"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+
+    fluxcd:
+      enabled: true
+      image: {repository: naira-plugin-fluxcd, tag: ""}
+      port: 50055
+      schedule: "*/1 * * * *"
+      rbac:
+        rules:
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+          - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+            resources: ["kustomizations"]
+            verbs: ["get", "list"]
+          - apiGroups: ["helm.toolkit.fluxcd.io"]
+            resources: ["helmreleases"]
+            verbs: ["get", "list"]
+          - apiGroups: ["source.toolkit.fluxcd.io"]
+            resources: ["gitrepositories"]
+            verbs: ["get", "list"]
+
+    openmetadata:
+      enabled: true
+      image: {repository: naira-plugin-openmetadata, tag: ""}
+      port: 50056
+      pathPrefix: openmetadata
+      env:
+        OPENMETADATA_BASE_URL: "{{ .Values.dependencies.openmetadata.baseUrl }}"
+        OPENMETADATA_ADMIN_EMAIL: "{{ .Values.dependencies.openmetadata.adminEmail }}"
+        OPENMETADATA_ADMIN_PASSWORD: {secretKeyRef: {key: OPENMETADATA_ADMIN_PASSWORD}}
+
+    tech-radar:
+      # Off by default: it needs a radar file (config.data or existingConfigMap).
+      # No schedule until naira#196 settles one.
+      enabled: false
+      image: {repository: naira-plugin-tech-radar, tag: ""}
+      port: 50057
+      env:
+        TECH_RADAR_CONFIG_PATH: /etc/naira/techradar/radar.yaml
+      config:
+        mountPath: /etc/naira/techradar
+        existingConfigMap: ""
+        data: {}
+
+    mcp-servers:
+      enabled: true
+      image: {repository: naira-plugin-mcp-servers, tag: ""}
+      port: 50058
+      pathPrefix: mcp
+      env:
+        MCP_ENDPOINTS: "{{ .Values.dependencies.mcp.endpoints }}"
+
+ui:
+  enabled: true
+  replicas: 1
+  image: {repository: naira-ui, tag: ""}
+  port: 80
+  # Empty -> http://catalog.<release namespace>.svc.cluster.local:<catalog.port>
+  catalogUpstream: ""
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 200m, memory: 128Mi}
+
+portal:
+  enabled: true
+  replicas: 1
+  image: {repository: naira-portal, tag: ""}
+  port: 3000
+  uiBaseUrl: http://localhost:3001
+  oidc:
+    clientId: naira-portal
+    # Secret `portal-oidc` (or existingSecret). Supplied by the operator;
+    # create is for kind.
+    secret:
+      existingSecret: ""
+      create: false
+      key: client-secret
+      value: ""
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}

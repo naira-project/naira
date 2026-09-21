@@ -1,0 +1,62 @@
+{{- if .Values.catalog.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    {{- include "naira.selector" (dict "root" . "name" "catalog") | nindent 4 }}
+spec:
+  replicas: {{ .Values.catalog.replicas }}
+  selector:
+    matchLabels:
+      {{- include "naira.selector" (dict "root" . "name" "catalog") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "naira.labels" . | nindent 8 }}
+        {{- include "naira.selector" (dict "root" . "name" "catalog") | nindent 8 }}
+    spec:
+      serviceAccountName: catalog
+      containers:
+        - name: catalog
+          image: {{ include "naira.image" (dict "root" $ "image" .Values.catalog.image) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: PORT
+              value: {{ .Values.catalog.port | quote }}
+            - name: KEYCLOAK_BASE_URL
+              value: {{ .Values.dependencies.keycloak.baseUrl | quote }}
+            - name: KEYCLOAK_REALM
+              value: {{ .Values.dependencies.keycloak.realm | quote }}
+            - name: KEYCLOAK_ISSUER
+              value: {{ .Values.dependencies.keycloak.issuer | quote }}
+          ports:
+            - {name: http, containerPort: {{ .Values.catalog.port }}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.catalog.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    {{- include "naira.selector" (dict "root" . "name" "catalog") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "naira.selector" (dict "root" . "name" "catalog") | nindent 4 }}
+  ports:
+    - {name: http, port: {{ .Values.catalog.port }}, targetPort: http}
+{{- end }}
