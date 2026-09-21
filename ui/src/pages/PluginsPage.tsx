@@ -190,7 +190,7 @@ function StatusTab({
               <td className="py-3 pr-4">
                 {running ? (
                   <span className="text-xs text-gray-400">—</span>
-                ) : op && op.metadata.state === 'FAILED' && op.error ? (
+                ) : op?.error ? (
                   <Button
                     type="button"
                     variant="destructive"
@@ -207,7 +207,7 @@ function StatusTab({
                     <span className="ml-0.5 underline">Details</span>
                   </Button>
                 ) : op ? (
-                  <PluginStatusBadge state={op.metadata.state} />
+                  <PluginStatusBadge state={op.done ? 'SUCCEEDED' : 'RUNNING'} />
                 ) : (
                   <span className="text-xs text-gray-400">Not run yet</span>
                 )}

@@ -72,7 +72,8 @@ export default function CatalogView({
     () =>
       operations.some(
         (op) =>
-          op.metadata.state === 'SUCCEEDED' &&
+          op.done &&
+          Boolean(op.response) &&
           (!viewpointPlugins || viewpointPlugins.includes(op.metadata.plugin)),
       ),
     [operations, viewpointPlugins],

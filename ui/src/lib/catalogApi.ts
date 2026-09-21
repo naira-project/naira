@@ -171,7 +171,6 @@ export interface StatusErrorResource {
 
 export interface OperationMetadataResource {
   plugin: string;
-  state: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
   startTime: string;
   endTime?: string;
   createdAt: string;
