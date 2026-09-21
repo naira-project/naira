@@ -17,12 +17,35 @@ spec:
       labels:
         {{- include "naira.labels" . | nindent 8 }}
         {{- include "naira.selector" (dict "root" . "name" "catalog") | nindent 8 }}
+      annotations:
+        checksum/plugin-config: {{ include (print $.Template.BasePath "/plugin-configmaps.yaml") . | sha256sum }}
     spec:
       serviceAccountName: catalog
+      initContainers:
+        {{- range $name, $p := .Values.catalog.plugins }}
+        {{- if $p.enabled }}
+        - name: plugin-{{ $name }}
+          image: {{ include "naira.image" (dict "root" $ "image" $p.image) | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          restartPolicy: Always
+          env:
+            - name: PORT
+              value: {{ $p.port | quote }}
+            {{- with $p.pathPrefix }}
+            - name: PATH_PREFIX
+              value: {{ . | quote }}
+            {{- end }}
+            {{- include "naira.env" (dict "root" $ "env" $p.env) | nindent 12 }}
+          resources:
+            {{- include "naira.pluginResources" (dict "root" $ "plugin" $p) | nindent 12 }}
+        {{- end }}
+        {{- end }}
       containers:
         - name: catalog
           image: {{ include "naira.image" (dict "root" $ "image" .Values.catalog.image) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+            - {name: plugin-config, mountPath: /etc/catalog/plugins.yaml, subPath: plugins.yaml, readOnly: true}
           env:
             - name: PORT
               value: {{ .Values.catalog.port | quote }}
@@ -44,6 +67,9 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.catalog.resources | nindent 12 }}
+      volumes:
+        - name: plugin-config
+          configMap: {name: catalog-plugin-config}
 ---
 apiVersion: v1
 kind: Service

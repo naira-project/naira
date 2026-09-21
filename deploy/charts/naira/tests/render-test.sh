@@ -39,4 +39,44 @@ check "catalog uses the catalog ServiceAccount" "catalog" \
 check "objects land in the release namespace" "naira" \
   "$(render | yq 'select(.kind == "Deployment" and .metadata.name == "catalog") | .metadata.namespace')"
 
+# ── Task 2: plugins ──────────────────────────────────────────────────────────
+PLUGINS_YAML='select(.kind == "ConfigMap" and .metadata.name == "catalog-plugin-config") | .data["plugins.yaml"]'
+LITELLM_ENV="$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .env[]"
+
+check "default sidecars (tech-radar off), sorted" \
+  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata" \
+  "$(render | yq ea "[$CAT | .initContainers[].name] | join(\",\")")"
+check "sidecars are native sidecars" "Always" \
+  "$(render | yq ea "[$CAT | .initContainers[].restartPolicy] | unique | join(\",\")")"
+check "plugin image" "ghcr.io/naira-project/naira-plugin-litellm:0.1.0" \
+  "$(render | yq "$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .image")"
+check "plugin PORT" "50051" "$(render | yq "$LITELLM_ENV | select(.name == \"PORT\") | .value")"
+check "plugin PATH_PREFIX" "litellm" "$(render | yq "$LITELLM_ENV | select(.name == \"PATH_PREFIX\") | .value")"
+check "plugin env tpl-rendered from dependencies" "http://litellm.naira-deps.svc.cluster.local:4000" \
+  "$(render | yq "$LITELLM_ENV | select(.name == \"LITELLM_BASE_URL\") | .value")"
+check "one dependency URL override reaches the plugin" "http://litellm.run1.svc.cluster.local:4000" \
+  "$(render --set dependencies.litellm.baseUrl=http://litellm.run1.svc.cluster.local:4000 \
+     | yq "$LITELLM_ENV | select(.name == \"LITELLM_BASE_URL\") | .value")"
+check "plugin secret env defaults to catalog-secrets" "catalog-secrets/LITELLM_API_KEY" \
+  "$(render | yq "$LITELLM_ENV | select(.name == \"LITELLM_API_KEY\") | .valueFrom.secretKeyRef | .name + \"/\" + .key")"
+check "plugin resources default" "128Mi" \
+  "$(render | yq "$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .resources.limits.memory")"
+check "plugin resources override merges" "256Mi 50m" \
+  "$(render --set catalog.plugins.litellm.resources.limits.memory=256Mi \
+     | yq "$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .resources | .limits.memory + \" \" + .requests.cpu")"
+check "plugins.yaml entry" "localhost:50051 0 0 * * *" \
+  "$(render | yq "$PLUGINS_YAML" | yq '.plugins.litellm | .address + " " + .schedule')"
+check "plugins.yaml omits schedule when unset" "null" \
+  "$(render | yq "$PLUGINS_YAML" | yq '.plugins.openmetadata.schedule')"
+check "disabled plugin: no sidecar" "" \
+  "$(render --set catalog.plugins.litellm.enabled=false | yq "$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .name")"
+check "disabled plugin: not in plugins.yaml" "false" \
+  "$(render --set catalog.plugins.litellm.enabled=false | yq "$PLUGINS_YAML" | yq '.plugins | has("litellm")')"
+check "plugins.yaml mounted" "/etc/catalog/plugins.yaml" \
+  "$(render | yq "$CAT | .containers[0].volumeMounts[] | select(.name == \"plugin-config\") | .mountPath")"
+check "checksum changes with plugins" "different" \
+  "$( [ "$(render | yq 'select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.template.metadata.annotations["checksum/plugin-config"]')" != \
+        "$(render --set catalog.plugins.litellm.enabled=false | yq 'select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.template.metadata.annotations["checksum/plugin-config"]')" ] \
+      && echo different || echo same)"
+
 exit $fail

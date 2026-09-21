@@ -1,1 +1,24 @@
-{{- /* Filled in by Task 2. */}}
+{{- if .Values.catalog.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-plugin-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    {{- include "naira.selector" (dict "root" . "name" "catalog") | nindent 4 }}
+data:
+  # PLUGIN_CONFIG_FILE (catalog/cmd/catalog/config.go). Generated from
+  # catalog.plugins, the same map that renders the sidecars.
+  plugins.yaml: |
+    plugins:
+    {{- range $name, $p := .Values.catalog.plugins }}
+    {{- if $p.enabled }}
+      {{ $name }}:
+        address: localhost:{{ $p.port }}
+        {{- with $p.schedule }}
+        schedule: {{ . | quote }}
+        {{- end }}
+    {{- end }}
+    {{- end }}
+{{- end }}
