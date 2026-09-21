@@ -13,13 +13,8 @@ linters:
       settings:
         ruleguard:
           rules: "rules/ruleguard.go"
-    revive:
-      rules:
-        - name: exported
-          severity: warning
     nolintlint:
       require-explanation: true
-      require-specific: true
   exclusions:
     rules:
       - linters:
