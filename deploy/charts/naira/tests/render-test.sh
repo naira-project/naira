@@ -93,4 +93,23 @@ check "disabled plugin: no RBAC" "" \
 check "two releases do not collide" "u-catalog" \
   "$(helm template u "$CHART" --namespace other "${BASE[@]}" | yq 'select(.kind == "ClusterRole" and .metadata.name == "u-catalog") | .metadata.name')"
 
+# ── Task 4: plugin config ────────────────────────────────────────────────────
+TR=(--set catalog.plugins.tech-radar.enabled=true --set-string 'catalog.plugins.tech-radar.config.data.radar\.yaml=schema_version: 1')
+check "tech-radar ConfigMap from data" "schema_version: 1" \
+  "$(render "${TR[@]}" | yq 'select(.kind == "ConfigMap" and .metadata.name == "plugin-tech-radar-config") | .data["radar.yaml"]')"
+check "tech-radar mounted as a directory" "/etc/naira/techradar none" \
+  "$(render "${TR[@]}" | yq "$CAT | .initContainers[] | select(.name == \"plugin-tech-radar\") | .volumeMounts[0] | .mountPath + \" \" + (.subPath // \"none\")")"
+check "tech-radar volume source" "plugin-tech-radar-config" \
+  "$(render "${TR[@]}" | yq "$CAT | .volumes[] | select(.name == \"plugin-tech-radar-config\") | .configMap.name")"
+check "existingConfigMap: no generated ConfigMap" "" \
+  "$(render --set catalog.plugins.tech-radar.enabled=true --set catalog.plugins.tech-radar.config.existingConfigMap=my-radar \
+     | yq 'select(.kind == "ConfigMap" and .metadata.name == "plugin-tech-radar-config") | .metadata.name')"
+check "existingConfigMap: volume points at it" "my-radar" \
+  "$(render --set catalog.plugins.tech-radar.enabled=true --set catalog.plugins.tech-radar.config.existingConfigMap=my-radar \
+     | yq "$CAT | .volumes[] | select(.name == \"plugin-tech-radar-config\") | .configMap.name")"
+check "all plugins on: 8 sidecars" "8" \
+  "$(render "${TR[@]}" | yq "$CAT | .initContainers | length")"
+check "tech-radar registered in plugins.yaml" "localhost:50057" \
+  "$(render "${TR[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.tech-radar.address')"
+
 exit $fail

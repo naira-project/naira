@@ -36,6 +36,12 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- include "naira.env" (dict "root" $ "env" $p.env) | nindent 12 }}
+          {{- if $p.config }}
+          volumeMounts:
+            - name: plugin-{{ $name }}-config
+              mountPath: {{ $p.config.mountPath }}
+              readOnly: true
+          {{- end }}
           resources:
             {{- include "naira.pluginResources" (dict "root" $ "plugin" $p) | nindent 12 }}
         {{- end }}
@@ -70,6 +76,13 @@ spec:
       volumes:
         - name: plugin-config
           configMap: {name: catalog-plugin-config}
+        {{- range $name, $p := .Values.catalog.plugins }}
+        {{- if and $p.enabled $p.config }}
+        - name: plugin-{{ $name }}-config
+          configMap:
+            name: {{ $p.config.existingConfigMap | default (printf "plugin-%s-config" $name) }}
+        {{- end }}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

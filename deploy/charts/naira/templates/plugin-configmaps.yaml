@@ -21,4 +21,19 @@ data:
         {{- end }}
     {{- end }}
     {{- end }}
+{{- range $name, $p := .Values.catalog.plugins }}
+{{- if and $p.enabled $p.config (not $p.config.existingConfigMap) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plugin-{{ $name }}-config
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+    {{- include "naira.selector" (dict "root" $ "name" "catalog") | nindent 4 }}
+data:
+  {{- toYaml $p.config.data | nindent 2 }}
+{{- end }}
+{{- end }}
 {{- end }}
