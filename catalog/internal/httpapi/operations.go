@@ -12,8 +12,7 @@ import (
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
 
-// StatusErrorResource is an AIP-193 compliant error representation carried
-// by failed operations.
+// StatusErrorResource is an error representation carried by failed operations.
 type StatusErrorResource struct {
 	Message string `json:"message"`
 }
