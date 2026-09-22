@@ -1,18 +1,15 @@
 # github plugin
 
-github finds GitHub repositories whose artifact attestations cryptographically prove that they built images running in Kubernetes Deployments, then enriches these repositories with metadata and CODEOWNERS information.
+github plugin connects Kubernetes Deployments to their source GitHub repositories.
 
-A Deployment is linked to a repository only after verification with "gh attestation verify".
+It discovers repositories whose artifact attestations cryptographically prove that they built the container images running in a cluster, enriching the results with repository metadata and top-level CODEOWNERS ownership.
 
-Verification is skipped for ghcr.io images that do not belong to GITHUB\_ORG to avoid unnecessary "gh" CLI calls. Images hosted on other OCI registries are always passed to verification because path conventions vary across providers.
+## How It Works
 
-Deployments with more than one container are not verified because the repository cannot be attributed to a single image unambiguously.
-
-TODO: Link deployments with more than one container to source repositories, verifying each container image independently.
-
-TODO(optimization): Support filtering images for verification on registries other than ghcr.io (e.g. via AllowedImagePrefixes in the plugin configuration) to avoid verifying images that do not belong to GITHUB\_ORG.
-
-TODO: Check support for private OCI registries and private GitHub repositories.
+  - Attestation Verification: A Deployment is linked to a repository only after successful verification using \`gh attestation verify\`.
+  - ghcr.io Optimization: Images on ghcr.io that do not belong to GITHUB\_ORG are skipped to avoid unnecessary CLI calls. Non-ghcr.io images are always verified since path conventions vary across registries.
+  - Single-Container Limit: Deployments with multiple containers are skipped because ownership cannot be attributed to a single image unambiguously.
+  - CODEOWNERS Attribution: Only the default (\`\*\`) rule is used to assign ownership. Path-specific rules (e.g., \`/docs/ @docs-team\`) are ignored to prevent misrepresenting partial owners as whole-repository owners.
 
 ## Environment Variables
 
@@ -23,6 +20,12 @@ TODO: Check support for private OCI registries and private GitHub repositories.
   - GITHUB\_ATTESTATION\_TIMEOUT (optional) - timeout for a single "gh attestation verify" invocation; defaults to "30s".
   - GH\_CLI\_PATH (optional) - path to the "gh" binary; defaults to "gh" (resolved from PATH).
   - KUBECONFIG (optional) - path to a kubeconfig file; when unset, in-cluster configuration is used.
+
+## TODOs
+
+  - Link multi-container deployments by verifying each image independently.
+  - Add registry filtering for non-ghcr.io images (e.g., \`AllowedImagePrefixes\`).
+  - Verify support for private OCI registries and private GitHub repositories.
 
 ---
 Readme created from Go doc with [goreadme](https://github.com/posener/goreadme)
