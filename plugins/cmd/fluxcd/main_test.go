@@ -220,6 +220,43 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
+			name: `GitRepository with GitHub URL, sourcing a Kustomization that describes a Deployment, ` +
+				`produces the "git_repository" node and "deployed_from" relation`,
+			objs: []runtime.Object{
+				namespace("flux-system"),
+				gitRepository("flux-system", "my-repo", "https://github.com/example/repo"),
+				kustomization("flux-system", "my-app",
+					sourceRef("GitRepository", "", "my-repo")),
+				namespace("team-a"),
+				deployment("team-a", "app",
+					kustLabel("flux-system", "my-app")),
+			},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
+						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
+					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
+					{ID: nodeID("deployment", "team-a/app")},
+					{ID: externalRepoID("example", "repo"),
+						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
+				},
+				Relations: []pluginapi.RelationClaim{
+					{Kind: "deployed_from",
+						From: nodeID("deployment", "team-a/app"),
+						To:   externalRepoID("example", "repo")},
+					{Kind: "describes",
+						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+						To:   nodeID("deployment", "team-a/app")},
+					{Kind: "references",
+						From: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
+						To:   externalRepoID("example", "repo")},
+					{Kind: "sourced_from",
+						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
+						To:   nodeID("GitRepository.fluxcd", "flux-system/my-repo")},
+				},
+			},
+		},
+		{
 			// TODO: could be improved in the future to also handle Buckets etc.
 			name: `Kustomization with non-GitRepository source produces a Node, but no "sourced_from" relation`,
 			objs: []runtime.Object{
@@ -309,78 +346,6 @@ func TestCollect(t *testing.T) {
 	}
 }
 
-// func TestCollect_ExternalGitRepositoryNode(t *testing.T) {
-// 	tests := []struct {
-// 		name string
-// 		objs []runtime.Object
-// 		want pluginapi.CollectResponse
-// 	}{
-// 		{
-// 			name: "GitHub URL produces external node and references relation",
-// 			objs: []runtime.Object{
-// 				namespace("flux-system"),
-// 				gitRepository("flux-system", "my-repo", "https://github.com/example/repo"),
-// 			},
-// 			want: func() pluginapi.CollectResponse {
-// 				fluxRepoNode, gitRepoNode, referencesRelation := githubRepoFixture("flux-system", "my-repo", "example", "repo")
-// 				return pluginapi.CollectResponse{
-// 					Nodes:     []pluginapi.NodeClaim{fluxRepoNode, gitRepoNode},
-// 					Relations: []pluginapi.RelationClaim{referencesRelation},
-// 				}
-// 			}(),
-// 		},
-// 		{
-// 			name: "non-GitHub URL produces no external node",
-// 			objs: []runtime.Object{
-// 				namespace("flux-system"),
-// 				gitRepository("flux-system", "my-repo", "https://gitlab.com/example/repo"),
-// 			},
-// 			want: pluginapi.CollectResponse{
-// 				Nodes: []pluginapi.NodeClaim{{
-// 					ID:         nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
-// 					Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"},
-// 				}},
-// 			},
-// 		},
-// 		{
-// 			name: "empty URL produces no external node",
-// 			objs: []runtime.Object{
-// 				namespace("flux-system"),
-// 				gitRepository("flux-system", "my-repo", ""),
-// 			},
-// 			want: pluginapi.CollectResponse{
-// 				Nodes: []pluginapi.NodeClaim{{
-// 					ID:         nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
-// 					Properties: pluginapi.PropertyMap{"url": ""},
-// 				}},
-// 			},
-// 		},
-// 		{
-// 			name: "invalid GitHub URL produces no external node",
-// 			objs: []runtime.Object{
-// 				namespace("flux-system"),
-// 				gitRepository("flux-system", "my-repo", "https://github.com/example"),
-// 			},
-// 			want: pluginapi.CollectResponse{
-// 				Nodes: []pluginapi.NodeClaim{{
-// 					ID:         nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
-// 					Properties: pluginapi.PropertyMap{"url": "https://github.com/example"},
-// 				}},
-// 			},
-// 		},
-// 	}
-
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			dynClient, disc := fakeClients(tt.objs...)
-
-// 			result, err := New(config{}).collect(context.Background(), disc, dynClient)
-// 			require.NoError(t, err)
-// 			assert.Equal(t, sortedByIDs(tt.want), sortedByIDs(result))
-// 		})
-// 	}
-// }
-
 // fakeClients returns a fake dynamic client pre-loaded with objs, and a fake
 // discovery client that knows about the FluxCD CRD resource types.
 func fakeClients(objs ...runtime.Object) (*fake.FakeDynamicClient, *discfake.FakeDiscovery) {
@@ -441,6 +406,10 @@ func sortedByIDs(r pluginapi.CollectResponse) pluginapi.CollectResponse {
 
 func nodeID(kind, path string) pluginapi.NodeID {
 	return pluginapi.NodeID{Kind: kind, Path: testClusterID + "/" + path}
+}
+
+func externalRepoID(owner, repo string) pluginapi.NodeID {
+	return pluginapi.NodeID{Kind: "git_repository", Path: "github.com/" + owner + "/" + repo}
 }
 
 // githubRepoFixture returns the boilerplate produced when a Flux GitRepository
