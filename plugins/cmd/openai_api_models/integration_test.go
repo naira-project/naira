@@ -35,29 +35,10 @@ const (
 	pluginConnectionTimeout = 20 * time.Second
 	pluginRunTimeout        = 30 * time.Second
 
-	litellmImage     = "ghcr.io/berriai/litellm:v1.97.0"
-	litellmPort      = "4000/tcp"
+	litellmImage = "ghcr.io/berriai/litellm:v1.97.0"
+
 	litellmMasterKey = "sk-test-master-key"
-
-	// litellmConfig declares two fake models. Their litellm_params point at
-	// an unreachable api_base: the test never asks litellm to complete a
-	// request, only to report the model_list via GET /v1/models, so the
-	// upstream "provider" is never actually contacted.
-	litellmConfig = `
-model_list:
-  - model_name: fake-model-1
-    litellm_params:
-      model: openai/fake-model-1
-      api_key: fake-key
-      api_base: http://127.0.0.1:9/fake
-  - model_name: fake-model-2
-    litellm_params:
-      model: openai/fake-model-2
-      api_key: fake-key
-      api_base: http://127.0.0.1:9/fake
-`
-
-	llamaCppAPIKey = "sk-test-llama-key"
+	llamaCppAPIKey   = "test-llamacpp-apikey"
 )
 
 // TestOpenAIAPIModels_Integration tests a real binary of the
@@ -75,7 +56,7 @@ model_list:
 //
 // Test output assertion: the catalog API should show 2 Model nodes, one per
 // LiteLLM model, with an "owned_by" property.
-func TestOpenAIAPIModels_Integration(t *testing.T) {
+func TestOpenAIAPIModels_Integration_LiteLLM(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -83,8 +64,42 @@ func TestOpenAIAPIModels_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), integrationTestTimeout)
 	defer cancel()
 
-	// Start a real LiteLLM server, seeded with 2 fake models.
-	litellmBaseURL := startLiteLLM(t, ctx)
+	// Start a real LiteLLM server, seeded with 2 fake models. Their
+	// litellm_params point at an unreachable api_base: the test never asks
+	// litellm to complete a request, only to report the model_list via GET
+	// /v1/models, so the upstream "provider" is never actually contacted.
+	const litellmPort = "4000/tcp"
+	litellmConfigPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(litellmConfigPath, []byte(`
+model_list:
+  - model_name: fake-model-1
+    litellm_params:
+      model: openai/fake-model-1
+      api_key: fake-key
+      api_base: http://127.0.0.1:9/fake
+  - model_name: fake-model-2
+    litellm_params:
+      model: openai/fake-model-2
+      api_key: fake-key
+      api_base: http://127.0.0.1:9/fake
+`), 0o600), "writing litellm config.yaml")
+	litellmCtr, err := testcontainers.Run(ctx, litellmImage,
+		testcontainers.WithExposedPorts(litellmPort),
+		testcontainers.WithEnv(map[string]string{
+			"LITELLM_MASTER_KEY": litellmMasterKey,
+		}),
+		testcontainers.WithFiles(testcontainers.ContainerFile{
+			HostFilePath:      litellmConfigPath,
+			ContainerFilePath: "/app/config.yaml",
+			FileMode:          0o444,
+		}),
+		testcontainers.WithCmd("--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"),
+		testcontainers.WithWaitStrategy(wait.ForHTTP("/health/readiness").WithPort(litellmPort)),
+	)
+	require.NoError(t, err, "starting litellm container")
+	t.Cleanup(func() { _ = litellmCtr.Terminate(context.Background()) })
+	litellmBaseURL, err := litellmCtr.PortEndpoint(ctx, litellmPort, "http")
+	require.NoError(t, err, "getting litellm endpoint")
 
 	// Start a mock OIDC (i.e. Keycloak-like) server.
 	oidc := oidctest.New(t, "test-realm")
@@ -289,36 +304,6 @@ plugins:
 type pluginClaim struct {
 	Plugin string            `json:"plugin"`
 	Props  map[string]string `json:"props"`
-}
-
-// startLiteLLM starts a real LiteLLM server container seeded with 2 fake
-// models and a predefined master API key, and returns its base URL.
-func startLiteLLM(t *testing.T, ctx context.Context) string {
-	t.Helper()
-
-	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte(litellmConfig), 0o600), "writing litellm config.yaml")
-
-	ctr, err := testcontainers.Run(ctx, litellmImage,
-		testcontainers.WithExposedPorts(litellmPort),
-		testcontainers.WithEnv(map[string]string{
-			"LITELLM_MASTER_KEY": litellmMasterKey,
-		}),
-		testcontainers.WithFiles(testcontainers.ContainerFile{
-			HostFilePath:      configPath,
-			ContainerFilePath: "/app/config.yaml",
-			FileMode:          0o444,
-		}),
-		testcontainers.WithCmd("--config", "/app/config.yaml", "--port", "4000", "--host", "0.0.0.0"),
-		testcontainers.WithWaitStrategy(wait.ForHTTP("/health/readiness").WithPort(litellmPort)),
-	)
-	require.NoError(t, err, "starting litellm container")
-	t.Cleanup(func() { _ = ctr.Terminate(context.Background()) })
-
-	endpoint, err := ctr.PortEndpoint(ctx, litellmPort, "http")
-	require.NoError(t, err, "getting litellm endpoint")
-
-	return endpoint
 }
 
 // buildAndStart builds pkg, trying to use the same command line used in our
