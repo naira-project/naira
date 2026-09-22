@@ -16,34 +16,28 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
-type fakeBedrockClient struct {
-	output *bedrock.ListFoundationModelsOutput
-	err    error
+func fakeBedrockClient(output *bedrock.ListFoundationModelsOutput, err error) listFoundationModelsFunc {
+	return func(context.Context, *bedrock.ListFoundationModelsInput, ...func(*bedrock.Options)) (*bedrock.ListFoundationModelsOutput, error) {
+		return output, err
+	}
 }
 
-func (f *fakeBedrockClient) ListFoundationModels(context.Context, *bedrock.ListFoundationModelsInput, ...func(*bedrock.Options)) (*bedrock.ListFoundationModelsOutput, error) {
-	return f.output, f.err
-}
-
-type fakeCloudWatchClient struct {
-	output *cloudwatch.GetMetricDataOutput
-	err    error
-}
-
-func (f *fakeCloudWatchClient) GetMetricData(context.Context, *cloudwatch.GetMetricDataInput, ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error) {
-	return f.output, f.err
+func fakeCloudWatchClient(output *cloudwatch.GetMetricDataOutput, err error) getMetricDataFunc {
+	return func(context.Context, *cloudwatch.GetMetricDataInput, ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error) {
+		return output, err
+	}
 }
 
 func strp(s string) *string { return &s }
 
-func newTestPlugin(regions []string, bc bedrockClient, cw cloudWatchClient, cwErr error) *Plugin {
+func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDataFunc, cwErr error) *Plugin {
 	return &Plugin{
 		logger: log.New(io.Discard, "", 0),
 		config: config{PathPrefix: "bedrock", Regions: regions},
-		newBedrockClient: func(context.Context, string) (bedrockClient, error) {
+		newBedrockClient: func(context.Context, string) (listFoundationModelsFunc, error) {
 			return bc, nil
 		},
-		newCloudWatchClient: func(context.Context, string) (cloudWatchClient, error) {
+		newCloudWatchClient: func(context.Context, string) (getMetricDataFunc, error) {
 			return cw, cwErr
 		},
 	}
@@ -202,8 +196,8 @@ func TestCollect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bc := &fakeBedrockClient{output: &bedrock.ListFoundationModelsOutput{ModelSummaries: tt.models}}
-			cw := &fakeCloudWatchClient{output: tt.cw}
+			bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{ModelSummaries: tt.models}, nil)
+			cw := fakeCloudWatchClient(tt.cw, nil)
 			p := newTestPlugin(tt.regions, bc, cw, tt.cwErr)
 
 			got, err := p.Collect(context.Background())
@@ -214,24 +208,24 @@ func TestCollect(t *testing.T) {
 }
 
 // TestCollect_ListFoundationModelsErrorIsReportedPerRegion needs a distinct
-// bedrockClient per region, so it doesn't fit the table above.
+// listFoundationModelsFunc per region, so it doesn't fit the table above.
 func TestCollect_ListFoundationModelsErrorIsReportedPerRegion(t *testing.T) {
-	goodModels := &fakeBedrockClient{output: &bedrock.ListFoundationModelsOutput{
+	goodModels := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
 		ModelSummaries: []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
-	}}
-	failing := &fakeBedrockClient{err: assert.AnError}
+	}, nil)
+	failing := fakeBedrockClient(nil, assert.AnError)
 
 	p := &Plugin{
 		logger: log.New(io.Discard, "", 0),
 		config: config{PathPrefix: "bedrock", Regions: []string{"us-east-1", "eu-central-1"}},
-		newBedrockClient: func(_ context.Context, region string) (bedrockClient, error) {
+		newBedrockClient: func(_ context.Context, region string) (listFoundationModelsFunc, error) {
 			if region == "eu-central-1" {
 				return failing, nil
 			}
 			return goodModels, nil
 		},
-		newCloudWatchClient: func(context.Context, string) (cloudWatchClient, error) {
-			return &fakeCloudWatchClient{output: &cloudwatch.GetMetricDataOutput{}}, nil
+		newCloudWatchClient: func(context.Context, string) (getMetricDataFunc, error) {
+			return fakeCloudWatchClient(&cloudwatch.GetMetricDataOutput{}, nil), nil
 		},
 	}
 
@@ -271,10 +265,10 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bc := &fakeBedrockClient{output: &bedrock.ListFoundationModelsOutput{
+			bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
 				ModelSummaries: []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
-			}}
-			cw := &fakeCloudWatchClient{output: tt.cw}
+			}, nil)
+			cw := fakeCloudWatchClient(tt.cw, nil)
 			p := newTestPlugin([]string{"us-east-1"}, bc, cw, nil)
 
 			got, err := p.Collect(context.Background())

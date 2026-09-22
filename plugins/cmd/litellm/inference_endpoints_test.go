@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
@@ -32,14 +34,18 @@ func startLiteLLMModelInfo(t *testing.T, modelInfo modelInfoResponse, health *he
 		require.NoError(t, json.NewEncoder(w).Encode(health))
 	})
 	mux.HandleFunc("/user/daily/activity", func(w http.ResponseWriter, _ *http.Request) {
-		modelGroups := make(map[string]dailyActivityModelEntry, len(invocationsByModel))
+		var modelGroups []string
 		for modelName, count := range invocationsByModel {
-			modelGroups[modelName] = dailyActivityModelEntry{Metrics: dailyActivityMetrics{APIRequests: count}}
+			modelGroups = append(modelGroups, fmt.Sprintf(`"%s": {"metrics": {"api_requests": %d}}`, modelName, count))
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(dailyActivityResponse{
-			Results: []dailyActivityRecord{{Breakdown: dailyActivityBreakdown{ModelGroups: modelGroups}}},
-		}))
+		fmt.Fprintf(w, `{
+  "results": [{
+    "breakdown": {
+      "model_groups": {%s}
+    }
+  }]
+}`, strings.Join(modelGroups, ","))
 	})
 
 	httpServer := httptest.NewServer(mux)

@@ -1,3 +1,30 @@
+// `bedrock` scans available foundational models and their inference endpoints for a specific IAM user fetched from a running AWS Bedrock instance.
+//
+// ## Setup
+//
+// 1. Create (or reuse) an IAM user with programmatic access, and attach a policy granting listing foundational models in Bedrock and getting metric data from Cloudwatch (For the sake of testing, `AdministratorAccess` policy can be added for a specific IAM user via root user, however least-privilege policy is always recommended).
+// 2. Generate an access key for that user (IAM -> Users -> Security credentials -> Create access key, "Local code" use case). Copy the secret immediately or download the .csv file which consists of the credentials.
+// 3. Provide `BEDROCK_AWS_ACCESS_KEY_ID` and `BEDROCK_AWS_SECRET_ACCESS_KEY` to the plugin:
+//   - Keep placeholder/empty values in the tracked manifest, and instead create the secret out-of-band, e.g. `kubectl create secret generic catalog-secrets --from-literal=BEDROCK_AWS_ACCESS_KEY_ID=... --from-literal=BEDROCK_AWS_SECRET_ACCESS_KEY=...`.
+//
+// 4. Verify Bedrock model access in the configured regions (Bedrock -> Model catalog, matching `BEDROCK_REGIONS`), and confirm you've invoked at least one model per region. CloudWatch only reports `InputTokenCount`/`OutputTokenCount`/`Invocations` for models that have received traffic.Otherwise the plugin just shows zero usage.
+// 5. No `AWS_REGION` env var is needed in the initContainer, since the region is passed explicitly per call via `awsconfig.WithRegion(region)`.
+//
+// ## Known Issues
+//
+// Currently, AWS Bedrock model fetches `all` foundational models and their inference endpoints available for a specific IAM user. However, this fetch now results with ~140 available inference endpoints, if the region is selected as `us-east-1` and ~40-50 available inference endpoints, if the region is selected as `eu-central-1`. This fetch mechanism provides small delay on the fetch, but with more regions available for a specific IAM user, this mechanism must be optimized.
+//
+// ## Environment Variables
+//
+//   - `AWS_ACCESS_KEY_ID` (mandatory) - Access key ID of a specific IAM user instance. This key ID, alongside with this IAM user's secret access key, is used for authorizing user to consume resources that they are permitted to.
+//
+//   - `AWS_SECRET_ACCESS_KEY` (mandatory) - Access key secret of a specific IAM user instance. This is used with access key ID as an authorization mechanism.
+//
+//   - `BEDROCK_REGIONS` (optional) - Default region is specified as `us-east-1`. Regions must be specified space-separated.
+//
+//   - `BEDROCK_METRICS_LOOKBACK` (optional) - Total period to which AWS CloudWatch needs to look for collecting inference endpoint specific metrics. Default is `24h`.
+//
+//go:generate bash -c "set -euo pipefail; goreadme -use-stdlib-markdown -title 'bedrock plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
 
 import (
@@ -9,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	bedrocktypes "github.com/aws/aws-sdk-go-v2/service/bedrock/types"
@@ -58,38 +86,34 @@ type config struct {
 type Plugin struct {
 	logger              *log.Logger
 	config              config
-	newBedrockClient    func(ctx context.Context, region string) (bedrockClient, error)
-	newCloudWatchClient func(ctx context.Context, region string) (cloudWatchClient, error)
+	newBedrockClient    func(ctx context.Context, region string) (listFoundationModelsFunc, error)
+	newCloudWatchClient func(ctx context.Context, region string) (getMetricDataFunc, error)
 }
 
-// bedrockClient is the subset of *bedrock.Client used by this plugin, so tests
-// can substitute a fake implementation.
-type bedrockClient interface {
-	ListFoundationModels(ctx context.Context, params *bedrock.ListFoundationModelsInput, optFns ...func(*bedrock.Options)) (*bedrock.ListFoundationModelsOutput, error)
-}
+// listFoundationModelsFunc is the subset of *bedrock.Client used by this
+// plugin, so tests can substitute a fake implementation.
+type listFoundationModelsFunc func(context.Context, *bedrock.ListFoundationModelsInput, ...func(*bedrock.Options)) (*bedrock.ListFoundationModelsOutput, error)
 
-// cloudWatchClient is the subset of *cloudwatch.Client used by this plugin.
-type cloudWatchClient interface {
-	GetMetricData(ctx context.Context, params *cloudwatch.GetMetricDataInput, optFns ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error)
-}
+// getMetricDataFunc is the subset of *cloudwatch.Client used by this plugin.
+type getMetricDataFunc func(context.Context, *cloudwatch.GetMetricDataInput, ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error)
 
 func New(cfg config, logger *log.Logger) *Plugin {
 	return &Plugin{
 		logger: logger,
 		config: cfg,
-		newBedrockClient: func(ctx context.Context, region string) (bedrockClient, error) {
+		newBedrockClient: func(ctx context.Context, region string) (listFoundationModelsFunc, error) {
 			awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 			if err != nil {
 				return nil, fmt.Errorf("loading AWS config for region %q: %w", region, err)
 			}
-			return bedrock.NewFromConfig(awsCfg), nil
+			return bedrock.NewFromConfig(awsCfg).ListFoundationModels, nil
 		},
-		newCloudWatchClient: func(ctx context.Context, region string) (cloudWatchClient, error) {
+		newCloudWatchClient: func(ctx context.Context, region string) (getMetricDataFunc, error) {
 			awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 			if err != nil {
 				return nil, fmt.Errorf("loading AWS config for region %q: %w", region, err)
 			}
-			return cloudwatch.NewFromConfig(awsCfg), nil
+			return cloudwatch.NewFromConfig(awsCfg).GetMetricData, nil
 		},
 	}
 }
@@ -247,11 +271,11 @@ func (m foundationModel) properties(region string, usage modelUsage) pluginapi.P
 func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]foundationModel, error) {
 	client, err := p.newBedrockClient(ctx, region)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error while initializing Bedrock client: %v", err)
 	}
 
 	//TODO next step to do filtering by specifying the properties to fill ListFoundationModelsInput struct.
-	out, err := client.ListFoundationModels(ctx, &bedrock.ListFoundationModelsInput{})
+	out, err := client(ctx, &bedrock.ListFoundationModelsInput{})
 	if err != nil {
 		return nil, fmt.Errorf("calling Bedrock ListFoundationModels: %w", err)
 	}
@@ -283,25 +307,23 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 
 	client, err := p.newCloudWatchClient(ctx, region)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error while initializing CloudWatch client: %v", err)
 	}
 
 	//TODO: use dynamic time intervals in the UI, not just from BEDROCK_METRICS_LOOKBACK
 	lookback := p.config.MetricsLookback
-	if lookback <= 0 {
-		lookback = metricLookbackWindow
-	}
 	endTime := time.Now().UTC()
 	startTime := endTime.Add(-lookback)
 
-	dimensionName := metricDimensionModelID
 	queries := make([]cwtypes.MetricDataQuery, 0, len(models)*6)
 	for i, model := range models {
 		modelID := strings.TrimSpace(model.ModelID)
 		if modelID == "" {
 			continue
 		}
-		dimensions := []cwtypes.Dimension{{Name: &dimensionName, Value: &modelID}}
+		dimensions := []cwtypes.Dimension{
+			{Name: aws.String(metricDimensionModelID), Value: aws.String(modelID)},
+		}
 
 		queries = append(queries,
 			metricQuery(fmt.Sprintf("in%d", i), metricNameInputTokens, dimensions),
@@ -313,7 +335,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 		)
 	}
 
-	out, err := client.GetMetricData(ctx, &cloudwatch.GetMetricDataInput{
+	out, err := client(ctx, &cloudwatch.GetMetricDataInput{
 		StartTime:         &startTime,
 		EndTime:           &endTime,
 		MetricDataQueries: queries,
@@ -347,19 +369,16 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 }
 
 func metricQuery(id, metricName string, dimensions []cwtypes.Dimension) cwtypes.MetricDataQuery {
-	namespace := metricNamespaceBedrock
-	stat := "Sum"
-	period := int32(metricPeriodSeconds)
 	return cwtypes.MetricDataQuery{
-		Id: &id,
+		Id: aws.String(id),
 		MetricStat: &cwtypes.MetricStat{
 			Metric: &cwtypes.Metric{
-				Namespace:  &namespace,
-				MetricName: &metricName,
+				Namespace:  aws.String(metricNamespaceBedrock),
+				MetricName: aws.String(metricName),
 				Dimensions: dimensions,
 			},
-			Period: &period,
-			Stat:   &stat,
+			Period: aws.Int32(metricPeriodSeconds),
+			Stat:   aws.String("Sum"),
 		},
 	}
 }

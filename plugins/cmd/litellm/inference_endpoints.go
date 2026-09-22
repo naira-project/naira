@@ -40,23 +40,23 @@ const (
 )
 
 type inferenceEndpoint struct {
-	ModelID         string  `json:"model_id"`
-	EndpointType    string  `json:"endpoint_type"`
-	Provider        string  `json:"provider"`
-	Status          string  `json:"status"`
-	APIProtocol     string  `json:"api_protocol"`
-	EndpointURL     string  `json:"endpoint_url"`
-	Region          string  `json:"region"`
-	ServesModel     string  `json:"model_name"`
-	OwnedBy         string  `json:"owned_by"`
-	LifecycleStatus string  `json:"lifecycle_status"`
-	DiscoveredVia   string  `json:"discovered_via"`
-	LastSeen        string  `json:"last_seen"`
-	Mode            string  `json:"mode"`
-	MaxTokens       int64   `json:"max_tokens"`
-	InputCost       float64 `json:"input_cost_per_token"`
-	OutputCost      float64 `json:"output_cost_per_token"`
-	Invocations     int64   `json:"-"`
+	ModelID            string  `json:"model_id"`
+	EndpointType       string  `json:"endpoint_type"`
+	Provider           string  `json:"provider"`
+	Status             string  `json:"status"`
+	APIProtocol        string  `json:"api_protocol"`
+	EndpointURL        string  `json:"endpoint_url"`
+	Region             string  `json:"region"`
+	ServesModel        string  `json:"model_name"`
+	OwnedBy            string  `json:"owned_by"`
+	LifecycleStatus    string  `json:"lifecycle_status"`
+	DiscoveredVia      string  `json:"discovered_via"`
+	LastSeen           string  `json:"last_seen"`
+	Mode               string  `json:"mode"`
+	MaxTokens          int64   `json:"max_tokens"`
+	InputCostPerToken  float64 `json:"input_cost_per_token"`
+	OutputCostPerToken float64 `json:"output_cost_per_token"`
+	Invocations        int64   `json:"-"`
 }
 
 type modelInfoResponse struct {
@@ -96,26 +96,6 @@ type healthEndpointEntry struct {
 
 type modelAndAPIBase struct{ model, apiBase string }
 
-type dailyActivityResponse struct {
-	Results []dailyActivityRecord `json:"results"`
-}
-
-type dailyActivityRecord struct {
-	Breakdown dailyActivityBreakdown `json:"breakdown"`
-}
-
-type dailyActivityBreakdown struct {
-	ModelGroups map[string]dailyActivityModelEntry `json:"model_groups"`
-}
-
-type dailyActivityModelEntry struct {
-	Metrics dailyActivityMetrics `json:"metrics"`
-}
-
-type dailyActivityMetrics struct {
-	APIRequests int64 `json:"api_requests"`
-}
-
 func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[string]string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
 
 	statusByKey, err := p.fetchEndpointHealth(ctx)
@@ -132,10 +112,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 
 	invocations, err := p.fetchModelInvocations(ctx)
 	if err != nil {
-		if p.logger != nil {
-			p.logger.Printf("WARN: fetching LiteLLM daily activity failed, continuing without invocation counts: %v", err)
-		}
-		invocations = map[string]int64{}
+		return []pluginapi.NodeClaim{}, []pluginapi.RelationClaim{}, fmt.Errorf("Error while fetching model invocations: %v", err)
 	}
 
 	var (
@@ -161,13 +138,16 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 
 		endpoint.OwnedBy = ownerByModelID[modelName]
 
-		endpointKey := modelName
+		regionSuffix := ""
 		if region := strings.TrimSpace(endpoint.Region); region != "" {
-			endpointKey += "-" + region
+			regionSuffix = "-" + region
 		}
 
 		endpointNode := pluginapi.NodeClaim{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: p.config.PathPrefix + "/" + endpointKey},
+			ID: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindInferenceEndpoint,
+				Path: p.config.PathPrefix + "/" + modelName + regionSuffix,
+			},
 			Properties: endpoint.properties(),
 		}
 		nodes = append(nodes, endpointNode)
@@ -175,7 +155,10 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 		relations = append(relations, pluginapi.RelationClaim{
 			Kind: pluginapi.RelationKindServesModel,
 			From: endpointNode.ID,
-			To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + modelName},
+			To: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindModel,
+				Path: p.config.PathPrefix + "/" + modelName,
+			},
 		})
 	}
 
@@ -238,11 +221,11 @@ func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 	if e.MaxTokens != 0 {
 		properties[propertyKeyMaxTokens] = strconv.FormatInt(e.MaxTokens, 10)
 	}
-	if e.InputCost != 0 {
-		properties[propertyKeyInputCostPerMillionTokens] = strconv.FormatFloat(e.InputCost*1_000_000, 'f', 4, 64)
+	if e.InputCostPerToken != 0 {
+		properties[propertyKeyInputCostPerMillionTokens] = strconv.FormatFloat(e.InputCostPerToken*1_000_000, 'f', 4, 64)
 	}
-	if e.OutputCost != 0 {
-		properties[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(e.OutputCost*1_000_000, 'f', 4, 64)
+	if e.OutputCostPerToken != 0 {
+		properties[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(e.OutputCostPerToken*1_000_000, 'f', 4, 64)
 	}
 	if e.Invocations != 0 {
 		properties[propertyKeyInvocations] = strconv.FormatInt(e.Invocations, 10)
@@ -279,7 +262,13 @@ func (p *Plugin) getLiteLLMJSON(ctx context.Context, urlStr, name, path string, 
 }
 
 func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[modelAndAPIBase]string) ([]inferenceEndpoint, error) {
-	var payload modelInfoResponse
+	var payload struct {
+		Data []struct {
+			ModelName     string           `json:"model_name"`
+			LiteLLMParams modelInfoLiteLLM `json:"litellm_params"`
+			ModelInfo     modelInfoDetail  `json:"model_info"`
+		} `json:"data"`
+	}
 	if err := p.getLiteLLMJSON(ctx, p.config.BaseURL+"/model/info", "Model info", "/model/info", &payload); err != nil {
 		return nil, err
 	}
@@ -295,17 +284,17 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 		}
 
 		endpoints = append(endpoints, inferenceEndpoint{
-			ModelID:      entry.ModelInfo.ModelID,
-			Provider:     entry.LiteLLMParams.provider(),
-			EndpointType: entry.LiteLLMParams.endpointType(),
-			Status:       status,
-			EndpointURL:  entry.LiteLLMParams.APIBase,
-			Region:       entry.LiteLLMParams.RegionName,
-			ServesModel:  strings.TrimSpace(entry.ModelName),
-			Mode:         entry.ModelInfo.Mode,
-			MaxTokens:    entry.ModelInfo.MaxTokens,
-			InputCost:    entry.ModelInfo.InputCostPerToken,
-			OutputCost:   entry.ModelInfo.OutputCostPerToken,
+			ModelID:            entry.ModelInfo.ModelID,
+			Provider:           entry.LiteLLMParams.provider(),
+			EndpointType:       entry.LiteLLMParams.endpointType(),
+			Status:             status,
+			EndpointURL:        entry.LiteLLMParams.APIBase,
+			Region:             entry.LiteLLMParams.RegionName,
+			ServesModel:        strings.TrimSpace(entry.ModelName),
+			Mode:               entry.ModelInfo.Mode,
+			MaxTokens:          entry.ModelInfo.MaxTokens,
+			InputCostPerToken:  entry.ModelInfo.InputCostPerToken,
+			OutputCostPerToken: entry.ModelInfo.OutputCostPerToken,
 		})
 	}
 
@@ -345,9 +334,6 @@ func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[modelAndAPIBase]s
 // together with the authorization mechanism within Naira (i.e. how to map LiteLLM credentials with Naira user).
 func (p *Plugin) fetchModelInvocations(ctx context.Context) (map[string]int64, error) {
 	lookback := p.config.MetricsLookback
-	if lookback <= 0 {
-		lookback = 24 * time.Hour
-	}
 	endDate := time.Now().UTC()
 	startDate := endDate.Add(-lookback)
 
@@ -360,7 +346,17 @@ func (p *Plugin) fetchModelInvocations(ctx context.Context) (map[string]int64, e
 	query.Set("end_date", endDate.Format("2006-01-02"))
 	requestURL.RawQuery = query.Encode()
 
-	var payload dailyActivityResponse
+	var payload struct {
+		Results []struct {
+			Breakdown struct {
+				ModelGroups map[string]struct {
+					Metrics struct {
+						APIRequests int64 `json:"api_requests"`
+					} `json:"metrics"`
+				} `json:"model_groups"`
+			} `json:"breakdown"`
+		} `json:"results"`
+	}
 	if err := p.getLiteLLMJSON(ctx, requestURL.String(), "daily activity", "/user/daily/activity", &payload); err != nil {
 		return nil, err
 	}
