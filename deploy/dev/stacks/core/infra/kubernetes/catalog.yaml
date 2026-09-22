@@ -403,7 +403,7 @@ data:
         address: localhost:50057
       mcp-servers:
         address: localhost:50058
-      openai-api-models:
+      openai-api-models-litellm:
         address: localhost:50059
 ---
 apiVersion: apps/v1
@@ -612,26 +612,12 @@ spec:
           env:
             - name: PORT
               value: "8090"
-<<<<<<< HEAD
             - name: KEYCLOAK_BASE_URL
               value: http://keycloak.keycloak.svc.cluster.local:8080
             - name: KEYCLOAK_REALM
               value: naira
             - name: KEYCLOAK_ISSUER
               value: http://localhost:8080/realms/naira
-||||||| parent of 008e2aa (openai-api for vllm and llamacpp)
-            - name: PLUGIN_ADDRESSES
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models=localhost:50057"
-=======
-            - name: PLUGIN_ADDRESSES
-<<<<<<< HEAD
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models-litellm=localhost:50057,openai-api-models-vllm=localhost:50058,openai-api-models-llamacpp=localhost:50059"
->>>>>>> 008e2aa (openai-api for vllm and llamacpp)
-||||||| parent of 717d2a1 (Remove llamacpp and vllm plugin sidecars)
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models-litellm=localhost:50057,openai-api-models-vllm=localhost:50058,openai-api-models-llamacpp=localhost:50059"
-=======
-              value: "litellm=localhost:50051,mlflow=localhost:50052,depl-calls-svc=localhost:50053,depl-uses-litellm=localhost:50054,fluxcd=localhost:50055,openmetadata=localhost:50056,openai-api-models-litellm=localhost:50057"
->>>>>>> 717d2a1 (Remove llamacpp and vllm plugin sidecars)
           ports:
             - containerPort: 8090
               name: http
