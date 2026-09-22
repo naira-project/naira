@@ -52,6 +52,7 @@ data:
         name: Hold
         description: Do not start new work with this.
     entries:
+      # --- Models ---
       - id: claude-sonnet
         name: Claude Sonnet
         quadrant: models         # must match a quadrant id
@@ -60,6 +61,67 @@ data:
         owner: ml-platform
         rationale: >
           Default general-purpose model; served through the central gateway.
+      - id: claude-haiku
+        name: Claude Haiku
+        quadrant: models
+        ring: adopt
+        owner: ml-platform
+        rationale: >
+          Fast, low-cost model for classification, routing, and high-volume tasks.
+      - id: gpt-5
+        name: GPT-5
+        quadrant: models
+        ring: trial
+        moved: in
+        owner: ml-platform
+        rationale: >
+          Evaluated as secondary frontier model for coding-heavy workloads.
+      - id: gemini-2-5-pro
+        name: Gemini 2.5 Pro
+        quadrant: models
+        ring: trial
+        owner: ml-platform
+        rationale: >
+          Strong long-context and multimodal capabilities; trialing for document analysis.
+      - id: llama-4
+        name: Llama 4
+        quadrant: models
+        ring: assess
+        owner: ml-platform
+        rationale: >
+          Open-weight option for on-prem and data-sensitive workloads; assessing quality gap.
+      - id: qwen-3
+        name: Qwen 3
+        quadrant: models
+        ring: assess
+        moved: in
+        owner: ml-platform
+        rationale: >
+          Competitive open-weight family, strong multilingual support; assessing licensing fit.
+      - id: gpt-3-5-turbo
+        name: GPT-3.5 Turbo
+        quadrant: models
+        ring: hold
+        moved: out
+        owner: ml-platform
+        rationale: >
+          Legacy model; migrate remaining integrations to current-generation models.
+      # --- Agentic Patterns ---
+      - id: mcp
+        name: Model Context Protocol
+        quadrant: agentic
+        ring: adopt
+        moved: in
+        owner: ai-board
+        rationale: >
+          De-facto standard for connecting models to tools and data; default integration path.
+      - id: tool-calling
+        name: Structured Tool Calling
+        quadrant: agentic
+        ring: adopt
+        owner: ai-board
+        rationale: >
+          Schema-validated function calling is the baseline for all model-to-system integration.
       - id: react-agents
         name: ReAct Agents
         quadrant: agentic
@@ -67,14 +129,81 @@ data:
         owner: ai-board
         rationale: >
           Promising for tool-using workflows; evaluate on internal projects first.
+      - id: plan-and-execute
+        name: Plan-and-Execute Agents
+        quadrant: agentic
+        ring: trial
+        owner: ai-board
+        rationale: >
+          Separating planning from execution improves reliability on long-horizon tasks.
+      - id: multi-agent-orchestration
+        name: Multi-Agent Orchestration
+        quadrant: agentic
+        ring: assess
+        moved: in
+        owner: ai-board
+        rationale: >
+          Subagent fan-out shows promise for review and research tasks; cost and debuggability unclear.
+      - id: computer-use
+        name: Computer-Use Agents
+        quadrant: agentic
+        ring: assess
+        owner: ai-board
+        rationale: >
+          Browser and desktop automation via vision; assessing sandboxing and reliability.
+      - id: unsupervised-autonomy
+        name: Unsupervised Autonomous Agents
+        quadrant: agentic
+        ring: hold
+        owner: ai-board
+        rationale: >
+          Agents without human checkpoints or budget limits; too risky for production today.
+      # --- Knowledge Techniques ---
       - id: hybrid-retrieval
         name: Hybrid Retrieval
+        quadrant: knowledge
+        ring: trial
+        moved: in
+        owner: ai-board
+        rationale: >
+          Combines dense and sparse retrieval; measurable answer-quality gains in pilots.
+      - id: reranking
+        name: Cross-Encoder Reranking
+        quadrant: knowledge
+        ring: adopt
+        owner: ai-board
+        rationale: >
+          Cheap precision boost on top of any retriever; standard part of the RAG pipeline.
+      - id: graph-rag
+        name: GraphRAG
+        quadrant: knowledge
+        ring: assess
+        owner: ai-board
+        rationale: >
+          Knowledge-graph-backed retrieval for multi-hop questions; indexing cost is high.
+      - id: semantic-chunking
+        name: Semantic Chunking
+        quadrant: knowledge
+        ring: trial
+        owner: ai-board
+        rationale: >
+          Structure-aware chunking outperforms fixed-size splitting on internal corpora.
+      - id: agentic-retrieval
+        name: Agentic Retrieval
         quadrant: knowledge
         ring: assess
         moved: in
         owner: ai-board
         rationale: >
-          Combines dense and sparse retrieval; explore impact on answer quality.
+          Letting the model iteratively search and refine queries; latency and cost under review.
+      - id: prompt-caching
+        name: Prompt Caching
+        quadrant: knowledge
+        ring: adopt
+        moved: in
+        owner: ml-platform
+        rationale: >
+          Large latency and cost wins for repeated context; enabled by default at the gateway.
       - id: naive-rag
         name: Naive RAG
         quadrant: knowledge
@@ -83,6 +212,58 @@ data:
         owner: ai-board
         rationale: >
           Superseded by hybrid retrieval; migrate existing pipelines.
+      # --- Others ---
+      - id: litellm
+        name: LiteLLM Gateway
+        quadrant: others
+        ring: adopt
+        owner: platform-team
+        rationale: >
+          Central model gateway for routing, quotas, and key management across providers.
+      - id: vllm
+        name: vLLM
+        quadrant: others
+        ring: adopt
+        owner: platform-team
+        rationale: >
+          Default serving engine for self-hosted open-weight models on GPU nodes.
+      - id: mlflow
+        name: MLflow
+        quadrant: others
+        ring: adopt
+        owner: platform-team
+        rationale: >
+          Established tracking and model registry; integrated into the catalog.
+      - id: langfuse
+        name: Langfuse
+        quadrant: others
+        ring: trial
+        moved: in
+        owner: platform-team
+        rationale: >
+          LLM observability with traces and evals; trialing as the standard tracing backend.
+      - id: kserve
+        name: KServe
+        quadrant: others
+        ring: assess
+        owner: platform-team
+        rationale: >
+          Kubernetes-native inference platform; assessing overlap with the vLLM setup.
+      - id: otel-genai
+        name: OpenTelemetry GenAI Conventions
+        quadrant: others
+        ring: trial
+        owner: platform-team
+        rationale: >
+          Vendor-neutral semantic conventions for LLM telemetry; aligns with existing OTel stack.
+      - id: langchain
+        name: LangChain
+        quadrant: others
+        ring: hold
+        moved: out
+        owner: ai-board
+        rationale: >
+          Abstraction overhead outweighs benefits; prefer direct SDKs plus MCP.
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -218,6 +399,8 @@ data:
         schedule: "*/1 * * * *"
       openmetadata:
         address: localhost:50056
+      tech-radar:
+        address: localhost:50057
       mcp-servers:
         address: localhost:50058
 ---
@@ -392,10 +575,6 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
-      volumes:
-        - name: tech-radar-config
-          configMap:
-            name: tech-radar-config
       containers:
         - name: catalog
           image: catalog:local
@@ -440,6 +619,9 @@ spec:
         - name: plugin-config
           configMap:
             name: catalog-plugin-config
+        - name: tech-radar-config
+          configMap:
+            name: tech-radar-config
 ---
 apiVersion: v1
 kind: Service
