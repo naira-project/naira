@@ -122,6 +122,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 
 	var resp pluginapi.CollectResponse
 	repos := make(map[ownerAndName]bool)
+	seenOwners := make(map[pluginapi.NodeID]bool)
 
 	for _, deployment := range deployments {
 		image, ok := singleContainerImage(deployment)
@@ -140,7 +141,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 		}
 
 		if !repos[repo] {
-			nodes, relations, err := p.collectRepo(ctx, repo)
+			nodes, relations, err := p.collectRepo(ctx, repo, seenOwners)
 			if err != nil {
 				p.logger.Printf("collecting repo %s/%s, err: %v", repo.owner, repo.name, err)
 				continue
@@ -186,7 +187,7 @@ func (p *Plugin) shouldVerifyImage(image string) bool {
 	return strings.HasPrefix(imageLower, "ghcr.io/"+orgLower+"/")
 }
 
-func (p *Plugin) collectRepo(ctx context.Context, repo ownerAndName) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
+func (p *Plugin) collectRepo(ctx context.Context, repo ownerAndName, seenOwners map[pluginapi.NodeID]bool) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
 	githubRepo, err := p.github.GetRepo(ctx, repo.owner, repo.name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("fetching repo: %w", err)
@@ -214,12 +215,12 @@ func (p *Plugin) collectRepo(ctx context.Context, repo ownerAndName) ([]pluginap
 		return nil, nil, fmt.Errorf("fetching codeowners: %w", err)
 	}
 
-	ownerNodes, ownedByRelations := codeownersClaims(repoNodeID, extractDefaultCodeowners(codeowners))
+	ownerNodes, ownedByRelations := codeownersClaims(repoNodeID, extractDefaultCodeowners(codeowners), seenOwners)
 	nodes = append(nodes, ownerNodes...)
 	return nodes, ownedByRelations, nil
 }
 
-func codeownersClaims(repoNodeID pluginapi.NodeID, handles []string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim) {
+func codeownersClaims(repoNodeID pluginapi.NodeID, handles []string, seenOwners map[pluginapi.NodeID]bool) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim) {
 	nodes := make([]pluginapi.NodeClaim, 0, len(handles))
 	relations := make([]pluginapi.RelationClaim, 0, len(handles))
 
@@ -228,7 +229,10 @@ func codeownersClaims(repoNodeID pluginapi.NodeID, handles []string) ([]pluginap
 			Kind: pluginapi.NodeKindOwner,
 			Path: "github.com/" + handle,
 		}
-		nodes = append(nodes, pluginapi.NodeClaim{ID: ownerNodeID})
+		if !seenOwners[ownerNodeID] {
+			nodes = append(nodes, pluginapi.NodeClaim{ID: ownerNodeID})
+			seenOwners[ownerNodeID] = true
+		}
 		relations = append(relations, pluginapi.RelationClaim{
 			Kind: pluginapi.RelationKindOwnedBy,
 			From: repoNodeID,

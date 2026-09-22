@@ -19,6 +19,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -36,10 +37,12 @@ if [ "$1" = "--version" ]; then
   exit 0
 fi
 
-# $1=attestation $2=verify $3=oci://<image> ...
 case "$3" in
   *service-a*)
     printf '[{"verificationResult":{"signature":{"certificate":{"sourceRepositoryURI":"https://github.com/naira-project/service-a"}}}}]'
+    ;;
+  *service-e*)
+    printf '[{"verificationResult":{"signature":{"certificate":{"sourceRepositoryURI":"https://github.com/naira-project/service-e"}}}}]'
     ;;
   *)
     printf '[]'
@@ -63,6 +66,10 @@ func newFakeGithubAPI(t *testing.T) *httptest.Server {
 			fmt.Fprint(w, `{"html_url":"https://github.com/naira-project/service-a","language":"Go"}`)
 		case "/repos/naira-project/service-a/contents/.github/CODEOWNERS":
 			fmt.Fprintf(w, `{"content":%q,"encoding":"base64"}`, codeowners)
+		case "/repos/naira-project/service-e":
+			fmt.Fprint(w, `{"html_url":"https://github.com/naira-project/service-e","language":"Go"}`)
+		case "/repos/naira-project/service-e/contents/.github/CODEOWNERS":
+			fmt.Fprintf(w, `{"content":%q,"encoding":"base64"}`, codeowners)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -77,47 +84,97 @@ func TestPlugin_Collect(t *testing.T) {
 		namespace  = "default"
 	)
 
-	clientset := fake.NewSimpleClientset(
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: clusterUID}},
-		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}},
-		deploymentWithImages(namespace, "app-a", "ghcr.io/naira-project/service-a:v1"),                 // org match, attestation verified
-		deploymentWithImages(namespace, "app-b", "ghcr.io/other-org/service-b:v1"),                     // different org, skipped early
-		deploymentWithImages(namespace, "app-c", "ghcr.io/naira-project/x", "ghcr.io/naira-project/y"), // two images, skipped early
-		deploymentWithImages(namespace, "app-d", "ghcr.io/naira-project/mystery:v1"),                   // org match, attestation NOT verified
-	)
-
 	githubAPI := newFakeGithubAPI(t)
 	ghPath := newFakeGhCLI(t)
 
-	p := New(config{
-		GitHubOrg:          "naira-project",
-		GitHubToken:        "test-token",
-		GitHubBaseURL:      githubAPI.URL,
-		HTTPTimeout:        5 * time.Second,
-		GHCLIPath:          ghPath,
-		AttestationTimeout: 5 * time.Second,
-	}, log.New(io.Discard, "", 0))
+	repoA := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/naira-project/service-a"}
+	repoE := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/naira-project/service-e"}
+	ownerTeam := pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@naira-project/team"}
 
-	resp, err := p.collect(context.Background(), clientset)
-	require.NoError(t, err)
+	deploymentNode := func(name string) pluginapi.NodeID {
+		return pluginapi.NodeID{Kind: pluginapi.NodeKindDeployment, Path: clusterUID + "/" + namespace + "/" + name}
+	}
 
-	repoNode := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/naira-project/service-a"}
-	ownerNode := pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@naira-project/team"}
-	deploymentNode := pluginapi.NodeID{Kind: pluginapi.NodeKindDeployment, Path: clusterUID + "/" + namespace + "/app-a"}
+	tests := []struct {
+		name          string
+		deployments   map[string][]string // deployment name -> container images
+		wantNodes     []pluginapi.NodeClaim
+		wantRelations []pluginapi.RelationClaim
+	}{
+		{
+			name:        "org match, attestation verified: repo, owner and deployment linked",
+			deployments: map[string][]string{"app": {"ghcr.io/naira-project/service-a:v1"}},
+			wantNodes: []pluginapi.NodeClaim{
+				{ID: repoA, Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"}},
+				{ID: ownerTeam},
+				{ID: deploymentNode("app")},
+			},
+			wantRelations: []pluginapi.RelationClaim{
+				{Kind: pluginapi.RelationKindOwnedBy, From: repoA, To: ownerTeam},
+				{Kind: pluginapi.RelationKindBuiltFrom, From: deploymentNode("app"), To: repoA},
+			},
+		},
+		{
+			name:        "different org: nothing produced",
+			deployments: map[string][]string{"app": {"ghcr.io/other-org/service-b:v1"}},
+		},
+		{
+			name:        "multiple containers: nothing produced",
+			deployments: map[string][]string{"app": {"ghcr.io/naira-project/service-a:v1", "ghcr.io/naira-project/service-e:v1"}},
+		},
+		{
+			name:        "org match, attestation not verified: nothing produced",
+			deployments: map[string][]string{"app": {"ghcr.io/naira-project/mystery:v1"}},
+		},
+		{
+			name: "two repos sharing an owner: owner node deduplicated, both relations kept",
+			deployments: map[string][]string{
+				"app-a": {"ghcr.io/naira-project/service-a:v1"},
+				"app-e": {"ghcr.io/naira-project/service-e:v1"},
+			},
+			wantNodes: []pluginapi.NodeClaim{
+				{ID: repoA, Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"}},
+				{ID: repoE, Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-e", "language": "Go"}},
+				{ID: ownerTeam}, // only once, even though both repos share it
+				{ID: deploymentNode("app-a")},
+				{ID: deploymentNode("app-e")},
+			},
+			wantRelations: []pluginapi.RelationClaim{
+				{Kind: pluginapi.RelationKindOwnedBy, From: repoA, To: ownerTeam},
+				{Kind: pluginapi.RelationKindOwnedBy, From: repoE, To: ownerTeam},
+				{Kind: pluginapi.RelationKindBuiltFrom, From: deploymentNode("app-a"), To: repoA},
+				{Kind: pluginapi.RelationKindBuiltFrom, From: deploymentNode("app-e"), To: repoE},
+			},
+		},
+	}
 
-	// Only app-a should have produced anything: app-b (wrong org), app-c
-	// (multiple containers) and app-d (attestation not verified) must be
-	// entirely absent from the result.
-	assert.ElementsMatch(t, []pluginapi.NodeClaim{
-		{ID: repoNode, Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"}},
-		{ID: ownerNode},
-		{ID: deploymentNode},
-	}, resp.Nodes)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			objs := []runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: clusterUID}},
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}},
+			}
+			for name, images := range tt.deployments {
+				objs = append(objs, deploymentWithImages(namespace, name, images...))
+			}
+			clientset := fake.NewSimpleClientset(objs...)
 
-	assert.ElementsMatch(t, []pluginapi.RelationClaim{
-		{Kind: pluginapi.RelationKindOwnedBy, From: repoNode, To: ownerNode},
-		{Kind: pluginapi.RelationKindBuiltFrom, From: deploymentNode, To: repoNode},
-	}, resp.Relations)
+			p := New(config{
+				GitHubOrg:          "naira-project",
+				GitHubToken:        "test-token",
+				GitHubBaseURL:      githubAPI.URL,
+				HTTPTimeout:        5 * time.Second,
+				GHCLIPath:          ghPath,
+				AttestationTimeout: 5 * time.Second,
+			}, log.New(io.Discard, "", 0))
+
+			resp, err := p.collect(context.Background(), clientset)
+			require.NoError(t, err)
+
+			assert.ElementsMatch(t, tt.wantNodes, resp.Nodes)
+			assert.ElementsMatch(t, tt.wantRelations, resp.Relations)
+		})
+	}
 }
 
 func deploymentWithImages(namespace, name string, images ...string) *appsv1.Deployment {
@@ -219,7 +276,7 @@ func TestCodeownersClaims(t *testing.T) {
 	repoNodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/acme/service"}
 	handles := []string{"@acme/team", "@alice"}
 
-	nodes, relations := codeownersClaims(repoNodeID, handles)
+	nodes, relations := codeownersClaims(repoNodeID, handles, make(map[pluginapi.NodeID]bool))
 
 	assert.ElementsMatch(t, []pluginapi.NodeClaim{
 		{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@acme/team"}},
@@ -232,7 +289,7 @@ func TestCodeownersClaims(t *testing.T) {
 }
 
 func TestCodeownersClaims_Empty(t *testing.T) {
-	nodes, relations := codeownersClaims(pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/acme/service"}, nil)
+	nodes, relations := codeownersClaims(pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/acme/service"}, nil, make(map[pluginapi.NodeID]bool))
 
 	require.Empty(t, nodes)
 	require.Empty(t, relations)
