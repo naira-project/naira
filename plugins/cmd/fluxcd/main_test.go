@@ -77,9 +77,9 @@ func TestCollect(t *testing.T) {
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
 						Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"}},
+					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "sourced_from",
@@ -98,9 +98,9 @@ func TestCollect(t *testing.T) {
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
 					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
 						Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"}},
+					{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "sourced_from",
@@ -110,7 +110,7 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
-			name: `Deployment with Kustomization label produces "deployed_from" and (reverse) "describes" Relations`,
+			name: `Deployment with Kustomization label produces "describes" Relations`,
 			objs: []runtime.Object{
 				namespace("flux-system"),
 				gitRepository("flux-system", "my-repo", "https://gitlab.com/example/repo"),
@@ -122,15 +122,12 @@ func TestCollect(t *testing.T) {
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
-					{ID: nodeID("deployment", "team-a/app")},
 					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
 						Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"}},
+					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
+					{ID: nodeID("deployment", "team-a/app")},
 				},
 				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/app"),
-						To:   nodeID("GitRepository.fluxcd", "flux-system/my-repo")},
 					{Kind: "describes",
 						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
 						To:   nodeID("deployment", "team-a/app")},
@@ -141,7 +138,7 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
-			name: `Deployment with HelmRelease label produces "deployed_from" and (reverse) "describes" Relations`,
+			name: `Deployment with HelmRelease label produces "describes" Relations`,
 			objs: []runtime.Object{
 				namespace("flux-system"),
 				gitRepository("flux-system", "my-repo", "https://gitlab.com/example/repo"),
@@ -153,15 +150,12 @@ func TestCollect(t *testing.T) {
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
-					{ID: nodeID("deployment", "team-a/app")},
 					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
 						Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"}},
+					{ID: nodeID("HelmChart.fluxcd", "flux-system/my-chart")},
+					{ID: nodeID("deployment", "team-a/app")},
 				},
 				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/app"),
-						To:   nodeID("GitRepository.fluxcd", "flux-system/my-repo")},
 					{Kind: "describes",
 						From: nodeID("HelmChart.fluxcd", "flux-system/my-chart"),
 						To:   nodeID("deployment", "team-a/app")},
@@ -182,9 +176,9 @@ func TestCollect(t *testing.T) {
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "team-a/my-app")},
 					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
 						Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"}},
+					{ID: nodeID("Kustomization.fluxcd", "team-a/my-app")},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "sourced_from",
@@ -206,19 +200,13 @@ func TestCollect(t *testing.T) {
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
+						Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"}},
 					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 					{ID: nodeID("deployment", "team-a/depl1")},
 					{ID: nodeID("deployment", "team-a/depl2")},
-					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
-						Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"}},
 				},
 				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/depl1"),
-						To:   nodeID("GitRepository.fluxcd", "flux-system/my-repo")},
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/depl2"),
-						To:   nodeID("GitRepository.fluxcd", "flux-system/my-repo")},
 					{Kind: "describes",
 						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
 						To:   nodeID("deployment", "team-a/depl1")},
@@ -292,15 +280,12 @@ func TestCollect(t *testing.T) {
 			},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
-					{ID: nodeID("deployment", "team-a/app")},
 					{ID: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
 						Properties: pluginapi.PropertyMap{"url": "https://gitlab.com/example/repo"}},
+					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
+					{ID: nodeID("deployment", "team-a/app")},
 				},
 				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "team-a/app"),
-						To:   nodeID("GitRepository.fluxcd", "flux-system/my-repo")},
 					{Kind: "describes",
 						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
 						To:   nodeID("deployment", "team-a/app")},
