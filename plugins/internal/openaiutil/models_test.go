@@ -2,6 +2,7 @@ package openaiutil
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -101,4 +102,115 @@ func TestFetchModelsTrimsTrailingSlashAndOmitsEmptyToken(t *testing.T) {
 	models, err := FetchModels(context.Background(), mockServer.Client(), mockServer.URL+"/base/", "  ")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"local-model"}, ModelIDs(models))
+}
+
+func TestGetModels_LlamacppResponseWithComplexExtras(t *testing.T) {
+	// Real response from llamacpp, with extra fields not present in usual /v1/models response:
+	// - "models" field in the root object,
+	// - "meta" field in the data[] sub-object.
+	// Some sub-fields were removed for brevity.
+	const llamacppResponse = `{
+      "models": [
+        {
+          "name": "test-model-name",
+          "model": "test-model-name",
+          "capabilities": [
+            "completion"
+          ],
+          "details": {
+            "format": "gguf"
+          }
+        }
+      ],
+      "object": "list",
+      "data": [
+        {
+          "id": "test-model-name",
+          "aliases": [
+            "test-model-name"
+          ],
+          "object": "model",
+          "created": 1790088392,
+          "owned_by": "llamacpp",
+          "meta": {
+            "n_params": 292800,
+            "size": 1171200,
+            "ftype": "(guessed) all F32"
+          }
+        }
+      ]
+    }`
+
+	type myDatum struct {
+		Datum
+		Aliases []string               `json:"aliases"`
+		Meta    map[string]interface{} `json:"meta"`
+	}
+	type myModelsResponse struct {
+		ModelsResponse[myDatum]
+		Models []map[string]interface{} `json:"models"`
+	}
+
+	v := myModelsResponse{}
+	err := json.Unmarshal([]byte(llamacppResponse), &v)
+	require.NoError(t, err)
+
+	wantResponse := myModelsResponse{
+		Models: []map[string]interface{}{
+			{
+				"name":  "test-model-name",
+				"model": "test-model-name",
+				"capabilities": []any{
+					"completion",
+				},
+				"details": map[string]any{
+					"format": "gguf",
+				},
+			},
+		},
+		ModelsResponse: ModelsResponse[myDatum]{
+			Data: []myDatum{
+				{
+					Datum: Datum{
+						ID:      "test-model-name",
+						Object:  "model",
+						Created: 1790088392,
+						OwnedBy: "llamacpp",
+					},
+					Aliases: []string{"test-model-name"},
+					Meta: map[string]interface{}{
+						"n_params": float64(292800),
+						"size":     float64(1171200),
+						"ftype":    "(guessed) all F32",
+					},
+				},
+			},
+		},
+	}
+	assert.Equal(t, wantResponse, v)
+}
+
+type Datum struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	OwnedBy string `json:"owned_by"`
+}
+
+// embeddedDatum is a private marker method to enforce embedding of Datum struct in
+// types implementing the EmbedsDatum interface.
+func (Datum) embeddedDatum() {}
+
+type EmbedsDatum interface {
+	embeddedDatum()
+}
+
+type ModelsResponse[T EmbedsDatum] struct {
+	Data []T `json:"data"`
+}
+
+func (ModelsResponse[T]) embeddedModelsResponse() {}
+
+type EmbedsModelsResponse[T EmbedsDatum] interface {
+	embeddedModelsResponse()
 }
