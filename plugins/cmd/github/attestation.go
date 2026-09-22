@@ -42,8 +42,7 @@ type ghAttestationEntry struct {
 }
 
 type ghCertificate struct {
-	SourceRepositoryURI      string `json:"sourceRepositoryURI"`
-	SourceRepositoryOwnerURI string `json:"sourceRepositoryOwnerURI"`
+	SourceRepositoryURI string `json:"sourceRepositoryURI"`
 }
 
 var ErrAttestationMissing = errors.New("attestation not found for given image")

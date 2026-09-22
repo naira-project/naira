@@ -6,12 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
 var errGithubResourceNotFound = errors.New("github resource not found")
+
+// maxGithubResponseBytes caps how much of a GitHub API response body we will
+// decode into memory. This is needed because we read files to fetch CODEOWNERS
+const maxGithubResponseBytes = 2 << 20 // 2MB
 
 type githubClient struct {
 	httpClient *http.Client
@@ -73,7 +78,8 @@ func (c *githubClient) get(ctx context.Context, path string, out any) error {
 	}
 
 	if out != nil {
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		limited := io.LimitReader(resp.Body, maxGithubResponseBytes)
+		if err := json.NewDecoder(limited).Decode(out); err != nil {
 			return fmt.Errorf("decoding github api response for %s: %w", path, err)
 		}
 	}
@@ -81,12 +87,12 @@ func (c *githubClient) get(ctx context.Context, path string, out any) error {
 }
 
 func (c *githubClient) GetRepo(ctx context.Context, owner, repo string) (ghRepo, error) {
-	var githubRepo ghRepo
-	err := c.get(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &githubRepo)
+	var r ghRepo
+	err := c.get(ctx, fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(repo)), &r)
 	if err != nil {
 		return ghRepo{}, fmt.Errorf("getting repo %s/%s: %w", owner, repo, err)
 	}
-	return githubRepo, nil
+	return r, nil
 }
 
 // GetCodeowners tries the well-known CODEOWNERS locations, in the order

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -99,4 +101,49 @@ func newFakeGithubContentsServer(t *testing.T, owner, repo string, responses map
 	}))
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+func TestGithubClient_GetCodeownersDoesNotReadOversizedResponse(t *testing.T) {
+	oversizedContentSize := maxGithubResponseBytes + (1 << 20) // + 1MB
+
+	responseBody := fmt.Appendf(nil, `{"content":"%s","encoding":"base64"}`, strings.Repeat("A", oversizedContentSize))
+	var bytesRead int
+
+	httpClient := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			assert.Equal(t, "/repos/acme/service/contents/.github/CODEOWNERS", req.URL.Path)
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       &countingReadCloser{Reader: bytes.NewReader(responseBody), bytesRead: &bytesRead},
+				Request:    req,
+			}, nil
+		}),
+	}
+
+	_, err := newGithubClient(httpClient, "https://api.github.test", "").GetCodeowners(context.Background(), "acme", "service")
+
+	require.Error(t, err)
+	assert.Greater(t, len(responseBody), 3<<20)
+	assert.LessOrEqual(t, bytesRead, maxGithubResponseBytes)
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type countingReadCloser struct {
+	io.Reader
+	bytesRead *int
+}
+
+func (r *countingReadCloser) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	*r.bytesRead += n
+	return n, err
+}
+
+func (r *countingReadCloser) Close() error {
+	return nil
 }
