@@ -112,7 +112,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 		return pluginapi.CollectResponse{}, fmt.Errorf("checking gh CLI availability: %w", err)
 	}
 
-	entries, err := discoverDeployments(ctx, k8sClient, p.logger)
+	deployments, err := discoverDeployments(ctx, k8sClient, p.logger)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("discovering deployments: %w", err)
 	}
@@ -120,8 +120,8 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 	var resp pluginapi.CollectResponse
 	repos := make(map[ownerAndName]bool)
 
-	for _, entry := range entries {
-		image, ok := singleContainerImage(entry)
+	for _, deployment := range deployments {
+		image, ok := singleContainerImage(deployment)
 		if !ok {
 			// Ambiguous attribution with more than one container
 			continue
@@ -132,7 +132,7 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 
 		repo, err := p.attestation.Verify(ctx, image, p.config.GitHubOrg)
 		if err != nil {
-			p.logger.Printf("verifying attestation for %s (deployment %s/%s): %v", image, entry.Namespace, entry.Name, err)
+			p.logger.Printf("verifying attestation for %s (deployment %s/%s): %v", image, deployment.Namespace, deployment.Name, err)
 			continue
 		}
 
@@ -147,10 +147,10 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 			repos[repo] = true
 		}
 
-		deploymentNodeClaim := pluginapi.NodeClaim{ID: entry.NodeID()}
+		deploymentNodeClaim := pluginapi.NodeClaim{ID: deployment.NodeID()}
 		deploymentRepoRelation := pluginapi.RelationClaim{
 			Kind: pluginapi.RelationKindBuiltFrom,
-			From: entry.NodeID(),
+			From: deployment.NodeID(),
 			To:   repo.ToNodeID(),
 		}
 		resp.Nodes = append(resp.Nodes, deploymentNodeClaim)
@@ -160,29 +160,27 @@ func (p *Plugin) collect(ctx context.Context, k8sClient kubernetes.Interface) (p
 	return resp, nil
 }
 
-func singleContainerImage(entry Deployment) (image string, ok bool) {
-	if len(entry.Images) != 1 {
+func singleContainerImage(deployment Deployment) (image string, ok bool) {
+	if len(deployment.Images) != 1 {
 		return "", false
 	}
-	return entry.Images[0], true
+	return deployment.Images[0], true
 }
 
 // shouldVerifyImage reports whether the given image reference is a candidate
 // for attestation verification based on its registry prefix.
 //
-// For ghcr.io images, it checks if the path starts with ghcr.io/<GitHubOrg>/.
-// For all other registries, it returns true by default.
+// ghcr.io images follow a predictable ghcr.io/<owner>/<repo> layout, so we
+// can cheaply filter out images that clearly belong to a different GitHub
+// org without spawning "gh". Other registries don't share this convention
 func (p *Plugin) shouldVerifyImage(image string) bool {
 	imageLower := strings.ToLower(image)
 
-	// Fast-path for ghcr.io based on the ghcr.io/<org>/<repo> naming convention.
-	if strings.HasPrefix(imageLower, "ghcr.io/") {
-		orgLower := strings.ToLower(p.config.GitHubOrg)
-		ghcrPrefix := fmt.Sprintf("ghcr.io/%s/", orgLower)
-		return strings.HasPrefix(imageLower, ghcrPrefix)
+	if !strings.HasPrefix(imageLower, "ghcr.io/") {
+		return true
 	}
-
-	return true
+	orgLower := strings.ToLower(p.config.GitHubOrg)
+	return strings.HasPrefix(imageLower, "ghcr.io/"+orgLower+"/")
 }
 
 func (p *Plugin) collectRepo(ctx context.Context, repo ownerAndName) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
