@@ -1,0 +1,87 @@
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
+#
+# LITELLM_API_KEY starts as a deliberately invalid placeholder — the seed
+# step's provision_chatbot1_key.py (seed/provision_chatbot1_key.py) mints a
+# real, openai-scoped LiteLLM key and patches it in before anything reads
+# this Secret. Seeding a real, working key here instead would make a broken
+# or skipped provisioning step invisible: depl_uses_litellm would still
+# authenticate successfully with it and the test could still pass for the
+# wrong reason, rather than failing clearly because chatbot1 couldn't
+# authenticate at all.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: chatbot1-secrets
+  namespace: ${NAMESPACE}
+type: Opaque
+stringData:
+  LITELLM_API_KEY: change-me
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chatbot1
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chatbot1
+  template:
+    metadata:
+      labels:
+        app: chatbot1
+    spec:
+      containers:
+        - name: chatbot1
+          image: chatbot1:${TAG}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LITELLM_API_URL
+              value: http://litellm.${NAMESPACE}.svc.cluster.local:4000
+            - name: LITELLM_MODEL
+              value: openai
+            - name: LITELLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: chatbot1-secrets
+                  key: LITELLM_API_KEY
+          ports:
+            - containerPort: 8501
+              name: http
+          # Fast, frequent startupProbe instead of a fixed initialDelaySeconds
+          # on readiness — a plain Streamlit app on python:3.11-slim is
+          # typically ready in a couple of seconds, not worth a flat 10s wait
+          # on every run. See components/postgres.yaml for the same pattern.
+          startupProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatbot1
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app: chatbot1
+  ports:
+    - name: http
+      port: 8501
+      targetPort: http
+  type: ClusterIP
