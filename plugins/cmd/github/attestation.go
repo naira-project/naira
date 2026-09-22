@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -53,11 +54,17 @@ func (v *attestationVerifier) Verify(ctx context.Context, image, org string) (ow
 	ctx, cancel := context.WithTimeout(ctx, v.timeout)
 	defer cancel()
 
+	imageURI := "oci://" + image
+
+	if _, err := url.Parse(imageURI); err != nil {
+		return ownerAndName{}, fmt.Errorf("invalid image reference %q: %w", image, err)
+	}
+
 	// passing gh an oci:// reference (rather than a resolved digest) means
 	// gh itself talks to the registry to resolve the digest and fetch
 	// the attestation bundle
 	cmd := exec.CommandContext(ctx, v.ghPath, "attestation", "verify",
-		"oci://"+image,
+		imageURI,
 		"--owner", org,
 		"--format", "json",
 	)
