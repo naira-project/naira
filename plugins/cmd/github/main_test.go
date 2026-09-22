@@ -102,7 +102,7 @@ func TestPlugin_Collect(t *testing.T) {
 	require.NoError(t, err)
 
 	repoNode := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/naira-project/service-a"}
-	ownerNode := pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "@naira-project/team"}
+	ownerNode := pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@naira-project/team"}
 	deploymentNode := pluginapi.NodeID{Kind: pluginapi.NodeKindDeployment, Path: clusterUID + "/" + namespace + "/app-a"}
 
 	// Only app-a should have produced anything: app-b (wrong org), app-c
@@ -222,12 +222,12 @@ func TestCodeownersClaims(t *testing.T) {
 	nodes, relations := codeownersClaims(repoNodeID, handles)
 
 	assert.ElementsMatch(t, []pluginapi.NodeClaim{
-		{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "@acme/team"}},
-		{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "@alice"}},
+		{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@acme/team"}},
+		{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@alice"}},
 	}, nodes)
 	assert.ElementsMatch(t, []pluginapi.RelationClaim{
-		{Kind: pluginapi.RelationKindOwnedBy, From: repoNodeID, To: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "@acme/team"}},
-		{Kind: pluginapi.RelationKindOwnedBy, From: repoNodeID, To: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "@alice"}},
+		{Kind: pluginapi.RelationKindOwnedBy, From: repoNodeID, To: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@acme/team"}},
+		{Kind: pluginapi.RelationKindOwnedBy, From: repoNodeID, To: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@alice"}},
 	}, relations)
 }
 

@@ -224,7 +224,10 @@ func codeownersClaims(repoNodeID pluginapi.NodeID, handles []string) ([]pluginap
 	relations := make([]pluginapi.RelationClaim, 0, len(handles))
 
 	for _, handle := range handles {
-		ownerNodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: handle}
+		ownerNodeID := pluginapi.NodeID{
+			Kind: pluginapi.NodeKindOwner,
+			Path: "github.com/" + handle,
+		}
 		nodes = append(nodes, pluginapi.NodeClaim{ID: ownerNodeID})
 		relations = append(relations, pluginapi.RelationClaim{
 			Kind: pluginapi.RelationKindOwnedBy,
