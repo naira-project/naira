@@ -12,11 +12,6 @@ import (
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
 
-// StatusErrorResource is an error representation carried by failed operations.
-type StatusErrorResource struct {
-	Message string `json:"message"`
-}
-
 // OperationMetadataResource holds progress information about an in-flight
 // or completed operation.
 type OperationMetadataResource struct {
@@ -24,6 +19,11 @@ type OperationMetadataResource struct {
 	StartTime time.Time  `json:"startTime"`
 	EndTime   *time.Time `json:"endTime,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
+}
+
+// StatusErrorResource is an error representation carried by failed operations.
+type StatusErrorResource struct {
+	Message string `json:"message"`
 }
 
 // RunPluginResponse is the successful result of a plugin run operation.
@@ -72,13 +72,13 @@ func operationFromCatalogOperation(op operations.Operation) OperationResource {
 		},
 	}
 
-	switch {
-	case done && op.State == operations.StateSucceeded:
+	switch op.State {
+	case operations.StateSucceeded:
 		resource.Response = &RunPluginResponse{
 			NodesUpserted:     op.NodesUpserted,
 			RelationsUpserted: op.RelationsUpserted,
 		}
-	case done && op.State == operations.StateFailed:
+	case operations.StateFailed:
 		message := "operation failed without an error"
 		if op.Error != nil {
 			message = op.Error.Message
