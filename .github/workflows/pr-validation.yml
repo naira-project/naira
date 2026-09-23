@@ -230,6 +230,10 @@ jobs:
         # No --wait: the LiteLLM migrations Job is garbage-collected after 120s
         # and Helm then fails a healthy release.
         run: |
+          # Helm 4 does not fetch from an unregistered HTTP repository.
+          helm repo add community-charts https://community-charts.github.io/helm-charts
+          helm repo add open-metadata https://helm.open-metadata.org
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm dependency build test-dependencies/charts/test-dependencies
           helm install test-dependencies test-dependencies/charts/test-dependencies \
             --namespace naira-deps --create-namespace \
