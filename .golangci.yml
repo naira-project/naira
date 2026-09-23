@@ -22,4 +22,4 @@ linters:
     rules:
       - linters:
           - revive
-        text: "should have comment"
+        text: "should have comment" # it's excluded not disabled, as "exported" check has other useful godoc rules in it
