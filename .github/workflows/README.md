@@ -25,3 +25,11 @@ Ensures code quality and buildability. Gatekeeper: `All Checks Passed`.
 
 ## 2. Release (`release-please.yml`)
  refer to naira-project/naira/.github/workflows/release.md
+
+
+---
+## Test E2E locally
+
+For more information, see: [`e2e/litellm_chatbot_to_catalog_api/README.md`](../../e2e/litellm_chatbot_to_catalog_api/README.md)
+(and [`e2e/README.md`](../../e2e/README.md) for the shared component pool
+model behind it).
