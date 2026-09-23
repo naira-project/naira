@@ -165,20 +165,28 @@ export async function fetchPlugins(token: string | null): Promise<PluginResource
 // Plugin run operations (AIP-151)
 // ---------------------------------------------------------------------------
 
-export interface StatusErrorResource {
+export interface ErrorResource {
   message: string;
+}
+
+export interface OperationMetadataResource {
+  plugin: string;
+  startTime: string;
+  endTime?: string;
+  createdAt: string;
+}
+
+export interface RunPluginResponse {
+  nodesUpserted: number;
+  relationsUpserted: number;
 }
 
 export interface OperationResource {
   name: string;
-  plugin: string;
-  state: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
-  startTime: string;
-  endTime?: string;
-  error?: StatusErrorResource;
-  nodesUpserted: number;
-  relationsUpserted: number;
-  createdAt: string;
+  done: boolean;
+  metadata: OperationMetadataResource;
+  response?: RunPluginResponse;
+  error?: ErrorResource;
 }
 
 interface RunPluginsResponse {
