@@ -1,10 +1,10 @@
 import { X } from 'lucide-react';
-import type { StatusErrorResource } from '../lib/catalogApi';
+import type { ErrorResource } from '../lib/catalogApi';
 import { Button } from './ui/button';
 
 interface PluginErrorModalProps {
   pluginName: string;
-  error: StatusErrorResource | null;
+  error: ErrorResource | null;
   onClose: () => void;
 }
 

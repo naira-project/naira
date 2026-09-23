@@ -6,7 +6,7 @@ import { PluginErrorModal } from '../components/PluginErrorModal';
 import { PluginStatusBadge } from '../components/PluginStatusBadge';
 import { Button } from '../components/ui/button';
 import { usePluginsStatus } from '../hooks/usePluginOperations';
-import type { OperationResource, PluginResource, StatusErrorResource } from '../lib/catalogApi';
+import type { ErrorResource, OperationResource, PluginResource } from '../lib/catalogApi';
 import { formatDuration, formatRelativeTime, latestOperationPerPlugin } from '../lib/utils';
 
 /** Dedicated page for managing plugin ingestion and schedules. */
@@ -39,7 +39,7 @@ export default function PluginsPage() {
 
   const [selectedError, setSelectedError] = useState<{
     plugin: string;
-    error: StatusErrorResource;
+    error: ErrorResource;
   } | null>(null);
 
   const handleRunVisible = async () => {
@@ -128,7 +128,7 @@ interface StatusTabProps {
   loading: boolean;
   runningPlugins: Set<string>;
   onRun: (plugin: string) => void;
-  onViewError: (plugin: string, error: StatusErrorResource) => void;
+  onViewError: (plugin: string, error: ErrorResource) => void;
 }
 
 function StatusTab({

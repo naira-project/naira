@@ -21,8 +21,8 @@ type OperationMetadataResource struct {
 	CreatedAt time.Time  `json:"createdAt"`
 }
 
-// StatusErrorResource is an error representation carried by failed operations.
-type StatusErrorResource struct {
+// ErrorResource is an error representation carried by failed operations.
+type ErrorResource struct {
 	Message string `json:"message"`
 }
 
@@ -39,7 +39,7 @@ type OperationResource struct {
 	Name     string                    `json:"name"`
 	Metadata OperationMetadataResource `json:"metadata"`
 	Done     bool                      `json:"done"`
-	Error    *StatusErrorResource      `json:"error,omitempty"`
+	Error    *ErrorResource            `json:"error,omitempty"`
 	Response *RunPluginResponse        `json:"response,omitempty"`
 }
 
@@ -83,7 +83,7 @@ func operationFromCatalogOperation(op operations.Operation) OperationResource {
 		if op.Error != nil {
 			message = op.Error.Message
 		}
-		resource.Error = &StatusErrorResource{Message: message}
+		resource.Error = &ErrorResource{Message: message}
 	}
 
 	return resource
