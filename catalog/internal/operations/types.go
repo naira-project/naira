@@ -16,8 +16,6 @@ const (
 // StatusError is an AIP-193 compliant error representation carried by
 // failed operations.
 type StatusError struct {
-
-	
 	Message string `json:"message"`
 }
 

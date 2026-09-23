@@ -47,3 +47,8 @@ tasks:
     desc: Run catalog unit tests
     cmds:
       - cd {{.CATALOG_DIR}} && go test -race ./...
+
+  go:lint:
+    desc: Lint go files
+    cmds:
+      - golangci-lint run
