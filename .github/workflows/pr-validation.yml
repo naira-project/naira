@@ -267,14 +267,18 @@ jobs:
           got=$(curl -sf -H "${AUTH}" localhost:18090/v1/plugins | jq -r '[.plugins[].name] | sort | join(",")')
           echo "plugins: ${got}"
           [ "${got}" = "${expected}" ] || { echo "::error::registered plugins differ from the chart: expected ${expected}"; exit 1; }
-          curl -sf -X POST -H "${AUTH}" 'localhost:18090/v1/plugins:run' -o /dev/null
-          for _ in $(seq 1 30); do
-            states=$(curl -sf -H "${AUTH}" localhost:18090/v1/operations | jq -r '[.operations[].state] | unique | join(",")')
-            [ "${states}" = "SUCCEEDED" ] && break
-            sleep 2
+          # Judge only the operations this run created: scheduled plugin runs
+          # (fluxcd every minute) keep adding PENDING/RUNNING entries to the list.
+          ours=$(curl -sf -X POST -H "${AUTH}" 'localhost:18090/v1/plugins:run' | jq -r '[.operations[].name] | join(",")')
+          for _ in $(seq 1 60); do
+            report=$(curl -sf -H "${AUTH}" localhost:18090/v1/operations \
+              | jq -r --arg ours "${ours}" '[.operations[] | select(.name as $n | ($ours | split(",")) | index($n))] | map(.plugin + "=" + .state + (if .error then " (" + .error + ")" else "" end)) | sort | join(" ")')
+            case "${report}" in *PENDING*|*RUNNING*) sleep 2 ;; *) break ;; esac
           done
-          echo "operation states: ${states}"
-          [ "${states}" = "SUCCEEDED" ] || { echo "::error::plugin runs did not all succeed"; exit 1; }
+          echo "plugin runs: ${report}"
+          case "${report}" in
+            *FAILED*|*PENDING*|*RUNNING*|"") echo "::error::plugin runs did not all succeed"; exit 1 ;;
+          esac
           curl -sf -o /dev/null -H "${AUTH}" localhost:13001/v1/plugins || { echo "::error::UI does not proxy /v1 to the catalog"; exit 1; }
       - name: Show state
         if: always()
