@@ -6,7 +6,7 @@ import (
 	"github.com/quasilyte/go-ruleguard/dsl"
 )
 
-// unwrappedErr flags a bare `return err` / `return _, err`
+// unwrappedErr used for linting, flags a bare `return err` / `return _, err`
 func unwrappedErr(m dsl.Matcher) {
 	m.Match(`return $err`, `return $_, $err`).
 		Where(m["err"].Type.Is(`error`) &&

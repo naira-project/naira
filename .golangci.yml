@@ -12,7 +12,7 @@ linters:
         - paramTypeCombine
       settings:
         ruleguard:
-          rules: "rules/ruleguard.go"
+          rules: "rules/ruleguard.go" # check if errs are wrapped
     revive:
       enable-default-rules: true
       rules:
