@@ -22,14 +22,19 @@ RUN CGO_ENABLED=0 go build -trimpath -o /out/plugin ./plugins/${PLUGIN}
 FROM alpine:3.20 AS gh-cli
 
 ARG GH_CLI_VERSION=2.63.2
+ARG GH_CLI_SHA256_AMD64=912fdb1ca29cb005fb746fc5d2b787a289078923a29d0f9ec19a0b00272ded00
+ARG GH_CLI_SHA256_ARM64=0f31e2a8549c64b5c1679f0b99ce5e0dac7c91da9e86f6246adb8805b0f0b4bb
 ARG TARGETARCH=amd64
 
 WORKDIR /gh
-# Download GH CLI and verify file integrity against the downloaded checksums
+# Download GH CLI and verify its integrity against reviewed checksums.
 RUN apk add --no-cache curl \
  && curl -sSLO https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz \
- && curl -sSLO https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_checksums.txt \
- && grep " gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz\$" gh_${GH_CLI_VERSION}_checksums.txt | sha256sum -c - \
+ && case "${TARGETARCH}" in \
+      amd64) echo "${GH_CLI_SHA256_AMD64}  gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz" | sha256sum -c - ;; \
+      arm64) echo "${GH_CLI_SHA256_ARM64}  gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz" | sha256sum -c - ;; \
+      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
  && tar xzf gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz \
  && cp gh_${GH_CLI_VERSION}_linux_${TARGETARCH}/bin/gh /gh/gh
 
