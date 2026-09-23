@@ -412,19 +412,6 @@ func externalRepoID(owner, repo string) pluginapi.NodeID {
 	return pluginapi.NodeID{Kind: "git_repository", Path: "github.com/" + owner + "/" + repo}
 }
 
-// githubRepoFixture returns the boilerplate produced when a Flux GitRepository
-// points to GitHub: the GitRepository.fluxcd node, the external git_repository node, and the
-// references relation connecting them.
-// func githubRepoFixture(ns, name, owner, repo string) (pluginapi.NodeClaim, pluginapi.NodeClaim, pluginapi.RelationClaim) {
-// 	url := "https://github.com/" + owner + "/" + repo
-// 	fluxID := nodeID("GitRepository.fluxcd", ns+"/"+name)
-// 	gitRepoID := pluginapi.NodeID{Kind: "git_repository", Path: "github.com/" + owner + "/" + repo}
-// 	fluxRepoNode := pluginapi.NodeClaim{ID: fluxID, Properties: pluginapi.PropertyMap{"url": url}}
-// 	gitRepoNode := pluginapi.NodeClaim{ID: gitRepoID, Properties: pluginapi.PropertyMap{"url": url}}
-// 	rel := pluginapi.RelationClaim{Kind: "references", From: fluxID, To: gitRepoID}
-// 	return fluxRepoNode, gitRepoNode, rel
-// }
-
 func namespace(name string) *corev1.Namespace {
 	uid := types.UID(fmt.Sprintf("random-ns-uid-%s-%d", name, rand.Uint64()))
 	return &corev1.Namespace{

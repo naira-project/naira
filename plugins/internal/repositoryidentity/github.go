@@ -9,7 +9,6 @@ import (
 var (
 	// scp-like syntax: git@github.com:owner/repo[.git]
 	// Taken from: https://git-scm.com/docs/git-clone#_git_urls
-
 	scpPattern = regexp.MustCompile(`^git@github\.com:([^/]+)/([^/]+)$`)
 
 	// Handle rules: max 39 chars, alphanumeric + single hyphens (not at start or end)
