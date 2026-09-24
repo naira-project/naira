@@ -45,7 +45,7 @@ jobs:
   # ── 3. Go unit tests ──────────────────────────────────────────────────────
   go-test:
     name: Test
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-go-test.yml@dddb3537f34394a6d3187fbf17df84882dd586f7
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-go-test.yml@15a3b4703cbb9ba357c17d4d61a6d2c9f7ca466f
     with:
       go-version: "1.26"
       working-directory: "."

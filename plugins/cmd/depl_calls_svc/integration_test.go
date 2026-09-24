@@ -168,7 +168,8 @@ plugins:
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		op, status := doJSON[apiOperation](c, ctx, http.MethodGet, catalogBaseURL+"/v1/operations/"+operationID, token)
 		assert.Equal(c, http.StatusOK, status, "GET /v1/operations/%s", operationID)
-		assert.Equal(c, "SUCCEEDED", op.State, operationErrorMessage(op))
+		assert.True(c, op.Done, operationErrorMessage(op))
+		assert.NotNil(c, op.Response, operationErrorMessage(op))
 	}, readinessTimeout, pollInterval, "operation %q didn't succeed", operationID)
 
 	//
@@ -329,8 +330,12 @@ func checkHTTPReady(ctx context.Context, url string) bool {
 }
 
 type apiOperation struct {
-	Name  string `json:"name"`
-	State string `json:"state"`
+	Name     string `json:"name"`
+	Done     bool   `json:"done"`
+	Response *struct {
+		NodesUpserted     int `json:"nodesUpserted"`
+		RelationsUpserted int `json:"relationsUpserted"`
+	} `json:"response,omitempty"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
