@@ -6,8 +6,11 @@ name: Dev Publish
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
+# No workflow-level permissions block, on purpose. A job that calls the
+# reusable build workflow can only narrow the workflow-level grant, so a
+# `contents: read` block here made GitHub reject every run at startup
+# (startup_failure, no jobs created), and a wide block trips the
+# excessive-permissions audit. Every job declares its own instead.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -191,6 +194,12 @@ jobs:
   container-publish-plugin-tech-radar:
     name: Publish · Plugin Tech Radar
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     with:
       image-name: "naira-plugin-tech-radar"
       dockerfile: "plugins/cmd/tech_radar/Dockerfile"
@@ -233,6 +242,8 @@ jobs:
       - container-publish-plugin-tech-radar
       - container-publish-plugin-github
     if: always()
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - name: Check results
