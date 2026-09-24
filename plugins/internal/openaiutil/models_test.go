@@ -78,8 +78,8 @@ func TestFetchModels(t *testing.T) {
 			}))
 			defer mockServer.Close()
 
-			var resp ModelsResponse[Datum]
-			err := FetchModels(context.Background(), mockServer.Client(), mockServer.URL, testToken, &resp)
+			var resp DataResponse[Datum]
+			err := GetModels(context.Background(), mockServer.Client(), mockServer.URL, testToken, &resp)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -100,10 +100,19 @@ func TestFetchModelsTrimsTrailingSlashAndOmitsEmptyToken(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	var resp ModelsResponse[Datum]
-	err := FetchModels(context.Background(), mockServer.Client(), mockServer.URL+"/base/", "  ", &resp)
+	var resp DataResponse[Datum]
+	err := GetModels(context.Background(), mockServer.Client(), mockServer.URL+"/base/", "  ", &resp)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"local-model"}, ModelIDs(resp.Data))
+	assert.Equal(t, []string{"local-model"}, modelIDs(resp.Data))
+}
+
+// ModelIDs reduces a datum list to its IDs, preserving order.
+func modelIDs(models []Datum) []string {
+	ids := make([]string, 0, len(models))
+	for _, m := range models {
+		ids = append(ids, m.ID)
+	}
+	return ids
 }
 
 func TestGetModels_LlamacppResponseWithComplexExtras(t *testing.T) {
@@ -149,7 +158,7 @@ func TestGetModels_LlamacppResponseWithComplexExtras(t *testing.T) {
 		Meta    map[string]interface{} `json:"meta"`
 	}
 	type myModelsResponse struct {
-		ModelsResponse[myDatum]
+		DataResponse[myDatum]
 		Models []map[string]interface{} `json:"models"`
 	}
 
@@ -170,7 +179,7 @@ func TestGetModels_LlamacppResponseWithComplexExtras(t *testing.T) {
 				},
 			},
 		},
-		ModelsResponse: ModelsResponse[myDatum]{
+		DataResponse: DataResponse[myDatum]{
 			Data: []myDatum{
 				{
 					Datum: Datum{

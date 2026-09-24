@@ -59,10 +59,6 @@ func (d *datum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type modelsResponse struct {
-	openaiutil.ModelsResponse[datum]
-}
-
 type config struct {
 	PathPrefix  string        `env:"PATH_PREFIX" usage:"prefix for emitted model Node paths, e.g. 'litellm' yields 'litellm/gpt-4o'"`
 	BaseURL     string        `env:"OPENAI_API_MODELS_BASE_URL" usage:"base URL of the OpenAI API-compatible endpoint, e.g. 'https://litellm.example.com'"`
@@ -107,8 +103,8 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	var resp modelsResponse
-	if err := openaiutil.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
+	var resp openaiutil.DataResponse[datum]
+	if err := openaiutil.GetModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching models from %q: %w", p.config.BaseURL, err)
 	}
 	models := resp.Data

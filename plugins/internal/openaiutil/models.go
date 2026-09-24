@@ -32,31 +32,23 @@ type EmbedsDatum interface {
 	embeddedDatum()
 }
 
-// ModelsResponse mirrors the root object returned by GET /v1/models: a "data"
+// DataResponse mirrors the root object returned by GET /v1/models: a "data"
 // array of datums of type T. Callers needing provider-specific extra
-// top-level fields (e.g. llama.cpp's "models") embed ModelsResponse in their
+// top-level fields (e.g. llama.cpp's "models") embed DataResponse in their
 // own type and pass a pointer to that type as FetchModels' out argument.
-type ModelsResponse[T EmbedsDatum] struct {
+type DataResponse[T EmbedsDatum] struct {
 	Data []T `json:"data"`
 }
 
-// embeddedModelsResponse is a private marker method enforcing that types
-// passed as FetchModels' out argument embed ModelsResponse[D] for some D. It
-// has a value receiver so that a pointer to an embedding type also satisfies
-// EmbedsModelsResponse.
-func (ModelsResponse[T]) embeddedModelsResponse() {}
+type SimpleModelsResponse = DataResponse[Datum]
 
-type EmbedsModelsResponse interface {
-	embeddedModelsResponse()
-}
-
-// FetchModels calls GET <baseURL>/v1/models with an optional bearer token,
-// and decodes the response body into out. out must be a pointer to a type
-// that embeds ModelsResponse[D] for some D (see EmbedsModelsResponse), which
-// lets callers capture provider-specific extra fields by embedding
-// Datum/ModelsResponse in their own types instead of losing them to the
-// well-known fields alone.
-func FetchModels(ctx context.Context, client *http.Client, baseURL, bearerToken string, out EmbedsModelsResponse) error {
+// GetModels calls GET <baseURL>/v1/models with an optional bearer token, and
+// decodes the response body into out. out should be a pointer to a type that
+// embeds DataResponse. For the simplest cases, use a pointer to a
+// SimpleModelsResponse struct as the type of out. For more complex cases, use
+// DataResponse with a custom struct, or even define a custom wrapper struct
+// and embed DataResponse in it.
+func GetModels(ctx context.Context, client *http.Client, baseURL, bearerToken string, out any) error {
 	addr := strings.TrimRight(baseURL, "/") + "/v1/models"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, addr, nil)
@@ -85,13 +77,4 @@ func FetchModels(ctx context.Context, client *http.Client, baseURL, bearerToken 
 	}
 
 	return nil
-}
-
-// ModelIDs reduces a datum list to its IDs, preserving order.
-func ModelIDs(models []Datum) []string {
-	ids := make([]string, 0, len(models))
-	for _, m := range models {
-		ids = append(ids, m.ID)
-	}
-	return ids
 }

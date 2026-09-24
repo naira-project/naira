@@ -60,8 +60,8 @@ func main() {
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	// List models from openai compatible v1/models endpoint
-	var resp openaiutil.ModelsResponse[openaiutil.Datum]
-	if err := openaiutil.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
+	var resp openaiutil.DataResponse[openaiutil.Datum]
+	if err := openaiutil.GetModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching LiteLLM models: %w", err)
 	}
 	models := resp.Data
