@@ -38,7 +38,8 @@ const propertyKeyOwnedBy = "owned_by"
 // properties instead of being silently dropped.
 type datum struct {
 	openaicompat.Datum
-	Extra map[string]json.RawMessage `json:"-"`
+	// FIXME(go1.27+): migrate to jsonv2 with `json:",embed"` and delete .UnmarshalJSON() func
+	Props map[string]json.RawMessage `json:"-"`
 }
 
 func (d *datum) UnmarshalJSON(data []byte) error {
@@ -48,13 +49,10 @@ func (d *datum) UnmarshalJSON(data []byte) error {
 
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("unmarshaling model fields: %w", err)
+		return fmt.Errorf("unmarshaling extra model fields: %w", err)
 	}
 	delete(raw, "id")
-	delete(raw, "object")
-	delete(raw, "created")
-	delete(raw, "owned_by")
-	d.Extra = raw
+	d.Props = raw
 
 	return nil
 }
@@ -110,7 +108,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	models := resp.Data
 
 	nodes := make([]pluginapi.NodeClaim, 0, len(models))
-	seen := make(map[string]struct{}, len(models))
+	seen := make(map[string]bool, len(models))
 	for _, model := range models {
 		id := strings.TrimSpace(model.ID)
 		if id == "" {
@@ -119,18 +117,18 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 
 		path := p.nodePrefix + "/" + id
-		if _, dup := seen[path]; dup {
+		if seen[path] {
 			p.logger.Printf("WARN: skipping model %q reported by %q: path %q already claimed", model.ID, p.config.BaseURL, path)
 			continue
 		}
-		seen[path] = struct{}{}
+		seen[path] = true
 
 		properties := pluginapi.PropertyMap{}
-		if model.OwnedBy != "" {
-			properties[propertyKeyOwnedBy] = model.OwnedBy
+		for k, v := range model.Props {
+			setProperty(properties, k, v)
 		}
-		for key, value := range model.Extra {
-			setProperty(properties, key, value)
+		if len(properties) == 0 {
+			properties = nil
 		}
 
 		nodes = append(nodes, pluginapi.NodeClaim{
@@ -143,28 +141,25 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 // setProperty assigns raw to properties[key], flattening JSON objects into
-// dotted-path sub-keys (e.g. "meta.n_params") so their individual fields are
-// queryable rather than buried in one JSON-blob property. JSON arrays are
-// kept as a single raw-JSON string property, since flattening them by index
-// wouldn't be meaningfully queryable.
+// dotted-path sub-keys (e.g. "meta.n_params"). JSON strings are stripped of
+// quotes; other types (incl. arrays) are assigned as raw text.
 func setProperty(properties pluginapi.PropertyMap, key string, raw json.RawMessage) {
+	// raw is a JSON object/map? if yes, recursively flatten keys into dotted "paths"
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &obj); err == nil {
-		for subKey, value := range obj {
-			setProperty(properties, key+"."+subKey, value)
+		for subKey, v := range obj {
+			setProperty(properties, key+"."+subKey, v)
 		}
 		return
 	}
-	properties[key] = rawJSONToString(raw)
-}
 
-// rawJSONToString renders a JSON value as a property string: a JSON string
-// value is unquoted, anything else (numbers, booleans, arrays) is rendered as
-// its compact JSON text.
-func rawJSONToString(raw json.RawMessage) string {
+	// raw is a JSON string? if yes, strip quotes
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
-		return s
+		properties[key] = s
+		return
 	}
-	return string(raw)
+
+	// fallback - assign raw text as string (note: includes arrays)
+	properties[key] = string(raw)
 }

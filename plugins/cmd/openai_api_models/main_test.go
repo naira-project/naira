@@ -22,28 +22,41 @@ func TestNewValidatesConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "missing base URL",
-			config:  config{PathPrefix: "litellm"},
+			name: "missing base URL",
+			config: config{
+				PathPrefix: "litellm",
+			},
 			wantErr: "OPENAI_API_MODELS_BASE_URL is empty",
 		},
 		{
-			name:    "missing node prefix",
-			config:  config{BaseURL: "http://litellm.example.com"},
+			name: "missing node prefix",
+			config: config{
+				BaseURL: "http://litellm.example.com",
+			},
 			wantErr: "PATH_PREFIX is empty",
 		},
 		{
-			name:    "node prefix of only slashes",
-			config:  config{BaseURL: "http://litellm.example.com", PathPrefix: "//"},
+			name: "node prefix of only slashes",
+			config: config{
+				BaseURL:    "http://litellm.example.com",
+				PathPrefix: "//",
+			},
 			wantErr: `PATH_PREFIX must not contain "/"`,
 		},
 		{
-			name:    "node prefix with trailing slash",
-			config:  config{BaseURL: "http://litellm.example.com", PathPrefix: "litellm/"},
+			name: "node prefix with trailing slash",
+			config: config{
+				BaseURL:    "http://litellm.example.com",
+				PathPrefix: "litellm/",
+			},
 			wantErr: `PATH_PREFIX must not contain "/"`,
 		},
 		{
-			name:    "node prefix with multiple segments",
-			config:  config{BaseURL: "http://litellm.example.com", PathPrefix: "models/litellm"},
+			name: "node prefix with multiple segments",
+			config: config{
+				BaseURL:    "http://litellm.example.com",
+				PathPrefix: "models/litellm",
+			},
 			wantErr: `PATH_PREFIX must not contain "/"`,
 		},
 	}
@@ -59,33 +72,61 @@ func TestNewValidatesConfig(t *testing.T) {
 
 func TestNewTrimsSurroundingSpaceFromNodePrefix(t *testing.T) {
 	// Whitespace is invisible in a manifest, so it is trimmed rather than rejected.
-	for _, prefix := range []string{"litellm", " litellm ", "\tlitellm\n"} {
-		p, err := New(config{BaseURL: "http://litellm.example.com", PathPrefix: prefix}, testLogger())
+	prefixTests := []string{
+		"litellm",
+		" litellm ",
+		"\tlitellm\n",
+	}
+	for _, prefix := range prefixTests {
+		p, err := New(config{
+			BaseURL:    "http://litellm.example.com",
+			PathPrefix: prefix,
+		}, testLogger())
 		require.NoError(t, err)
 		assert.Equal(t, "litellm", p.nodePrefix, "prefix %q", prefix)
 	}
 }
 
 func TestCollect(t *testing.T) {
-	const testAPIKey = "sk-test"
-
 	mockServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/v1/models", r.URL.Path)
-		assert.Equal(t, "Bearer "+testAPIKey, r.Header.Get("Authorization"))
-		fmt.Fprint(w, `{"data":[
-			{"id":"gpt-4o","owned_by":"openai"},
-			{"id":"claude-sonnet-5","owned_by":"anthropic"},
-			{"id":"local-model"},
-			{"id":"gpt-4o","owned_by":"openai"},
-			{"id":"  "}
-		]}`)
+		assert.Equal(t, "Bearer test-api-key", r.Header.Get("Authorization"))
+		fmt.Fprint(w, `{
+            "data":[
+                {
+                    "id": "gpt-4o",
+                    "owned_by": "openai"
+                },
+                {
+                    "id": "claude-sonnet-5",
+                    "owned_by": "anthropic"
+                },
+                {
+                    "id": "local-model"
+                },
+                {
+                    "id": "gpt-4o",
+                    "owned_by": "openai"
+                },
+                {
+                    "id": "many-extra-fields",
+                    "test-text": "aaa",
+                    "test-number": 123,
+                    "test-object": {"a": 1, "b": 2},
+                    "test-array": [1, 2, 3]
+                },
+                {
+                    "id": "  "
+                }
+            ]
+        }`)
 	}))
 	defer mockServer.Close()
 
 	p, err := New(config{
 		BaseURL:     mockServer.URL,
 		PathPrefix:  "vllm",
-		APIKey:      testAPIKey,
+		APIKey:      "test-api-key",
 		HTTPTimeout: 5 * time.Second,
 	}, testLogger())
 	require.NoError(t, err)
@@ -96,17 +137,23 @@ func TestCollect(t *testing.T) {
 
 	assert.Empty(t, res.Relations)
 	assert.Equal(t, []pluginapi.NodeClaim{
-		{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "vllm/gpt-4o"},
-			Properties: pluginapi.PropertyMap{propertyKeyOwnedBy: "openai"},
+		{ID: nodeID("model", "vllm/gpt-4o"),
+			Properties: pluginapi.PropertyMap{
+				"owned_by": "openai"},
 		},
-		{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "vllm/claude-sonnet-5"},
-			Properties: pluginapi.PropertyMap{propertyKeyOwnedBy: "anthropic"},
+		{ID: nodeID("model", "vllm/claude-sonnet-5"),
+			Properties: pluginapi.PropertyMap{
+				"owned_by": "anthropic"},
 		},
-		{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "vllm/local-model"},
-			Properties: pluginapi.PropertyMap{},
+		{ID: nodeID("model", "vllm/local-model")},
+		{ID: nodeID("model", "vllm/many-extra-fields"),
+			Properties: pluginapi.PropertyMap{
+				"test-text":     "aaa",
+				"test-number":   "123",
+				"test-object.a": "1",
+				"test-object.b": "2",
+				"test-array":    "[1, 2, 3]",
+			},
 		},
 	}, res.Nodes)
 }
@@ -117,7 +164,10 @@ func TestCollectPropagatesFetchError(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	p, err := New(config{BaseURL: mockServer.URL, PathPrefix: "litellm"}, testLogger())
+	p, err := New(config{
+		BaseURL:    mockServer.URL,
+		PathPrefix: "litellm",
+	}, testLogger())
 	require.NoError(t, err)
 	p.httpClient = mockServer.Client()
 
@@ -128,4 +178,8 @@ func TestCollectPropagatesFetchError(t *testing.T) {
 
 func testLogger() *log.Logger {
 	return log.New(io.Discard, "", 0)
+}
+
+func nodeID(kind, path string) pluginapi.NodeID {
+	return pluginapi.NodeID{Kind: kind, Path: path}
 }
