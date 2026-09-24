@@ -27,15 +27,17 @@ development Secrets from values.
 ## Constraints
 
 - One release per namespace: namespaced objects have fixed names (`catalog`,
-  `ui`, `portal`, `catalog-plugin-config`, `catalog-secrets`, `portal-oidc`).
+  `ui`, `portal`, `catalog-plugin-config`, `plugin-<name>-config`,
+  `catalog-secrets`, `portal-oidc`).
   Cluster-scoped RBAC is prefixed with the release name, so several releases
   per cluster are fine.
 - The UI works only in namespace `idp-system` for now: `ui/nginx.conf.template`
   still proxies to `catalog.idp-system` regardless of `ui.catalogUpstream`.
-- On ghcr at `0.1.0`, `naira-plugin-depl-uses-litellm`,
-  `naira-plugin-openmetadata`, `naira-plugin-mcp-servers` and
-  `naira-plugin-tech-radar` have no tag yet. A registry install needs those
-  plugins disabled or a later release.
+- On ghcr, `naira-plugin-depl-uses-litellm`, `naira-plugin-openmetadata`,
+  `naira-plugin-mcp-servers` and `naira-plugin-tech-radar` have no `0.1.0`
+  tag; only `dev-publish.yml` builds them (branch-name tags). A registry
+  install at the chart's default tag needs those plugins disabled, a dev tag
+  via `image.tag`, or a release that includes them.
 
 ## Plugins
 
@@ -56,9 +58,9 @@ in a value fails the render.
 
 ## Guards
 
-`templates/validate.yaml` (and, for a missing plugin image, `naira.image` in
-`_helpers.tpl` — templates render in file order, before `validate.yaml` can
-catch it) reject: `catalog.secret`/`portal.oidc.secret` with both
+`templates/validate.yaml` (and, for a missing `image.repository` on the
+catalog, a plugin, the UI or the portal, `naira.image` in `_helpers.tpl` —
+templates render in file order, before `validate.yaml` can catch it) reject: `catalog.secret`/`portal.oidc.secret` with both
 `existingSecret` and `create` set; `catalog.secret.create` true with
 `catalog.secret.data` empty; two enabled plugins on the same port; a plugin
 `config` block with neither `existingConfigMap` nor `data`; a plugin `env`

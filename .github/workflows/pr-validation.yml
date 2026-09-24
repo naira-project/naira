@@ -200,7 +200,7 @@ jobs:
         with:
           repository: naira-project/test-dependencies
           # Pinned commit of the test-dependencies chart this PR is verified against.
-          ref: 0b1d86e6c46a416cc86fd35f765ca6d6a53e2ed6
+          ref: 0a46a359d6ce5a92614e63f1791ef74cfe3d511a
           path: test-dependencies
           persist-credentials: false
       - name: Set up Helm
