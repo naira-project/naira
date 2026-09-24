@@ -46,6 +46,7 @@ func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDa
 func TestCollect(t *testing.T) {
 	novaMicro := bedrocktypes.FoundationModelSummary{
 		ModelId:          strp("amazon.nova-micro-v1:0"),
+		ModelName:        strp("Nova Micro"),
 		ProviderName:     strp("Amazon"),
 		ModelLifecycle:   &bedrocktypes.FoundationModelLifecycle{Status: bedrocktypes.FoundationModelLifecycleStatusActive},
 		InputModalities:  []bedrocktypes.ModelModality{bedrocktypes.ModelModalityText},
@@ -89,8 +90,8 @@ func TestCollect(t *testing.T) {
 					{
 						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
 						Properties: pluginapi.PropertyMap{
-							"provider": "bedrock", "region": "us-east-1", "lifecycle_status": "active",
-							"input_modalities": "text", "output_modalities": "text",
+							"provider": "bedrock", "region": "us-east-1", "model_name": "Nova Micro",
+							"lifecycle_status": "active", "input_modalities": "text", "output_modalities": "text",
 							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
 							"status": "healthy",
 						},

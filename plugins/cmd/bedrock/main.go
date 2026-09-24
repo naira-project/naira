@@ -51,6 +51,7 @@ const (
 	propertyKeyOwnedBy          = "owned_by"
 	propertyKeyProvider         = "provider"
 	propertyKeyRegion           = "region"
+	propertyKeyModelName        = "model_name"
 	propertyKeyLifecycleStatus  = "lifecycle_status"
 	propertyKeyInputModalities  = "input_modalities"
 	propertyKeyOutputModalities = "output_modalities"
@@ -213,12 +214,12 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 }
 
 type foundationModel struct {
-	ModelID          string
-	ModelName        string
-	ProviderName     string
-	LifecycleStatus  string
-	InputModalities  []string
-	OutputModalities []string
+	ModelID      string
+	ProviderName string
+	// Props holds the properties already converted to their final string
+	// form (lifecycle status, modalities, ...), ready to be merged into a
+	// node's PropertyMap.
+	Props pluginapi.PropertyMap
 }
 
 type modelUsage struct {
@@ -244,14 +245,8 @@ func (m foundationModel) properties(region string, usage modelUsage) pluginapi.P
 		propertyKeyProvider: providerNameBedrock,
 		propertyKeyRegion:   region,
 	}
-	for key, value := range map[string]string{
-		propertyKeyLifecycleStatus:  strings.ToLower(m.LifecycleStatus),
-		propertyKeyInputModalities:  strings.Join(m.InputModalities, ","),
-		propertyKeyOutputModalities: strings.Join(m.OutputModalities, ","),
-	} {
-		if value != "" {
-			properties[key] = value
-		}
+	for key, value := range m.Props {
+		properties[key] = value
 	}
 
 	if usage.InputTokens != 0 {
@@ -282,13 +277,22 @@ func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]fou
 
 	models := make([]foundationModel, 0, len(out.ModelSummaries))
 	for _, summary := range out.ModelSummaries {
+		props := pluginapi.PropertyMap{}
+		for key, value := range map[string]string{
+			propertyKeyModelName:        derefString(summary.ModelName),
+			propertyKeyLifecycleStatus:  strings.ToLower(string(lifecycleStatus(summary.ModelLifecycle))),
+			propertyKeyInputModalities:  strings.Join(modalitiesToStrings(summary.InputModalities), ","),
+			propertyKeyOutputModalities: strings.Join(modalitiesToStrings(summary.OutputModalities), ","),
+		} {
+			if value != "" {
+				props[key] = value
+			}
+		}
+
 		models = append(models, foundationModel{
-			ModelID:          derefString(summary.ModelId),
-			ModelName:        derefString(summary.ModelName),
-			ProviderName:     derefString(summary.ProviderName),
-			LifecycleStatus:  strings.ToLower(string(lifecycleStatus(summary.ModelLifecycle))),
-			InputModalities:  modalitiesToStrings(summary.InputModalities),
-			OutputModalities: modalitiesToStrings(summary.OutputModalities),
+			ModelID:      derefString(summary.ModelId),
+			ProviderName: derefString(summary.ProviderName),
+			Props:        props,
 		})
 	}
 
