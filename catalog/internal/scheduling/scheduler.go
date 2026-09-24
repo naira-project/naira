@@ -41,7 +41,7 @@ func (s *Scheduler) registerSchedules(configs catalog.PluginConfigsByName, runFu
 	for plugin, config := range configs {
 		expr := config.Schedule
 		if plugin == "" {
-			return ErrInvalidPlugin // nolint // no need to wrap error, it's unique
+			return ErrInvalidPlugin
 		}
 		if expr == catalog.ScheduleManual {
 			continue
