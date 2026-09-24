@@ -18,7 +18,7 @@ func TestFetchModels(t *testing.T) {
 		name            string
 		statusCode      int
 		body            string
-		wantModels      []Model
+		wantModels      []Datum
 		wantErr         bool
 		wantUnauthorize bool
 	}{
@@ -26,7 +26,7 @@ func TestFetchModels(t *testing.T) {
 			name:       "200 OK returns models",
 			statusCode: http.StatusOK,
 			body:       `{"data":[{"id":"gpt-4o","owned_by":"openai"},{"id":"claude-sonnet-5","owned_by":"anthropic"}]}`,
-			wantModels: []Model{
+			wantModels: []Datum{
 				{ID: "gpt-4o", OwnedBy: "openai"},
 				{ID: "claude-sonnet-5", OwnedBy: "anthropic"},
 			},
@@ -35,7 +35,7 @@ func TestFetchModels(t *testing.T) {
 			name:       "empty data array returns no models",
 			statusCode: http.StatusOK,
 			body:       `{"data":[]}`,
-			wantModels: []Model{},
+			wantModels: []Datum{},
 		},
 		{
 			name:            "401 Unauthorized is reported as ErrUnauthorized",
@@ -78,7 +78,7 @@ func TestFetchModels(t *testing.T) {
 			}))
 			defer mockServer.Close()
 
-			models, err := FetchModels(context.Background(), mockServer.Client(), mockServer.URL, testToken)
+			resp, err := FetchModels[ModelsResponse[Datum], Datum](context.Background(), mockServer.Client(), mockServer.URL, testToken)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -86,7 +86,7 @@ func TestFetchModels(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.wantModels, models)
+			assert.Equal(t, tt.wantModels, resp.Data)
 		})
 	}
 }
@@ -99,9 +99,9 @@ func TestFetchModelsTrimsTrailingSlashAndOmitsEmptyToken(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	models, err := FetchModels(context.Background(), mockServer.Client(), mockServer.URL+"/base/", "  ")
+	resp, err := FetchModels[ModelsResponse[Datum], Datum](context.Background(), mockServer.Client(), mockServer.URL+"/base/", "  ")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"local-model"}, ModelIDs(models))
+	assert.Equal(t, []string{"local-model"}, ModelIDs(resp.Data))
 }
 
 func TestGetModels_LlamacppResponseWithComplexExtras(t *testing.T) {
@@ -188,29 +188,4 @@ func TestGetModels_LlamacppResponseWithComplexExtras(t *testing.T) {
 		},
 	}
 	assert.Equal(t, wantResponse, v)
-}
-
-type Datum struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	OwnedBy string `json:"owned_by"`
-}
-
-// embeddedDatum is a private marker method to enforce embedding of Datum struct in
-// types implementing the EmbedsDatum interface.
-func (Datum) embeddedDatum() {}
-
-type EmbedsDatum interface {
-	embeddedDatum()
-}
-
-type ModelsResponse[T EmbedsDatum] struct {
-	Data []T `json:"data"`
-}
-
-func (ModelsResponse[T]) embeddedModelsResponse() {}
-
-type EmbedsModelsResponse[T EmbedsDatum] interface {
-	embeddedModelsResponse()
 }

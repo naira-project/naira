@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -30,6 +31,37 @@ import (
 )
 
 const propertyKeyOwnedBy = "owned_by"
+
+// datum embeds openaiutil.Datum and additionally captures every field of a
+// /v1/models entry that isn't one of Datum's well-known fields, so that
+// provider-specific extras (e.g. llama.cpp's "meta") surface as node
+// properties instead of being silently dropped.
+type datum struct {
+	openaiutil.Datum
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+func (d *datum) UnmarshalJSON(data []byte) error {
+	if err := json.Unmarshal(data, &d.Datum); err != nil {
+		return fmt.Errorf("unmarshaling well-known model fields: %w", err)
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("unmarshaling model fields: %w", err)
+	}
+	delete(raw, "id")
+	delete(raw, "object")
+	delete(raw, "created")
+	delete(raw, "owned_by")
+	d.Extra = raw
+
+	return nil
+}
+
+type modelsResponse struct {
+	openaiutil.ModelsResponse[datum]
+}
 
 type config struct {
 	PathPrefix  string        `env:"PATH_PREFIX" usage:"prefix for emitted model Node paths, e.g. 'litellm' yields 'litellm/gpt-4o'"`
@@ -75,10 +107,11 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	models, err := openaiutil.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey)
+	resp, err := openaiutil.FetchModels[modelsResponse, datum](ctx, p.httpClient, p.config.BaseURL, p.config.APIKey)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching models from %q: %w", p.config.BaseURL, err)
 	}
+	models := resp.Data
 
 	nodes := make([]pluginapi.NodeClaim, 0, len(models))
 	seen := make(map[string]struct{}, len(models))
@@ -100,6 +133,9 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		if model.OwnedBy != "" {
 			properties[propertyKeyOwnedBy] = model.OwnedBy
 		}
+		for key, value := range model.Extra {
+			properties[key] = rawJSONToString(value)
+		}
 
 		nodes = append(nodes, pluginapi.NodeClaim{
 			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: path},
@@ -108,4 +144,15 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	}
 
 	return pluginapi.CollectResponse{Nodes: nodes, Relations: []pluginapi.RelationClaim{}}, nil
+}
+
+// rawJSONToString renders a JSON value as a property string: a JSON string
+// value is unquoted, anything else (numbers, booleans, objects, arrays) is
+// rendered as its compact JSON text.
+func rawJSONToString(raw json.RawMessage) string {
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	return string(raw)
 }

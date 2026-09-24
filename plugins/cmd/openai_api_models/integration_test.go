@@ -298,7 +298,21 @@ plugins:
 	assert.Equal(t, "model", nodes.Nodes[0].Kind)
 	assert.Equal(t, "llamacpp1/test-model-name", nodes.Nodes[0].Path)
 	require.Len(t, nodes.Nodes[0].PluginClaims, 1)
-	assert.Equal(t, "llamacpp", nodes.Nodes[0].PluginClaims[0].Props["owned_by"])
+	props := nodes.Nodes[0].PluginClaims[0].Props
+	assert.Equal(t, "llamacpp", props["owned_by"])
+
+	// llama.cpp's /v1/models response carries fields beyond the well-known
+	// ones (see openaiutil's TestGetModels_LlamacppResponseWithComplexExtras):
+	// an "aliases" array, and a "meta" object with model file details. Verify
+	// those extras made it through to node properties as well.
+	assert.JSONEq(t, `["test-model-name"]`, props["aliases"])
+	var meta map[string]any
+	require.NoError(t, json.Unmarshal([]byte(props["meta"]), &meta))
+	assert.Subset(t, meta, map[string]any{
+		"n_params": float64(292800),
+		"size":     float64(1171200),
+		"ftype":    "(guessed) all F32",
+	})
 }
 
 type pluginClaim struct {
