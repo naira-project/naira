@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/naira-project/naira/plugins/internal/openaiutil"
+	"github.com/naira-project/naira/plugins/internal/openaicompat"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -37,7 +37,7 @@ const propertyKeyOwnedBy = "owned_by"
 // provider-specific extras (e.g. llama.cpp's "meta") surface as node
 // properties instead of being silently dropped.
 type datum struct {
-	openaiutil.Datum
+	openaicompat.Datum
 	Extra map[string]json.RawMessage `json:"-"`
 }
 
@@ -103,8 +103,8 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	var resp openaiutil.DataResponse[datum]
-	if err := openaiutil.GetModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
+	var resp openaicompat.DataResponse[datum]
+	if err := openaicompat.GetModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching models from %q: %w", p.config.BaseURL, err)
 	}
 	models := resp.Data

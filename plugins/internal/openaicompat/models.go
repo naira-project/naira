@@ -1,7 +1,7 @@
 // Package openaiutil provides a small client for the parts of the OpenAI API
 // that Naira plugins need, so that every plugin talking to an OpenAI-compatible
 // endpoint shares one implementation.
-package openaiutil
+package openaicompat
 
 import (
 	"context"

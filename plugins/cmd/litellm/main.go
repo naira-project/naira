@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/naira-project/naira/plugins/internal/openaiutil"
+	"github.com/naira-project/naira/plugins/internal/openaicompat"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	"k8s.io/client-go/dynamic"
@@ -60,8 +60,8 @@ func main() {
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	// List models from openai compatible v1/models endpoint
-	var resp openaiutil.DataResponse[openaiutil.Datum]
-	if err := openaiutil.GetModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
+	var resp openaicompat.DataResponse[openaicompat.Datum]
+	if err := openaicompat.GetModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching LiteLLM models: %w", err)
 	}
 	models := resp.Data
