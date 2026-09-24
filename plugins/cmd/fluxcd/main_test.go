@@ -237,19 +237,19 @@ func TestCollect(t *testing.T) {
 						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
 					{ID: nodeID("Kustomization.fluxcd", "flux-system/my-app")},
 					{ID: nodeID("deployment", "team-a/app")},
-					{ID: externalRepoID("example", "repo"),
+					{ID: rawNodeID("git_repository", "github.com/example/repo"),
 						Properties: pluginapi.PropertyMap{"url": "https://github.com/example/repo"}},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
 						From: nodeID("deployment", "team-a/app"),
-						To:   externalRepoID("example", "repo")},
+						To:   rawNodeID("git_repository", "github.com/example/repo")},
 					{Kind: "describes",
 						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
 						To:   nodeID("deployment", "team-a/app")},
 					{Kind: "references",
 						From: nodeID("GitRepository.fluxcd", "flux-system/my-repo"),
-						To:   externalRepoID("example", "repo")},
+						To:   rawNodeID("git_repository", "github.com/example/repo")},
 					{Kind: "sourced_from",
 						From: nodeID("Kustomization.fluxcd", "flux-system/my-app"),
 						To:   nodeID("GitRepository.fluxcd", "flux-system/my-repo")},
@@ -408,8 +408,8 @@ func nodeID(kind, path string) pluginapi.NodeID {
 	return pluginapi.NodeID{Kind: kind, Path: testClusterID + "/" + path}
 }
 
-func externalRepoID(owner, repo string) pluginapi.NodeID {
-	return pluginapi.NodeID{Kind: "git_repository", Path: "github.com/" + owner + "/" + repo}
+func rawNodeID(kind, path string) pluginapi.NodeID {
+	return pluginapi.NodeID{Kind: kind, Path: path}
 }
 
 func namespace(name string) *corev1.Namespace {
