@@ -21,7 +21,7 @@ order, and catalog.yaml dereferences .image before validate.yaml runs).
 {{- $img := .image | default dict -}}
 {{- $repo := required (printf "%s.image.repository is required" .context) $img.repository -}}
 {{- $tag := $img.tag | default .root.Values.image.tag | default .root.Chart.AppVersion -}}
-{{- $ref := printf "%s:%s" $repo $tag -}}
+{{- $ref := printf "%s:%v" $repo $tag -}}
 {{- if .root.Values.image.registry -}}
 {{- printf "%s/%s" .root.Values.image.registry $ref -}}
 {{- else -}}

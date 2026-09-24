@@ -12,7 +12,7 @@ silently does nothing.
 {{- if and .Values.catalog.secret.create (not .Values.catalog.secret.data) }}
 {{- fail "catalog.secret.create is true but catalog.secret.data is empty" }}
 {{- end }}
-{{- $ports := dict }}
+{{- $ports := dict (toString .Values.catalog.port) "catalog" }}
 {{- range $name, $p := .Values.catalog.plugins }}
 {{- if $p.enabled }}
 {{- $port := toString $p.port }}

@@ -30,7 +30,11 @@ development Secrets from values.
   `ui`, `portal`, `catalog-plugin-config`, `plugin-<name>-config`,
   `catalog-secrets`, `portal-oidc`).
   Cluster-scoped RBAC is prefixed with the release name, so several releases
-  per cluster are fine.
+  per cluster are fine as long as their release names differ.
+- Migrating from `deploy/dev/stacks`: uninstall that stack first (`task
+  platform:undeploy` or delete the `catalog`/`ui`/`portal` Deployments in
+  `idp-system`). `helm install` cannot take over those objects: the Deployment
+  selectors differ and are immutable.
 - The UI works only in namespace `idp-system` for now: `ui/nginx.conf.template`
   still proxies to `catalog.idp-system` regardless of `ui.catalogUpstream`.
 - On ghcr, `naira-plugin-depl-uses-litellm`, `naira-plugin-openmetadata`,

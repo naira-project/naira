@@ -172,8 +172,9 @@ jobs:
         # Validates the rendered manifests against the Kubernetes API schemas;
         # helm lint does not see wrong field names or types. One run per values
         # file the chart supports (bare defaults do not render by design).
+        shell: bash # pipefail: a chart that fails to render must not pass on empty input
         env:
-          KUBERNETES_VERSION: "1.36.1" # keep in sync with e2e/base/kind-config.yaml
+          KUBERNETES_VERSION: "1.36.1" # keep in sync with the kind node image below and deploy/dev/stacks/core/infra/kind/kind-config.yaml
         run: |
           for values in ci/default-values.yaml values-dev.yaml; do
             helm template naira deploy/charts/naira --namespace idp-system -f "deploy/charts/naira/${values}" \
@@ -185,6 +186,9 @@ jobs:
   # functional probe a developer runs locally: every plugin registers with the
   # catalog and a run of every plugin succeeds. Images are built from this PR's
   # tree, so unpublished plugin images are no obstacle.
+  # Not part of the all-checks gate yet: it checks out test-dependencies at a
+  # commit of that repo's open PR branch. Add it to the gate once that PR is
+  # merged and the pin below points at a default-branch commit.
   helm-chart-install:
     name: Check · Helm Chart Install
     needs: helm-chart
@@ -211,6 +215,7 @@ jobs:
         uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
         with:
           cluster_name: naira-ci
+          node_image: kindest/node:v1.36.1 # the version kubeconform validates against
       - name: Build images
         # Same names and tag the chart's values-dev.yaml expects; loaded into
         # the node, never pushed.
@@ -249,6 +254,7 @@ jobs:
       - name: Probe the catalog through its API
         # Token from the dev realm, then: all enabled plugins registered, a
         # run of every plugin reaches SUCCEEDED, the UI proxies /v1 to the catalog.
+        shell: bash # pipefail for the helm template | yq pipelines
         run: |
           kubectl -n naira-deps port-forward svc/keycloak 18080:8080 &
           kubectl -n idp-system port-forward svc/catalog 18090:8090 &
@@ -300,7 +306,6 @@ jobs:
         container-build-catalog,
         container-build-ui,
         helm-chart,
-        helm-chart-install,
       ]
     if: always()
     runs-on: ubuntu-latest
@@ -316,7 +321,6 @@ jobs:
             "${{ needs.container-build-catalog.result }}"
             "${{ needs.container-build-ui.result }}"
             "${{ needs.helm-chart.result }}"
-            "${{ needs.helm-chart-install.result }}"
           )
           for r in "${RESULTS[@]}"; do
             if [[ "$r" != "success" ]]; then

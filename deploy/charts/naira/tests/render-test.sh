@@ -146,6 +146,9 @@ check "ui disabled" "" \
 
 # ── Task 7: guards ───────────────────────────────────────────────────────────
 must_fail "duplicate plugin port" "both use port 50051" --set catalog.plugins.mlflow.port=50051
+must_fail "plugin port equal to the catalog port" "catalog and mlflow both use port 8090" --set catalog.plugins.mlflow.port=8090
+check "numeric image tag renders as a string" "ghcr.io/naira-project/naira-catalog:20260924" \
+  "$(render --set image.tag=20260924 | yq "$CAT | .containers[0].image")"
 must_fail "catalog secret: existing and create" "catalog.secret: set existingSecret or create, not both" \
   --set catalog.secret.existingSecret=x --set catalog.secret.create=true
 must_fail "portal secret: existing and create" "portal.oidc.secret: set existingSecret or create, not both" \
