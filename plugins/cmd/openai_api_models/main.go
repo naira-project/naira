@@ -134,7 +134,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 			properties[propertyKeyOwnedBy] = model.OwnedBy
 		}
 		for key, value := range model.Extra {
-			properties[key] = rawJSONToString(value)
+			setProperty(properties, key, value)
 		}
 
 		nodes = append(nodes, pluginapi.NodeClaim{
@@ -146,9 +146,25 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	return pluginapi.CollectResponse{Nodes: nodes, Relations: []pluginapi.RelationClaim{}}, nil
 }
 
+// setProperty assigns raw to properties[key], flattening JSON objects into
+// dotted-path sub-keys (e.g. "meta.n_params") so their individual fields are
+// queryable rather than buried in one JSON-blob property. JSON arrays are
+// kept as a single raw-JSON string property, since flattening them by index
+// wouldn't be meaningfully queryable.
+func setProperty(properties pluginapi.PropertyMap, key string, raw json.RawMessage) {
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err == nil {
+		for subKey, value := range obj {
+			setProperty(properties, key+"."+subKey, value)
+		}
+		return
+	}
+	properties[key] = rawJSONToString(raw)
+}
+
 // rawJSONToString renders a JSON value as a property string: a JSON string
-// value is unquoted, anything else (numbers, booleans, objects, arrays) is
-// rendered as its compact JSON text.
+// value is unquoted, anything else (numbers, booleans, arrays) is rendered as
+// its compact JSON text.
 func rawJSONToString(raw json.RawMessage) string {
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {

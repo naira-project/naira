@@ -164,23 +164,23 @@ plugins:
 	}](t, ctx, http.MethodGet, catalogBaseURL+"/v1/nodes", token)
 	assert.Equal(t, http.StatusOK, status, "GET /v1/nodes")
 	require.Len(t, nodes.Nodes, 1)
-	assert.Equal(t, "model", nodes.Nodes[0].Kind)
-	assert.Equal(t, "llamacpp1/test-model-name", nodes.Nodes[0].Path)
-	require.Len(t, nodes.Nodes[0].PluginClaims, 1)
-	props := nodes.Nodes[0].PluginClaims[0].Props
-	assert.Equal(t, "llamacpp", props["owned_by"])
+	n := nodes.Nodes[0]
+	assert.Equal(t, "model", n.Kind)
+	assert.Equal(t, "llamacpp1/test-model-name", n.Path)
+	require.Len(t, n.PluginClaims, 1)
+	props := n.PluginClaims[0].Props
 
 	// llama.cpp's /v1/models response carries fields beyond the well-known
 	// ones (see openaiutil's TestGetModels_LlamacppResponseWithComplexExtras):
 	// an "aliases" array, and a "meta" object with model file details. Verify
-	// those extras made it through to node properties as well.
-	assert.JSONEq(t, `["test-model-name"]`, props["aliases"])
-	var meta map[string]any
-	require.NoError(t, json.Unmarshal([]byte(props["meta"]), &meta))
-	assert.Subset(t, meta, map[string]any{
-		"n_params": float64(292800),
-		"size":     float64(1171200),
-		"ftype":    "(guessed) all F32",
+	// those extras made it through to node properties as well, with the
+	// "meta" object flattened into dotted-path properties.
+	assert.Subset(t, props, map[string]string{
+		"owned_by":      "llamacpp",
+		"aliases":       `["test-model-name"]`,
+		"meta.n_params": "292800",
+		"meta.size":     "1171200",
+		"meta.ftype":    "(guessed) all F32",
 	})
 }
 
