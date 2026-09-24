@@ -16,7 +16,7 @@ var errGithubResourceNotFound = errors.New("github resource not found")
 
 // maxGithubResponseBytes caps how much of a GitHub API response body we will
 // decode into memory. This is needed because we read files to fetch CODEOWNERS
-const maxGithubResponseBytes = 2 << 20 // 2MB
+const maxGithubResponseBytes = 2 * 1024 * 1024 // 2MB
 
 type githubClient struct {
 	httpClient *http.Client

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -25,13 +24,13 @@ func TestGithubClient_GetRepo(t *testing.T) {
 	defer srv.Close()
 
 	c := newGithubClient(srv.Client(), srv.URL, "secret-token")
-	repo, err := c.GetRepo(context.Background(), "acme", "service")
+	repo, err := c.GetRepo(t.Context(), "acme", "service")
 	require.NoError(t, err)
 	assert.Equal(t, "Go", repo.Language)
 }
 
 func TestGithubClient_GetCodeowners(t *testing.T) {
-	const codeownersBody = "* @acme/team\n"
+	const codeownersBody = "* @acme/team"
 	base64Body := base64.StdEncoding.EncodeToString([]byte(codeownersBody))
 
 	tests := []struct {
@@ -42,12 +41,28 @@ func TestGithubClient_GetCodeowners(t *testing.T) {
 		wantRequests []string // queried paths in chronological order
 	}{
 		{
-			name: "found at first location",
+			name: "found at .github/CODEOWNERS",
 			responses: map[string]ghContent{
 				".github/CODEOWNERS": {Content: base64Body, Encoding: "base64"},
 			},
 			wantContent:  codeownersBody,
 			wantRequests: []string{".github/CODEOWNERS"},
+		},
+		{
+			name: "found at CODEOWNERS",
+			responses: map[string]ghContent{
+				"CODEOWNERS": {Content: base64Body, Encoding: "base64"},
+			},
+			wantContent:  codeownersBody,
+			wantRequests: []string{".github/CODEOWNERS", "CODEOWNERS"},
+		},
+		{
+			name: "found at docs/CODEOWNERS",
+			responses: map[string]ghContent{
+				"docs/CODEOWNERS": {Content: base64Body, Encoding: "base64"},
+			},
+			wantContent:  codeownersBody,
+			wantRequests: []string{".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"},
 		},
 		{
 			name:         "not found anywhere",
@@ -57,10 +72,11 @@ func TestGithubClient_GetCodeowners(t *testing.T) {
 		{
 			name: "skips unsupported encoding and keeps looking",
 			responses: map[string]ghContent{
-				"docs/CODEOWNERS": {Content: codeownersBody, Encoding: "text"},
+				".github/CODEOWNERS": {Content: codeownersBody, Encoding: "text"},
+				"CODEOWNERS":         {Content: base64Body, Encoding: "base64"},
 			},
-			wantErr:      errGithubResourceNotFound,
-			wantRequests: []string{".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS"},
+			wantContent:  codeownersBody,
+			wantRequests: []string{".github/CODEOWNERS", "CODEOWNERS"},
 		},
 	}
 
@@ -69,7 +85,8 @@ func TestGithubClient_GetCodeowners(t *testing.T) {
 			var requests []string
 			srv := newFakeGithubContentsServer(t, "acme", "service", tt.responses, &requests)
 
-			got, err := newGithubClient(srv.Client(), srv.URL, "").GetCodeowners(context.Background(), "acme", "service")
+			client := newGithubClient(srv.Client(), srv.URL, "")
+			got, err := client.GetCodeowners(t.Context(), "acme", "service")
 
 			if tt.wantErr != nil {
 				require.ErrorIs(t, err, tt.wantErr)
@@ -104,8 +121,7 @@ func newFakeGithubContentsServer(t *testing.T, owner, repo string, responses map
 }
 
 func TestGithubClient_GetCodeownersDoesNotReadOversizedResponse(t *testing.T) {
-	oversizedContentSize := maxGithubResponseBytes + (1 << 20) // + 1MB
-
+	oversizedContentSize := maxGithubResponseBytes + 1024*1024 // + 1MB
 	responseBody := fmt.Appendf(nil, `{"content":"%s","encoding":"base64"}`, strings.Repeat("A", oversizedContentSize))
 	var bytesRead int
 
@@ -120,10 +136,10 @@ func TestGithubClient_GetCodeownersDoesNotReadOversizedResponse(t *testing.T) {
 		}),
 	}
 
-	_, err := newGithubClient(httpClient, "https://api.github.test", "").GetCodeowners(context.Background(), "acme", "service")
+	_, err := newGithubClient(httpClient, "https://api.github.test", "").
+		GetCodeowners(t.Context(), "acme", "service")
 
 	require.Error(t, err)
-	assert.Greater(t, len(responseBody), 3<<20)
 	assert.LessOrEqual(t, bytesRead, maxGithubResponseBytes)
 }
 
