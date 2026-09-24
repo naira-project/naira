@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +16,10 @@ func fakeGh(t *testing.T, stdout string, exitCode int) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "gh")
-	script := fmt.Sprintf("#!/bin/sh\nprintf '%%s' %q\nexit %d\n", stdout, exitCode)
+	script := fmt.Sprintf(`#!/bin/sh
+printf '%%s' %q
+exit %d
+`, stdout, exitCode)
 	require.NoError(t, os.WriteFile(path, []byte(script), 0o755))
 	return path
 }
@@ -27,12 +29,13 @@ func attestationJSON(repositoryURL string) string {
 }
 
 func TestAttestationVerifier_Verify(t *testing.T) {
+	const testGithubOrg = "naira-project"
+
 	tests := []struct {
 		name      string
 		ghPath    string
 		output    string
 		exitCode  int
-		org       string
 		wantOwner string
 		wantName  string
 		wantErr   string
@@ -40,45 +43,48 @@ func TestAttestationVerifier_Verify(t *testing.T) {
 		{
 			name:      "returns repository from a valid attestation",
 			output:    attestationJSON("https://github.com/naira-project/service"),
-			org:       "naira-project",
 			wantOwner: "naira-project",
 			wantName:  "service",
 		},
 		{
 			name:      "matches organization case insensitively",
 			output:    attestationJSON("https://github.com/Naira-Project/service"),
-			org:       "naira-project",
 			wantOwner: "Naira-Project",
 			wantName:  "service",
 		},
 		{
 			name:    "rejects a different organization",
 			output:  attestationJSON("https://github.com/other-org/service"),
-			org:     "naira-project",
 			wantErr: ErrAttestationMissing.Error(),
 		},
 		{
 			name:    "rejects an empty result",
 			output:  "[]",
-			org:     "naira-project",
+			wantErr: ErrAttestationMissing.Error(),
+		},
+		{
+			name:    "rejects an entry with an empty source repository URI",
+			output:  attestationJSON(""),
+			wantErr: ErrAttestationMissing.Error(),
+		},
+		{
+			name:    "rejects a non-github source repository URI",
+			output:  attestationJSON("https://gitlab.com/naira-project/service"),
 			wantErr: ErrAttestationMissing.Error(),
 		},
 		{
 			name:     "returns an error when gh fails",
 			exitCode: 1,
-			org:      "naira-project",
 			wantErr:  "gh attestation verify failed",
 		},
 		{
 			name:    "returns an error for malformed JSON",
 			output:  "not-json",
-			org:     "naira-project",
 			wantErr: "parsing gh attestation verify output",
 		},
 		{
 			name:    "returns an error when gh cannot be started",
 			ghPath:  filepath.Join("/tmp", "missing-gh"),
-			org:     "naira-project",
 			wantErr: "failed to run gh attestation verify for image",
 		},
 	}
@@ -91,11 +97,7 @@ func TestAttestationVerifier_Verify(t *testing.T) {
 			}
 			verifier := newAttestationVerifier(ghPath, "token", 5*time.Second)
 
-			repo, err := verifier.Verify(
-				context.Background(),
-				"ghcr.io/naira-project/service:latest",
-				tt.org,
-			)
+			repo, err := verifier.Verify(t.Context(), "ghcr.io/naira-project/service:latest", testGithubOrg)
 
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
