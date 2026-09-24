@@ -78,7 +78,8 @@ func TestFetchModels(t *testing.T) {
 			}))
 			defer mockServer.Close()
 
-			resp, err := FetchModels[ModelsResponse[Datum], Datum](context.Background(), mockServer.Client(), mockServer.URL, testToken)
+			var resp ModelsResponse[Datum]
+			err := FetchModels(context.Background(), mockServer.Client(), mockServer.URL, testToken, &resp)
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -99,7 +100,8 @@ func TestFetchModelsTrimsTrailingSlashAndOmitsEmptyToken(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	resp, err := FetchModels[ModelsResponse[Datum], Datum](context.Background(), mockServer.Client(), mockServer.URL+"/base/", "  ")
+	var resp ModelsResponse[Datum]
+	err := FetchModels(context.Background(), mockServer.Client(), mockServer.URL+"/base/", "  ", &resp)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"local-model"}, ModelIDs(resp.Data))
 }

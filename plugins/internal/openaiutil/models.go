@@ -24,8 +24,8 @@ type Datum struct {
 	OwnedBy string `json:"owned_by"`
 }
 
-// embeddedDatum is a private marker method enforcing that types passed as
-// FetchModels' D type parameter embed Datum.
+// embeddedDatum is a private marker method enforcing that types embedding
+// Datum satisfy EmbedsDatum.
 func (Datum) embeddedDatum() {}
 
 type EmbedsDatum interface {
@@ -35,32 +35,33 @@ type EmbedsDatum interface {
 // ModelsResponse mirrors the root object returned by GET /v1/models: a "data"
 // array of datums of type T. Callers needing provider-specific extra
 // top-level fields (e.g. llama.cpp's "models") embed ModelsResponse in their
-// own type and pass that type as FetchModels' T type parameter.
+// own type and pass a pointer to that type as FetchModels' out argument.
 type ModelsResponse[T EmbedsDatum] struct {
 	Data []T `json:"data"`
 }
 
 // embeddedModelsResponse is a private marker method enforcing that types
-// passed as FetchModels' T type parameter embed ModelsResponse[D].
+// passed as FetchModels' out argument embed ModelsResponse[D] for some D. It
+// has a value receiver so that a pointer to an embedding type also satisfies
+// EmbedsModelsResponse.
 func (ModelsResponse[T]) embeddedModelsResponse() {}
 
-type EmbedsModelsResponse[T EmbedsDatum] interface {
+type EmbedsModelsResponse interface {
 	embeddedModelsResponse()
 }
 
 // FetchModels calls GET <baseURL>/v1/models with an optional bearer token,
-// and decodes the response body into T. T must embed ModelsResponse[D] (see
-// EmbedsModelsResponse), which lets callers capture provider-specific extra
-// fields by embedding Datum/ModelsResponse in their own types instead of
-// losing them to the well-known fields alone.
-func FetchModels[T EmbedsModelsResponse[D], D EmbedsDatum](ctx context.Context, client *http.Client, baseURL, bearerToken string) (T, error) {
-	var zero T
-
+// and decodes the response body into out. out must be a pointer to a type
+// that embeds ModelsResponse[D] for some D (see EmbedsModelsResponse), which
+// lets callers capture provider-specific extra fields by embedding
+// Datum/ModelsResponse in their own types instead of losing them to the
+// well-known fields alone.
+func FetchModels(ctx context.Context, client *http.Client, baseURL, bearerToken string, out EmbedsModelsResponse) error {
 	addr := strings.TrimRight(baseURL, "/") + "/v1/models"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, addr, nil)
 	if err != nil {
-		return zero, fmt.Errorf("preparing %q request: %w", addr, err)
+		return fmt.Errorf("preparing %q request: %w", addr, err)
 	}
 	if strings.TrimSpace(bearerToken) != "" {
 		req.Header.Set("Authorization", "Bearer "+bearerToken)
@@ -68,23 +69,22 @@ func FetchModels[T EmbedsModelsResponse[D], D EmbedsDatum](ctx context.Context, 
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return zero, fmt.Errorf("executing %q request: %w", addr, err)
+		return fmt.Errorf("executing %q request: %w", addr, err)
 	}
 	defer resp.Body.Close()
 
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
-		return zero, fmt.Errorf("%q returned %s: %w", addr, resp.Status, ErrUnauthorized)
+		return fmt.Errorf("%q returned %s: %w", addr, resp.Status, ErrUnauthorized)
 	case resp.StatusCode < 200 || resp.StatusCode >= 300:
-		return zero, fmt.Errorf("%q returned %s", addr, resp.Status)
+		return fmt.Errorf("%q returned %s", addr, resp.Status)
 	}
 
-	var payload T
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return zero, fmt.Errorf("parsing %q response: %w", addr, err)
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("parsing %q response: %w", addr, err)
 	}
 
-	return payload, nil
+	return nil
 }
 
 // ModelIDs reduces a datum list to its IDs, preserving order.

@@ -107,8 +107,8 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	resp, err := openaiutil.FetchModels[modelsResponse, datum](ctx, p.httpClient, p.config.BaseURL, p.config.APIKey)
-	if err != nil {
+	var resp modelsResponse
+	if err := openaiutil.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching models from %q: %w", p.config.BaseURL, err)
 	}
 	models := resp.Data
