@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -58,7 +57,7 @@ exit 0
 func newFakeGithubAPI(t *testing.T) *httptest.Server {
 	t.Helper()
 
-	codeowners := base64.StdEncoding.EncodeToString([]byte("* @naira-project/team\n"))
+	codeowners := base64.StdEncoding.EncodeToString([]byte("* @naira-project/team"))
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -79,71 +78,95 @@ func newFakeGithubAPI(t *testing.T) *httptest.Server {
 }
 
 func TestPlugin_Collect(t *testing.T) {
-	const (
-		clusterUID = "test-cluster-uid"
-		namespace  = "default"
-	)
-
 	githubAPI := newFakeGithubAPI(t)
 	ghPath := newFakeGhCLI(t)
 
-	repoA := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/naira-project/service-a"}
-	repoE := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/naira-project/service-e"}
-	ownerTeam := pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@naira-project/team"}
+	var (
+		repoA     = nodeID("git_repository", "github.com/naira-project/service-a")
+		repoE     = nodeID("git_repository", "github.com/naira-project/service-e")
+		ownerTeam = nodeID("owner", "github.com/@naira-project/team")
+	)
 
-	deploymentNode := func(name string) pluginapi.NodeID {
-		return pluginapi.NodeID{Kind: pluginapi.NodeKindDeployment, Path: clusterUID + "/" + namespace + "/" + name}
+	deployment := func(name string) pluginapi.NodeID {
+		return nodeID("deployment", "test-cluster-uid/default/"+name)
 	}
 
 	tests := []struct {
-		name          string
-		deployments   map[string][]string // deployment name -> container images
-		wantNodes     []pluginapi.NodeClaim
-		wantRelations []pluginapi.RelationClaim
+		name               string
+		imagesByDeployment map[string][]string
+		wantNodes          []pluginapi.NodeClaim
+		wantRelations      []pluginapi.RelationClaim
 	}{
 		{
-			name:        "org match, attestation verified: repo, owner and deployment linked",
-			deployments: map[string][]string{"app": {"ghcr.io/naira-project/service-a:v1"}},
+			name:               "org match, attestation verified: repo, owner and deployment linked",
+			imagesByDeployment: map[string][]string{"app": {"ghcr.io/naira-project/service-a:v1"}},
 			wantNodes: []pluginapi.NodeClaim{
-				{ID: repoA, Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"}},
+				{
+					ID:         repoA,
+					Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"},
+				},
 				{ID: ownerTeam},
-				{ID: deploymentNode("app")},
+				{ID: deployment("app")},
 			},
 			wantRelations: []pluginapi.RelationClaim{
-				{Kind: pluginapi.RelationKindOwnedBy, From: repoA, To: ownerTeam},
-				{Kind: pluginapi.RelationKindBuiltFrom, From: deploymentNode("app"), To: repoA},
+				{Kind: "owned_by",
+					From: repoA,
+					To:   ownerTeam,
+				},
+				{Kind: "built_from",
+					From: deployment("app"),
+					To:   repoA,
+				},
 			},
 		},
 		{
-			name:        "different org: nothing produced",
-			deployments: map[string][]string{"app": {"ghcr.io/other-org/service-b:v1"}},
+			name:               "different org: nothing produced",
+			imagesByDeployment: map[string][]string{"app": {"ghcr.io/other-org/service-b:v1"}},
 		},
 		{
-			name:        "multiple containers: nothing produced",
-			deployments: map[string][]string{"app": {"ghcr.io/naira-project/service-a:v1", "ghcr.io/naira-project/service-e:v1"}},
+			name:               "multiple images on one deployment: nothing produced",
+			imagesByDeployment: map[string][]string{"app": {"ghcr.io/naira-project/service-a:v1", "ghcr.io/naira-project/service-e:v1"}},
 		},
 		{
-			name:        "org match, attestation not verified: nothing produced",
-			deployments: map[string][]string{"app": {"ghcr.io/naira-project/mystery:v1"}},
+			name:               "org match, attestation not verified: nothing produced",
+			imagesByDeployment: map[string][]string{"app": {"ghcr.io/naira-project/mystery:v1"}},
 		},
 		{
 			name: "two repos sharing an owner: owner node deduplicated, both relations kept",
-			deployments: map[string][]string{
+			imagesByDeployment: map[string][]string{
 				"app-a": {"ghcr.io/naira-project/service-a:v1"},
 				"app-e": {"ghcr.io/naira-project/service-e:v1"},
 			},
 			wantNodes: []pluginapi.NodeClaim{
-				{ID: repoA, Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"}},
-				{ID: repoE, Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-e", "language": "Go"}},
+				{
+					ID:         repoA,
+					Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"},
+				},
+				{
+					ID:         repoE,
+					Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-e", "language": "Go"},
+				},
 				{ID: ownerTeam}, // only once, even though both repos share it
-				{ID: deploymentNode("app-a")},
-				{ID: deploymentNode("app-e")},
+				{ID: deployment("app-a")},
+				{ID: deployment("app-e")},
 			},
 			wantRelations: []pluginapi.RelationClaim{
-				{Kind: pluginapi.RelationKindOwnedBy, From: repoA, To: ownerTeam},
-				{Kind: pluginapi.RelationKindOwnedBy, From: repoE, To: ownerTeam},
-				{Kind: pluginapi.RelationKindBuiltFrom, From: deploymentNode("app-a"), To: repoA},
-				{Kind: pluginapi.RelationKindBuiltFrom, From: deploymentNode("app-e"), To: repoE},
+				{Kind: "owned_by",
+					From: repoA,
+					To:   ownerTeam,
+				},
+				{Kind: "owned_by",
+					From: repoE,
+					To:   ownerTeam,
+				},
+				{Kind: "built_from",
+					From: deployment("app-a"),
+					To:   repoA,
+				},
+				{Kind: "built_from",
+					From: deployment("app-e"),
+					To:   repoE,
+				},
 			},
 		},
 	}
@@ -151,11 +174,11 @@ func TestPlugin_Collect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			objs := []runtime.Object{
-				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: clusterUID}},
-				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}},
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: "test-cluster-uid"}},
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
 			}
-			for name, images := range tt.deployments {
-				objs = append(objs, deploymentWithImages(namespace, name, images...))
+			for name, images := range tt.imagesByDeployment {
+				objs = append(objs, deploymentWithImages("default", name, images...))
 			}
 			clientset := fake.NewSimpleClientset(objs...)
 
@@ -168,7 +191,7 @@ func TestPlugin_Collect(t *testing.T) {
 				AttestationTimeout: 5 * time.Second,
 			}, log.New(io.Discard, "", 0))
 
-			resp, err := p.collect(context.Background(), clientset)
+			resp, err := p.collect(t.Context(), clientset)
 			require.NoError(t, err)
 
 			assert.ElementsMatch(t, tt.wantNodes, resp.Nodes)
@@ -253,8 +276,15 @@ func TestSingleContainerImage(t *testing.T) {
 		wantImage string
 		wantOK    bool
 	}{
-		{name: "no containers"},
-		{name: "multiple containers", images: []string{"a", "b"}},
+		{
+			name:   "no containers",
+			wantOK: false,
+		},
+		{
+			name:   "multiple containers",
+			images: []string{"a", "b"},
+			wantOK: false,
+		},
 		{
 			name:      "one container",
 			images:    []string{"ghcr.io/acme/service:v1"},
@@ -273,24 +303,36 @@ func TestSingleContainerImage(t *testing.T) {
 }
 
 func TestCodeownersClaims(t *testing.T) {
-	repoNodeID := pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/acme/service"}
+	repoNodeID := nodeID("git_repository", "github.com/acme/service")
 	handles := []string{"@acme/team", "@alice"}
 
 	nodes, relations := codeownersClaims(repoNodeID, handles, make(map[pluginapi.NodeID]bool))
 
 	assert.ElementsMatch(t, []pluginapi.NodeClaim{
-		{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@acme/team"}},
-		{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@alice"}},
+		{ID: nodeID("owner", "github.com/@acme/team")},
+		{ID: nodeID("owner", "github.com/@alice")},
 	}, nodes)
 	assert.ElementsMatch(t, []pluginapi.RelationClaim{
-		{Kind: pluginapi.RelationKindOwnedBy, From: repoNodeID, To: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@acme/team"}},
-		{Kind: pluginapi.RelationKindOwnedBy, From: repoNodeID, To: pluginapi.NodeID{Kind: pluginapi.NodeKindOwner, Path: "github.com/@alice"}},
+		{Kind: "owned_by",
+			From: repoNodeID,
+			To:   nodeID("owner", "github.com/@acme/team"),
+		},
+		{Kind: "owned_by",
+			From: repoNodeID,
+			To:   nodeID("owner", "github.com/@alice"),
+		},
 	}, relations)
 }
 
 func TestCodeownersClaims_Empty(t *testing.T) {
-	nodes, relations := codeownersClaims(pluginapi.NodeID{Kind: pluginapi.NodeKindGitRepository, Path: "github.com/acme/service"}, nil, make(map[pluginapi.NodeID]bool))
+	repoNodeID := nodeID("git_repository", "github.com/acme/service")
+
+	nodes, relations := codeownersClaims(repoNodeID, nil, make(map[pluginapi.NodeID]bool))
 
 	require.Empty(t, nodes)
 	require.Empty(t, relations)
+}
+
+func nodeID(kind, path string) pluginapi.NodeID {
+	return pluginapi.NodeID{Kind: kind, Path: path}
 }
