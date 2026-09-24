@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
+import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { CATALOG_VIEWPOINTS } from '../config/viewpoints';
@@ -63,7 +64,7 @@ export default function Overview() {
 
           <div className="ml-12 grid grid-cols-[repeat(auto-fill,16rem)] gap-4">
             {filteredCards.map((card) => (
-              <Card key={card.path} className="cursor-pointer transition-shadow hover:shadow-md">
+              <Card key={card.path}>
                 <CardContent>
                   <h3 className="text-sm text-center font-semibold text-foreground">
                     {card.heading}
@@ -73,13 +74,13 @@ export default function Overview() {
                   </p>
                 </CardContent>
                 <div className="px-4 pb-4">
-                  <button
+                  <Button
                     type="button"
                     onClick={() => navigate(card.path)}
-                    className="flex w-full items-center justify-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                    className="w-full rounded-md bg-primary px-3 py-1.5 text-sm text-white transition-opacity hover:bg-primary hover:opacity-90"
                   >
                     Browse
-                  </button>
+                  </Button>
                 </div>
               </Card>
             ))}

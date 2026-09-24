@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { type CatalogGraphResponse, useCatalogGraph } from '../hooks/useCatalogGraph';
 import { encodeCatalogPath, type NodeResource } from '../lib/catalogApi';
 import { parsePath } from '../lib/kindUtils';
+import { Button } from './ui/button';
 
 export const MCP_SERVER_KIND = 'mcp_server';
 const EXPOSES_RELATION = 'exposes';
@@ -61,14 +62,15 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
       <ul className="divide-y divide-gray-200 overflow-hidden rounded-md border border-gray-200">
         {tools.map((tool) => (
           <li key={tool.name}>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() =>
                 navigate(
                   `/catalog/${encodeURIComponent(tool.kind)}/${encodeCatalogPath(tool.path)}`,
                 )
               }
-              className="flex w-full items-start gap-3 bg-card px-4 py-3 text-left transition-colors hover:bg-gray-50"
+              className="h-auto w-full items-start justify-start gap-3 rounded-none bg-card px-4 py-3 text-left font-normal transition-colors hover:bg-gray-50"
             >
               <Wrench size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
 
@@ -90,7 +92,7 @@ export default function MCPServerTools({ node }: MCPServerToolsProps) {
               </div>
 
               <ChevronRight size={15} className="mt-0.5 shrink-0 text-muted-foreground" />
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { RadarEntry, RadarModel, RadarQuadrant } from '@/lib/techRadar';
 import { ringColor } from '@/lib/techRadar';
@@ -66,13 +67,13 @@ export default function QuadrantSummaryCard({ quadrant, model }: QuadrantSummary
         )}
       </CardContent>
       <div className="px-4 pb-4">
-        <button
+        <Button
           type="button"
           onClick={() => navigate(`/tech-radar/${encodeURIComponent(quadrant.id)}`)}
-          className="flex w-full items-center justify-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          className="w-full rounded-md bg-primary px-3 py-1.5 text-sm text-white transition-opacity hover:bg-primary hover:opacity-90"
         >
           View details
-        </button>
+        </Button>
       </div>
     </Card>
   );
