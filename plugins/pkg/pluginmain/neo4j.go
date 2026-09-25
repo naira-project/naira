@@ -45,7 +45,7 @@ func printNeo4j(req pluginapi.CollectResponse, prefix string, logger *log.Logger
 	}
 }
 
-func pushNeo4j(ctx context.Context, req pluginapi.CollectResponse, prefix, url string, logger *log.Logger) error {
+func pushNeo4j(ctx context.Context, req pluginapi.CollectResponse, prefix, url string) error {
 	username := os.Getenv("NEO4J_USERNAME")
 	if username == "" {
 		username = "neo4j"

@@ -54,7 +54,36 @@ jobs:
       # revisit once the test suite reaches meaningful coverage.
       coverage-threshold: 0
 
-  # ── 4. UI checks (TypeScript and Biome) ───────────────────────────────────
+  # ── 4. Go formatting, linting ───────────────────────────
+  backend-check:
+    name: Check · Go
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Check gofmt
+        run: |
+          gofmt_output=$(gofmt -l .)
+          if [[ -n "$gofmt_output" ]]; then
+            echo "The following files are not formatted with gofmt:"
+            echo "$gofmt_output"
+            exit 1
+          fi
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+
+  # ── 5. UI checks (TypeScript and Biome) ───────────────────────────────────
   ui-check:
     name: Check · UI
     runs-on: ubuntu-latest
@@ -86,7 +115,7 @@ jobs:
           # root, so prefix them to make inline PR annotations line up correctly.
           npx biome ci --reporter=github . | sed -E 's/(file=)/\1ui\//'
 
-  # ── 5. Container build — catalog (build-only, no push on PRs) ─────────────
+  # ── 6. Container build — catalog (build-only, no push on PRs) ─────────────
   container-build-catalog:
     name: Container Build · Catalog
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@9d11293b6fdfb550b5b8d43ae551639591bcf468
@@ -96,7 +125,7 @@ jobs:
       context: "."
       platforms: "linux/amd64,linux/arm64"
 
-  # ── 6. Container build — ui (build-only, no push on PRs) ──────────────────
+  # ── 7. Container build — ui (build-only, no push on PRs) ──────────────────
   container-build-ui:
     name: Container Build · UI
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@9d11293b6fdfb550b5b8d43ae551639591bcf468
@@ -114,6 +143,7 @@ jobs:
         pr-title,
         workflow-security,
         go-test,
+        backend-check,
         ui-check,
         container-build-catalog,
         container-build-ui,
@@ -127,6 +157,7 @@ jobs:
             "${{ needs.pr-title.result }}"
             "${{ needs.workflow-security.result }}"
             "${{ needs.go-test.result }}"
+            "${{ needs.backend-check.result }}"
             "${{ needs.ui-check.result }}"
             "${{ needs.container-build-catalog.result }}"
             "${{ needs.container-build-ui.result }}"
