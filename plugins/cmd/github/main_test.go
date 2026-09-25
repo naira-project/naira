@@ -98,13 +98,15 @@ func TestPlugin_Collect(t *testing.T) {
 		wantRelations      []pluginapi.RelationClaim
 	}{
 		{
-			name:               "org match, attestation verified: repo, owner and deployment linked",
-			imagesByDeployment: map[string][]string{"app": {"ghcr.io/naira-project/service-a:v1"}},
+			name: "org match, attestation verified: repo, owner and deployment linked",
+			imagesByDeployment: map[string][]string{
+				"app": {"ghcr.io/naira-project/service-a:v1"},
+			},
 			wantNodes: []pluginapi.NodeClaim{
-				{
-					ID:         repoA,
-					Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"},
-				},
+				{ID: repoA,
+					Properties: pluginapi.PropertyMap{
+						"url":      "https://github.com/naira-project/service-a",
+						"language": "Go"}},
 				{ID: ownerTeam},
 				{ID: deployment("app")},
 			},
@@ -120,16 +122,22 @@ func TestPlugin_Collect(t *testing.T) {
 			},
 		},
 		{
-			name:               "different org: nothing produced",
-			imagesByDeployment: map[string][]string{"app": {"ghcr.io/other-org/service-b:v1"}},
+			name: "different org: nothing produced",
+			imagesByDeployment: map[string][]string{
+				"app": {"ghcr.io/other-org/service-b:v1"},
+			},
 		},
 		{
-			name:               "multiple images on one deployment: nothing produced",
-			imagesByDeployment: map[string][]string{"app": {"ghcr.io/naira-project/service-a:v1", "ghcr.io/naira-project/service-e:v1"}},
+			name: "multiple images on one deployment: nothing produced",
+			imagesByDeployment: map[string][]string{
+				"app": {"ghcr.io/naira-project/service-a:v1", "ghcr.io/naira-project/service-e:v1"},
+			},
 		},
 		{
-			name:               "org match, attestation not verified: nothing produced",
-			imagesByDeployment: map[string][]string{"app": {"ghcr.io/naira-project/mystery:v1"}},
+			name: "org match, attestation not verified: nothing produced",
+			imagesByDeployment: map[string][]string{
+				"app": {"ghcr.io/naira-project/mystery:v1"},
+			},
 		},
 		{
 			name: "two repos sharing an owner: owner node deduplicated, both relations kept",
@@ -139,12 +147,18 @@ func TestPlugin_Collect(t *testing.T) {
 			},
 			wantNodes: []pluginapi.NodeClaim{
 				{
-					ID:         repoA,
-					Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-a", "language": "Go"},
+					ID: repoA,
+					Properties: pluginapi.PropertyMap{
+						"url":      "https://github.com/naira-project/service-a",
+						"language": "Go",
+					},
 				},
 				{
-					ID:         repoE,
-					Properties: pluginapi.PropertyMap{"url": "https://github.com/naira-project/service-e", "language": "Go"},
+					ID: repoE,
+					Properties: pluginapi.PropertyMap{
+						"url":      "https://github.com/naira-project/service-e",
+						"language": "Go",
+					},
 				},
 				{ID: ownerTeam}, // only once, even though both repos share it
 				{ID: deployment("app-a")},
@@ -304,13 +318,14 @@ func TestSingleContainerImage(t *testing.T) {
 
 func TestCodeownersClaims(t *testing.T) {
 	repoNodeID := nodeID("git_repository", "github.com/acme/service")
-	handles := []string{"@acme/team", "@alice"}
+	handles := []string{"@acme/team", "@alice", "docs@example.com"}
 
 	nodes, relations := codeownersClaims(repoNodeID, handles, make(map[pluginapi.NodeID]bool))
 
 	assert.ElementsMatch(t, []pluginapi.NodeClaim{
 		{ID: nodeID("owner", "github.com/@acme/team")},
 		{ID: nodeID("owner", "github.com/@alice")},
+		{ID: nodeID("owner", "github.com/docs@example.com")},
 	}, nodes)
 	assert.ElementsMatch(t, []pluginapi.RelationClaim{
 		{Kind: "owned_by",
@@ -320,6 +335,10 @@ func TestCodeownersClaims(t *testing.T) {
 		{Kind: "owned_by",
 			From: repoNodeID,
 			To:   nodeID("owner", "github.com/@alice"),
+		},
+		{Kind: "owned_by",
+			From: repoNodeID,
+			To:   nodeID("owner", "github.com/docs@example.com"),
 		},
 	}, relations)
 }

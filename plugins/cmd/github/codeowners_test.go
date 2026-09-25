@@ -37,9 +37,16 @@ func TestParseCodeowners(t *testing.T) {
 		{
 			name: "single wildcard rule with multiple owners",
 			content: `
-* @owner1 @owner2 user@example.com
+* @owner1 @owner2
 `,
-			expected: []string{"@owner1", "@owner2", "user@example.com"},
+			expected: []string{"@owner1", "@owner2"},
+		},
+		{
+			name: "wildcard rule with email owner",
+			content: `
+* docs@example.com
+`,
+			expected: []string{"docs@example.com"},
 		},
 		{
 			name: "ignore path-specific rules, extract only global asterisk rules",
