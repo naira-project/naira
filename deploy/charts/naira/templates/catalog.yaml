@@ -19,8 +19,12 @@ spec:
         {{- include "naira.selector" (dict "root" . "name" "catalog") | nindent 8 }}
       annotations:
         checksum/plugin-config: {{ include (print $.Template.BasePath "/plugin-configmaps.yaml") . | sha256sum }}
+        {{- with .Values.catalog.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       serviceAccountName: catalog
+      {{- include "naira.podSpec" (dict "root" $ "name" "catalog" "cfg" .Values.catalog) | trim | nindent 6 }}
       initContainers:
         {{- range $name, $p := .Values.catalog.plugins }}
         {{- if $p.enabled }}
@@ -28,6 +32,10 @@ spec:
           image: {{ include "naira.image" (dict "root" $ "image" $p.image "context" (printf "catalog.plugins.%s" $name)) | quote }}
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           restartPolicy: Always
+          securityContext:
+            {{- include "naira.pluginSecurityContext" (dict "root" $ "plugin" $p) | nindent 12 }}
+          startupProbe:
+            {{- include "naira.pluginStartupProbe" (dict "root" $ "plugin" $p) | nindent 12 }}
           env:
             - name: PORT
               value: {{ $p.port | quote }}
@@ -50,6 +58,10 @@ spec:
         - name: catalog
           image: {{ include "naira.image" (dict "root" $ "image" .Values.catalog.image "context" "catalog") | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.catalog.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           volumeMounts:
             - {name: plugin-config, mountPath: /etc/catalog/plugins.yaml, subPath: plugins.yaml, readOnly: true}
           env:
@@ -63,6 +75,9 @@ spec:
               value: {{ .Values.dependencies.keycloak.issuer | quote }}
           ports:
             - {name: http, containerPort: {{ .Values.catalog.port }}}
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            {{- toYaml .Values.catalog.startupProbe | nindent 12 }}
           readinessProbe:
             httpGet: {path: /healthz, port: http}
             initialDelaySeconds: 5

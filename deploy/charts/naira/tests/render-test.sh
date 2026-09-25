@@ -217,4 +217,104 @@ LONG=$(printf 'a%.0s' $(seq 1 57))
 must_fail "plugin name over 56 characters" "name too long" \
   --set "catalog.plugins.${LONG}.enabled=true" --set "catalog.plugins.${LONG}.port=50099" --set "catalog.plugins.${LONG}.image.repository=x"
 
+# ── Pod hardening and scheduling ─────────────────────────────────────────────
+POD='select(.kind == "Deployment" and .metadata.name == "%s") | .spec.template.spec'
+pod() { printf "$POD" "$1"; }
+SIDE='.initContainers[] | select(.name == "plugin-litellm")'
+check "catalog runs as the distroless uid" "65532 true" \
+  "$(render | yq "$(pod catalog) | .containers[0].securityContext | (.runAsUser | tostring) + \" \" + (.runAsNonRoot | tostring)")"
+check "sidecar security context defaults" "false ALL RuntimeDefault" \
+  "$(render | yq "$(pod catalog) | $SIDE | .securityContext | (.allowPrivilegeEscalation | tostring) + \" \" + .capabilities.drop[0] + \" \" + .seccompProfile.type")"
+check "plugin securityContext merges over defaults" "true true" \
+  "$(render --set catalog.plugins.litellm.securityContext.readOnlyRootFilesystem=true \
+     | yq "$(pod catalog) | $SIDE | .securityContext | (.readOnlyRootFilesystem | tostring) + \" \" + (.runAsNonRoot | tostring)")"
+check "sidecar startup probe is a TCP check on the plugin port" "50051 60" \
+  "$(render | yq "$(pod catalog) | $SIDE | .startupProbe | (.tcpSocket.port | tostring) + \" \" + (.failureThreshold | tostring)")"
+check "plugin startupProbe merges over defaults" "1 5" \
+  "$(render --set catalog.plugins.litellm.startupProbe.failureThreshold=5 \
+     | yq "$(pod catalog) | $SIDE | .startupProbe | (.periodSeconds | tostring) + \" \" + (.failureThreshold | tostring)")"
+check "catalog startup probe" "/healthz" "$(render | yq "$(pod catalog) | .containers[0].startupProbe.httpGet.path")"
+check "ui startup probe" "/" "$(render | yq "$(pod ui) | .containers[0].startupProbe.httpGet.path")"
+check "portal startup probe" "/" "$(render | yq "$(pod portal) | .containers[0].startupProbe.httpGet.path")"
+check "ui does not drop capabilities" "null" "$(render | yq "$(pod ui) | .containers[0].securityContext.capabilities")"
+check "portal seccomp profile" "RuntimeDefault" "$(render | yq "$(pod portal) | .containers[0].securityContext.seccompProfile.type")"
+check "no scheduling fields by default" "false" \
+  "$(render | yq "$(pod catalog) | (has(\"imagePullSecrets\") or has(\"nodeSelector\") or has(\"tolerations\") or has(\"affinity\") or has(\"topologySpreadConstraints\") or has(\"priorityClassName\") or has(\"securityContext\")) | tostring")"
+for w in catalog ui portal; do
+  check "$w imagePullSecrets" "regcred" \
+    "$(render --set 'imagePullSecrets[0].name=regcred' | yq "$(pod $w) | .imagePullSecrets[0].name")"
+  check "$w podSecurityContext" "1000" \
+    "$(render --set $w.podSecurityContext.fsGroup=1000 | yq "$(pod $w) | .securityContext.fsGroup")"
+  check "$w priorityClassName" "high" "$(render --set $w.priorityClassName=high | yq "$(pod $w) | .priorityClassName")"
+  check "$w nodeSelector" "linux" "$(render --set $w.nodeSelector.os=linux | yq "$(pod $w) | .nodeSelector.os")"
+  check "$w tolerations" "dedicated" \
+    "$(render --set 'catalog.tolerations[0].key=dedicated' --set 'ui.tolerations[0].key=dedicated' --set 'portal.tolerations[0].key=dedicated' | yq "$(pod $w) | .tolerations[0].key")"
+  check "$w pod annotations" "v" \
+    "$(render --set-string $w.podAnnotations.k=v | yq "select(.kind == \"Deployment\" and .metadata.name == \"$w\") | .spec.template.metadata.annotations.k")"
+  check "$w soft anti-affinity" "app.kubernetes.io/name=$w 100" \
+    "$(render --set $w.podAntiAffinity=soft \
+       | yq "$(pod $w) | .affinity.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution[0] | \"app.kubernetes.io/name=\" + .podAffinityTerm.labelSelector.matchLabels[\"app.kubernetes.io/name\"] + \" \" + (.weight | tostring)")"
+  check "$w hard anti-affinity" "kubernetes.io/hostname" \
+    "$(render --set $w.podAntiAffinity=hard \
+       | yq "$(pod $w) | .affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution[0].topologyKey")"
+  check "$w topology spread gets its own selector" "$w" \
+    "$(render --set $w.topologySpreadConstraints[0].maxSkew=1 --set $w.topologySpreadConstraints[0].topologyKey=zone --set $w.topologySpreadConstraints[0].whenUnsatisfiable=DoNotSchedule \
+       | yq "$(pod $w) | .topologySpreadConstraints[0].labelSelector.matchLabels[\"app.kubernetes.io/name\"]")"
+done
+check "catalog keeps its checksum annotation with podAnnotations" "true" \
+  "$(render --set-string catalog.podAnnotations.k=v | yq 'select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.template.metadata.annotations | has("checksum/plugin-config")')"
+check "explicit affinity.podAntiAffinity wins over the preset" "null" \
+  "$(render --set catalog.podAntiAffinity=hard --set catalog.affinity.podAntiAffinity.x=y \
+     | yq "$(pod catalog) | .affinity.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution")"
+check "topology spread keeps an explicit selector" "mine" \
+  "$(render --set catalog.topologySpreadConstraints[0].maxSkew=1 --set catalog.topologySpreadConstraints[0].topologyKey=zone \
+     --set catalog.topologySpreadConstraints[0].whenUnsatisfiable=DoNotSchedule --set catalog.topologySpreadConstraints[0].labelSelector.matchLabels.app=mine \
+     | yq "$(pod catalog) | .topologySpreadConstraints[0].labelSelector.matchLabels.app")"
+must_fail "podAntiAffinity value" "ui.podAntiAffinity: must be soft, hard or empty" --set ui.podAntiAffinity=maybe
+
+# ── PDB, HPA, NetworkPolicy ──────────────────────────────────────────────────
+PDB='select(.kind == "PodDisruptionBudget" and .metadata.name == "%s") | .spec'
+check "no PDB, HPA or NetworkPolicy by default" "0" \
+  "$(render | yq ea '[select(.kind == "PodDisruptionBudget" or .kind == "HorizontalPodAutoscaler" or .kind == "NetworkPolicy")] | length')"
+check "PDB with minAvailable" "1" "$(render --set catalog.pdb.enabled=true --set catalog.pdb.minAvailable=1 | yq "$(printf "$PDB" catalog) | .minAvailable")"
+check "PDB minAvailable wins over maxUnavailable" "null" \
+  "$(render --set catalog.pdb.enabled=true --set catalog.pdb.minAvailable=1 | yq "$(printf "$PDB" catalog) | .maxUnavailable")"
+check "PDB defaults to maxUnavailable 1" "1" "$(render --set ui.pdb.enabled=true | yq "$(printf "$PDB" ui) | .maxUnavailable")"
+check "PDB percentage stays a string" "!!str" \
+  "$(render --set ui.pdb.enabled=true --set-string ui.pdb.maxUnavailable=50% | yq "$(printf "$PDB" ui) | .maxUnavailable | tag")"
+check "PDB selects the workload" "portal" \
+  "$(render --set portal.pdb.enabled=true | yq "$(printf "$PDB" portal) | .selector.matchLabels[\"app.kubernetes.io/name\"]")"
+check "PDB not rendered for a disabled workload" "0" \
+  "$(render --set ui.enabled=false --set ui.pdb.enabled=true | yq ea '[select(.kind == "PodDisruptionBudget")] | length')"
+HPA='select(.kind == "HorizontalPodAutoscaler" and .metadata.name == "%s") | .spec'
+check "ui HPA targets its Deployment" "ui 1 3" \
+  "$(render --set ui.autoscaling.enabled=true | yq "$(printf "$HPA" ui) | .scaleTargetRef.name + \" \" + (.minReplicas | tostring) + \" \" + (.maxReplicas | tostring)")"
+check "HPA omits Deployment replicas" "null" \
+  "$(render --set ui.autoscaling.enabled=true | yq "$(pod ui | sed 's/ | .spec.template.spec//') | .spec.replicas")"
+check "Deployment keeps replicas without HPA" "1" \
+  "$(render | yq 'select(.kind == "Deployment" and .metadata.name == "ui") | .spec.replicas')"
+check "HPA with memory target only" "memory" \
+  "$(render --set portal.autoscaling.enabled=true --set portal.autoscaling.targetCPUUtilizationPercentage=null --set portal.autoscaling.targetMemoryUtilizationPercentage=70 \
+     | yq "$(printf "$HPA" portal) | .metrics[0].resource.name")"
+check "no catalog HPA" "0" \
+  "$(render --set catalog.autoscaling.enabled=true | yq ea '[select(.kind == "HorizontalPodAutoscaler" and .metadata.name == "catalog")] | length')"
+must_fail "HPA min above max" "ui.autoscaling: minReplicas is greater than maxReplicas" \
+  --set ui.autoscaling.enabled=true --set ui.autoscaling.minReplicas=5
+must_fail "HPA without a target" "portal.autoscaling: set targetCPUUtilizationPercentage" \
+  --set portal.autoscaling.enabled=true --set portal.autoscaling.targetCPUUtilizationPercentage=null
+NP='select(.kind == "NetworkPolicy") | .spec'
+check "NetworkPolicy admits the ui pods on the catalog port" "ui 8090" \
+  "$(render --set catalog.networkPolicy.enabled=true \
+     | yq "$NP | .ingress[0] | .from[0].podSelector.matchLabels[\"app.kubernetes.io/name\"] + \" \" + (.ports[0].port | tostring)")"
+check "NetworkPolicy selects the catalog pods" "catalog" \
+  "$(render --set catalog.networkPolicy.enabled=true | yq "$NP | .podSelector.matchLabels[\"app.kubernetes.io/name\"]")"
+check "NetworkPolicy with the ui disabled admits nobody" "false Ingress" \
+  "$(render --set ui.enabled=false --set catalog.networkPolicy.enabled=true | yq "$NP | (has(\"ingress\") | tostring) + \" \" + .policyTypes[0]")"
+check "NetworkPolicy extraIngress is appended" "2 ingress-nginx" \
+  "$(render --set catalog.networkPolicy.enabled=true --set 'catalog.networkPolicy.extraIngress[0].from[0].namespaceSelector.matchLabels.n=ingress-nginx' \
+     | yq "$NP | (.ingress | length | tostring) + \" \" + .ingress[1].from[0].namespaceSelector.matchLabels.n")"
+check "hardened values render" "ok" \
+  "$(render_raw -f "$CHART/ci/hardened-values.yaml" >/dev/null && echo ok)"
+check "helm lint hardened" "ok" "$(helm lint "$CHART" -f "$CHART/ci/hardened-values.yaml" >/dev/null && echo ok)"
+
 exit $fail

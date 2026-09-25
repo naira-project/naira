@@ -56,3 +56,20 @@ CreateContainerConfigError; fail here with the fix instead.
 {{- if and .Values.portal.enabled (not $o.existingSecret) (not $o.create) }}
 {{- fail "portal reads its OIDC client secret: set portal.oidc.secret.existingSecret or portal.oidc.secret.create" }}
 {{- end }}
+{{- range $name := list "catalog" "ui" "portal" }}
+{{- $cfg := index $.Values $name }}
+{{- if not (has (toString $cfg.podAntiAffinity) (list "" "soft" "hard")) }}
+{{- fail (printf "%s.podAntiAffinity: must be soft, hard or empty" $name) }}
+{{- end }}
+{{- end }}
+{{- range $name := list "ui" "portal" }}
+{{- $a := (index $.Values $name).autoscaling }}
+{{- if $a.enabled }}
+{{- if gt (int $a.minReplicas) (int $a.maxReplicas) }}
+{{- fail (printf "%s.autoscaling: minReplicas is greater than maxReplicas" $name) }}
+{{- end }}
+{{- if not (or $a.targetCPUUtilizationPercentage $a.targetMemoryUtilizationPercentage) }}
+{{- fail (printf "%s.autoscaling: set targetCPUUtilizationPercentage or targetMemoryUtilizationPercentage" $name) }}
+{{- end }}
+{{- end }}
+{{- end }}

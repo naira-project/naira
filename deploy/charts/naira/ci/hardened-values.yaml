@@ -1,0 +1,39 @@
+# Every optional scheduling, availability and network field switched on, so
+# lint and kubeconform see them rendered.
+imagePullSecrets:
+  - name: regcred
+catalog:
+  secret:
+    existingSecret: catalog-secrets
+  podAnnotations: {example.com/scrape: "false"}
+  priorityClassName: system-cluster-critical
+  nodeSelector: {kubernetes.io/os: linux}
+  tolerations:
+    - {key: dedicated, operator: Equal, value: naira, effect: NoSchedule}
+  podAntiAffinity: hard
+  topologySpreadConstraints:
+    - {maxSkew: 1, topologyKey: topology.kubernetes.io/zone, whenUnsatisfiable: ScheduleAnyway}
+  podSecurityContext: {fsGroup: 65532}
+  pdb: {enabled: true, minAvailable: 1}
+  networkPolicy:
+    enabled: true
+    extraIngress:
+      - from:
+          - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+        ports:
+          - {protocol: TCP, port: 8090}
+ui:
+  podAntiAffinity: soft
+  pdb: {enabled: true, maxUnavailable: "50%"}
+  autoscaling: {enabled: true, minReplicas: 2, maxReplicas: 4, targetCPUUtilizationPercentage: 70}
+portal:
+  oidc:
+    secret:
+      existingSecret: portal-oidc
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - {key: kubernetes.io/arch, operator: In, values: [amd64, arm64]}
+  autoscaling: {enabled: true, targetMemoryUtilizationPercentage: 75}

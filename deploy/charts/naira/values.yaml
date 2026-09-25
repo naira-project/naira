@@ -9,6 +9,9 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
+# Pull Secrets for every workload, e.g. [{name: regcred}].
+imagePullSecrets: []
+
 # Defaults match test-dependencies installed into namespace naira-deps.
 dependencies:
   keycloak:
@@ -35,6 +38,38 @@ catalog:
   image: {repository: naira-catalog, tag: ""}
   port: 8090
 
+  # Pod placement and security, same keys on ui and portal. Empty values render
+  # nothing. topologySpreadConstraints entries without a labelSelector get the
+  # workload's own. podAntiAffinity: "" | soft | hard (hostname); an explicit
+  # affinity.podAntiAffinity wins.
+  podAnnotations: {}
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAntiAffinity: ""
+  topologySpreadConstraints: []
+  podSecurityContext: {}
+  # The catalog and plugin images run as distroless nonroot (uid 65532), so
+  # this meets Pod Security "restricted".
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities: {drop: [ALL]}
+    runAsNonRoot: true
+    runAsUser: 65532
+    seccompProfile: {type: RuntimeDefault}
+  # Timing only; the probe is the /healthz check. The pod is not Ready and the
+  # liveness probe does not run until it passes.
+  startupProbe: {periodSeconds: 2, failureThreshold: 30}
+  # minAvailable wins when set. Leave PDB off with one replica: a PDB on a
+  # single replica blocks node drains.
+  pdb: {enabled: false, minAvailable: "", maxUnavailable: 1}
+  # Ingress to the catalog from the ui pods, plus extraIngress (complete
+  # NetworkPolicy ingress rules) for other callers. Egress is not restricted.
+  # There is no catalog HPA: it runs the plugin schedules in-process and keeps
+  # operations in memory, so a second replica repeats every scheduled run.
+  networkPolicy: {enabled: false, extraIngress: []}
+
   # Secret `catalog-secrets` (or existingSecret) holding LITELLM_API_KEY and
   # OPENMETADATA_ADMIN_PASSWORD. Supplied by the operator; create is for kind.
   secret:
@@ -56,6 +91,16 @@ catalog:
     resources:
       requests: {cpu: 50m, memory: 64Mi}
       limits: {cpu: 200m, memory: 128Mi}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: [ALL]}
+      runAsNonRoot: true
+      runAsUser: 65532
+      seccompProfile: {type: RuntimeDefault}
+    # TCP check on the plugin's port. The catalog container starts after the
+    # sidecars pass it, so the catalog's 10s connect timeout does not race a
+    # slow plugin start.
+    startupProbe: {periodSeconds: 1, failureThreshold: 60}
 
   # Plugin sidecars (ADR-005), keyed by name so an overlay changes one field.
   # One entry drives: the sidecar, its line in plugins.yaml, its RBAC and its
@@ -67,7 +112,8 @@ catalog:
   #   schedule    cron; omit for manual trigger only
   #   env         NAME: "value, tpl-rendered" | NAME: {secretKeyRef: {name?, key}}
   #               (secretKeyRef.name defaults to the catalog Secret)
-  #   resources   merged over pluginDefaults.resources
+  #   resources, securityContext, startupProbe
+  #               merged over the same keys of pluginDefaults
   #   rbac.rules  ClusterRole rules, only for plugins that read the cluster
   #   config      {mountPath, existingConfigMap | data}: files mounted as a directory
   plugins:
@@ -209,6 +255,29 @@ ui:
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 200m, memory: 128Mi}
+  podAnnotations: {}
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAntiAffinity: ""
+  topologySpreadConstraints: []
+  podSecurityContext: {}
+  # The image is nginx:alpine and runs as root, so no runAsNonRoot and no
+  # capability drop (nginx needs SETUID/SETGID/CHOWN/NET_BIND_SERVICE). Not
+  # Pod Security "restricted" until the image is unprivileged.
+  securityContext:
+    allowPrivilegeEscalation: false
+    seccompProfile: {type: RuntimeDefault}
+  startupProbe: {periodSeconds: 2, failureThreshold: 30}
+  pdb: {enabled: false, minAvailable: "", maxUnavailable: 1}
+  # Replicas are omitted from the Deployment while enabled.
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: null
 
 portal:
   enabled: true
@@ -228,3 +297,24 @@ portal:
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: 500m, memory: 256Mi}
+  podAnnotations: {}
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAntiAffinity: ""
+  topologySpreadConstraints: []
+  podSecurityContext: {}
+  # The image is node:alpine and runs as root, so no runAsNonRoot. Not Pod
+  # Security "restricted" until the image sets a non-root user.
+  securityContext:
+    allowPrivilegeEscalation: false
+    seccompProfile: {type: RuntimeDefault}
+  startupProbe: {periodSeconds: 2, failureThreshold: 30}
+  pdb: {enabled: false, minAvailable: "", maxUnavailable: 1}
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: null

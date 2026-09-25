@@ -153,6 +153,7 @@ jobs:
         run: |
           helm lint deploy/charts/naira -f deploy/charts/naira/ci/default-values.yaml
           helm lint deploy/charts/naira -f deploy/charts/naira/values-dev.yaml
+          helm lint deploy/charts/naira -f deploy/charts/naira/ci/hardened-values.yaml
       - name: Render tests
         run: deploy/charts/naira/tests/render-test.sh
       - name: ct lint
@@ -176,7 +177,7 @@ jobs:
         env:
           KUBERNETES_VERSION: "1.36.1" # keep in sync with the kind node image below and deploy/dev/stacks/core/infra/kind/kind-config.yaml
         run: |
-          for values in ci/default-values.yaml values-dev.yaml; do
+          for values in ci/default-values.yaml ci/hardened-values.yaml values-dev.yaml; do
             helm template naira deploy/charts/naira --namespace idp-system -f "deploy/charts/naira/${values}" \
               | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}"
           done

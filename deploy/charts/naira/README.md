@@ -65,6 +65,32 @@ in a value fails the render.
 | mcp-servers | 50058 | yes | — |
 | github | 50059 | no | Secret key `GITHUB_TOKEN`; RBAC: namespaces, deployments |
 
+## Scheduling, security and availability
+
+Same keys on `catalog`, `ui` and `portal` unless noted; unset values render
+nothing. `imagePullSecrets` is top-level and applies to all three.
+
+| Key | Notes |
+|---|---|
+| `podAnnotations`, `priorityClassName`, `nodeSelector`, `tolerations`, `affinity` | Passed through. |
+| `podAntiAffinity` | `soft` or `hard`, per hostname; an explicit `affinity.podAntiAffinity` wins. |
+| `topologySpreadConstraints` | An entry without `labelSelector` gets the workload's own. |
+| `podSecurityContext`, `securityContext` | See below. |
+| `startupProbe` | Timing only. Sidecars get a TCP check on their port (`catalog.pluginDefaults.startupProbe`, per-plugin override), so the catalog container starts after every plugin listens. |
+| `pdb` | Off. `minAvailable` wins over `maxUnavailable`. With one replica a PDB blocks node drains. |
+| `autoscaling` | `ui` and `portal` only; `replicas` is then omitted. Not on the catalog: it runs the plugin schedules in-process and keeps operations in memory, so a second replica repeats every scheduled run. |
+| `catalog.networkPolicy` | Ingress to the catalog from the `ui` pods, plus `extraIngress` rules. Egress is not restricted. |
+
+`securityContext`: the catalog and every plugin sidecar run as uid 65532 with
+no privilege escalation, all capabilities dropped and the `RuntimeDefault`
+seccomp profile, which meets Pod Security `restricted`. The `ui` (nginx) and
+`portal` (node) images have no `USER` and run as root, so they get only
+`allowPrivilegeEscalation: false` and seccomp; a `restricted` namespace needs
+non-root images for both first.
+
+Not provided: ServiceMonitor/PodMonitor. No workload exposes a metrics
+endpoint yet.
+
 ## Guards
 
 `templates/validate.yaml` (and, for a missing `image.repository` on the
@@ -76,7 +102,8 @@ templates render in file order, before `validate.yaml` can catch it) reject: `ca
 `plugin-<name>` longer than 63 characters; a plugin
 `config` block with neither `existingConfigMap` nor `data`; a plugin `env`
 entry that is a Secret reference without a `key`; an enabled plugin without
-`image.repository`; and either Secret (catalog or portal) missing a source
+`image.repository`; a `podAntiAffinity` other than `soft`/`hard`; `ui`/`portal` autoscaling
+with `minReplicas` above `maxReplicas` or no target; and either Secret (catalog or portal) missing a source
 when something reads it.
 
 ## Tests

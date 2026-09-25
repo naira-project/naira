@@ -60,3 +60,67 @@ Usage: include "naira.env" (dict "root" $ "env" .env)
 {{- define "naira.pluginResources" -}}
 {{- toYaml (mergeOverwrite (deepCopy .root.Values.catalog.pluginDefaults.resources) (.plugin.resources | default dict)) -}}
 {{- end -}}
+
+{{/* Usage: include "naira.pluginSecurityContext" (dict "root" $ "plugin" $p) */}}
+{{- define "naira.pluginSecurityContext" -}}
+{{- toYaml (mergeOverwrite (deepCopy .root.Values.catalog.pluginDefaults.securityContext) (.plugin.securityContext | default dict)) -}}
+{{- end -}}
+
+{{/* TCP check on the plugin's port. Usage: include "naira.pluginStartupProbe" (dict "root" $ "plugin" $p) */}}
+{{- define "naira.pluginStartupProbe" -}}
+{{- $probe := mergeOverwrite (deepCopy .root.Values.catalog.pluginDefaults.startupProbe) (.plugin.startupProbe | default dict) -}}
+{{- $_ := set $probe "tcpSocket" (dict "port" (int .plugin.port)) -}}
+{{- toYaml $probe -}}
+{{- end -}}
+
+{{/*
+Pod-level fields shared by the three Deployments; unset values render nothing.
+Usage: include "naira.podSpec" (dict "root" $ "name" "catalog" "cfg" .Values.catalog)
+*/}}
+{{- define "naira.podSpec" -}}
+{{- $selector := dict "app.kubernetes.io/name" .name "app.kubernetes.io/instance" (toString .root.Release.Name) -}}
+{{- with .root.Values.imagePullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .cfg.priorityClassName }}
+priorityClassName: {{ . | quote }}
+{{- end }}
+{{- with .cfg.podSecurityContext }}
+securityContext:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .cfg.nodeSelector }}
+nodeSelector:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .cfg.tolerations }}
+tolerations:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- $affinity := deepCopy (.cfg.affinity | default dict) }}
+{{- if and .cfg.podAntiAffinity (not (hasKey $affinity "podAntiAffinity")) }}
+{{- $term := dict "labelSelector" (dict "matchLabels" $selector) "topologyKey" "kubernetes.io/hostname" }}
+{{- if eq .cfg.podAntiAffinity "hard" }}
+{{- $_ := set $affinity "podAntiAffinity" (dict "requiredDuringSchedulingIgnoredDuringExecution" (list $term)) }}
+{{- else }}
+{{- $_ := set $affinity "podAntiAffinity" (dict "preferredDuringSchedulingIgnoredDuringExecution" (list (dict "weight" 100 "podAffinityTerm" $term))) }}
+{{- end }}
+{{- end }}
+{{- with $affinity }}
+affinity:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- $spread := list }}
+{{- range .cfg.topologySpreadConstraints }}
+{{- $c := deepCopy . }}
+{{- if not (hasKey $c "labelSelector") }}
+{{- $_ := set $c "labelSelector" (dict "matchLabels" $selector) }}
+{{- end }}
+{{- $spread = append $spread $c }}
+{{- end }}
+{{- with $spread }}
+topologySpreadConstraints:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end -}}

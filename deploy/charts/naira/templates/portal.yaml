@@ -9,7 +9,9 @@ metadata:
     {{- include "naira.labels" . | nindent 4 }}
     {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 4 }}
 spec:
+  {{- if not .Values.portal.autoscaling.enabled }}
   replicas: {{ .Values.portal.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 6 }}
@@ -18,11 +20,20 @@ spec:
       labels:
         {{- include "naira.labels" . | nindent 8 }}
         {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 8 }}
+      {{- with .Values.portal.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
+      {{- include "naira.podSpec" (dict "root" $ "name" "portal" "cfg" .Values.portal) | trim | nindent 6 }}
       containers:
         - name: portal
           image: {{ include "naira.image" (dict "root" $ "image" .Values.portal.image "context" "portal") | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.portal.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: PORT
               value: {{ .Values.portal.port | quote }}
@@ -45,6 +56,9 @@ spec:
                   key: {{ .Values.portal.oidc.secret.key }}
           ports:
             - {name: http, containerPort: {{ .Values.portal.port }}}
+          startupProbe:
+            httpGet: {path: /, port: http}
+            {{- toYaml .Values.portal.startupProbe | nindent 12 }}
           readinessProbe:
             httpGet: {path: /, port: http}
             initialDelaySeconds: 10

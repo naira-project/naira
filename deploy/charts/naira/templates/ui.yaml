@@ -8,7 +8,9 @@ metadata:
     {{- include "naira.labels" . | nindent 4 }}
     {{- include "naira.selector" (dict "root" . "name" "ui") | nindent 4 }}
 spec:
+  {{- if not .Values.ui.autoscaling.enabled }}
   replicas: {{ .Values.ui.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "naira.selector" (dict "root" . "name" "ui") | nindent 6 }}
@@ -17,16 +19,28 @@ spec:
       labels:
         {{- include "naira.labels" . | nindent 8 }}
         {{- include "naira.selector" (dict "root" . "name" "ui") | nindent 8 }}
+      {{- with .Values.ui.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
+      {{- include "naira.podSpec" (dict "root" $ "name" "ui" "cfg" .Values.ui) | trim | nindent 6 }}
       containers:
         - name: ui
           image: {{ include "naira.image" (dict "root" $ "image" .Values.ui.image "context" "ui") | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.ui.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           env:
             - name: CATALOG_UPSTREAM
               value: {{ .Values.ui.catalogUpstream | default (printf "http://catalog.%s.svc.cluster.local:%v" .Release.Namespace .Values.catalog.port) | quote }}
           ports:
             - {name: http, containerPort: {{ .Values.ui.port }}}
+          startupProbe:
+            httpGet: {path: /, port: http}
+            {{- toYaml .Values.ui.startupProbe | nindent 12 }}
           readinessProbe:
             httpGet: {path: /, port: http}
             initialDelaySeconds: 5
