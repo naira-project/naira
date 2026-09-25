@@ -135,6 +135,170 @@ jobs:
       context: "ui"
       platforms: "linux/amd64,linux/arm64"
 
+  # ── 7. Helm chart ─────────────────────────────────────────────────────────
+  helm-chart:
+    name: Check · Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # ct lint diffs against the target branch
+          persist-credentials: false
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
+      - name: helm lint
+        run: |
+          helm lint deploy/charts/naira -f deploy/charts/naira/ci/default-values.yaml
+          helm lint deploy/charts/naira -f deploy/charts/naira/values-dev.yaml
+          helm lint deploy/charts/naira -f deploy/charts/naira/ci/hardened-values.yaml
+      - name: Render tests
+        run: deploy/charts/naira/tests/render-test.sh
+      - name: ct lint
+        env:
+          TARGET_BRANCH: ${{ github.event.repository.default_branch }}
+        run: ct lint --config ct.yaml --target-branch "$TARGET_BRANCH"
+      - name: Set up kubeconform
+        env:
+          KUBECONFORM_VERSION: v0.8.0
+          KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+        run: |
+          curl -sSLo kubeconform.tar.gz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tar.gz" | sha256sum -c -
+          tar -xzf kubeconform.tar.gz kubeconform
+          sudo mv kubeconform /usr/local/bin/kubeconform
+      - name: kubeconform
+        # Validates the rendered manifests against the Kubernetes API schemas;
+        # helm lint does not see wrong field names or types. One run per values
+        # file the chart supports (bare defaults do not render by design).
+        shell: bash # pipefail: a chart that fails to render must not pass on empty input
+        env:
+          KUBERNETES_VERSION: "1.36.1" # keep in sync with the kind node image below and deploy/dev/stacks/core/infra/kind/kind-config.yaml
+        run: |
+          for values in ci/default-values.yaml ci/hardened-values.yaml values-dev.yaml; do
+            helm template naira deploy/charts/naira --namespace idp-system -f "deploy/charts/naira/${values}" \
+              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}"
+          done
+
+  # ── 8. Helm chart — install on kind ──────────────────────────────────────
+  # The chart and its dependency tier on a throwaway cluster, then the same
+  # functional probe a developer runs locally: every plugin registers with the
+  # catalog and a run of every plugin succeeds. Images are built from this PR's
+  # tree, so unpublished plugin images are no obstacle.
+  # Not part of the all-checks gate yet: it checks out test-dependencies at a
+  # commit of that repo's open PR branch. Add it to the gate once that PR is
+  # merged and the pin below points at a default-branch commit.
+  helm-chart-install:
+    name: Check · Helm Chart Install
+    needs: helm-chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout test-dependencies
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: naira-project/test-dependencies
+          # Pinned commit of the test-dependencies chart this PR is verified against.
+          ref: 4b7b36fadaca77e3d02394f1cdc0b5d8650f0c95
+          path: test-dependencies
+          persist-credentials: false
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+      - name: Create kind cluster
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          cluster_name: naira-ci
+          node_image: kindest/node:v1.36.1 # the version kubeconform validates against
+      - name: Build images
+        # Same names and tag the chart's values-dev.yaml expects; loaded into
+        # the node, never pushed.
+        run: |
+          docker build -q -t naira-catalog:0.1.0 -f catalog/Dockerfile .
+          for p in depl-calls-svc depl-uses-litellm fluxcd litellm mcp-servers mlflow tech-radar; do
+            docker build -q -t "naira-plugin-${p}:0.1.0" -f "plugins/cmd/${p//-/_}/Dockerfile" .
+          done
+          docker build -q -t naira-ui:0.1.0 ui
+          docker build -q -t naira-portal:0.1.0 naira-openmfp-portal
+          kind load docker-image --name naira-ci \
+            naira-catalog:0.1.0 naira-ui:0.1.0 naira-portal:0.1.0 \
+            naira-plugin-depl-calls-svc:0.1.0 naira-plugin-depl-uses-litellm:0.1.0 \
+            naira-plugin-fluxcd:0.1.0 naira-plugin-litellm:0.1.0 naira-plugin-mcp-servers:0.1.0 \
+            naira-plugin-mlflow:0.1.0 naira-plugin-tech-radar:0.1.0
+      - name: Install test-dependencies
+        # No --wait: the LiteLLM migrations Job is garbage-collected after 120s
+        # and Helm then fails a healthy release.
+        run: |
+          # Helm 4 does not fetch from an unregistered HTTP repository.
+          helm repo add community-charts https://community-charts.github.io/helm-charts
+          helm repo add open-metadata https://helm.open-metadata.org
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm dependency build test-dependencies/charts/test-dependencies
+          helm install test-dependencies test-dependencies/charts/test-dependencies \
+            --namespace naira-deps --create-namespace \
+            -f test-dependencies/charts/test-dependencies/values-dev.yaml
+          kubectl -n naira-deps wait --for=condition=Available deployment --all --timeout=12m
+          kubectl -n naira-deps wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset --all --timeout=12m
+      - name: Install naira
+        run: |
+          helm install naira deploy/charts/naira \
+            --namespace idp-system --create-namespace \
+            -f deploy/charts/naira/values-dev.yaml
+          kubectl -n idp-system wait --for=condition=Available deployment --all --timeout=5m
+      - name: Probe the catalog through its API
+        # Token from the dev realm, then: all enabled plugins registered, a
+        # run of every plugin reaches SUCCEEDED, the UI proxies /v1 to the catalog.
+        shell: bash # pipefail for the helm template | yq pipelines
+        run: |
+          kubectl -n naira-deps port-forward svc/keycloak 18080:8080 &
+          kubectl -n idp-system port-forward svc/catalog 18090:8090 &
+          kubectl -n idp-system port-forward svc/ui 13001:80 &
+          for _ in $(seq 1 30); do
+            curl -sf -o /dev/null localhost:18080/realms/naira && curl -sf -o /dev/null localhost:18090/healthz && break
+            sleep 1
+          done
+          TOKEN=$(curl -sf -H 'Host: localhost:8080' -d grant_type=password -d client_id=naira-portal \
+            -d client_secret=naira-local-dev-secret -d username=testuser -d password=testpass \
+            localhost:18080/realms/naira/protocol/openid-connect/token | jq -r .access_token)
+          AUTH="Authorization: Bearer ${TOKEN}"
+          expected=$(helm template naira deploy/charts/naira -n idp-system -f deploy/charts/naira/values-dev.yaml \
+            | yq 'select(.kind == "ConfigMap" and .metadata.name == "catalog-plugin-config") | .data["plugins.yaml"]' \
+            | yq '.plugins | keys | sort | join(",")')
+          got=$(curl -sf -H "${AUTH}" localhost:18090/v1/plugins | jq -r '[.plugins[].name] | sort | join(",")')
+          echo "plugins: ${got}"
+          [ "${got}" = "${expected}" ] || { echo "::error::registered plugins differ from the chart: expected ${expected}"; exit 1; }
+          # Judge only the operations this run created: scheduled plugin runs
+          # (fluxcd every minute) keep adding unfinished entries to the list.
+          # Operations are AIP-151: `done` false is pending or running, `error`
+          # is set only on failure.
+          ours=$(curl -sf -X POST -H "${AUTH}" 'localhost:18090/v1/plugins:run' | jq -r '[.operations[].name] | join(",")')
+          want=$(jq -r 'split(",") | length' <<<"\"${ours}\"")
+          for _ in $(seq 1 60); do
+            report=$(curl -sf -H "${AUTH}" localhost:18090/v1/operations \
+              | jq -r --arg ours "${ours}" '[.operations[] | select(.name as $n | ($ours | split(",")) | index($n))]
+                  | map(.metadata.plugin + "=" + (if .done | not then "RUNNING" elif .error then "FAILED (" + .error.message + ")" else "SUCCEEDED" end))
+                  | sort | join(" ")')
+            case "${report}" in *RUNNING*) sleep 2 ;; *) break ;; esac
+          done
+          echo "plugin runs: ${report}"
+          # Count the successes: a report that matches no failure pattern must not pass by default.
+          ok=$(grep -o 'SUCCEEDED' <<<"${report}" | wc -l)
+          if [ "${want}" -eq 0 ] || [ "${ok}" -ne "${want}" ]; then echo "::error::plugin runs did not all succeed (${ok}/${want})"; exit 1; fi
+          curl -sf -o /dev/null -H "${AUTH}" localhost:13001/v1/plugins || { echo "::error::UI does not proxy /v1 to the catalog"; exit 1; }
+      - name: Show state
+        if: always()
+        run: |
+          kubectl -n naira-deps get pods
+          kubectl -n idp-system get pods
+          kubectl -n idp-system logs deploy/catalog -c catalog --tail=50 || true
+
   # ── Gate: single required status check for branch protection ──────────────
   all-checks:
     name: All Checks Passed
@@ -147,6 +311,7 @@ jobs:
         ui-check,
         container-build-catalog,
         container-build-ui,
+        helm-chart,
       ]
     if: always()
     runs-on: ubuntu-latest
@@ -161,6 +326,7 @@ jobs:
             "${{ needs.ui-check.result }}"
             "${{ needs.container-build-catalog.result }}"
             "${{ needs.container-build-ui.result }}"
+            "${{ needs.helm-chart.result }}"
           )
           for r in "${RESULTS[@]}"; do
             if [[ "$r" != "success" ]]; then

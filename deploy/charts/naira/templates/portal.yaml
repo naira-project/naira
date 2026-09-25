@@ -1,0 +1,87 @@
+{{- if .Values.portal.enabled }}
+{{- $kc := .Values.dependencies.keycloak }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 4 }}
+spec:
+  {{- if not .Values.portal.autoscaling.enabled }}
+  replicas: {{ .Values.portal.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "naira.labels" . | nindent 8 }}
+        {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 8 }}
+      {{- with .Values.portal.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- include "naira.podSpec" (dict "root" $ "name" "portal" "cfg" .Values.portal) | trim | nindent 6 }}
+      containers:
+        - name: portal
+          image: {{ include "naira.image" (dict "root" $ "image" .Values.portal.image "context" "portal") | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.portal.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: PORT
+              value: {{ .Values.portal.port | quote }}
+            - name: NAIRA_UI_BASE_URL
+              value: {{ .Values.portal.uiBaseUrl | quote }}
+            - name: IDP_NAMES
+              value: keycloak
+            - name: BASE_DOMAINS_KEYCLOAK
+              value: {{ $kc.baseDomain | quote }}
+            - name: AUTH_SERVER_URL_KEYCLOAK
+              value: {{ $kc.authUrl | quote }}
+            - name: TOKEN_URL_KEYCLOAK
+              value: {{ printf "%s/realms/%s/protocol/openid-connect/token" $kc.baseUrl $kc.realm | quote }}
+            - name: OIDC_CLIENT_ID_KEYCLOAK
+              value: {{ .Values.portal.oidc.clientId | quote }}
+            - name: OIDC_CLIENT_SECRET_KEYCLOAK
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "naira.portalSecretName" . }}
+                  key: {{ .Values.portal.oidc.secret.key }}
+          ports:
+            - {name: http, containerPort: {{ .Values.portal.port }}}
+          startupProbe:
+            httpGet: {path: /, port: http}
+            {{- toYaml .Values.portal.startupProbe | nindent 12 }}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.portal.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 4 }}
+  ports:
+    - {name: http, port: {{ .Values.portal.port }}, targetPort: http}
+{{- end }}

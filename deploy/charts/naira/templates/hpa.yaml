@@ -1,0 +1,35 @@
+{{- /* No catalog HPA: see catalog.networkPolicy in values.yaml. */}}
+{{- range $name := list "ui" "portal" }}
+{{- $cfg := index $.Values $name }}
+{{- if and $cfg.enabled $cfg.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+    {{- include "naira.selector" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $name }}
+  minReplicas: {{ $cfg.autoscaling.minReplicas }}
+  maxReplicas: {{ $cfg.autoscaling.maxReplicas }}
+  metrics:
+    {{- with $cfg.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target: {type: Utilization, averageUtilization: {{ . }}}
+    {{- end }}
+    {{- with $cfg.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target: {type: Utilization, averageUtilization: {{ . }}}
+    {{- end }}
+{{- end }}
+{{- end }}

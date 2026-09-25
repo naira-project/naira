@@ -1,0 +1,12 @@
+apiVersion: v2
+name: naira
+description: Naira — catalog with its plugin sidecars, UI and portal
+type: application
+# Native sidecars (initContainers with restartPolicy: Always): beta in 1.29, GA in 1.33.
+kubeVersion: ">=1.29.0-0"
+# Release CI sets both.
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/naira-project/naira
+sources:
+  - https://github.com/naira-project/naira

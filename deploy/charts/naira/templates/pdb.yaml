@@ -1,0 +1,23 @@
+{{- range $name := list "catalog" "ui" "portal" }}
+{{- $cfg := index $.Values $name }}
+{{- if and $cfg.enabled $cfg.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+    {{- include "naira.selector" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  {{- if $cfg.pdb.minAvailable }}
+  minAvailable: {{ if kindIs "string" $cfg.pdb.minAvailable }}{{ $cfg.pdb.minAvailable | quote }}{{ else }}{{ $cfg.pdb.minAvailable }}{{ end }}
+  {{- else }}
+  maxUnavailable: {{ if kindIs "string" $cfg.pdb.maxUnavailable }}{{ $cfg.pdb.maxUnavailable | quote }}{{ else }}{{ $cfg.pdb.maxUnavailable }}{{ end }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "naira.selector" (dict "root" $ "name" $name) | nindent 6 }}
+{{- end }}
+{{- end }}

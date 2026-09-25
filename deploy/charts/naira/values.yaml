@@ -1,0 +1,318 @@
+# Naira — first-party components only (RFC-009 §1). Keycloak, LiteLLM, MLflow,
+# OpenMetadata and MCP servers come from the test-dependencies chart or the
+# operator's own; this chart only needs their addresses (`dependencies`).
+
+image:
+  # Chart-local, not a Helm global. Empty for images loaded into kind.
+  registry: ghcr.io/naira-project
+  # Empty -> .Chart.AppVersion. A per-image tag wins over this one.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Pull Secrets for every workload, e.g. [{name: regcred}].
+imagePullSecrets: []
+
+# Defaults match test-dependencies installed into namespace naira-deps.
+dependencies:
+  keycloak:
+    baseUrl: http://keycloak.naira-deps.svc.cluster.local:8080
+    realm: naira
+    # Browser-facing. Differs from baseUrl wherever the browser cannot resolve
+    # cluster DNS, i.e. every environment reached by port-forward.
+    issuer: http://localhost:8080/realms/naira
+    authUrl: http://localhost:8080/realms/naira/protocol/openid-connect/auth
+    baseDomain: localhost
+  litellm:
+    baseUrl: http://litellm.naira-deps.svc.cluster.local:4000
+  mlflow:
+    baseUrl: http://mlflow.naira-deps.svc.cluster.local:5000
+  openmetadata:
+    baseUrl: http://openmetadata.naira-deps.svc.cluster.local:8585
+    adminEmail: admin@open-metadata.org
+  mcp:
+    endpoints: mock-knowledge-base=http://mcp-mock.naira-deps.svc.cluster.local:8080/mcp
+
+catalog:
+  enabled: true
+  replicas: 1
+  image: {repository: naira-catalog, tag: ""}
+  port: 8090
+
+  # Pod placement and security, same keys on ui and portal. Empty values render
+  # nothing. topologySpreadConstraints entries without a labelSelector get the
+  # workload's own. podAntiAffinity: "" | soft | hard (hostname); an explicit
+  # affinity.podAntiAffinity wins.
+  podAnnotations: {}
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAntiAffinity: ""
+  topologySpreadConstraints: []
+  podSecurityContext: {}
+  # The catalog and plugin images run as distroless nonroot (uid 65532), so
+  # this meets Pod Security "restricted".
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities: {drop: [ALL]}
+    runAsNonRoot: true
+    runAsUser: 65532
+    seccompProfile: {type: RuntimeDefault}
+  # Timing only; the probe is the /healthz check. The pod is not Ready and the
+  # liveness probe does not run until it passes.
+  startupProbe: {periodSeconds: 2, failureThreshold: 30}
+  # minAvailable wins when set. Leave PDB off with one replica: a PDB on a
+  # single replica blocks node drains.
+  pdb: {enabled: false, minAvailable: "", maxUnavailable: 1}
+  # Ingress to the catalog from the ui pods, plus extraIngress (complete
+  # NetworkPolicy ingress rules) for other callers. Egress is not restricted.
+  # There is no catalog HPA: it runs the plugin schedules in-process and keeps
+  # operations in memory, so a second replica repeats every scheduled run.
+  networkPolicy: {enabled: false, extraIngress: []}
+
+  # Secret `catalog-secrets` (or existingSecret) holding LITELLM_API_KEY and
+  # OPENMETADATA_ADMIN_PASSWORD. Supplied by the operator; create is for kind.
+  secret:
+    existingSecret: ""
+    create: false
+    data: {}
+
+  rbac:
+    rules:
+      - apiGroups: ["naira.io"]
+        resources: ["appidentities"]
+        verbs: ["get", "list"]
+
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
+  pluginDefaults:
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+      limits: {cpu: 200m, memory: 128Mi}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities: {drop: [ALL]}
+      runAsNonRoot: true
+      runAsUser: 65532
+      seccompProfile: {type: RuntimeDefault}
+    # No probes: the plugins listen on loopback only, which kubelet probes
+    # (pod IP) cannot reach.
+
+  # Plugin sidecars (ADR-005), keyed by name so an overlay changes one field.
+  # One entry drives: the sidecar, its line in plugins.yaml, its RBAC and its
+  # config ConfigMap. The catalog connects to every enabled plugin at startup
+  # and exits if one is unreachable.
+  #
+  #   image       naira-plugin-<name>; built from plugins/cmd/<name, - as _>
+  #   port        unique within the pod
+  #   schedule    cron; omit for manual trigger only
+  #   env         NAME: "value, tpl-rendered" | NAME: {secretKeyRef: {name?, key}}
+  #               (secretKeyRef.name defaults to the catalog Secret)
+  #   resources, securityContext
+  #               merged over the same keys of pluginDefaults
+  #   rbac.rules  ClusterRole rules, only for plugins that read the cluster
+  #   config      {mountPath, existingConfigMap | data}: files mounted as a directory
+  plugins:
+    litellm:
+      enabled: true
+      image: {repository: naira-plugin-litellm, tag: ""}
+      port: 50051
+      schedule: "0 0 * * *"
+      pathPrefix: litellm
+      env:
+        LITELLM_BASE_URL: "{{ .Values.dependencies.litellm.baseUrl }}"
+        LITELLM_API_KEY: {secretKeyRef: {key: LITELLM_API_KEY}}
+
+    mlflow:
+      enabled: true
+      image: {repository: naira-plugin-mlflow, tag: ""}
+      port: 50052
+      schedule: "0 0 * * *"
+      pathPrefix: mlflow
+      env:
+        MLFLOW_BASE_URL: "{{ .Values.dependencies.mlflow.baseUrl }}"
+
+    depl-calls-svc:
+      enabled: true
+      image: {repository: naira-plugin-depl-calls-svc, tag: ""}
+      port: 50053
+      schedule: "0 * * * *"
+      env:
+        DEPL_CALLS_SVC_KUBECONFIG: ""
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces", "services"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+
+    depl-uses-litellm:
+      # Off by default: cluster-wide get/list on Secrets, on the ServiceAccount
+      # shared by the catalog and every sidecar. Enabled in values-dev.yaml.
+      enabled: false
+      image: {repository: naira-plugin-depl-uses-litellm, tag: ""}
+      port: 50054
+      schedule: "0 * * * *"
+      env:
+        DEPL_USES_LITELLM_KUBECONFIG: ""
+        DEPL_USES_LITELLM_NAMED_HOSTS: "litellm={{ .Values.dependencies.litellm.baseUrl }}"
+      # The plugin reads every key of the Secrets that Deployments reference,
+      # to find LiteLLM keys.
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces", "secrets"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+
+    fluxcd:
+      enabled: true
+      image: {repository: naira-plugin-fluxcd, tag: ""}
+      port: 50055
+      schedule: "*/1 * * * *"
+      rbac:
+        rules:
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+          - apiGroups: ["kustomize.toolkit.fluxcd.io"]
+            resources: ["kustomizations"]
+            verbs: ["get", "list"]
+          - apiGroups: ["helm.toolkit.fluxcd.io"]
+            resources: ["helmreleases"]
+            verbs: ["get", "list"]
+          - apiGroups: ["source.toolkit.fluxcd.io"]
+            resources: ["gitrepositories"]
+            verbs: ["get", "list"]
+
+    openmetadata:
+      enabled: true
+      image: {repository: naira-plugin-openmetadata, tag: ""}
+      port: 50056
+      pathPrefix: openmetadata
+      env:
+        OPENMETADATA_BASE_URL: "{{ .Values.dependencies.openmetadata.baseUrl }}"
+        OPENMETADATA_ADMIN_EMAIL: "{{ .Values.dependencies.openmetadata.adminEmail }}"
+        OPENMETADATA_ADMIN_PASSWORD: {secretKeyRef: {key: OPENMETADATA_ADMIN_PASSWORD}}
+
+    tech-radar:
+      # Off by default: it needs a radar file (config.data or existingConfigMap).
+      # No schedule until naira#196 settles one.
+      enabled: false
+      image: {repository: naira-plugin-tech-radar, tag: ""}
+      port: 50057
+      env:
+        TECH_RADAR_CONFIG_PATH: /etc/naira/techradar/radar.yaml
+      config:
+        mountPath: /etc/naira/techradar
+        existingConfigMap: ""
+        data: {}
+
+    mcp-servers:
+      enabled: true
+      image: {repository: naira-plugin-mcp-servers, tag: ""}
+      port: 50058
+      pathPrefix: mcp
+      env:
+        MCP_ENDPOINTS: "{{ .Values.dependencies.mcp.endpoints }}"
+
+    github:
+      # Off by default: GITHUB_TOKEN is required. Add it to the catalog Secret
+      # (key GITHUB_TOKEN) before enabling. No schedule: manual trigger only.
+      enabled: false
+      image: {repository: naira-plugin-github, tag: ""}
+      port: 50059
+      env:
+        GITHUB_ORG: naira-project
+        GITHUB_TOKEN: {secretKeyRef: {key: GITHUB_TOKEN}}
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+
+ui:
+  enabled: true
+  replicas: 1
+  image: {repository: naira-ui, tag: ""}
+  port: 80
+  # Empty -> http://catalog.<release namespace>.svc.cluster.local:<catalog.port>
+  # Set on the UI container but not read by the UI image yet: ui/nginx.conf.template
+  # still proxies to catalog.idp-system. Until that changes, install into
+  # namespace idp-system for a working UI.
+  catalogUpstream: ""
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 200m, memory: 128Mi}
+  podAnnotations: {}
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAntiAffinity: ""
+  topologySpreadConstraints: []
+  podSecurityContext: {}
+  # The image is nginx:alpine and runs as root, so no runAsNonRoot and no
+  # capability drop (nginx needs SETUID/SETGID/CHOWN/NET_BIND_SERVICE). Not
+  # Pod Security "restricted" until the image is unprivileged.
+  securityContext:
+    allowPrivilegeEscalation: false
+    seccompProfile: {type: RuntimeDefault}
+  startupProbe: {periodSeconds: 2, failureThreshold: 30}
+  pdb: {enabled: false, minAvailable: "", maxUnavailable: 1}
+  # Replicas are omitted from the Deployment while enabled.
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: null
+
+portal:
+  enabled: true
+  replicas: 1
+  image: {repository: naira-portal, tag: ""}
+  port: 3000
+  uiBaseUrl: http://localhost:3001
+  oidc:
+    clientId: naira-portal
+    # Secret `portal-oidc` (or existingSecret). Supplied by the operator;
+    # create is for kind.
+    secret:
+      existingSecret: ""
+      create: false
+      key: client-secret
+      value: ""
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  podAnnotations: {}
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAntiAffinity: ""
+  topologySpreadConstraints: []
+  podSecurityContext: {}
+  # The image is node:alpine and runs as root, so no runAsNonRoot. Not Pod
+  # Security "restricted" until the image sets a non-root user.
+  securityContext:
+    allowPrivilegeEscalation: false
+    seccompProfile: {type: RuntimeDefault}
+  startupProbe: {periodSeconds: 2, failureThreshold: 30}
+  pdb: {enabled: false, minAvailable: "", maxUnavailable: 1}
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: null
