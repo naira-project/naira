@@ -290,7 +290,7 @@ jobs:
           echo "plugin runs: ${report}"
           # Count the successes: a report that matches no failure pattern must not pass by default.
           ok=$(grep -o 'SUCCEEDED' <<<"${report}" | wc -l)
-          [ "${ok}" -eq "${want}" ] && [ "${want}" -gt 0 ] || { echo "::error::plugin runs did not all succeed (${ok}/${want})"; exit 1; }
+          if [ "${want}" -eq 0 ] || [ "${ok}" -ne "${want}" ]; then echo "::error::plugin runs did not all succeed (${ok}/${want})"; exit 1; fi
           curl -sf -o /dev/null -H "${AUTH}" localhost:13001/v1/plugins || { echo "::error::UI does not proxy /v1 to the catalog"; exit 1; }
       - name: Show state
         if: always()
