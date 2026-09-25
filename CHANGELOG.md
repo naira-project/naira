@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.1.0](https://github.com/naira-project/naira/compare/v0.1.0...v0.1.0) (2026-09-25)
+
+
+### Features
+
+* add -neo4j graph formatting flag for plugins ([f31a8c6](https://github.com/naira-project/naira/commit/f31a8c63a1ae857dd2121ed59356a59dbc65f497))
+* add -neo4j graph formatting flag for plugins ([4b5afcb](https://github.com/naira-project/naira/commit/4b5afcb041119ee3738c1bf8d37c7184ec31f6cf))
+* add e2e test infra with smoke test ([#154](https://github.com/naira-project/naira/issues/154)) ([304ef27](https://github.com/naira-project/naira/commit/304ef27481b555242a4171b4c63f988ab811b9ed))
+* add plugin scheduling and display schedules in UI ([#173](https://github.com/naira-project/naira/issues/173)) ([7228b95](https://github.com/naira-project/naira/commit/7228b958fb550e5061c32315252d7f502b23b525))
+* add prometheus, llama.cpp, vllm to dev environment ([#121](https://github.com/naira-project/naira/issues/121)) ([fb83b1b](https://github.com/naira-project/naira/commit/fb83b1b7cdad708ec2764f3d43e2b88765e28a88))
+* aligns the operations API with the AIP-151 ([#187](https://github.com/naira-project/naira/issues/187)) ([8de2baa](https://github.com/naira-project/naira/commit/8de2baa82eb2424d606e7c535b2d2b1a483afc99))
+* Keycloak integration into Naira ([#95](https://github.com/naira-project/naira/issues/95)) ([9411cd4](https://github.com/naira-project/naira/commit/9411cd4306623ada8d633d5f9a1fed6d2dbe953b))
+* linting for go files ([#203](https://github.com/naira-project/naira/issues/203)) ([2c161fc](https://github.com/naira-project/naira/commit/2c161fcec250148ff5ff0fe99b55634c3c898d08))
+* mcp plugin & catalog ([#160](https://github.com/naira-project/naira/issues/160)) ([745a3c1](https://github.com/naira-project/naira/commit/745a3c14be97b91364063156a26b7aff9c7c84af))
+* migrate the ui-poc from CRA to Vite ([#148](https://github.com/naira-project/naira/issues/148)) ([d3300f6](https://github.com/naira-project/naira/commit/d3300f6dab0cf29c715c0c8c69de88a94ca6792c))
+* plugins & ingestion management dialog ([#136](https://github.com/naira-project/naira/issues/136)) ([645c4a2](https://github.com/naira-project/naira/commit/645c4a283c8e60a39ad1e279741358fa43637a0b))
+* **plugins:** add GitHub plugin ([#155](https://github.com/naira-project/naira/issues/155)) ([866a6b2](https://github.com/naira-project/naira/commit/866a6b2a4d119ba33bc9434073ca0c6850229c3f))
+* refactors plugin execution from synchronous to asynchronous ([#135](https://github.com/naira-project/naira/issues/135)) ([c93e665](https://github.com/naira-project/naira/commit/c93e665ef5988509640fb38bd7746ad0d42c877b))
+* support configurable node path prefix per plugin instance ([#125](https://github.com/naira-project/naira/issues/125)) ([738fb33](https://github.com/naira-project/naira/commit/738fb33e6cea513ddd5159870b742636bcf05ad5))
+* tech radar implementation ([#175](https://github.com/naira-project/naira/issues/175)) ([ecced24](https://github.com/naira-project/naira/commit/ecced2454dc6109a396ffe2824f72523eca26d22))
+* **ui:** kind based page separation ([#152](https://github.com/naira-project/naira/issues/152)) ([fb68112](https://github.com/naira-project/naira/commit/fb681122e99ed71ec6bf27df309bceb13ad60030))
+* **ui:** lint UI files with biome ([#167](https://github.com/naira-project/naira/issues/167)) ([01b7a47](https://github.com/naira-project/naira/commit/01b7a4717bda1c6ce1578ffe179bf94b8678c758))
+* **ui:** TanStack Table for table solution ([#162](https://github.com/naira-project/naira/issues/162)) ([bdc7e09](https://github.com/naira-project/naira/commit/bdc7e09aaa9da2eb51fb095ba1eb10d454ce035d))
+
+
+### Bug Fixes
+
+* **ci:** create release tag via GitHub API ([#180](https://github.com/naira-project/naira/issues/180)) ([ed9d991](https://github.com/naira-project/naira/commit/ed9d991a2cf6d7c6c7ad7b56d75e6dfc323294a5))
+* decode path segments in GetNode ([#144](https://github.com/naira-project/naira/issues/144)) ([db1db64](https://github.com/naira-project/naira/commit/db1db6428f7ef1b22f88e4e9b400086ae22b032d))
+* **dev:** declare tech-radar-config volume in the pod's single volumes list ([#197](https://github.com/naira-project/naira/issues/197)) ([d44310f](https://github.com/naira-project/naira/commit/d44310fdf3677dc90806ce12c57190cce87b2963))
+* **ui:** improve graph nodes connection ([#172](https://github.com/naira-project/naira/issues/172)) ([09f588c](https://github.com/naira-project/naira/commit/09f588c2fa6ce3d25ae455fba9d215a92b1225a1))
+* **ui:** upgrade to Tailwind v4 ([#174](https://github.com/naira-project/naira/issues/174)) ([4a0cba8](https://github.com/naira-project/naira/commit/4a0cba8c17612479b2de9f0c055bb2dc882a13a6))
+
 ## [0.1.0](https://github.com/naira-project/naira/compare/v0.0.2...v0.1.0) (2026-07-16)
 
 
