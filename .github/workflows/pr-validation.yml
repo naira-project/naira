@@ -274,17 +274,22 @@ jobs:
           echo "plugins: ${got}"
           [ "${got}" = "${expected}" ] || { echo "::error::registered plugins differ from the chart: expected ${expected}"; exit 1; }
           # Judge only the operations this run created: scheduled plugin runs
-          # (fluxcd every minute) keep adding PENDING/RUNNING entries to the list.
+          # (fluxcd every minute) keep adding unfinished entries to the list.
+          # Operations are AIP-151: `done` false is pending or running, `error`
+          # is set only on failure.
           ours=$(curl -sf -X POST -H "${AUTH}" 'localhost:18090/v1/plugins:run' | jq -r '[.operations[].name] | join(",")')
+          want=$(jq -r 'split(",") | length' <<<"\"${ours}\"")
           for _ in $(seq 1 60); do
             report=$(curl -sf -H "${AUTH}" localhost:18090/v1/operations \
-              | jq -r --arg ours "${ours}" '[.operations[] | select(.name as $n | ($ours | split(",")) | index($n))] | map(.plugin + "=" + .state + (if .error then " (" + .error + ")" else "" end)) | sort | join(" ")')
-            case "${report}" in *PENDING*|*RUNNING*) sleep 2 ;; *) break ;; esac
+              | jq -r --arg ours "${ours}" '[.operations[] | select(.name as $n | ($ours | split(",")) | index($n))]
+                  | map(.metadata.plugin + "=" + (if .done | not then "RUNNING" elif .error then "FAILED (" + .error.message + ")" else "SUCCEEDED" end))
+                  | sort | join(" ")')
+            case "${report}" in *RUNNING*) sleep 2 ;; *) break ;; esac
           done
           echo "plugin runs: ${report}"
-          case "${report}" in
-            *FAILED*|*PENDING*|*RUNNING*|"") echo "::error::plugin runs did not all succeed"; exit 1 ;;
-          esac
+          # Count the successes: a report that matches no failure pattern must not pass by default.
+          ok=$(grep -o 'SUCCEEDED' <<<"${report}" | wc -l)
+          [ "${ok}" -eq "${want}" ] && [ "${want}" -gt 0 ] || { echo "::error::plugin runs did not all succeed (${ok}/${want})"; exit 1; }
           curl -sf -o /dev/null -H "${AUTH}" localhost:13001/v1/plugins || { echo "::error::UI does not proxy /v1 to the catalog"; exit 1; }
       - name: Show state
         if: always()

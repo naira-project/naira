@@ -6,11 +6,10 @@ name: Dev Publish
 on:
   workflow_dispatch:
 
-# No workflow-level permissions block, on purpose. A job that calls the
-# reusable build workflow can only narrow the workflow-level grant, so a
-# `contents: read` block here made GitHub reject every run at startup
-# (startup_failure, no jobs created), and a wide block trips the
-# excessive-permissions audit. Every job declares its own instead.
+# No workflow-level permissions block; every job declares its own, as
+# release-please.yml does. A job without one inherits the workflow-level grant,
+# and the reusable build workflow requests more than `contents: read`, which
+# GitHub rejects at startup (startup_failure, no jobs created).
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
