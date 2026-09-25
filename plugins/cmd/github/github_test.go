@@ -157,7 +157,10 @@ type countingReadCloser struct {
 func (r *countingReadCloser) Read(p []byte) (int, error) {
 	n, err := r.Reader.Read(p)
 	*r.bytesRead += n
-	return n, err
+	if err != nil {
+		return n, fmt.Errorf("failed to read: %w", err)
+	}
+	return n, nil
 }
 
 func (r *countingReadCloser) Close() error {
