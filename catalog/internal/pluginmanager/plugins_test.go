@@ -32,7 +32,7 @@ var stubResponse = pluginapi.CollectResponse{
 	},
 }
 
-func (mockPlugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
+func (mockPlugin) Collect(_ context.Context) (pluginapi.CollectResponse, error) {
 	return stubResponse, nil
 }
 
