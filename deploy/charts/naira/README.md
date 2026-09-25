@@ -37,6 +37,10 @@ development Secrets from values.
   selectors differ and are immutable.
 - The UI works only in namespace `idp-system` for now: `ui/nginx.conf.template`
   still proxies to `catalog.idp-system` regardless of `ui.catalogUpstream`.
+- `dependencies.keycloak.issuer`, `authUrl`, `baseDomain` and `portal.uiBaseUrl`
+  default to `localhost` (kind, port-forward). Anywhere else, set them to the
+  addresses the browser uses; the catalog accepts only tokens whose `iss`
+  equals `issuer`.
 - On ghcr, `naira-plugin-depl-uses-litellm`, `naira-plugin-openmetadata`,
   `naira-plugin-mcp-servers` and `naira-plugin-tech-radar` have no `0.1.0`
   tag; only `dev-publish.yml` builds them (branch-name tags). A registry
@@ -54,11 +58,12 @@ in a value fails the render.
 | litellm | 50051 | yes | Secret key `LITELLM_API_KEY` |
 | mlflow | 50052 | yes | — |
 | depl-calls-svc | 50053 | yes | RBAC: namespaces, services, deployments |
-| depl-uses-litellm | 50054 | yes | RBAC: namespaces, secrets, deployments |
+| depl-uses-litellm | 50054 | no | RBAC: namespaces, secrets (cluster-wide), deployments |
 | fluxcd | 50055 | yes | RBAC: deployments, kustomizations, helmreleases, gitrepositories |
 | openmetadata | 50056 | yes | Secret key `OPENMETADATA_ADMIN_PASSWORD` |
 | tech-radar | 50057 | no | Config file (`config.data` or `config.existingConfigMap`) |
 | mcp-servers | 50058 | yes | — |
+| github | 50059 | no | Secret key `GITHUB_TOKEN`; RBAC: namespaces, deployments |
 
 ## Guards
 
@@ -66,7 +71,9 @@ in a value fails the render.
 catalog, a plugin, the UI or the portal, `naira.image` in `_helpers.tpl` —
 templates render in file order, before `validate.yaml` can catch it) reject: `catalog.secret`/`portal.oidc.secret` with both
 `existingSecret` and `create` set; `catalog.secret.create` true with
-`catalog.secret.data` empty; two enabled plugins on the same port; a plugin
+`catalog.secret.data` empty; `portal.oidc.secret.create` true with
+`portal.oidc.secret.value` empty; two enabled plugins on the same port; an enabled plugin whose name makes
+`plugin-<name>` longer than 63 characters; a plugin
 `config` block with neither `existingConfigMap` nor `data`; a plugin `env`
 entry that is a Secret reference without a `key`; an enabled plugin without
 `image.repository`; and either Secret (catalog or portal) missing a source

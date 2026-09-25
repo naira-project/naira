@@ -107,16 +107,17 @@ catalog:
             verbs: ["get", "list"]
 
     depl-uses-litellm:
-      enabled: true
+      # Off by default: cluster-wide get/list on Secrets, on the ServiceAccount
+      # shared by the catalog and every sidecar. Enabled in values-dev.yaml.
+      enabled: false
       image: {repository: naira-plugin-depl-uses-litellm, tag: ""}
       port: 50054
       schedule: "0 * * * *"
       env:
         DEPL_USES_LITELLM_KUBECONFIG: ""
         DEPL_USES_LITELLM_NAMED_HOSTS: "litellm={{ .Values.dependencies.litellm.baseUrl }}"
-      # Cluster-wide get/list on Secrets: the plugin reads every key of the
-      # Secrets that Deployments reference, to find LiteLLM keys. Disable the
-      # plugin if that is not acceptable.
+      # The plugin reads every key of the Secrets that Deployments reference,
+      # to find LiteLLM keys.
       rbac:
         rules:
           - apiGroups: [""]
@@ -176,6 +177,24 @@ catalog:
       pathPrefix: mcp
       env:
         MCP_ENDPOINTS: "{{ .Values.dependencies.mcp.endpoints }}"
+
+    github:
+      # Off by default: GITHUB_TOKEN is required. Add it to the catalog Secret
+      # (key GITHUB_TOKEN) before enabling. No schedule: manual trigger only.
+      enabled: false
+      image: {repository: naira-plugin-github, tag: ""}
+      port: 50059
+      env:
+        GITHUB_ORG: naira-project
+        GITHUB_TOKEN: {secretKeyRef: {key: GITHUB_TOKEN}}
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
 
 ui:
   enabled: true

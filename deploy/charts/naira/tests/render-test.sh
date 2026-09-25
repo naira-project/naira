@@ -44,7 +44,7 @@ PLUGINS_YAML='select(.kind == "ConfigMap" and .metadata.name == "catalog-plugin-
 LITELLM_ENV="$CAT | .initContainers[] | select(.name == \"plugin-litellm\") | .env[]"
 
 check "default sidecars (tech-radar off), sorted" \
-  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata" \
+  "plugin-depl-calls-svc,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata" \
   "$(render | yq ea "[$CAT | .initContainers[].name] | join(\",\")")"
 check "sidecars are native sidecars" "Always" \
   "$(render | yq ea "[$CAT | .initContainers[].restartPolicy] | unique | join(\",\")")"
@@ -80,9 +80,9 @@ check "checksum changes with plugins" "different" \
       && echo different || echo same)"
 
 # ── Task 3: RBAC ─────────────────────────────────────────────────────────────
-check "ClusterRoles are release-prefixed" "t-catalog,t-plugin-depl-calls-svc,t-plugin-depl-uses-litellm,t-plugin-fluxcd" \
+check "ClusterRoles are release-prefixed" "t-catalog,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
   "$(render | yq ea '[select(.kind == "ClusterRole") | .metadata.name] | sort | join(",")')"
-check "bindings match roles" "t-catalog,t-plugin-depl-calls-svc,t-plugin-depl-uses-litellm,t-plugin-fluxcd" \
+check "bindings match roles" "t-catalog,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
   "$(render | yq ea '[select(.kind == "ClusterRoleBinding") | .roleRef.name] | sort | join(",")')"
 check "binding subject is the catalog SA in the release namespace" "catalog/naira" \
   "$(render | yq 'select(.kind == "ClusterRoleBinding" and .metadata.name == "t-plugin-fluxcd") | .subjects[0] | .name + "/" + .namespace')"
@@ -107,8 +107,8 @@ check "existingConfigMap: no generated ConfigMap" "" \
 check "existingConfigMap: volume points at it" "my-radar" \
   "$(render --set catalog.plugins.tech-radar.enabled=true --set catalog.plugins.tech-radar.config.existingConfigMap=my-radar \
      | yq "$CAT | .volumes[] | select(.name == \"plugin-tech-radar-config\") | .configMap.name")"
-check "all plugins on: 8 sidecars" "8" \
-  "$(render "${TR[@]}" | yq "$CAT | .initContainers | length")"
+check "default plus tech-radar and depl-uses-litellm: 8 sidecars" "8" \
+  "$(render "${TR[@]}" --set catalog.plugins.depl-uses-litellm.enabled=true | yq "$CAT | .initContainers | length")"
 check "tech-radar registered in plugins.yaml" "localhost:50057" \
   "$(render "${TR[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.tech-radar.address')"
 
@@ -193,5 +193,28 @@ must_fail "secretKeyRef without key" "secretKeyRef.key is required" \
   --set catalog.plugins.litellm.env.LITELLM_API_KEY.secretKeyRef.key=null
 RENDER=render_raw must_fail "create with empty data" "catalog.secret.data is empty" \
   --set portal.enabled=false --set catalog.secret.create=true
+
+# ── Review fixes: portal Secret guard, github plugin ─────────────────────────
+RENDER=render_raw must_fail "portal create with empty value" "portal.oidc.secret.value is empty" \
+  --set catalog.enabled=false --set portal.oidc.secret.create=true
+check "github off by default" "" \
+  "$(render | yq "$CAT | .initContainers[] | select(.name == \"plugin-github\") | .name")"
+GH=(--set catalog.plugins.github.enabled=true)
+check "github token from the catalog Secret" "catalog-secrets/GITHUB_TOKEN" \
+  "$(render "${GH[@]}" | yq "$CAT | .initContainers[] | select(.name == \"plugin-github\") | .env[] | select(.name == \"GITHUB_TOKEN\") | .valueFrom.secretKeyRef | .name + \"/\" + .key")"
+check "github registered in plugins.yaml" "localhost:50059" \
+  "$(render "${GH[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.github.address')"
+check "github RBAC when enabled" "t-plugin-github" \
+  "$(render "${GH[@]}" | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-github") | .metadata.name')"
+RENDER=render_raw must_fail "github on without a catalog Secret source" "catalog.plugins.github reads GITHUB_TOKEN from the catalog Secret" \
+  --set portal.enabled=false --set catalog.plugins.github.enabled=true --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
+
+check "depl-uses-litellm off by default: no Secret read grant" "0" \
+  "$(render | yq ea '[select(.kind == "ClusterRole") | .rules[] | select(.resources[] == "secrets")] | length')"
+check "depl-uses-litellm enabled: ClusterRole with secrets" "t-plugin-depl-uses-litellm" \
+  "$(render --set catalog.plugins.depl-uses-litellm.enabled=true | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-depl-uses-litellm") | .metadata.name')"
+LONG=$(printf 'a%.0s' $(seq 1 57))
+must_fail "plugin name over 56 characters" "name too long" \
+  --set "catalog.plugins.${LONG}.enabled=true" --set "catalog.plugins.${LONG}.port=50099" --set "catalog.plugins.${LONG}.image.repository=x"
 
 exit $fail

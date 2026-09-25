@@ -11,6 +11,8 @@ catalog:
       LITELLM_API_KEY: sk-local-litellm
       OPENMETADATA_ADMIN_PASSWORD: admin
   plugins:
+    depl-uses-litellm:
+      enabled: true
     openmetadata:
       # OpenMetadata is off in test-dependencies values-dev.yaml.
       enabled: false

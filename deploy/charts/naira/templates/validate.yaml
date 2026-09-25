@@ -12,6 +12,9 @@ silently does nothing.
 {{- if and .Values.catalog.secret.create (not .Values.catalog.secret.data) }}
 {{- fail "catalog.secret.create is true but catalog.secret.data is empty" }}
 {{- end }}
+{{- if and .Values.portal.oidc.secret.create (not .Values.portal.oidc.secret.value) }}
+{{- fail "portal.oidc.secret.create is true but portal.oidc.secret.value is empty" }}
+{{- end }}
 {{- $ports := dict (toString .Values.catalog.port) "catalog" }}
 {{- range $name, $p := .Values.catalog.plugins }}
 {{- if $p.enabled }}
@@ -20,6 +23,9 @@ silently does nothing.
 {{- fail (printf "catalog.plugins: %s and %s both use port %s" (get $ports $port) $name $port) }}
 {{- end }}
 {{- $_ := set $ports $port $name }}
+{{- if gt (len (printf "plugin-%s" $name)) 63 }}
+{{- fail (printf "catalog.plugins.%s: name too long; the sidecar name plugin-%s exceeds 63 characters" $name $name) }}
+{{- end }}
 {{- if and $p.config (not $p.config.existingConfigMap) (not $p.config.data) }}
 {{- fail (printf "catalog.plugins.%s.config: set existingConfigMap or data" $name) }}
 {{- end }}
