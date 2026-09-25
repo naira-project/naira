@@ -1,0 +1,51 @@
+# --- Stage 1: Build the plugin binary ---
+FROM golang:1.26-alpine AS builder
+
+ARG PLUGIN=github
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY plugins/pkg/ ./plugins/pkg/
+COPY plugins/internal/ ./plugins/internal/
+COPY plugins/cmd/${PLUGIN}/ ./plugins/${PLUGIN}/
+
+RUN CGO_ENABLED=0 go build -trimpath -o /out/plugin ./plugins/${PLUGIN}
+
+# --- Stage 2: Fetch the gh CLI ---
+#
+# The github plugin shells out to `gh attestation verify`. GitHub ships gh as a fully
+# static Go binary (verified against the real v2.63.2 linux_amd64 release.
+# `file` report "statically linked"), so it drops straight into distroless image
+FROM alpine:3.20 AS gh-cli
+
+ARG GH_CLI_VERSION=2.63.2
+ARG GH_CLI_SHA256_AMD64=912fdb1ca29cb005fb746fc5d2b787a289078923a29d0f9ec19a0b00272ded00
+ARG GH_CLI_SHA256_ARM64=0f31e2a8549c64b5c1679f0b99ce5e0dac7c91da9e86f6246adb8805b0f0b4bb
+ARG TARGETARCH=amd64
+
+WORKDIR /gh
+# Download GH CLI and verify its integrity against reviewed checksums.
+RUN apk add --no-cache curl \
+ && curl -sSLO https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz \
+ && case "${TARGETARCH}" in \
+      amd64) echo "${GH_CLI_SHA256_AMD64}  gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz" | sha256sum -c - ;; \
+      arm64) echo "${GH_CLI_SHA256_ARM64}  gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz" | sha256sum -c - ;; \
+      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && tar xzf gh_${GH_CLI_VERSION}_linux_${TARGETARCH}.tar.gz \
+ && cp gh_${GH_CLI_VERSION}_linux_${TARGETARCH}/bin/gh /gh/gh
+
+# --- Stage 3: Final image for the github plugin + gh ---
+FROM gcr.io/distroless/static-debian13:latest
+
+COPY --from=builder /out/plugin /plugin
+COPY --from=gh-cli /gh/gh /usr/local/bin/gh
+
+EXPOSE 50051
+
+USER nonroot:nonroot
+
+ENTRYPOINT ["/plugin"]

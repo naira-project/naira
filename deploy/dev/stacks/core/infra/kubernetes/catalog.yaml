@@ -399,10 +399,12 @@ data:
         schedule: "*/1 * * * *"
       openmetadata:
         address: localhost:50056
-      tech-radar:
-        address: localhost:50057
       mcp-servers:
+        address: localhost:50057
+      tech-radar:
         address: localhost:50058
+      github:
+        address: localhost:50059
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -541,7 +543,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50058"
+              value: "50057"
             - name: MCP_ENDPOINTS
               value: mock-knowledge-base=http://mcp-mock.mcp-mock.svc.cluster.local:8080/mcp
             - name: PATH_PREFIX
@@ -559,7 +561,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: PORT
-              value: "50057"
+              value: "50058"
             - name: TECH_RADAR_CONFIG_PATH
               value: /etc/naira/techradar/radar.yaml
           # Mounted as a directory (no subPath) so ConfigMap updates reach the
@@ -568,6 +570,25 @@ spec:
             - name: tech-radar-config
               mountPath: /etc/naira/techradar
               readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-github
+          image: github:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50059"
+            - name: GITHUB_ORG
+              value: "naira-project"
+            # replace with a real PAT before running locally
+            - name: GITHUB_TOKEN
+              value: ""
           resources:
             requests:
               cpu: 50m
