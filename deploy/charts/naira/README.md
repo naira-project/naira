@@ -76,7 +76,7 @@ nothing. `imagePullSecrets` is top-level and applies to all three.
 | `podAntiAffinity` | `soft` or `hard`, per hostname; an explicit `affinity.podAntiAffinity` wins. |
 | `topologySpreadConstraints` | An entry without `labelSelector` gets the workload's own. |
 | `podSecurityContext`, `securityContext` | See below. |
-| `startupProbe` | Timing only. Sidecars get a TCP check on their port (`catalog.pluginDefaults.startupProbe`, per-plugin override), so the catalog container starts after every plugin listens. |
+| `startupProbe` | Timing only; the check is the readiness path. None on the plugin sidecars: they listen on loopback only, which kubelet probes (pod IP) cannot reach. |
 | `pdb` | Off. `minAvailable` wins over `maxUnavailable`. With one replica a PDB blocks node drains. |
 | `autoscaling` | `ui` and `portal` only; `replicas` is then omitted. Not on the catalog: it runs the plugin schedules in-process and keeps operations in memory, so a second replica repeats every scheduled run. |
 | `catalog.networkPolicy` | Ingress to the catalog from the `ui` pods, plus `extraIngress` rules. Egress is not restricted. |

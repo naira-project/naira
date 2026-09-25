@@ -97,10 +97,8 @@ catalog:
       runAsNonRoot: true
       runAsUser: 65532
       seccompProfile: {type: RuntimeDefault}
-    # TCP check on the plugin's port. The catalog container starts after the
-    # sidecars pass it, so the catalog's 10s connect timeout does not race a
-    # slow plugin start.
-    startupProbe: {periodSeconds: 1, failureThreshold: 60}
+    # No probes: the plugins listen on loopback only, which kubelet probes
+    # (pod IP) cannot reach.
 
   # Plugin sidecars (ADR-005), keyed by name so an overlay changes one field.
   # One entry drives: the sidecar, its line in plugins.yaml, its RBAC and its
@@ -112,7 +110,7 @@ catalog:
   #   schedule    cron; omit for manual trigger only
   #   env         NAME: "value, tpl-rendered" | NAME: {secretKeyRef: {name?, key}}
   #               (secretKeyRef.name defaults to the catalog Secret)
-  #   resources, securityContext, startupProbe
+  #   resources, securityContext
   #               merged over the same keys of pluginDefaults
   #   rbac.rules  ClusterRole rules, only for plugins that read the cluster
   #   config      {mountPath, existingConfigMap | data}: files mounted as a directory

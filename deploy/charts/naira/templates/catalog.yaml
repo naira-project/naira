@@ -34,8 +34,6 @@ spec:
           restartPolicy: Always
           securityContext:
             {{- include "naira.pluginSecurityContext" (dict "root" $ "plugin" $p) | nindent 12 }}
-          startupProbe:
-            {{- include "naira.pluginStartupProbe" (dict "root" $ "plugin" $p) | nindent 12 }}
           env:
             - name: PORT
               value: {{ $p.port | quote }}

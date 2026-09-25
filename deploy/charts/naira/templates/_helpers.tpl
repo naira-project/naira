@@ -66,13 +66,6 @@ Usage: include "naira.env" (dict "root" $ "env" .env)
 {{- toYaml (mergeOverwrite (deepCopy .root.Values.catalog.pluginDefaults.securityContext) (.plugin.securityContext | default dict)) -}}
 {{- end -}}
 
-{{/* TCP check on the plugin's port. Usage: include "naira.pluginStartupProbe" (dict "root" $ "plugin" $p) */}}
-{{- define "naira.pluginStartupProbe" -}}
-{{- $probe := mergeOverwrite (deepCopy .root.Values.catalog.pluginDefaults.startupProbe) (.plugin.startupProbe | default dict) -}}
-{{- $_ := set $probe "tcpSocket" (dict "port" (int .plugin.port)) -}}
-{{- toYaml $probe -}}
-{{- end -}}
-
 {{/*
 Pod-level fields shared by the three Deployments; unset values render nothing.
 Usage: include "naira.podSpec" (dict "root" $ "name" "catalog" "cfg" .Values.catalog)

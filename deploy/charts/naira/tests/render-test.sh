@@ -228,11 +228,6 @@ check "sidecar security context defaults" "false ALL RuntimeDefault" \
 check "plugin securityContext merges over defaults" "true true" \
   "$(render --set catalog.plugins.litellm.securityContext.readOnlyRootFilesystem=true \
      | yq "$(pod catalog) | $SIDE | .securityContext | (.readOnlyRootFilesystem | tostring) + \" \" + (.runAsNonRoot | tostring)")"
-check "sidecar startup probe is a TCP check on the plugin port" "50051 60" \
-  "$(render | yq "$(pod catalog) | $SIDE | .startupProbe | (.tcpSocket.port | tostring) + \" \" + (.failureThreshold | tostring)")"
-check "plugin startupProbe merges over defaults" "1 5" \
-  "$(render --set catalog.plugins.litellm.startupProbe.failureThreshold=5 \
-     | yq "$(pod catalog) | $SIDE | .startupProbe | (.periodSeconds | tostring) + \" \" + (.failureThreshold | tostring)")"
 check "catalog startup probe" "/healthz" "$(render | yq "$(pod catalog) | .containers[0].startupProbe.httpGet.path")"
 check "ui startup probe" "/" "$(render | yq "$(pod ui) | .containers[0].startupProbe.httpGet.path")"
 check "portal startup probe" "/" "$(render | yq "$(pod portal) | .containers[0].startupProbe.httpGet.path")"
