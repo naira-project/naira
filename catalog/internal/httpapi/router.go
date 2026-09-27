@@ -29,7 +29,7 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugin
 		router.Use(requestLogger(logger))
 	}
 
-	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 

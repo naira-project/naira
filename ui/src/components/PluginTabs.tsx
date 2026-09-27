@@ -1,4 +1,5 @@
 import { cn } from '../lib/utils';
+import { Button } from './ui/button';
 
 interface PluginTabsProps {
   plugins: string[];
@@ -14,32 +15,36 @@ interface PluginTabsProps {
 export default function PluginTabs({ plugins, activePlugin, onSelect }: PluginTabsProps) {
   return (
     <div className="flex gap-1 border-b border-gray-200">
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         onClick={() => onSelect(null)}
         className={cn(
-          'px-3 py-1.5 text-sm transition-colors',
+          'rounded-none px-3 py-1.5 text-sm transition-colors',
           activePlugin === null
             ? 'border-b-2 border-primary font-semibold text-foreground'
             : 'text-muted-foreground hover:text-foreground',
         )}
       >
         All
-      </button>
+      </Button>
       {plugins.map((plugin) => (
-        <button
+        <Button
           type="button"
           key={plugin}
+          variant="ghost"
+          size="sm"
           onClick={() => onSelect(plugin)}
           className={cn(
-            'px-3 py-1.5 text-sm transition-colors',
+            'rounded-none px-3 py-1.5 text-sm transition-colors',
             activePlugin === plugin
               ? 'border-b-2 border-primary font-semibold text-foreground'
               : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {plugin}
-        </button>
+        </Button>
       ))}
     </div>
   );

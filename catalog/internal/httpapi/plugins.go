@@ -38,7 +38,7 @@ func newPluginResource(name string, config catalog.PluginConfig) PluginResource 
 
 // newListPluginsHandler lists configured plugin resources and their schedules.
 func newListPluginsHandler(configs catalog.PluginConfigsByName, logger *log.Logger) http.HandlerFunc {
-	return handleWithListOptions(pluginListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
+	return handleWithListOptions(pluginListOptionsSpec, func(w http.ResponseWriter, _ *http.Request, options listOptions) error {
 		resources := make([]PluginResource, 0, len(configs))
 		for _, name := range slices.Sorted(maps.Keys(configs)) {
 			resources = append(resources, newPluginResource(name, configs[name]))

@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
+	github.com/aws/aws-sdk-go-v2 v1.46.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.3
 	github.com/aws/aws-sdk-go-v2/service/bedrock v1.71.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.71.0
@@ -13,6 +14,7 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/neo4j/neo4j-go-driver/v5 v5.28.4
 	github.com/oauth2-proxy/mockoidc v0.0.0-20240214162133-caebfff84d25
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
@@ -31,7 +33,6 @@ require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.46.0 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.3 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.19.2 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.2 // indirect

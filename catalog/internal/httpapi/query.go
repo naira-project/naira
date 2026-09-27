@@ -136,7 +136,7 @@ func parseFilterSyntax(filter string) (*equalityFilter, error) {
 	return &equalityFilter{field: field, value: unquotedValue}, nil
 }
 
-func paginate[T any](items []T, pageSize int, offset int, scope string, logger *log.Logger) ([]T, string, int, error) {
+func paginate[T any](items []T, pageSize, offset int, scope string, logger *log.Logger) ([]T, string, int, error) {
 	totalSize := len(items)
 	if offset < 0 || offset > totalSize {
 		return nil, "", 0, fmt.Errorf("offset %d out of bounds (total %d): %w", offset, totalSize, errInvalidPageToken)
@@ -172,7 +172,7 @@ func encodePageToken(offset int, scope string, logger *log.Logger) (string, erro
 	return base64.RawURLEncoding.EncodeToString(buf.Bytes()), nil
 }
 
-func decodePageToken(pageToken string, scope string) (int, error) {
+func decodePageToken(pageToken, scope string) (int, error) {
 	trimmed := strings.TrimSpace(pageToken)
 	if trimmed == "" {
 		return 0, nil

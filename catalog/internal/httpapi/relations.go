@@ -59,7 +59,7 @@ func sortRelations(relations []Relation) {
 	})
 }
 
-func relationName(kind string, from pluginapi.NodeID, to pluginapi.NodeID) string {
+func relationName(kind string, from, to pluginapi.NodeID) string {
 	return fmt.Sprintf("relations/%s/%s|%s", kind, url.PathEscape(nodeName(from)), url.PathEscape(nodeName(to)))
 }
 

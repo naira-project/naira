@@ -63,31 +63,37 @@ export default function TechRadarQuadrant() {
           ) : (
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setActiveRing(null)}
                   className={pillClass(activeRing === null)}
                 >
                   All rings
-                </button>
+                </Button>
                 {model.rings.map((ring) => (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     key={ring.id}
                     onClick={() => setActiveRing(activeRing === ring.id ? null : ring.id)}
                     className={pillClass(activeRing === ring.id)}
                   >
                     {ring.name}
-                  </button>
+                  </Button>
                 ))}
                 <div className="mx-2 h-5 w-px bg-gray-200" />
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setMovedOnly((value) => !value)}
                   className={pillClass(movedOnly)}
                 >
                   Moved only
-                </button>
+                </Button>
               </div>
 
               <RadarEntryTable entries={entries} rings={model.rings} />

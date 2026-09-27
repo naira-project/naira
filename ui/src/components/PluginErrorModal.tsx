@@ -1,9 +1,10 @@
 import { X } from 'lucide-react';
-import type { StatusErrorResource } from '../lib/catalogApi';
+import type { ErrorResource } from '../lib/catalogApi';
+import { Button } from './ui/button';
 
 interface PluginErrorModalProps {
   pluginName: string;
-  error: StatusErrorResource | null;
+  error: ErrorResource | null;
   onClose: () => void;
 }
 
@@ -16,9 +17,10 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
       role="dialog"
       aria-modal="true"
     >
-      <button
+      <Button
         type="button"
-        className="absolute inset-0 cursor-default bg-black/20"
+        variant="ghost"
+        className="absolute inset-0 h-auto w-auto cursor-default rounded-none bg-black/20 p-0 hover:bg-black/20"
         onClick={onClose}
         aria-label="Close error log"
       />
@@ -30,14 +32,16 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
               Execution Error: <span className="font-mono text-sm font-normal">{pluginName}</span>
             </h3>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
             onClick={onClose}
             className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
             aria-label="Close error log"
           >
             <X size={18} />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
@@ -52,13 +56,15 @@ export function PluginErrorModal({ pluginName, error, onClose }: PluginErrorModa
 
         {/* Footer */}
         <div className="flex shrink-0 justify-end border-t border-gray-200 bg-gray-50 px-5 py-3">
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={onClose}
             className="rounded-md bg-gray-200 px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-300"
           >
             Close
-          </button>
+          </Button>
         </div>
       </div>
     </div>

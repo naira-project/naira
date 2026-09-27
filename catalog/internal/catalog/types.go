@@ -10,7 +10,7 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
-// An empty Schedule means that the plugin is manually triggered only.
+// ScheduleManual indicates that the plugin is manually triggered only (when set to an empty string).
 const ScheduleManual = ""
 
 // PluginConfig is the immutable configuration for a registered plugin.

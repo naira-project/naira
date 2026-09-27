@@ -19,6 +19,7 @@ import '@xyflow/react/dist/style.css';
 
 import PropertiesPanel from '../components/PropertiesPanel';
 import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import {
@@ -69,17 +70,19 @@ function toFlowNode(
             {node.kind}
           </span>
           {!node.isRoot && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-xs"
               onClick={(e) => {
                 e.stopPropagation();
                 onFocus(node);
               }}
               title="Set as root"
-              className="cursor-pointer rounded p-1 text-gray-400 hover:text-gray-700 hover:bg-black/5 transition-colors shrink-0"
+              className="h-auto shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-black/5 hover:text-gray-700"
             >
               <Focus size={13} />
-            </button>
+            </Button>
           )}
         </div>
         <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
