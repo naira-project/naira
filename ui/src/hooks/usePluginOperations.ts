@@ -6,6 +6,7 @@ import {
   fetchOperations,
   fetchPlugins,
   type OperationResource,
+  type PluginResource,
 } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
@@ -14,17 +15,11 @@ const POLL_INTERVAL_MS = 2000;
 const EMPTY_OPERATIONS: OperationResource[] = [];
 const STALE_AFTER_MS = 2 * 60 * 1000;
 
-const TERMINAL_STATES: OperationResource['state'][] = ['SUCCEEDED', 'FAILED'];
-
-function isTerminal(op: OperationResource) {
-  return TERMINAL_STATES.includes(op.state);
-}
-
 function isStale(op: OperationResource) {
-  if (isTerminal(op)) return false;
+  if (op.done) return false;
 
-  const startTime = new Date(op.startTime).getTime();
-  const createdTime = new Date(op.createdAt).getTime();
+  const startTime = new Date(op.metadata.startTime).getTime();
+  const createdTime = new Date(op.metadata.createdAt).getTime();
   const referenceTime = Number.isFinite(startTime) && startTime > 0 ? startTime : createdTime;
 
   return Number.isFinite(referenceTime) && Date.now() - referenceTime > STALE_AFTER_MS;
@@ -53,7 +48,7 @@ export interface RunErrorEntry {
  * whenever non-terminal operations exist.
  */
 interface UsePluginsStatusResult {
-  plugins: string[];
+  plugins: PluginResource[];
   operations: OperationResource[];
   loading: boolean;
   /** Set of plugin names currently executing or awaiting response. */
@@ -106,14 +101,14 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     queryFn: () => fetchOperations(token),
     refetchInterval: (query) => {
       const ops = query.state.data ?? [];
-      return ops.some((op) => !isTerminal(op)) ? POLL_INTERVAL_MS : false;
+      return ops.some((op) => !op.done) ? POLL_INTERVAL_MS : false;
     },
   });
 
   const operations = operationsQuery.data ?? EMPTY_OPERATIONS;
 
   const runningPlugins = useMemo(() => {
-    const running = new Set(operations.filter((op) => !isTerminal(op)).map((op) => op.plugin));
+    const running = new Set(operations.filter((op) => !op.done).map((op) => op.metadata.plugin));
     pendingLocal.forEach((p) => {
       running.add(p);
     });
@@ -125,7 +120,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     operations.filter(isStale).forEach((op) => {
       if (!warnedRef.current.has(op.name)) {
         warnedRef.current.add(op.name);
-        addError(`"${op.plugin}" is taking longer than expected — check back shortly.`);
+        addError(`"${op.metadata.plugin}" is taking longer than expected — check back shortly.`);
       }
     });
   }, [operations, addError]);
@@ -137,7 +132,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
       const next = new Set(
         Array.from(prev).filter((name) => {
           const op = operations.find((o) => o.name === name);
-          return op ? !isTerminal(op) : true;
+          return op ? !op.done : true;
         }),
       );
       return next.size === prev.size ? prev : next;

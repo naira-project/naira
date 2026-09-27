@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { isComplexValue, isUrlValue, tryParseJson } from '../lib/kindUtils';
+import { Button } from './ui/button';
 
 type PropertiesLayout = 'row' | 'stacked';
 
@@ -77,10 +78,12 @@ function PropertyRow({
   );
 
   const valueEl = isComplex ? (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="xs"
       onClick={() => setExpanded((v) => !v)}
-      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      className="h-auto gap-1 rounded-none p-0 text-xs text-muted-foreground hover:text-foreground"
     >
       {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
       {expanded ? 'Collapse' : 'Expand'}
@@ -89,7 +92,7 @@ function PropertyRow({
           ? `[${(parsedComplex as unknown[]).length}]`
           : `{${Object.keys(parsedComplex as Record<string, unknown>).length}}`}
       </span>
-    </button>
+    </Button>
   ) : isUrl ? (
     <a
       href={String(value)}

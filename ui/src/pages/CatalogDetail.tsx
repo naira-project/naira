@@ -2,7 +2,9 @@ import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import PropertiesPanel from '../components/PropertiesPanel';
-import { detailTabsForKind } from '../config/detailTabs';
+import RelatedNodes from '../components/RelatedNodes';
+import { detailTabsForKind, relatedCardForKind } from '../config/detailTabs';
+import { Button } from '../components/ui/button';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
@@ -30,6 +32,7 @@ export default function CatalogDetail() {
 
   // Kind-specific tabs come from configuration;
   const kindTabs = detailTabsForKind(decodedKind);
+  const relatedConfig = relatedCardForKind(decodedKind);
   const landingTab = kindTabs.find((tab) => tab.primary)?.value ?? GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 
@@ -48,14 +51,16 @@ export default function CatalogDetail() {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Top bar */}
         <header className="flex shrink-0 items-center gap-3 border-b border-gray-200 bg-card px-6 py-3">
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => navigate(backPath ? `/catalog/${backPath}` : '/catalog')}
-            className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-gray-100 hover:text-foreground transition-colors"
+            className="text-muted-foreground hover:bg-gray-100 hover:text-foreground"
           >
             <ArrowLeft size={16} />
             Back to catalog
-          </button>
+          </Button>
 
           <div className="h-5 w-px bg-gray-300" />
 
@@ -81,19 +86,21 @@ export default function CatalogDetail() {
               {/* Tabs */}
               <div className="flex gap-1 border-b border-gray-200">
                 {tabs.map(({ value, label }) => (
-                  <button
+                  <Button
                     type="button"
                     key={value}
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setActiveTab(value)}
                     className={cn(
-                      'px-4 py-2 text-sm transition-colors',
+                      'rounded-none px-4 py-2 text-sm transition-colors',
                       currentTab === value
                         ? 'border-b-2 border-primary font-semibold text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {label}
-                  </button>
+                  </Button>
                 ))}
               </div>
 
@@ -105,13 +112,17 @@ export default function CatalogDetail() {
                   </div>
                 )}
 
-                {kindTabs.map(({ value, component: TabComponent }) =>
-                  currentTab === value ? <TabComponent key={value} node={node} /> : null,
+                {kindTabs.map(({ value, config }) =>
+                  currentTab === value ? (
+                    <RelatedNodes key={value} node={node} config={config} />
+                  ) : null,
                 )}
 
                 {currentTab === PROPERTIES_TAB && (
                   <div className="flex flex-col gap-6">
                     <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+
+                    {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
 
                     <PersesDashboard modelId={nodeProps(node).model_id}/>
                   </div>

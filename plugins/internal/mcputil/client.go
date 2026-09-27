@@ -1,7 +1,6 @@
 // Package mcputil provides a read-only client for the parts of the Model
 // Context Protocol that Naira plugins need, so that every plugin cataloging MCP
 // servers shares one implementation.
-
 package mcputil
 
 import (
@@ -73,7 +72,7 @@ type Inventory struct {
 	Tools  []Tool
 }
 
-// Opens a session to the target and reads its server metadata and tool list.
+// Inspect opens a session to the target and reads its server metadata and tool list.
 func Inspect(ctx context.Context, httpClient *http.Client, target Target) (Inventory, error) {
 	transport, err := newTransport(httpClient, target)
 	if err != nil {

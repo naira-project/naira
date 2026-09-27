@@ -78,7 +78,7 @@ To spin up the full environment on your machine:
 ```
 ├── catalog/              # Go catalog service (HTTP API, plugin manager)
 ├── plugins/              # Collector plugins (mlflow, litellm, fluxcd, ...)
-├── ui-poc/               # React/TypeScript UI
+├── ui/                   # React/TypeScript UI
 ├── naira-openmfp-portal/ # OpenMFP Portal (This is the backbone for future UI plugins)
 ├── deploy/               # Helm charts + dev environment (kind, k8s manifests)
 ├── docs/                 # Documentation

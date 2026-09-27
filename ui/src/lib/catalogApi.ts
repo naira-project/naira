@@ -144,14 +144,19 @@ export async function fetchRelations(token: string | null, options: ListRequest 
 // Plugin discovery
 // ---------------------------------------------------------------------------
 
-interface ListPluginsResponse {
-  plugins: string[];
+export interface PluginResource {
+  name: string;
+  schedule: string;
 }
 
-/**
- * GET /v1/plugins — returns the list of registered plugin names.
- */
-export async function fetchPlugins(token: string | null): Promise<string[]> {
+interface ListPluginsResponse {
+  plugins?: PluginResource[];
+  nextPageToken?: string;
+  totalSize?: number;
+}
+
+/** GET /v1/plugins — returns configured plugins and their schedules. */
+export async function fetchPlugins(token: string | null): Promise<PluginResource[]> {
   const data = await fetchJson<ListPluginsResponse>('/v1/plugins', token);
   return data.plugins ?? [];
 }
@@ -160,20 +165,28 @@ export async function fetchPlugins(token: string | null): Promise<string[]> {
 // Plugin run operations (AIP-151)
 // ---------------------------------------------------------------------------
 
-export interface StatusErrorResource {
+export interface ErrorResource {
   message: string;
+}
+
+export interface OperationMetadataResource {
+  plugin: string;
+  startTime: string;
+  endTime?: string;
+  createdAt: string;
+}
+
+export interface RunPluginResponse {
+  nodesUpserted: number;
+  relationsUpserted: number;
 }
 
 export interface OperationResource {
   name: string;
-  plugin: string;
-  state: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
-  startTime: string;
-  endTime?: string;
-  error?: StatusErrorResource;
-  nodesUpserted: number;
-  relationsUpserted: number;
-  createdAt: string;
+  done: boolean;
+  metadata: OperationMetadataResource;
+  response?: RunPluginResponse;
+  error?: ErrorResource;
 }
 
 interface RunPluginsResponse {
@@ -207,11 +220,11 @@ export async function runAllPlugins(token: string | null): Promise<OperationReso
 }
 
 /**
- * POST /v1/{plugin}:run — triggers a single plugin asynchronously.
+ * POST /v1/plugins/{plugin}:run — triggers a single plugin asynchronously.
  * Returns the tracking operation.
  */
 export async function runPlugin(token: string | null, plugin: string): Promise<OperationResource> {
-  const response = await fetch(`/v1/${encodeURIComponent(plugin)}:run`, {
+  const response = await fetch(`/v1/plugins/${encodeURIComponent(plugin)}:run`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });

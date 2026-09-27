@@ -1,0 +1,28 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - gocritic # collection of checks that detect style and performance issues
+    - revive # claims to be replacement of golint
+  settings:
+    gocritic:
+      enabled-checks:
+        - ruleguard
+        - paramTypeCombine
+      settings:
+        ruleguard:
+          rules: "rules/ruleguard.go" # check if errs are wrapped
+    revive:
+      enable-default-rules: true
+      rules:
+        - name: package-comments # TODO: good candidate to enable in future to improve codebase documentation
+          disabled: true
+  exclusions:
+    rules:
+        # revive's "exported" check bundles two things: (1) exported identifiers must have a doc comment,
+        # and (2) if a godoc comment exists, it must start with the identifier's name. 
+        # We only want (2) enforced for now. Exclusion of "should have comment" suppress (1)
+      - linters:
+          - revive
+        text: "should have comment"

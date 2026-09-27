@@ -72,7 +72,7 @@ func (a *App[C]) Serve(p pluginapi.Plugin) {
 			printNeo4j(res, *neo4jPrefix, a.Logger)
 			return
 		}
-		if err := pushNeo4j(context.Background(), res, *neo4jPrefix, *neo4jURL, a.Logger); err != nil {
+		if err := pushNeo4j(context.Background(), res, *neo4jPrefix, *neo4jURL); err != nil {
 			a.Logger.Fatalf("failed to push to neo4j: %v", err)
 		}
 		return
