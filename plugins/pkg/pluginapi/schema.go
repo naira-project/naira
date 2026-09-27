@@ -26,5 +26,4 @@ const (
 	RelationKindDerivedFrom      = "derived_from"
 	RelationKindExposes          = "exposes"
 	RelationKindServesModel      = "serves_model"
-	RelationKindExposedByGateway = "exposed_by_gateway"
 )

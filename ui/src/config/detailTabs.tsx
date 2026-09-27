@@ -1,8 +1,8 @@
 import { BrainCircuit, Cloud, Wrench } from 'lucide-react';
 import type { RelatedNodesConfig } from '../components/RelatedNodes';
 
-export const MCP_SERVER_KIND = 'mcp_server';
-const RELATION_KIND_SERVES_MODEL = 'serves_model';
+const MCP_SERVER_KIND = 'mcp_server';
+const SERVES_MODEL_RELATION = 'serves_model';
 
 /**
  * Extra detail-page tabs, per node kind.
@@ -30,14 +30,14 @@ export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
     ),
   },
   inference_endpoint: {
-    relationKind: RELATION_KIND_SERVES_MODEL,
+    relationKind: SERVES_MODEL_RELATION,
     direction: 'outgoing',
     title: 'Uses Model',
     icon: BrainCircuit,
     description: 'The model this inference endpoint serves.',
   },
   model: {
-    relationKind: RELATION_KIND_SERVES_MODEL,
+    relationKind: SERVES_MODEL_RELATION,
     direction: 'incoming',
     title: 'Served By',
     icon: Cloud,

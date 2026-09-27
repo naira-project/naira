@@ -9,8 +9,7 @@ import { parsePath } from '../lib/kindUtils';
 /**
  * Describes one set of neighbours reached from a node via a single relation
  * kind/direction, e.g. the tools an MCP server exposes, or the model an
- * inference endpoint serves. Drives both the Tools tab (`layout: 'list'`) and
- * the Properties-tab cross-link cards (`layout: 'cards'`, the default).
+ * inference endpoint serves.
  */
 export interface RelatedNodesConfig {
   /** Relation kind to filter edges by, e.g. "exposes" or "serves_model". */
@@ -28,7 +27,7 @@ export interface RelatedNodesConfig {
   countSuffix?: string;
   /** Shown instead of nothing when list layout has no items. Cards layout renders nothing either way. */
   emptyText?: ReactNode;
-
+  /** Description for the inference endpoints, when they are presented in the card view */
   description?: string;
 }
 
