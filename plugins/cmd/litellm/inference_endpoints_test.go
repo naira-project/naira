@@ -1,11 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
@@ -13,40 +11,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// noDailyActivity is a /user/daily/activity response with no recorded
+// requests for any model.
+const noDailyActivity = `{"results": []}`
+
 // startLiteLLMModelInfo serves /model/info, /health and /user/daily/activity
-// with the given payloads, mirroring the endpoints listInferenceEndpoints
-// depends on. invocationsByModel maps model name to api_requests; a model
-// missing from it is treated as having received no traffic.
-func startLiteLLMModelInfo(t *testing.T, modelInfo modelInfoResponse, health *healthResponse, invocationsByModel map[string]int64) string {
+// with the given raw JSON bodies, mirroring the endpoints
+// listInferenceEndpoints depends on. An empty health makes /health respond
+// with 503 Service Unavailable.
+func startLiteLLMModelInfo(t *testing.T, modelInfo, health, dailyActivity string) string {
 	t.Helper()
 
+	serveJSON := func(body string) http.HandlerFunc {
+		return func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, body)
+		}
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/model/info", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(modelInfo))
-	})
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		if health == nil {
+	mux.HandleFunc("/model/info", serveJSON(modelInfo))
+	if health == "" {
+		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(health))
-	})
-	mux.HandleFunc("/user/daily/activity", func(w http.ResponseWriter, _ *http.Request) {
-		var modelGroups []string
-		for modelName, count := range invocationsByModel {
-			modelGroups = append(modelGroups, fmt.Sprintf(`"%s": {"metrics": {"api_requests": %d}}`, modelName, count))
-		}
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{
-  "results": [{
-    "breakdown": {
-      "model_groups": {%s}
-    }
-  }]
-}`, strings.Join(modelGroups, ","))
-	})
+		})
+	} else {
+		mux.HandleFunc("/health", serveJSON(health))
+	}
+	mux.HandleFunc("/user/daily/activity", serveJSON(dailyActivity))
 
 	httpServer := httptest.NewServer(mux)
 	t.Cleanup(httpServer.Close)
@@ -55,26 +47,45 @@ func startLiteLLMModelInfo(t *testing.T, modelInfo modelInfoResponse, health *he
 }
 
 func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
-	baseURL := startLiteLLMModelInfo(t,
-		modelInfoResponse{Data: []modelInfoEntry{
+	const modelInfoResponse = `{
+		"data": [
 			{
-				ModelName: "idp-claude-sonnet",
-				LiteLLMParams: modelInfoLiteLLM{
-					Model:      "anthropic/claude-3-5-sonnet-latest",
-					APIBase:    "https://api.anthropic.com",
-					RegionName: "us-east-1",
-				},
-				ModelInfo: modelInfoDetail{
-					ModelID: "model-1", Mode: "chat", MaxTokens: 8192,
-					InputCostPerToken: 0.000003, OutputCostPerToken: 0.000015,
-				},
+			"model_name": "idp-claude-sonnet",
+			"litellm_params": {
+				"model": "anthropic/claude-3-5-sonnet-latest",
+				"api_base": "https://api.anthropic.com",
+				"region_name": "us-east-1"
 			},
-		}},
-		&healthResponse{HealthyEndpoints: []healthEndpointEntry{
-			{Model: "anthropic/claude-3-5-sonnet-latest", APIBase: "https://api.anthropic.com"},
-		}},
-		map[string]int64{"idp-claude-sonnet": 7},
-	)
+			"model_info": {
+				"id": "model-1",
+				"mode": "chat",
+				"max_tokens": 8192,
+				"input_cost_per_token": 0.000003,
+				"output_cost_per_token": 0.000015
+			}
+			}
+		]
+	}`
+	const healthResponse = `{
+		"healthy_endpoints": [
+			{
+			"model": "anthropic/claude-3-5-sonnet-latest",
+			"api_base": "https://api.anthropic.com"
+			}
+		]
+	}`
+	const dailyActivityResponse = `{
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-claude-sonnet": {"metrics": {"api_requests": 7}}
+				}
+			}
+			}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, dailyActivityResponse)
 
 	nodes, relations, err := testPlugin(t, baseURL).
 		listInferenceEndpoints(t.Context(), map[string]string{"idp-claude-sonnet": "team-a"})
@@ -86,13 +97,13 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 
 	endpoint := endpoints["litellm/idp-claude-sonnet-us-east-1"]
 	assert.Equal(t, "model-1", endpoint[propertyKeyModelID])
-	assert.Equal(t, "7", endpoint[propertyKeyInvocations])
+	assert.Equal(t, "7", endpoint[propertyKeyInvocationsTotal])
 	assert.Equal(t, "anthropic", endpoint[propertyKeyProvider])
 	assert.Equal(t, endpointTypeExternal, endpoint[propertyKeyEndpointType])
 	assert.Equal(t, endpointStatusHealthy, endpoint[propertyKeyEndpointStatus])
 	assert.Equal(t, "https://api.anthropic.com", endpoint[propertyKeyEndpointURL])
 	assert.Equal(t, "us-east-1", endpoint[propertyKeyRegion])
-	assert.Equal(t, "idp-claude-sonnet", endpoint[propertyKeyServesModel])
+	assert.Equal(t, "idp-claude-sonnet", endpoint[propertyKeyModelName])
 	assert.Equal(t, "team-a", endpoint[propertyKeyOwnedBy])
 	assert.Equal(t, "chat", endpoint[propertyKeyMode])
 	assert.Equal(t, "8192", endpoint[propertyKeyMaxTokens])
@@ -105,11 +116,9 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 }
 
 func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
-	baseURL := startLiteLLMModelInfo(t,
-		modelInfoResponse{Data: []modelInfoEntry{{ModelName: "idp-unused-model"}}},
-		&healthResponse{HealthyEndpoints: []healthEndpointEntry{{Model: "idp-unused-model"}}},
-		nil,
-	)
+	const modelInfoResponse = `{"data": [{"model_name": "idp-unused-model"}]}`
+	const healthResponse = `{"healthy_endpoints": [{"model": "idp-unused-model"}]}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, noDailyActivity)
 
 	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
 	require.NoError(t, err)
@@ -118,11 +127,8 @@ func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
 }
 
 func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
-	baseURL := startLiteLLMModelInfo(t,
-		modelInfoResponse{Data: []modelInfoEntry{{ModelName: "  "}}},
-		&healthResponse{},
-		nil,
-	)
+	const modelInfoResponse = `{"data": [{"model_name": "  "}]}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, `{}`, noDailyActivity)
 
 	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
 	require.NoError(t, err)
@@ -131,11 +137,19 @@ func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
 }
 
 func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testing.T) {
-	baseURL := startLiteLLMModelInfo(t,
-		modelInfoResponse{Data: []modelInfoEntry{{ModelName: "idp-model"}}},
-		nil,
-		map[string]int64{"idp-model": 1},
-	)
+	const modelInfoResponse = `{"data": [{"model_name": "idp-model"}]}`
+	const dailyActivityResponse = `{
+  "results": [
+    {
+      "breakdown": {
+        "model_groups": {
+          "idp-model": {"metrics": {"api_requests": 1}}
+        }
+      }
+    }
+  ]
+}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, "", dailyActivityResponse)
 
 	nodes, _, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
 	require.NoError(t, err, "an unreachable health endpoint should not fail the whole sync")
@@ -174,7 +188,7 @@ func TestModelInfoLiteLLMEndpointType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := modelInfoLiteLLM{APIBase: tt.apiBase}
+			m := litellmParams{modelAndAPIBase: modelAndAPIBase{APIBase: tt.apiBase}}
 			assert.Equal(t, tt.want, m.endpointType())
 		})
 	}
@@ -194,7 +208,7 @@ func TestModelInfoLiteLLMProvider(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := modelInfoLiteLLM{CustomLLMProvider: tt.customLLMProvider, Model: tt.model}
+			m := litellmParams{CustomLLMProvider: tt.customLLMProvider, modelAndAPIBase: modelAndAPIBase{Model: tt.model}}
 			assert.Equal(t, tt.want, m.provider())
 		})
 	}

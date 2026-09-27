@@ -22,14 +22,14 @@ const (
 	propertyKeyAPIProtocol                = "api_protocol"
 	propertyKeyEndpointURL                = "endpoint_url"
 	propertyKeyRegion                     = "region"
-	propertyKeyServesModel                = "serves_model"
+	propertyKeyModelName                  = "serves_model"
 	propertyKeyLifecycleStatus            = "lifecycle_status"
 	propertyKeyLastSeen                   = "last_seen"
 	propertyKeyMode                       = "mode"
 	propertyKeyMaxTokens                  = "max_tokens"
 	propertyKeyInputCostPerMillionTokens  = "input_cost_per_million_tokens"
 	propertyKeyOutputCostPerMillionTokens = "output_cost_per_million_tokens"
-	propertyKeyInvocations                = "invocations_total"
+	propertyKeyInvocationsTotal           = "invocations_total"
 
 	endpointTypeInternal = "internal"
 	endpointTypeExternal = "external"
@@ -47,7 +47,7 @@ type inferenceEndpoint struct {
 	APIProtocol        string  `json:"api_protocol"`
 	EndpointURL        string  `json:"endpoint_url"`
 	Region             string  `json:"region"`
-	ServesModel        string  `json:"model_name"`
+	ModelName          string  `json:"model_name"`
 	OwnedBy            string  `json:"owned_by"`
 	LifecycleStatus    string  `json:"lifecycle_status"`
 	DiscoveredVia      string  `json:"discovered_via"`
@@ -56,28 +56,18 @@ type inferenceEndpoint struct {
 	MaxTokens          int64   `json:"max_tokens"`
 	InputCostPerToken  float64 `json:"input_cost_per_token"`
 	OutputCostPerToken float64 `json:"output_cost_per_token"`
-	Invocations        int64   `json:"-"`
+
+	Invocations int64 `json:"-"`
 }
 
-type modelInfoResponse struct {
-	Data []modelInfoEntry `json:"data"`
-}
-
-type modelInfoEntry struct {
-	ModelName     string           `json:"model_name"`
-	LiteLLMParams modelInfoLiteLLM `json:"litellm_params"`
-	ModelInfo     modelInfoDetail  `json:"model_info"`
-}
-
-type modelInfoLiteLLM struct {
-	Model             string `json:"model"`
-	APIBase           string `json:"api_base"`
+type litellmParams struct {
+	modelAndAPIBase
 	CustomLLMProvider string `json:"custom_llm_provider"`
 	RegionName        string `json:"region_name"`
 }
 
-type modelInfoDetail struct {
-	ModelID            string  `json:"id"`
+type modelInfo struct {
+	ID                 string  `json:"id"`
 	Mode               string  `json:"mode"`
 	MaxTokens          int64   `json:"max_tokens"`
 	InputCostPerToken  float64 `json:"input_cost_per_token"`
@@ -94,7 +84,17 @@ type healthEndpointEntry struct {
 	APIBase string `json:"api_base"`
 }
 
-type modelAndAPIBase struct{ model, apiBase string }
+type modelAndAPIBase struct {
+	Model   string `json:"model"`
+	APIBase string `json:"api_base"`
+}
+
+func (m modelAndAPIBase) normalizedMAAB() modelAndAPIBase {
+	return modelAndAPIBase{
+		Model:   strings.TrimSpace(m.Model),
+		APIBase: strings.TrimSpace(m.APIBase),
+	}
+}
 
 func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[string]string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
 
@@ -112,7 +112,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 
 	invocations, err := p.fetchModelInvocations(ctx)
 	if err != nil {
-		return []pluginapi.NodeClaim{}, []pluginapi.RelationClaim{}, fmt.Errorf("Error while fetching model invocations: %v", err)
+		return nil, nil, fmt.Errorf("Error while fetching model invocations: %v", err)
 	}
 
 	var (
@@ -121,7 +121,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 	)
 
 	for _, endpoint := range endpoints {
-		modelName := strings.TrimSpace(endpoint.ServesModel)
+		modelName := strings.TrimSpace(endpoint.ModelName)
 		if modelName == "" {
 			if p.logger != nil {
 				p.logger.Printf("WARN: skipping inference endpoint with no model name")
@@ -167,7 +167,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 
 // endpointType distinguishes a self-hosted deployment reachable only inside the
 // cluster from an externally managed SaaS endpoint, based on the api_base host.
-func (m modelInfoLiteLLM) endpointType() string {
+func (m litellmParams) endpointType() string {
 	base := strings.TrimSpace(m.APIBase)
 	if base == "" {
 		return endpointTypeExternal
@@ -186,7 +186,7 @@ func (m modelInfoLiteLLM) endpointType() string {
 	return endpointTypeExternal
 }
 
-func (m modelInfoLiteLLM) provider() string {
+func (m litellmParams) provider() string {
 	if p := strings.TrimSpace(m.CustomLLMProvider); p != "" {
 		return p
 	}
@@ -206,7 +206,7 @@ func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 		propertyKeyAPIProtocol:     e.APIProtocol,
 		propertyKeyEndpointURL:     e.EndpointURL,
 		propertyKeyRegion:          e.Region,
-		propertyKeyServesModel:     e.ServesModel,
+		propertyKeyModelName:       e.ModelName,
 		propertyKeyOwnedBy:         e.OwnedBy,
 		propertyKeyLifecycleStatus: e.LifecycleStatus,
 		propertyKeyDiscoveredVia:   e.DiscoveredVia,
@@ -228,34 +228,34 @@ func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 		properties[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(e.OutputCostPerToken*1_000_000, 'f', 4, 64)
 	}
 	if e.Invocations != 0 {
-		properties[propertyKeyInvocations] = strconv.FormatInt(e.Invocations, 10)
+		properties[propertyKeyInvocationsTotal] = strconv.FormatInt(e.Invocations, 10)
 	}
 
 	return properties
 }
 
 // getLiteLLMJSON issues an authorized GET against urlStr and decodes the JSON
-// response body into out. name and path identify the endpoint in error
-// messages, e.g. name "health" and path "/health".
-func (p *Plugin) getLiteLLMJSON(ctx context.Context, urlStr, name, path string, out any) error {
+// response body into out. Callers wrap the returned error with the endpoint
+// they called.
+func (p *Plugin) getLiteLLMJSON(ctx context.Context, urlStr string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
-		return fmt.Errorf("building LiteLLM %s request: %w", name, err)
+		return fmt.Errorf("building request: %w", err)
 	}
 	p.addAuthorization(req)
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("calling LiteLLM %s endpoint: %w", name, err)
+		return fmt.Errorf("sending request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("litellm %s returned %s", path, resp.Status)
+		return fmt.Errorf("unexpected status %s", resp.Status)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("decoding LiteLLM %s response: %w", name, err)
+		return fmt.Errorf("decoding response body: %w", err)
 	}
 
 	return nil
@@ -264,33 +264,33 @@ func (p *Plugin) getLiteLLMJSON(ctx context.Context, urlStr, name, path string, 
 func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[modelAndAPIBase]string) ([]inferenceEndpoint, error) {
 	var payload struct {
 		Data []struct {
-			ModelName     string           `json:"model_name"`
-			LiteLLMParams modelInfoLiteLLM `json:"litellm_params"`
-			ModelInfo     modelInfoDetail  `json:"model_info"`
+			ModelName     string        `json:"model_name"`
+			LiteLLMParams litellmParams `json:"litellm_params"`
+			ModelInfo     modelInfo     `json:"model_info"`
 		} `json:"data"`
 	}
-	if err := p.getLiteLLMJSON(ctx, p.config.BaseURL+"/model/info", "Model info", "/model/info", &payload); err != nil {
-		return nil, err
+	if err := p.getLiteLLMJSON(ctx, p.config.BaseURL+"/model/info", &payload); err != nil {
+		return nil, fmt.Errorf("fetching LiteLLM /model/info: %w", err)
 	}
 
 	endpoints := make([]inferenceEndpoint, 0, len(payload.Data))
 	for _, entry := range payload.Data {
 		status, ok := statusByKey[modelAndAPIBase{
-			model:   strings.TrimSpace(entry.LiteLLMParams.Model),
-			apiBase: strings.TrimSpace(entry.LiteLLMParams.APIBase),
+			Model:   strings.TrimSpace(entry.LiteLLMParams.Model),
+			APIBase: strings.TrimSpace(entry.LiteLLMParams.APIBase),
 		}]
 		if !ok {
 			status = endpointStatusUnknown
 		}
 
 		endpoints = append(endpoints, inferenceEndpoint{
-			ModelID:            entry.ModelInfo.ModelID,
+			ModelID:            entry.ModelInfo.ID,
 			Provider:           entry.LiteLLMParams.provider(),
 			EndpointType:       entry.LiteLLMParams.endpointType(),
 			Status:             status,
 			EndpointURL:        entry.LiteLLMParams.APIBase,
 			Region:             entry.LiteLLMParams.RegionName,
-			ServesModel:        strings.TrimSpace(entry.ModelName),
+			ModelName:          strings.TrimSpace(entry.ModelName),
 			Mode:               entry.ModelInfo.Mode,
 			MaxTokens:          entry.ModelInfo.MaxTokens,
 			InputCostPerToken:  entry.ModelInfo.InputCostPerToken,
@@ -306,21 +306,21 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 // endpoints returned by /model/info.
 func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[modelAndAPIBase]string, error) {
 	var payload healthResponse
-	if err := p.getLiteLLMJSON(ctx, p.config.BaseURL+"/health", "health", "/health", &payload); err != nil {
-		return nil, err
+	if err := p.getLiteLLMJSON(ctx, p.config.BaseURL+"/health", &payload); err != nil {
+		return nil, fmt.Errorf("fetching LiteLLM /health: %w", err)
 	}
 
 	status := make(map[modelAndAPIBase]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
 	for _, entry := range payload.UnhealthyEndpoints {
 		status[modelAndAPIBase{
-			model:   strings.TrimSpace(entry.Model),
-			apiBase: strings.TrimSpace(entry.APIBase),
+			Model:   strings.TrimSpace(entry.Model),
+			APIBase: strings.TrimSpace(entry.APIBase),
 		}] = endpointStatusUnhealthy
 	}
 	for _, entry := range payload.HealthyEndpoints {
 		status[modelAndAPIBase{
-			model:   strings.TrimSpace(entry.Model),
-			apiBase: strings.TrimSpace(entry.APIBase),
+			Model:   strings.TrimSpace(entry.Model),
+			APIBase: strings.TrimSpace(entry.APIBase),
 		}] = endpointStatusHealthy
 	}
 
@@ -357,8 +357,8 @@ func (p *Plugin) fetchModelInvocations(ctx context.Context) (map[string]int64, e
 			} `json:"breakdown"`
 		} `json:"results"`
 	}
-	if err := p.getLiteLLMJSON(ctx, requestURL.String(), "daily activity", "/user/daily/activity", &payload); err != nil {
-		return nil, err
+	if err := p.getLiteLLMJSON(ctx, requestURL.String(), &payload); err != nil {
+		return nil, fmt.Errorf("fetching LiteLLM /user/daily/activity: %w", err)
 	}
 
 	invocations := make(map[string]int64)
