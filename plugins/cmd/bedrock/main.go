@@ -111,6 +111,10 @@ const (
 	metricDimensionModelID = "ModelId"
 	metricLookbackWindow   = 24 * time.Hour
 	metricPeriodSeconds    = 3600
+
+	// maxMetricDataQueriesPerRequest is the CloudWatch GetMetricData limit on
+	// MetricDataQueries per call.
+	maxMetricDataQueriesPerRequest = 500
 )
 
 type config struct {
@@ -375,18 +379,34 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 		)
 	}
 
-	out, err := client(ctx, &cloudwatch.GetMetricDataInput{
-		StartTime:         &startTime,
-		EndTime:           &endTime,
-		MetricDataQueries: queries,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("calling CloudWatch GetMetricData: %w", err)
-	}
+	// GetMetricData accepts at most maxMetricDataQueriesPerRequest queries per
+	// call, and a single batch may still be split across pages via NextToken,
+	// so values are accumulated per query ID across batches and pages.
+	usageByQueryID := make(map[string]float64, len(queries))
+	for batchStart := 0; batchStart < len(queries); batchStart += maxMetricDataQueriesPerRequest {
+		batch := queries[batchStart:min(batchStart+maxMetricDataQueriesPerRequest, len(queries))]
 
-	usageByQueryID := make(map[string]float64, len(out.MetricDataResults))
-	for _, result := range out.MetricDataResults {
-		usageByQueryID[derefString(result.Id)] = sumValues(result.Values)
+		var nextToken *string
+		for {
+			out, err := client(ctx, &cloudwatch.GetMetricDataInput{
+				StartTime:         &startTime,
+				EndTime:           &endTime,
+				MetricDataQueries: batch,
+				NextToken:         nextToken,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("calling CloudWatch GetMetricData: %w", err)
+			}
+
+			for _, result := range out.MetricDataResults {
+				usageByQueryID[derefString(result.Id)] += sumValues(result.Values)
+			}
+
+			if derefString(out.NextToken) == "" {
+				break
+			}
+			nextToken = out.NextToken
+		}
 	}
 
 	usage := make(map[string]modelUsage, len(models))

@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
+	"slices"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
@@ -234,6 +236,57 @@ func TestCollect_ListFoundationModelsErrorIsReportedPerRegion(t *testing.T) {
 	require.Error(t, err, "the eu-central-1 failure should be surfaced")
 	require.Len(t, got.Nodes, 1, "us-east-1 should still be collected despite eu-central-1 failing")
 	assert.Equal(t, "bedrock/amazon.titan-text-express-v1", got.Nodes[0].ID.Path)
+}
+
+// TestCollect_BatchesAndPaginatesMetricQueries covers regions with enough
+// models to exceed the GetMetricData query limit (e.g. ~140 in us-east-1).
+func TestCollect_BatchesAndPaginatesMetricQueries(t *testing.T) {
+	const modelCount = 140
+	models := make([]bedrocktypes.FoundationModelSummary, modelCount)
+	for i := range models {
+		models[i] = bedrocktypes.FoundationModelSummary{ModelId: strp(fmt.Sprintf("model-%d", i))}
+	}
+	bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{ModelSummaries: models}, nil)
+
+	lastIndex := modelCount - 1
+	var batchSizes []int
+	cw := func(_ context.Context, in *cloudwatch.GetMetricDataInput, _ ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error) {
+		if len(in.MetricDataQueries) > maxMetricDataQueriesPerRequest {
+			return nil, fmt.Errorf("got %d queries, want at most %d", len(in.MetricDataQueries), maxMetricDataQueriesPerRequest)
+		}
+		if in.NextToken == nil {
+			batchSizes = append(batchSizes, len(in.MetricDataQueries))
+		}
+
+		var ids []string
+		for _, q := range in.MetricDataQueries {
+			ids = append(ids, *q.Id)
+		}
+		if !slices.Contains(ids, fmt.Sprintf("inv%d", lastIndex)) {
+			return &cloudwatch.GetMetricDataOutput{}, nil
+		}
+		// Split the last model's invocations across two pages.
+		if in.NextToken == nil {
+			return &cloudwatch.GetMetricDataOutput{
+				MetricDataResults: []cwtypes.MetricDataResult{{Id: strp(fmt.Sprintf("inv%d", lastIndex)), Values: []float64{2}}},
+				NextToken:         strp("page-2"),
+			}, nil
+		}
+		return &cloudwatch.GetMetricDataOutput{
+			MetricDataResults: []cwtypes.MetricDataResult{{Id: strp(fmt.Sprintf("inv%d", lastIndex)), Values: []float64{3}}},
+		}, nil
+	}
+	p := newTestPlugin([]string{"us-east-1"}, bc, cw, nil)
+
+	got, err := p.Collect(context.Background())
+	require.NoError(t, err)
+
+	assert.Equal(t, []int{500, 340}, batchSizes)
+	require.Len(t, got.Nodes, modelCount+1)
+	endpoint := got.Nodes[len(got.Nodes)-1]
+	assert.Equal(t, pluginapi.NodeKindInferenceEndpoint, endpoint.ID.Kind)
+	assert.Equal(t, fmt.Sprintf("bedrock/model-%d-us-east-1", lastIndex), endpoint.ID.Path)
+	assert.Equal(t, "5", endpoint.Properties["invocations_total"])
 }
 
 func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {

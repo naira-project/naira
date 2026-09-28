@@ -404,8 +404,6 @@ data:
         schedule: "*/1 * * * *"
       openmetadata:
         address: localhost:50056
-      tech-radar:
-        address: localhost:50057
       mcp-servers:
         address: localhost:50057
       tech-radar:
