@@ -83,6 +83,13 @@ jobs:
         with:
           version: v2.13.2
 
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        with:
+          ignore_paths: >-
+            .claude
+            node_modules
+
   # ── 5. UI checks (TypeScript and Biome) ───────────────────────────────────
   ui-check:
     name: Check · UI
