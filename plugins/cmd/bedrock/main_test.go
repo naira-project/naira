@@ -20,13 +20,13 @@ import (
 
 func fakeBedrockClient(output *bedrock.ListFoundationModelsOutput, err error) listFoundationModelsFunc {
 	return func(context.Context, *bedrock.ListFoundationModelsInput, ...func(*bedrock.Options)) (*bedrock.ListFoundationModelsOutput, error) {
-		return output, err
+		return output, fmt.Errorf("Error while creating fake Bedrock client: %w", err)
 	}
 }
 
 func fakeCloudWatchClient(output *cloudwatch.GetMetricDataOutput, err error) getMetricDataFunc {
 	return func(context.Context, *cloudwatch.GetMetricDataInput, ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error) {
-		return output, err
+		return output, fmt.Errorf("Error while creating fake CloudWatch client: %w", err)
 	}
 }
 
@@ -40,7 +40,7 @@ func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDa
 			return bc, nil
 		},
 		newCloudWatchClient: func(context.Context, string) (getMetricDataFunc, error) {
-			return cw, cwErr
+			return cw, fmt.Errorf("CloudWatch client error: %w", cwErr)
 		},
 	}
 }

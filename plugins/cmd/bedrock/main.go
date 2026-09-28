@@ -309,7 +309,7 @@ func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]fou
 		return nil, fmt.Errorf("Error while initializing Bedrock client: %v", err)
 	}
 
-	//TODO next step to do filtering by specifying the properties to fill ListFoundationModelsInput struct.
+	// TODO next step to do filtering by specifying the properties to fill ListFoundationModelsInput struct.
 	out, err := client(ctx, &bedrock.ListFoundationModelsInput{})
 	if err != nil {
 		return nil, fmt.Errorf("calling Bedrock ListFoundationModels: %w", err)
@@ -354,7 +354,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 		return nil, fmt.Errorf("Error while initializing CloudWatch client: %v", err)
 	}
 
-	//TODO: use dynamic time intervals in the UI, not just from BEDROCK_METRICS_LOOKBACK
+	// TODO: use dynamic time intervals in the UI, not just from BEDROCK_METRICS_LOOKBACK
 	lookback := p.config.MetricsLookback
 	endTime := time.Now().UTC()
 	startTime := endTime.Add(-lookback)
