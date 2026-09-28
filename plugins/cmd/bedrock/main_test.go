@@ -95,23 +95,23 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{
-						ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.nova-micro-v1:0"},
+						ID:         pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.nova-micro-v1:0"},
 						Properties: pluginapi.PropertyMap{"owned_by": "Amazon"},
 					},
 					{
-						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
+						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
 						Properties: pluginapi.PropertyMap{
 							"provider": "bedrock", "region": "us-east-1", "model_name": "Nova Micro",
 							"lifecycle_status": "active", "input_modalities": "text", "output_modalities": "text",
 							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
-							"status": "healthy",
+							"endpoint_status": "healthy",
 						},
 					},
 				},
 				Relations: []pluginapi.RelationClaim{{
-					Kind: pluginapi.RelationKindServesModel,
-					From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
-					To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.nova-micro-v1:0"},
+					Kind: "serves_model",
+					From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
+					To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.nova-micro-v1:0"},
 				}},
 			},
 		},
@@ -122,7 +122,7 @@ func TestCollect(t *testing.T) {
 			cw:      noUsage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
+					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 				},
 			},
 		},
@@ -133,7 +133,7 @@ func TestCollect(t *testing.T) {
 			cwErr:   assert.AnError,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
+					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 				},
 			},
 		},
@@ -147,20 +147,20 @@ func TestCollect(t *testing.T) {
 			cw: usageAtIndex1,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
+					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
+						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
 						Properties: pluginapi.PropertyMap{
 							"provider": "bedrock", "region": "us-east-1",
 							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
-							"status": "healthy",
+							"endpoint_status": "healthy",
 						},
 					},
 				},
 				Relations: []pluginapi.RelationClaim{{
-					Kind: pluginapi.RelationKindServesModel,
-					From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
-					To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"},
+					Kind: "serves_model",
+					From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
+					To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"},
 				}},
 			},
 		},
@@ -171,35 +171,35 @@ func TestCollect(t *testing.T) {
 			cw:      usage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
+					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
+						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
 						Properties: pluginapi.PropertyMap{
 							"provider": "bedrock", "region": "us-east-1",
 							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
-							"status": "healthy",
+							"endpoint_status": "healthy",
 						},
 					},
-					{ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
+					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-eu-central-1"},
+						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-eu-central-1"},
 						Properties: pluginapi.PropertyMap{
 							"provider": "bedrock", "region": "eu-central-1",
 							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
-							"status": "healthy",
+							"endpoint_status": "healthy",
 						},
 					},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{
-						Kind: pluginapi.RelationKindServesModel,
-						From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
-						To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"},
+						Kind: "serves_model",
+						From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
+						To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"},
 					},
 					{
-						Kind: pluginapi.RelationKindServesModel,
-						From: pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: "bedrock/amazon.titan-text-express-v1-eu-central-1"},
-						To:   pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "bedrock/amazon.titan-text-express-v1"},
+						Kind: "serves_model",
+						From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-eu-central-1"},
+						To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"},
 					},
 				},
 			},
@@ -293,7 +293,7 @@ func TestCollect_BatchesAndPaginatesMetricQueries(t *testing.T) {
 	assert.Equal(t, []int{500, 340}, batchSizes)
 	require.Len(t, got.Nodes, modelCount+1)
 	endpoint := got.Nodes[len(got.Nodes)-1]
-	assert.Equal(t, pluginapi.NodeKindInferenceEndpoint, endpoint.ID.Kind)
+	assert.Equal(t, "inference_endpoint", endpoint.ID.Kind)
 	assert.Equal(t, fmt.Sprintf("bedrock/model-%d-us-east-1", lastIndex), endpoint.ID.Path)
 	assert.Equal(t, "5", endpoint.Properties["invocations_total"])
 }
@@ -338,7 +338,7 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Len(t, got.Nodes, 2)
-			assert.Equal(t, endpointStatusUnhealthy, got.Nodes[1].Properties["status"])
+			assert.Equal(t, "unhealthy", got.Nodes[1].Properties["endpoint_status"])
 		})
 	}
 }

@@ -91,28 +91,32 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 		listInferenceEndpoints(t.Context(), map[string]string{"idp-claude-sonnet": "team-a"})
 	require.NoError(t, err)
 
-	endpoints := nodePaths(nodes, pluginapi.NodeKindInferenceEndpoint)
-	require.Contains(t, endpoints, "litellm/idp-claude-sonnet-us-east-1",
-		"the region is appended to disambiguate endpoints serving the same model")
+	// The region is appended to the path to disambiguate endpoints serving
+	// the same model.
+	assert.Equal(t, []pluginapi.NodeClaim{{
+		ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "litellm/idp-claude-sonnet-us-east-1"},
+		Properties: pluginapi.PropertyMap{
+			"model_id":                       "model-1",
+			"endpoint_type":                  "external",
+			"provider":                       "anthropic",
+			"endpoint_status":                "healthy",
+			"endpoint_url":                   "https://api.anthropic.com",
+			"region":                         "us-east-1",
+			"model_name":                     "idp-claude-sonnet",
+			"owned_by":                       "team-a",
+			"mode":                           "chat",
+			"max_tokens":                     "8192",
+			"input_cost_per_million_tokens":  "3.0000",
+			"output_cost_per_million_tokens": "15.0000",
+			"invocations_total":              "7",
+		},
+	}}, nodes)
 
-	endpoint := endpoints["litellm/idp-claude-sonnet-us-east-1"]
-	assert.Equal(t, "model-1", endpoint[propertyKeyModelID])
-	assert.Equal(t, "7", endpoint[propertyKeyInvocationsTotal])
-	assert.Equal(t, "anthropic", endpoint[propertyKeyProvider])
-	assert.Equal(t, endpointTypeExternal, endpoint[propertyKeyEndpointType])
-	assert.Equal(t, endpointStatusHealthy, endpoint[propertyKeyEndpointStatus])
-	assert.Equal(t, "https://api.anthropic.com", endpoint[propertyKeyEndpointURL])
-	assert.Equal(t, "us-east-1", endpoint[propertyKeyRegion])
-	assert.Equal(t, "idp-claude-sonnet", endpoint[propertyKeyModelName])
-	assert.Equal(t, "team-a", endpoint[propertyKeyOwnedBy])
-	assert.Equal(t, "chat", endpoint[propertyKeyMode])
-	assert.Equal(t, "8192", endpoint[propertyKeyMaxTokens])
-	assert.Equal(t, "3.0000", endpoint[propertyKeyInputCostPerMillionTokens])
-	assert.Equal(t, "15.0000", endpoint[propertyKeyOutputCostPerMillionTokens])
-
-	require.Len(t, relations, 1)
-	assert.Equal(t, pluginapi.RelationKindServesModel, relations[0].Kind)
-	assert.Equal(t, pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "litellm/idp-claude-sonnet"}, relations[0].To)
+	assert.Equal(t, []pluginapi.RelationClaim{{
+		Kind: "serves_model",
+		From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "litellm/idp-claude-sonnet-us-east-1"},
+		To:   pluginapi.NodeID{Kind: "model", Path: "litellm/idp-claude-sonnet"},
+	}}, relations)
 }
 
 func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
@@ -154,9 +158,9 @@ func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testin
 	nodes, _, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
 	require.NoError(t, err, "an unreachable health endpoint should not fail the whole sync")
 
-	endpoints := nodePaths(nodes, pluginapi.NodeKindInferenceEndpoint)
+	endpoints := nodePaths(nodes, "inference_endpoint")
 	require.Contains(t, endpoints, "litellm/idp-model")
-	assert.Equal(t, endpointStatusUnknown, endpoints["litellm/idp-model"][propertyKeyEndpointStatus])
+	assert.Equal(t, "unknown", endpoints["litellm/idp-model"]["endpoint_status"])
 }
 
 func TestListInferenceEndpointsReportsUnreachableModelInfo(t *testing.T) {
@@ -177,14 +181,14 @@ func TestModelInfoLiteLLMEndpointType(t *testing.T) {
 		apiBase string
 		want    string
 	}{
-		{"empty api_base is external", "", endpointTypeExternal},
-		{"unparsable api_base is external", "://bad-url", endpointTypeExternal},
-		{"localhost is internal", "http://localhost:4000", endpointTypeInternal},
-		{"cluster-local .svc host is internal", "http://litellm.litellm.svc", endpointTypeInternal},
-		{"cluster-local .svc.cluster.local host is internal", "http://litellm.litellm.svc.cluster.local:4000", endpointTypeInternal},
-		{"private IP is internal", "http://10.0.0.5:8080", endpointTypeInternal},
-		{"loopback IP is internal", "http://127.0.0.1:8080", endpointTypeInternal},
-		{"public host is external", "https://api.anthropic.com", endpointTypeExternal},
+		{"empty api_base is external", "", "external"},
+		{"unparsable api_base is external", "://bad-url", "external"},
+		{"localhost is internal", "http://localhost:4000", "internal"},
+		{"cluster-local .svc host is internal", "http://litellm.litellm.svc", "internal"},
+		{"cluster-local .svc.cluster.local host is internal", "http://litellm.litellm.svc.cluster.local:4000", "internal"},
+		{"private IP is internal", "http://10.0.0.5:8080", "internal"},
+		{"loopback IP is internal", "http://127.0.0.1:8080", "internal"},
+		{"public host is external", "https://api.anthropic.com", "external"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
