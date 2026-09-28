@@ -1,8 +1,5 @@
 // Integration test for the github plugin.
 // See the godoc of TestGithubPlugin_Integration for more details.
-//
-// For an overview on integration tests philosophy in the project,
-// see: docs/integration-tests.md.
 package main
 
 import (
@@ -23,6 +20,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/k3s"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -40,29 +38,6 @@ const (
 	pluginRunTimeout        = 30 * time.Second
 
 	k3sImage = "rancher/k3s:v1.28.2-k3s1"
-
-	// githubTestOrg/githubTestRepo is a real, public GitHub repository used
-	// to exercise attestation verification, repo metadata and CODEOWNERS
-	// lookup against the real GitHub API and a real "gh" CLI.
-	githubTestOrg  = "naira-project"
-	githubTestRepo = "naira"
-
-	// TODO: fill these in with real sha256 digests of images published to
-	// ghcr.io/naira-project/naira: one built via GitHub Actions with a
-	// verifiable artifact attestation ("gh attestation verify" succeeds),
-	// and one without an attestation (e.g. pushed manually, or from a
-	// workflow run without attestations enabled).
-	attestedImageSHA   = "sha256:9d1149eb56e62050316edd85b12a67bf67d4b74b"
-	unattestedImageSHA = "sha256:866a6b2a4d119ba33bc9434073ca0c6850229c3f"
-
-	attestedImage   = "ghcr.io/" + githubTestOrg + "/" + githubTestRepo + "@" + attestedImageSHA
-	unattestedImage = "ghcr.io/" + githubTestOrg + "/" + githubTestRepo + "@" + unattestedImageSHA
-
-	// otherOrgImage belongs to a different GitHub org on ghcr.io. It doesn't
-	// need to exist for real: the plugin's ghcr.io optimization
-	// (shouldVerifyImage) filters it out based on the registry path alone,
-	// before ever invoking "gh attestation verify".
-	otherOrgImage = "ghcr.io/other-org/service:v1"
 )
 
 // TestGithubPlugin_Integration tests a real binary of the github plugin
@@ -81,9 +56,8 @@ const (
 //     skipped if either of these is missing, so it doesn't fail in
 //     environments that aren't set up for it,
 //   - github.com/naira-project/naira to be a real, public repository with
-//     a top-level CODEOWNERS "*" rule, and two known image digests
-//     published to ghcr.io/naira-project/naira (see attestedImageSHA and
-//     unattestedImageSHA above).
+//     a top-level CODEOWNERS "*" rule, and one known image digest
+//     published to ghcr.io/naira-project/naira (see attestedImageSHA above).
 //
 // The plugin & catalog binaries are built as part of the test (should be
 // mostly cached on repeated runs).
@@ -110,13 +84,11 @@ func TestGithubPlugin_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
-	fmt.Println("o2k")
 
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	if githubToken == "" {
 		t.Skip("skipping: GITHUB_TOKEN not set")
 	}
-	fmt.Println("ok2")
 
 	ghPath, err := exec.LookPath("gh")
 	if err != nil {
@@ -126,12 +98,33 @@ func TestGithubPlugin_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), integrationTestTimeout)
 	defer cancel()
 
-	// Start kubernetes (k3s), seeded with the four Deployments described above.
+	var (
+		// githubTest... are ours real GitHub repository data used
+		// to exercise attestation verification, repo metadata and CODEOWNERS
+		// lookup against the real GitHub API and a real "gh" CLI.
+		githubTestOrg     = "naira-project"
+		githubTestPackage = "naira-catalog"
+		githubTestRepo    = "naira"
+
+		// attestedImageSHA is attestation triggerred by Naira's "Dev Publish" workflow
+		// link to attestation: https://github.com/naira-project/naira/attestations/49777757
+		attestedImageSHA = "sha-c6364a1"
+		// unattestedImageSHA points to first build, where attestation provenance action was not enabled yet
+		unattestedImageSHA = "sha-c8b0666"
+
+		attestedImage   = "ghcr.io/" + githubTestOrg + "/" + githubTestPackage + ":" + attestedImageSHA
+		unattestedImage = "ghcr.io/" + githubTestOrg + "/" + githubTestPackage + ":" + unattestedImageSHA
+
+		// otherOrgImage doesn't need to exist for real
+		otherOrgImage = "ghcr.io/other-org/service:v1"
+	)
+
+	// Start kubernetes (k3s), seeded with four Deployments.
 	kubeconfigPath, clusterID := startK3s(ctx, t,
-		deploymentWithImages("app-attested", attestedImage),
-		deploymentWithImages("app-unattested", unattestedImage),
-		deploymentWithImages("app-other-org", otherOrgImage),
-		deploymentWithImages("app-multi-container", attestedImage, unattestedImage),
+		deploymentWithImages2("app-attested", attestedImage),
+		deploymentWithImages2("app-unattested", unattestedImage),
+		deploymentWithImages2("app-other-org", otherOrgImage),
+		deploymentWithImages2("app-multi-container", attestedImage, unattestedImage),
 	)
 
 	// Start a mock OIDC (i.e. Keycloak-like) server.
@@ -178,7 +171,7 @@ plugins:
 
 	// Trigger a run of the plugin through the catalog, and wait for the
 	// operation to succeed.
-	operationID := requestPluginRun(ctx, t, catalogBaseURL, token, "github")
+	operationID := requestPluginRun(ctx, t, catalogBaseURL, token)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		op, status := doJSON[apiOperation](ctx, c, http.MethodGet, catalogBaseURL+"/v1/operations/"+operationID, token)
 		assert.Equal(c, http.StatusOK, status, "GET /v1/operations/%s", operationID)
@@ -256,23 +249,29 @@ plugins:
 	}
 }
 
-// func deploymentWithImages(name string, images ...string) *appsv1.Deployment {
-// 	containers := make([]corev1.Container, 0, len(images))
-// 	for i, image := range images {
-// 		containers = append(containers, corev1.Container{
-// 			Name:  fmt.Sprintf("container-%d", i),
-// 			Image: image,
-// 		})
-// 	}
-// 	return &appsv1.Deployment{
-// 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
-// 		Spec: appsv1.DeploymentSpec{
-// 			Template: corev1.PodTemplateSpec{
-// 				Spec: corev1.PodSpec{Containers: containers},
-// 			},
-// 		},
-// 	}
-// }
+func deploymentWithImages2(name string, images ...string) *appsv1.Deployment {
+	containers := make([]corev1.Container, 0, len(images))
+	for i, image := range images {
+		containers = append(containers, corev1.Container{
+			Name:  fmt.Sprintf("container-%d", i),
+			Image: image,
+		})
+	}
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": name},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"app": name},
+				},
+				Spec: corev1.PodSpec{Containers: containers},
+			},
+		},
+	}
+}
 
 // startK3s starts a k3s container seeded with deployments, and returns a
 // kubeconfig file path for that cluster plus its cluster ID (the
@@ -393,11 +392,11 @@ type apiOperation struct {
 	} `json:"error,omitempty"`
 }
 
-func requestPluginRun(ctx context.Context, t *testing.T, catalogBaseURL, token, pluginName string) string {
+func requestPluginRun(ctx context.Context, t *testing.T, catalogBaseURL, token string) string {
 	t.Helper()
 
-	op, status := doJSON[apiOperation](ctx, t, http.MethodPost, catalogBaseURL+"/v1/plugins/"+pluginName+":run", token)
-	require.Equal(t, http.StatusAccepted, status, "POST /v1/plugins/%s:run", pluginName)
+	op, status := doJSON[apiOperation](ctx, t, http.MethodPost, catalogBaseURL+"/v1/plugins/github:run", token)
+	require.Equal(t, http.StatusAccepted, status, "POST /v1/plugins/github:run")
 	require.NotEmpty(t, op.Name)
 	return op.Name
 }
