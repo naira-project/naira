@@ -94,7 +94,7 @@ const (
 	propertyKeyInputTokensTotal  = "input_tokens_total"
 	propertyKeyOutputTokensTotal = "output_tokens_total"
 	propertyKeyInvocationsTotal  = "invocations_total"
-	propertyKeyStatus    = "status"
+	propertyKeyEndpointStatus    = "endpoint_status"
 
 	providerNameBedrock = "bedrock"
 
@@ -272,7 +272,7 @@ type modelUsage struct {
 
 // status reports whether the model showed any client errors, server errors
 // or throttles in the lookback window. This is for active inference endpoints.
-func (u modelUsage) status() string {
+func (u modelUsage) endpointStatus() string {
 	if u.ClientErrors != 0 || u.ServerErrors != 0 || u.Throttles != 0 {
 		return endpointStatusUnhealthy
 	}
@@ -296,7 +296,7 @@ func (m foundationModel) properties(region string, usage modelUsage) pluginapi.P
 	}
 	if usage.Invocations != 0 {
 		properties[propertyKeyInvocationsTotal] = strconv.FormatFloat(usage.Invocations, 'f', 0, 64)
-		properties[propertyKeyStatus] = usage.status()
+		properties[propertyKeyEndpointStatus] = usage.endpointStatus()
 	}
 
 	return properties

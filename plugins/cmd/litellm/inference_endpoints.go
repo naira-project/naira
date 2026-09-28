@@ -18,7 +18,7 @@ const (
 	propertyKeyModelID                    = "model_id"
 	propertyKeyEndpointType               = "endpoint_type"
 	propertyKeyProvider                   = "provider"
-	propertyKeyEndpointStatus             = "status"
+	propertyKeyEndpointStatus             = "endpoint_status"
 	propertyKeyAPIProtocol                = "api_protocol"
 	propertyKeyEndpointURL                = "endpoint_url"
 	propertyKeyRegion                     = "region"
