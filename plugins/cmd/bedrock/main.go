@@ -94,7 +94,7 @@ const (
 	propertyKeyInputTokensTotal  = "input_tokens_total"
 	propertyKeyOutputTokensTotal = "output_tokens_total"
 	propertyKeyInvocationsTotal  = "invocations_total"
-	propertyKeyEndpointStatus    = "status"
+	propertyKeyStatus    = "status"
 
 	providerNameBedrock = "bedrock"
 
@@ -296,7 +296,7 @@ func (m foundationModel) properties(region string, usage modelUsage) pluginapi.P
 	}
 	if usage.Invocations != 0 {
 		properties[propertyKeyInvocationsTotal] = strconv.FormatFloat(usage.Invocations, 'f', 0, 64)
-		properties[propertyKeyEndpointStatus] = usage.status()
+		properties[propertyKeyStatus] = usage.status()
 	}
 
 	return properties
