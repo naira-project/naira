@@ -22,7 +22,7 @@ const (
 	propertyKeyAPIProtocol                = "api_protocol"
 	propertyKeyEndpointURL                = "endpoint_url"
 	propertyKeyRegion                     = "region"
-	propertyKeyModelName                  = "serves_model"
+	propertyKeyModelName                  = "model_name"
 	propertyKeyLifecycleStatus            = "lifecycle_status"
 	propertyKeyLastSeen                   = "last_seen"
 	propertyKeyMode                       = "mode"
@@ -112,7 +112,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 
 	invocations, err := p.fetchModelInvocations(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error while fetching model invocations: %v", err)
+		return nil, nil, fmt.Errorf("fetching model invocations: %w", err)
 	}
 
 	var (
