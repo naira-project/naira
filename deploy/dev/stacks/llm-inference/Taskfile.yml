@@ -16,6 +16,10 @@ includes:
   vllm:
     taskfile: ./tasks/vllm.yml
     dir: .
+  # Opt-in: needs AWS credentials, so not part of `deploy`.
+  cloudwatch:
+    taskfile: ./tasks/cloudwatch.yml
+    dir: .
 
 tasks:
   deploy:
@@ -28,6 +32,7 @@ tasks:
   undeploy:
     desc: Remove the full LLM Inference stack from kind
     cmds:
+      - task: cloudwatch:undeploy
       - task: monitoring:undeploy
       - task: llamacpp:undeploy
       - task: litellm:undeploy
