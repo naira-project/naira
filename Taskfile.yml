@@ -56,4 +56,6 @@ tasks:
   shell:lint:
     desc: Lint shell scripts with ShellCheck
     cmds:
-      - shellcheck ui/docker-entrypoint.sh e2e/scripts/*.sh
+      # Mirrors ci's ignore_paths (.claude, node_modules) instead of a fixed
+      # file list, so a new script is picked up automatically.
+      - git ls-files '*.sh' ':!:.claude/**' ':!:node_modules/**' | xargs shellcheck
