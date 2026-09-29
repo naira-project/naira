@@ -28,6 +28,8 @@ export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
     title: 'Served By',
     icon: Cloud,
     description: 'The inference endpoint that serves this model.',
+    emptyText:
+      'No inference endpoint serves this model. Endpoints only appear once the model has received traffic within the metrics lookback window.',
   },
 };
 
