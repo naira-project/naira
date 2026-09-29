@@ -28,7 +28,6 @@ const (
 	propertyKeyRegionName                 = "region_name"
 	propertyKeyModelName                  = "model_name"
 	propertyKeyLifecycleStatus            = "lifecycle_status"
-	propertyKeyLastSeen                   = "last_seen"
 	propertyKeyMode                       = "mode"
 	propertyKeyMaxTokens                  = "max_tokens"
 	propertyKeyInputCostPerMillionTokens  = "input_cost_per_million_tokens"
@@ -41,26 +40,22 @@ const (
 	endpointStatusHealthy   = "healthy"
 	endpointStatusUnhealthy = "unhealthy"
 	endpointStatusUnknown   = "unknown"
+
+	// The LiteLLM proxy exposes every deployment through its OpenAI-compatible
+	// API, regardless of the upstream provider's native protocol.
+	apiProtocolOpenAI = "openai"
+
+	// Endpoints are only emitted once they received traffic in the lookback
+	// window, so every emitted endpoint is active.
+	lifecycleStatusActive = "active"
 )
 
 type inferenceEndpoint struct {
-	ID                 string
-	EndpointType       string
-	Provider           string
-	Status             string
-	APIProtocol        string
-	APIBase            string
-	RegionName         string
-	ModelName          string
-	OwnedBy            string
-	LifecycleStatus    string
-	DiscoveredVia      string
-	LastSeen           string
-	Mode               string
-	MaxTokens          int64
-	InputCostPerToken  float64
-	OutputCostPerToken float64
-	Invocations        int64
+	ModelName string
+	// Props holds the properties already converted to their final string
+	// form (provider, status, costs, ...), ready to be merged into a
+	// node's PropertyMap.
+	Props pluginapi.PropertyMap
 }
 
 type litellmParams struct {
@@ -119,7 +114,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 	)
 
 	for _, endpoint := range endpoints {
-		modelName := strings.TrimSpace(endpoint.ModelName)
+		modelName := endpoint.ModelName
 		if modelName == "" {
 			if p.logger != nil {
 				p.logger.Printf("WARN: skipping inference endpoint with no model name")
@@ -132,12 +127,15 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 		if invocations[modelName] == 0 {
 			continue
 		}
-		endpoint.Invocations = invocations[modelName]
+		endpoint.Props[propertyKeyInvocationsTotal] = strconv.FormatInt(invocations[modelName], 10)
+		endpoint.Props[propertyKeyLifecycleStatus] = lifecycleStatusActive
 
-		endpoint.OwnedBy = ownerByModelID[modelName]
+		if owner := ownerByModelID[modelName]; owner != "" {
+			endpoint.Props[propertyKeyOwnedBy] = owner
+		}
 
 		regionSuffix := ""
-		if region := strings.TrimSpace(endpoint.RegionName); region != "" {
+		if region := endpoint.Props[propertyKeyRegionName]; region != "" {
 			regionSuffix = "-" + region
 		}
 
@@ -146,7 +144,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 				Kind: pluginapi.NodeKindInferenceEndpoint,
 				Path: p.config.PathPrefix + "/" + modelName + regionSuffix,
 			},
-			Properties: endpoint.properties(),
+			Properties: endpoint.Props,
 		}
 		nodes = append(nodes, endpointNode)
 
@@ -192,44 +190,6 @@ func (m litellmParams) provider() string {
 		return strings.TrimSpace(provider)
 	}
 	return ""
-}
-
-func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
-	properties := pluginapi.PropertyMap{}
-	for key, value := range map[string]string{
-		propertyKeyID:              e.ID,
-		propertyKeyEndpointType:    e.EndpointType,
-		propertyKeyProvider:        e.Provider,
-		propertyKeyEndpointStatus:  e.Status,
-		propertyKeyAPIProtocol:     e.APIProtocol,
-		propertyKeyAPIBase:         e.APIBase,
-		propertyKeyRegionName:      e.RegionName,
-		propertyKeyModelName:       e.ModelName,
-		propertyKeyOwnedBy:         e.OwnedBy,
-		propertyKeyLifecycleStatus: e.LifecycleStatus,
-		propertyKeyDiscoveredVia:   e.DiscoveredVia,
-		propertyKeyLastSeen:        e.LastSeen,
-		propertyKeyMode:            e.Mode,
-	} {
-		if value != "" {
-			properties[key] = value
-		}
-	}
-
-	if e.MaxTokens != 0 {
-		properties[propertyKeyMaxTokens] = strconv.FormatInt(e.MaxTokens, 10)
-	}
-	if e.InputCostPerToken != 0 {
-		properties[propertyKeyInputCostPerMillionTokens] = strconv.FormatFloat(e.InputCostPerToken*1_000_000, 'f', 4, 64)
-	}
-	if e.OutputCostPerToken != 0 {
-		properties[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(e.OutputCostPerToken*1_000_000, 'f', 4, 64)
-	}
-	if e.Invocations != 0 {
-		properties[propertyKeyInvocationsTotal] = strconv.FormatInt(e.Invocations, 10)
-	}
-
-	return properties
 }
 
 // getLiteLLMJSON issues an authorized GET against urlStr and decodes the JSON
@@ -278,18 +238,38 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 			status = endpointStatusUnknown
 		}
 
+		modelName := strings.TrimSpace(entry.ModelName)
+
+		props := pluginapi.PropertyMap{}
+		for key, value := range map[string]string{
+			propertyKeyID:             entry.ModelInfo.ID,
+			propertyKeyEndpointType:   entry.LiteLLMParams.endpointType(),
+			propertyKeyProvider:       entry.LiteLLMParams.provider(),
+			propertyKeyEndpointStatus: status,
+			propertyKeyAPIProtocol:    apiProtocolOpenAI,
+			propertyKeyAPIBase:        entry.LiteLLMParams.APIBase,
+			propertyKeyRegionName:     strings.TrimSpace(entry.LiteLLMParams.RegionName),
+			propertyKeyModelName:      modelName,
+			propertyKeyMode:           entry.ModelInfo.Mode,
+		} {
+			if value != "" {
+				props[key] = value
+			}
+		}
+
+		if entry.ModelInfo.MaxTokens != 0 {
+			props[propertyKeyMaxTokens] = strconv.FormatInt(entry.ModelInfo.MaxTokens, 10)
+		}
+		if entry.ModelInfo.InputCostPerToken != 0 {
+			props[propertyKeyInputCostPerMillionTokens] = strconv.FormatFloat(entry.ModelInfo.InputCostPerToken*1_000_000, 'f', 4, 64)
+		}
+		if entry.ModelInfo.OutputCostPerToken != 0 {
+			props[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(entry.ModelInfo.OutputCostPerToken*1_000_000, 'f', 4, 64)
+		}
+
 		endpoints = append(endpoints, inferenceEndpoint{
-			ID:                 entry.ModelInfo.ID,
-			Provider:           entry.LiteLLMParams.provider(),
-			EndpointType:       entry.LiteLLMParams.endpointType(),
-			Status:             status,
-			APIBase:            entry.LiteLLMParams.APIBase,
-			RegionName:         entry.LiteLLMParams.RegionName,
-			ModelName:          strings.TrimSpace(entry.ModelName),
-			Mode:               entry.ModelInfo.Mode,
-			MaxTokens:          entry.ModelInfo.MaxTokens,
-			InputCostPerToken:  entry.ModelInfo.InputCostPerToken,
-			OutputCostPerToken: entry.ModelInfo.OutputCostPerToken,
+			ModelName: modelName,
+			Props:     props,
 		})
 	}
 

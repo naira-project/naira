@@ -130,6 +130,24 @@ type Plugin struct {
 	newCloudWatchClient func(ctx context.Context, region string) (getMetricDataFunc, error)
 }
 
+type foundationModel struct {
+	ModelID      string
+	ProviderName string
+	// Props holds the properties already converted to their final string
+	// form (lifecycle status, modalities, ...), ready to be merged into a
+	// node's PropertyMap.
+	Props pluginapi.PropertyMap
+}
+
+type modelUsage struct {
+	InputTokens            float64
+	OutputTokens           float64
+	Invocations            float64
+	InvocationClientErrors float64
+	InvocationServerErrors float64
+	InvocationThrottles    float64
+}
+
 // listFoundationModelsFunc is the subset of *bedrock.Client used by this
 // plugin, so tests can substitute a fake implementation.
 type listFoundationModelsFunc func(context.Context, *bedrock.ListFoundationModelsInput, ...func(*bedrock.Options)) (*bedrock.ListFoundationModelsOutput, error)
@@ -256,24 +274,6 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 	}
 
 	return nodes, relations, nil
-}
-
-type foundationModel struct {
-	ModelID      string
-	ProviderName string
-	// Props holds the properties already converted to their final string
-	// form (lifecycle status, modalities, ...), ready to be merged into a
-	// node's PropertyMap.
-	Props pluginapi.PropertyMap
-}
-
-type modelUsage struct {
-	InputTokens            float64
-	OutputTokens           float64
-	Invocations            float64
-	InvocationClientErrors float64
-	InvocationServerErrors float64
-	InvocationThrottles    float64
 }
 
 // status reports whether the model showed any client errors, server errors
