@@ -41,7 +41,10 @@ func strp(s string) *string { return &s }
 func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDataFunc, cwErr error) *Plugin {
 	return &Plugin{
 		logger: log.New(io.Discard, "", 0),
-		config: config{PathPrefix: "bedrock", Regions: regions},
+		config: config{
+			PathPrefix: "bedrock",
+			Regions:    regions,
+		},
 		newBedrockClient: func(context.Context, string) (listFoundationModelsFunc, error) {
 			return bc, nil
 		},
@@ -65,17 +68,35 @@ func TestCollect(t *testing.T) {
 	}
 	usage := &cloudwatch.GetMetricDataOutput{
 		MetricDataResults: []cwtypes.MetricDataResult{
-			{Id: strp("in0"), Values: []float64{3}},
-			{Id: strp("out0"), Values: []float64{5}},
-			{Id: strp("inv0"), Values: []float64{1}},
+			{
+				Id:     strp("in0"),
+				Values: []float64{3},
+			},
+			{
+				Id:     strp("out0"),
+				Values: []float64{5},
+			},
+			{
+				Id:     strp("inv0"),
+				Values: []float64{1},
+			},
 		},
 	}
 	noUsage := &cloudwatch.GetMetricDataOutput{}
 	usageAtIndex1 := &cloudwatch.GetMetricDataOutput{
 		MetricDataResults: []cwtypes.MetricDataResult{
-			{Id: strp("in1"), Values: []float64{3}},
-			{Id: strp("out1"), Values: []float64{5}},
-			{Id: strp("inv1"), Values: []float64{1}},
+			{
+				Id:     strp("in1"),
+				Values: []float64{3},
+			},
+			{
+				Id:     strp("out1"),
+				Values: []float64{5},
+			},
+			{
+				Id:     strp("inv1"),
+				Values: []float64{1},
+			},
 		},
 	}
 
@@ -95,24 +116,46 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{
-						ID:         pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.nova-micro-v1:0"},
-						Properties: pluginapi.PropertyMap{"owned_by": "Amazon"},
+						ID: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.nova-micro-v1:0",
+						},
+						Properties: pluginapi.PropertyMap{
+							"owned_by": "Amazon",
+						},
 					},
 					{
-						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
+						ID: pluginapi.NodeID{
+							Kind: "inference_endpoint",
+							Path: "bedrock/amazon.nova-micro-v1:0-us-east-1",
+						},
 						Properties: pluginapi.PropertyMap{
-							"provider": "bedrock", "region": "us-east-1", "model_name": "Nova Micro",
-							"lifecycle_status": "active", "input_modalities": "text", "output_modalities": "text",
-							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
-							"endpoint_status": "healthy",
+							"provider":            "bedrock",
+							"region":              "us-east-1",
+							"model_name":          "Nova Micro",
+							"lifecycle_status":    "active",
+							"input_modalities":    "text",
+							"output_modalities":   "text",
+							"input_tokens_total":  "3",
+							"output_tokens_total": "5",
+							"invocations_total":   "1",
+							"status":              "healthy",
 						},
 					},
 				},
-				Relations: []pluginapi.RelationClaim{{
-					Kind: "serves_model",
-					From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.nova-micro-v1:0-us-east-1"},
-					To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.nova-micro-v1:0"},
-				}},
+				Relations: []pluginapi.RelationClaim{
+					{
+						Kind: "serves_model",
+						From: pluginapi.NodeID{
+							Kind: "inference_endpoint",
+							Path: "bedrock/amazon.nova-micro-v1:0-us-east-1",
+						},
+						To: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.nova-micro-v1:0",
+						},
+					},
+				},
 			},
 		},
 		{
@@ -122,7 +165,15 @@ func TestCollect(t *testing.T) {
 			cw:      noUsage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
+					{
+						ID: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.titan-text-express-v1",
+						},
+						Properties: pluginapi.PropertyMap{
+							"owned_by": "",
+						},
+					},
 				},
 			},
 		},
@@ -133,7 +184,15 @@ func TestCollect(t *testing.T) {
 			cwErr:   assert.AnError,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
+					{
+						ID: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.titan-text-express-v1",
+						},
+						Properties: pluginapi.PropertyMap{
+							"owned_by": "",
+						},
+					},
 				},
 			},
 		},
@@ -147,21 +206,43 @@ func TestCollect(t *testing.T) {
 			cw: usageAtIndex1,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
+						ID: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.titan-text-express-v1",
+						},
 						Properties: pluginapi.PropertyMap{
-							"provider": "bedrock", "region": "us-east-1",
-							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
-							"endpoint_status": "healthy",
+							"owned_by": "",
+						},
+					},
+					{
+						ID: pluginapi.NodeID{
+							Kind: "inference_endpoint",
+							Path: "bedrock/amazon.titan-text-express-v1-us-east-1",
+						},
+						Properties: pluginapi.PropertyMap{
+							"provider":            "bedrock",
+							"region":              "us-east-1",
+							"input_tokens_total":  "3",
+							"output_tokens_total": "5",
+							"invocations_total":   "1",
+							"status":              "healthy",
 						},
 					},
 				},
-				Relations: []pluginapi.RelationClaim{{
-					Kind: "serves_model",
-					From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
-					To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"},
-				}},
+				Relations: []pluginapi.RelationClaim{
+					{
+						Kind: "serves_model",
+						From: pluginapi.NodeID{
+							Kind: "inference_endpoint",
+							Path: "bedrock/amazon.titan-text-express-v1-us-east-1",
+						},
+						To: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.titan-text-express-v1",
+						},
+					},
+				},
 			},
 		},
 		{
@@ -171,35 +252,75 @@ func TestCollect(t *testing.T) {
 			cw:      usage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
+						ID: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.titan-text-express-v1",
+						},
 						Properties: pluginapi.PropertyMap{
-							"provider": "bedrock", "region": "us-east-1",
-							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
-							"endpoint_status": "healthy",
+							"owned_by": "",
 						},
 					},
-					{ID: pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"}, Properties: pluginapi.PropertyMap{"owned_by": ""}},
 					{
-						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-eu-central-1"},
+						ID: pluginapi.NodeID{
+							Kind: "inference_endpoint",
+							Path: "bedrock/amazon.titan-text-express-v1-us-east-1",
+						},
 						Properties: pluginapi.PropertyMap{
-							"provider": "bedrock", "region": "eu-central-1",
-							"input_tokens_total": "3", "output_tokens_total": "5", "invocations_total": "1",
-							"endpoint_status": "healthy",
+							"provider":            "bedrock",
+							"region":              "us-east-1",
+							"input_tokens_total":  "3",
+							"output_tokens_total": "5",
+							"invocations_total":   "1",
+							"status":              "healthy",
+						},
+					},
+					{
+						ID: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.titan-text-express-v1",
+						},
+						Properties: pluginapi.PropertyMap{
+							"owned_by": "",
+						},
+					},
+					{
+						ID: pluginapi.NodeID{
+							Kind: "inference_endpoint",
+							Path: "bedrock/amazon.titan-text-express-v1-eu-central-1",
+						},
+						Properties: pluginapi.PropertyMap{
+							"provider":            "bedrock",
+							"region":              "eu-central-1",
+							"input_tokens_total":  "3",
+							"output_tokens_total": "5",
+							"invocations_total":   "1",
+							"status":              "healthy",
 						},
 					},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{
 						Kind: "serves_model",
-						From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-us-east-1"},
-						To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"},
+						From: pluginapi.NodeID{
+							Kind: "inference_endpoint",
+							Path: "bedrock/amazon.titan-text-express-v1-us-east-1",
+						},
+						To: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.titan-text-express-v1",
+						},
 					},
 					{
 						Kind: "serves_model",
-						From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/amazon.titan-text-express-v1-eu-central-1"},
-						To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/amazon.titan-text-express-v1"},
+						From: pluginapi.NodeID{
+							Kind: "inference_endpoint",
+							Path: "bedrock/amazon.titan-text-express-v1-eu-central-1",
+						},
+						To: pluginapi.NodeID{
+							Kind: "model",
+							Path: "bedrock/amazon.titan-text-express-v1",
+						},
 					},
 				},
 			},
@@ -229,7 +350,10 @@ func TestCollect_ListFoundationModelsErrorIsReportedPerRegion(t *testing.T) {
 
 	p := &Plugin{
 		logger: log.New(io.Discard, "", 0),
-		config: config{PathPrefix: "bedrock", Regions: []string{"us-east-1", "eu-central-1"}},
+		config: config{
+			PathPrefix: "bedrock",
+			Regions:    []string{"us-east-1", "eu-central-1"},
+		},
 		newBedrockClient: func(_ context.Context, region string) (listFoundationModelsFunc, error) {
 			if region == "eu-central-1" {
 				return failing, nil
@@ -277,12 +401,22 @@ func TestCollect_BatchesAndPaginatesMetricQueries(t *testing.T) {
 		// Split the last model's invocations across two pages.
 		if in.NextToken == nil {
 			return &cloudwatch.GetMetricDataOutput{
-				MetricDataResults: []cwtypes.MetricDataResult{{Id: strp(fmt.Sprintf("inv%d", lastIndex)), Values: []float64{2}}},
-				NextToken:         strp("page-2"),
+				MetricDataResults: []cwtypes.MetricDataResult{
+					{
+						Id:     strp(fmt.Sprintf("inv%d", lastIndex)),
+						Values: []float64{2},
+					},
+				},
+				NextToken: strp("page-2"),
 			}, nil
 		}
 		return &cloudwatch.GetMetricDataOutput{
-			MetricDataResults: []cwtypes.MetricDataResult{{Id: strp(fmt.Sprintf("inv%d", lastIndex)), Values: []float64{3}}},
+			MetricDataResults: []cwtypes.MetricDataResult{
+				{
+					Id:     strp(fmt.Sprintf("inv%d", lastIndex)),
+					Values: []float64{3},
+				},
+			},
 		}, nil
 	}
 	p := newTestPlugin([]string{"us-east-1"}, bc, cw, nil)
@@ -306,22 +440,40 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 		{
 			name: "client errors",
 			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
-				{Id: strp("inv0"), Values: []float64{5}},
-				{Id: strp("cerr0"), Values: []float64{2}},
+				{
+					Id:     strp("inv0"),
+					Values: []float64{5},
+				},
+				{
+					Id:     strp("cerr0"),
+					Values: []float64{2},
+				},
 			}},
 		},
 		{
 			name: "server errors",
 			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
-				{Id: strp("inv0"), Values: []float64{5}},
-				{Id: strp("serr0"), Values: []float64{1}},
+				{
+					Id:     strp("inv0"),
+					Values: []float64{5},
+				},
+				{
+					Id:     strp("serr0"),
+					Values: []float64{1},
+				},
 			}},
 		},
 		{
 			name: "throttles",
 			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
-				{Id: strp("inv0"), Values: []float64{5}},
-				{Id: strp("thr0"), Values: []float64{3}},
+				{
+					Id:     strp("inv0"),
+					Values: []float64{5},
+				},
+				{
+					Id:     strp("thr0"),
+					Values: []float64{3},
+				},
 			}},
 		},
 	}
@@ -338,7 +490,7 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Len(t, got.Nodes, 2)
-			assert.Equal(t, "unhealthy", got.Nodes[1].Properties["endpoint_status"])
+			assert.Equal(t, "unhealthy", got.Nodes[1].Properties["status"])
 		})
 	}
 }

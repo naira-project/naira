@@ -93,30 +93,43 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 
 	// The region is appended to the path to disambiguate endpoints serving
 	// the same model.
-	assert.Equal(t, []pluginapi.NodeClaim{{
-		ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "litellm/idp-claude-sonnet-us-east-1"},
-		Properties: pluginapi.PropertyMap{
-			"model_id":                       "model-1",
-			"endpoint_type":                  "external",
-			"provider":                       "anthropic",
-			"endpoint_status":                "healthy",
-			"endpoint_url":                   "https://api.anthropic.com",
-			"region":                         "us-east-1",
-			"model_name":                     "idp-claude-sonnet",
-			"owned_by":                       "team-a",
-			"mode":                           "chat",
-			"max_tokens":                     "8192",
-			"input_cost_per_million_tokens":  "3.0000",
-			"output_cost_per_million_tokens": "15.0000",
-			"invocations_total":              "7",
+	assert.Equal(t, []pluginapi.NodeClaim{
+		{
+			ID: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-claude-sonnet-us-east-1",
+			},
+			Properties: pluginapi.PropertyMap{
+				"id":                             "model-1",
+				"endpoint_type":                  "external",
+				"provider":                       "anthropic",
+				"status":                         "healthy",
+				"api_base":                       "https://api.anthropic.com",
+				"region_name":                    "us-east-1",
+				"model_name":                     "idp-claude-sonnet",
+				"owned_by":                       "team-a",
+				"mode":                           "chat",
+				"max_tokens":                     "8192",
+				"input_cost_per_million_tokens":  "3.0000",
+				"output_cost_per_million_tokens": "15.0000",
+				"invocations_total":              "7",
+			},
 		},
-	}}, nodes)
+	}, nodes)
 
-	assert.Equal(t, []pluginapi.RelationClaim{{
-		Kind: "serves_model",
-		From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "litellm/idp-claude-sonnet-us-east-1"},
-		To:   pluginapi.NodeID{Kind: "model", Path: "litellm/idp-claude-sonnet"},
-	}}, relations)
+	assert.Equal(t, []pluginapi.RelationClaim{
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-claude-sonnet-us-east-1",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-claude-sonnet",
+			},
+		},
+	}, relations)
 }
 
 func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
@@ -143,16 +156,16 @@ func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
 func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testing.T) {
 	const modelInfoResponse = `{"data": [{"model_name": "idp-model"}]}`
 	const dailyActivityResponse = `{
-  "results": [
-    {
-      "breakdown": {
-        "model_groups": {
-          "idp-model": {"metrics": {"api_requests": 1}}
-        }
-      }
-    }
-  ]
-}`
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-model": {"metrics": {"api_requests": 1}}
+				}
+			}
+			}
+		]
+	}`
 	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, "", dailyActivityResponse)
 
 	nodes, _, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
@@ -160,7 +173,7 @@ func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testin
 
 	endpoints := nodePaths(nodes, "inference_endpoint")
 	require.Contains(t, endpoints, "litellm/idp-model")
-	assert.Equal(t, "unknown", endpoints["litellm/idp-model"]["endpoint_status"])
+	assert.Equal(t, "unknown", endpoints["litellm/idp-model"]["status"])
 }
 
 func TestListInferenceEndpointsReportsUnreachableModelInfo(t *testing.T) {

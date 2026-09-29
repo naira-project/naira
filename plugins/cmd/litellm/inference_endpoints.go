@@ -15,13 +15,17 @@ import (
 )
 
 const (
-	propertyKeyModelID                    = "model_id"
+	propertyKeyID                    		= 		"id"
 	propertyKeyEndpointType               = "endpoint_type"
 	propertyKeyProvider                   = "provider"
-	propertyKeyEndpointStatus             = "endpoint_status"
+	/* In mcp.go, propertyKeyStatus is already used, preventing this file from 
+	* using propertyKeyStatus. LiteLLM API returns  Hence, here, for displaying the status of a single inference endpoint in Naira
+	* (healthy/unhealthy/unknown), propertyKeyEndpointStatus with the value 'status' will be used.		
+	*/
+	propertyKeyEndpointStatus             = "status"
 	propertyKeyAPIProtocol                = "api_protocol"
-	propertyKeyEndpointURL                = "endpoint_url"
-	propertyKeyRegion                     = "region"
+	propertyKeyAPIBase               = "api_base"
+	propertyKeyRegionName                   = "region_name"
 	propertyKeyModelName                  = "model_name"
 	propertyKeyLifecycleStatus            = "lifecycle_status"
 	propertyKeyLastSeen                   = "last_seen"
@@ -40,24 +44,23 @@ const (
 )
 
 type inferenceEndpoint struct {
-	ModelID            string  `json:"model_id"`
-	EndpointType       string  `json:"endpoint_type"`
-	Provider           string  `json:"provider"`
-	Status             string  `json:"status"`
-	APIProtocol        string  `json:"api_protocol"`
-	EndpointURL        string  `json:"endpoint_url"`
-	Region             string  `json:"region"`
-	ModelName          string  `json:"model_name"`
-	OwnedBy            string  `json:"owned_by"`
-	LifecycleStatus    string  `json:"lifecycle_status"`
-	DiscoveredVia      string  `json:"discovered_via"`
-	LastSeen           string  `json:"last_seen"`
-	Mode               string  `json:"mode"`
-	MaxTokens          int64   `json:"max_tokens"`
-	InputCostPerToken  float64 `json:"input_cost_per_token"`
-	OutputCostPerToken float64 `json:"output_cost_per_token"`
-
-	Invocations int64 `json:"-"`
+	ID            	   string
+	EndpointType       string
+	Provider           string
+	Status             string
+	APIProtocol        string
+	APIBase        	   string
+	RegionName         string
+	ModelName          string
+	OwnedBy            string
+	LifecycleStatus    string
+	DiscoveredVia      string
+	LastSeen           string
+	Mode               string
+	MaxTokens          int64
+	InputCostPerToken  float64
+	OutputCostPerToken float64
+	Invocations int64
 }
 
 type litellmParams struct {
@@ -75,13 +78,8 @@ type modelInfo struct {
 }
 
 type healthResponse struct {
-	HealthyEndpoints   []healthEndpointEntry `json:"healthy_endpoints"`
-	UnhealthyEndpoints []healthEndpointEntry `json:"unhealthy_endpoints"`
-}
-
-type healthEndpointEntry struct {
-	Model   string `json:"model"`
-	APIBase string `json:"api_base"`
+	HealthyEndpoints   []modelAndAPIBase `json:"healthy_endpoints"`
+	UnhealthyEndpoints []modelAndAPIBase `json:"unhealthy_endpoints"`
 }
 
 type modelAndAPIBase struct {
@@ -139,7 +137,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 		endpoint.OwnedBy = ownerByModelID[modelName]
 
 		regionSuffix := ""
-		if region := strings.TrimSpace(endpoint.Region); region != "" {
+		if region := strings.TrimSpace(endpoint.RegionName); region != "" {
 			regionSuffix = "-" + region
 		}
 
@@ -199,13 +197,13 @@ func (m litellmParams) provider() string {
 func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 	properties := pluginapi.PropertyMap{}
 	for key, value := range map[string]string{
-		propertyKeyModelID:         e.ModelID,
+		propertyKeyID:         e.ID,
 		propertyKeyEndpointType:    e.EndpointType,
 		propertyKeyProvider:        e.Provider,
 		propertyKeyEndpointStatus:  e.Status,
 		propertyKeyAPIProtocol:     e.APIProtocol,
-		propertyKeyEndpointURL:     e.EndpointURL,
-		propertyKeyRegion:          e.Region,
+		propertyKeyAPIBase:     e.APIBase,
+		propertyKeyRegionName:          e.RegionName,
 		propertyKeyModelName:       e.ModelName,
 		propertyKeyOwnedBy:         e.OwnedBy,
 		propertyKeyLifecycleStatus: e.LifecycleStatus,
@@ -275,21 +273,18 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 
 	endpoints := make([]inferenceEndpoint, 0, len(payload.Data))
 	for _, entry := range payload.Data {
-		status, ok := statusByKey[modelAndAPIBase{
-			Model:   strings.TrimSpace(entry.LiteLLMParams.Model),
-			APIBase: strings.TrimSpace(entry.LiteLLMParams.APIBase),
-		}]
+		status, ok := statusByKey[entry.LiteLLMParams.normalizedMAAB()]
 		if !ok {
 			status = endpointStatusUnknown
 		}
 
 		endpoints = append(endpoints, inferenceEndpoint{
-			ModelID:            entry.ModelInfo.ID,
+			ID:            entry.ModelInfo.ID,
 			Provider:           entry.LiteLLMParams.provider(),
 			EndpointType:       entry.LiteLLMParams.endpointType(),
 			Status:             status,
-			EndpointURL:        entry.LiteLLMParams.APIBase,
-			Region:             entry.LiteLLMParams.RegionName,
+			APIBase:        entry.LiteLLMParams.APIBase,
+			RegionName:             entry.LiteLLMParams.RegionName,
 			ModelName:          strings.TrimSpace(entry.ModelName),
 			Mode:               entry.ModelInfo.Mode,
 			MaxTokens:          entry.ModelInfo.MaxTokens,
@@ -312,16 +307,10 @@ func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[modelAndAPIBase]s
 
 	status := make(map[modelAndAPIBase]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
 	for _, entry := range payload.UnhealthyEndpoints {
-		status[modelAndAPIBase{
-			Model:   strings.TrimSpace(entry.Model),
-			APIBase: strings.TrimSpace(entry.APIBase),
-		}] = endpointStatusUnhealthy
+		status[entry.normalizedMAAB()] = endpointStatusUnhealthy
 	}
 	for _, entry := range payload.HealthyEndpoints {
-		status[modelAndAPIBase{
-			Model:   strings.TrimSpace(entry.Model),
-			APIBase: strings.TrimSpace(entry.APIBase),
-		}] = endpointStatusHealthy
+		status[entry.normalizedMAAB()] = endpointStatusHealthy
 	}
 
 	return status, nil
