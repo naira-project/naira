@@ -15,17 +15,17 @@ import (
 )
 
 const (
-	propertyKeyID                    		= 		"id"
-	propertyKeyEndpointType               = "endpoint_type"
-	propertyKeyProvider                   = "provider"
-	/* In mcp.go, propertyKeyStatus is already used, preventing this file from 
+	propertyKeyID           = "id"
+	propertyKeyEndpointType = "endpoint_type"
+	propertyKeyProvider     = "provider"
+	/* In mcp.go, propertyKeyStatus is already used, preventing this file from
 	* using propertyKeyStatus. LiteLLM API returns  Hence, here, for displaying the status of a single inference endpoint in Naira
-	* (healthy/unhealthy/unknown), propertyKeyEndpointStatus with the value 'status' will be used.		
-	*/
+	* (healthy/unhealthy/unknown), propertyKeyEndpointStatus with the value 'status' will be used.
+	 */
 	propertyKeyEndpointStatus             = "status"
 	propertyKeyAPIProtocol                = "api_protocol"
-	propertyKeyAPIBase               = "api_base"
-	propertyKeyRegionName                   = "region_name"
+	propertyKeyAPIBase                    = "api_base"
+	propertyKeyRegionName                 = "region_name"
 	propertyKeyModelName                  = "model_name"
 	propertyKeyLifecycleStatus            = "lifecycle_status"
 	propertyKeyLastSeen                   = "last_seen"
@@ -44,12 +44,12 @@ const (
 )
 
 type inferenceEndpoint struct {
-	ID            	   string
+	ID                 string
 	EndpointType       string
 	Provider           string
 	Status             string
 	APIProtocol        string
-	APIBase        	   string
+	APIBase            string
 	RegionName         string
 	ModelName          string
 	OwnedBy            string
@@ -60,7 +60,7 @@ type inferenceEndpoint struct {
 	MaxTokens          int64
 	InputCostPerToken  float64
 	OutputCostPerToken float64
-	Invocations int64
+	Invocations        int64
 }
 
 type litellmParams struct {
@@ -197,13 +197,13 @@ func (m litellmParams) provider() string {
 func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
 	properties := pluginapi.PropertyMap{}
 	for key, value := range map[string]string{
-		propertyKeyID:         e.ID,
+		propertyKeyID:              e.ID,
 		propertyKeyEndpointType:    e.EndpointType,
 		propertyKeyProvider:        e.Provider,
 		propertyKeyEndpointStatus:  e.Status,
 		propertyKeyAPIProtocol:     e.APIProtocol,
-		propertyKeyAPIBase:     e.APIBase,
-		propertyKeyRegionName:          e.RegionName,
+		propertyKeyAPIBase:         e.APIBase,
+		propertyKeyRegionName:      e.RegionName,
 		propertyKeyModelName:       e.ModelName,
 		propertyKeyOwnedBy:         e.OwnedBy,
 		propertyKeyLifecycleStatus: e.LifecycleStatus,
@@ -279,12 +279,12 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 		}
 
 		endpoints = append(endpoints, inferenceEndpoint{
-			ID:            entry.ModelInfo.ID,
+			ID:                 entry.ModelInfo.ID,
 			Provider:           entry.LiteLLMParams.provider(),
 			EndpointType:       entry.LiteLLMParams.endpointType(),
 			Status:             status,
-			APIBase:        entry.LiteLLMParams.APIBase,
-			RegionName:             entry.LiteLLMParams.RegionName,
+			APIBase:            entry.LiteLLMParams.APIBase,
+			RegionName:         entry.LiteLLMParams.RegionName,
 			ModelName:          strings.TrimSpace(entry.ModelName),
 			Mode:               entry.ModelInfo.Mode,
 			MaxTokens:          entry.ModelInfo.MaxTokens,

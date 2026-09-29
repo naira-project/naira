@@ -94,7 +94,7 @@ const (
 	propertyKeyInputTokensTotal  = "input_tokens_total"
 	propertyKeyOutputTokensTotal = "output_tokens_total"
 	propertyKeyInvocationsTotal  = "invocations_total"
-	propertyKeyStatus    = "status"
+	propertyKeyStatus            = "status"
 
 	providerNameBedrock = "bedrock"
 
