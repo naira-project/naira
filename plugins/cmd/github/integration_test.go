@@ -40,7 +40,7 @@ const (
 	k3sImage = "rancher/k3s:v1.28.2-k3s1"
 )
 
-// TestGithubPlugin_Integration tests a real binary of the github plugin
+// TestGithub_Integration tests a real binary of the github plugin
 // against its "neighbor" components:
 //
 //   - the real GitHub API (api.github.com),
@@ -53,11 +53,11 @@ const (
 //   - a "gh" binary available on PATH,
 //   - a GITHUB_TOKEN environment variable with a valid GitHub token (a
 //     classic token with no selected scopes is sufficient); the test is
-//     skipped if either of these is missing, so it doesn't fail in
-//     environments that aren't set up for it,
+//     skipped if either of these is missing, so local test runs don't
+//     require a "gh" and GitHub token by default,
 //   - github.com/naira-project/naira to be a real, public repository with
-//     a top-level CODEOWNERS "*" rule, and one known image digest
-//     published to ghcr.io/naira-project/naira (see attestedImageSHA above).
+//     a top-level CODEOWNERS "*" rules, and one known image digest
+//     published to ghcr.io/naira-project/naira.
 //
 // The plugin & catalog binaries are built as part of the test (should be
 // mostly cached on repeated runs).
@@ -66,18 +66,12 @@ const (
 //   - one running the attested image (single container),
 //   - one running the unattested image (single container),
 //   - one running an image on ghcr.io under a different, made-up org
-//     (filtered out before ever calling gh, per the plugin's ghcr.io
-//     optimization),
-//   - one running two containers (skipped: ambiguous attribution).
+//   - one running two containers.
 //
-// Test output assertion: only the first Deployment should end up linked, via
-// the catalog API, to a git_repository node for naira-project/naira, which
-// itself should have at two CODEOWNERS-derived owner.
-//
-// NOTE: In case of problems with the test, try increasing kernel inotify limit:
-//
-//	sudo sysctl -w fs.inotify.max_user_instances=512
-func TestGithubPlugin_Integration(t *testing.T) {
+// Test output assertion: only the attested Deployment should end up linked to the
+// git_repository node via the catalog API. That repository node should also be linked
+// to its two CODEOWNERS-derived owners
+func TestGithub_Integration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")
 	}
@@ -118,10 +112,10 @@ func TestGithubPlugin_Integration(t *testing.T) {
 
 	// Start kubernetes (k3s), seeded with four Deployments.
 	kubeconfigPath, clusterID := startK3s(ctx, t,
-		deploymentWithImages2("app-attested", attestedImage),
-		deploymentWithImages2("app-unattested", unattestedImage),
-		deploymentWithImages2("app-other-org", otherOrgImage),
-		deploymentWithImages2("app-multi-container", attestedImage, unattestedImage),
+		newDeploymentWithImages("app-attested", attestedImage),
+		newDeploymentWithImages("app-unattested", unattestedImage),
+		newDeploymentWithImages("app-other-org", otherOrgImage),
+		newDeploymentWithImages("app-multi-container", attestedImage, unattestedImage),
 	)
 
 	// Start a mock OIDC (i.e. Keycloak-like) server.
@@ -232,7 +226,11 @@ plugins:
 	})
 }
 
-func deploymentWithImages2(name string, images ...string) *appsv1.Deployment {
+// -----------------------------------------------------------------------------
+// Test Helpers (Specific to github plugin test)
+// -----------------------------------------------------------------------------
+
+func newDeploymentWithImages(name string, images ...string) *appsv1.Deployment {
 	containers := make([]corev1.Container, 0, len(images))
 	for i, image := range images {
 		containers = append(containers, corev1.Container{
@@ -255,6 +253,10 @@ func deploymentWithImages2(name string, images ...string) *appsv1.Deployment {
 		},
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Test Helpers (Copied from depl_calls_svc integration test with small adjustments)
+// -----------------------------------------------------------------------------
 
 // startK3s starts a k3s container seeded with deployments, and returns a
 // kubeconfig file path for that cluster plus its cluster ID (the
@@ -296,6 +298,19 @@ func startK3s(ctx context.Context, t *testing.T, deployments ...*appsv1.Deployme
 
 	return kubeconfigPath, clusterID
 }
+
+func requestPluginRun(ctx context.Context, t *testing.T, catalogBaseURL, token string) string {
+	t.Helper()
+
+	op, status := doJSON[apiOperation](ctx, t, http.MethodPost, catalogBaseURL+"/v1/plugins/github:run", token)
+	require.Equal(t, http.StatusAccepted, status, "POST /v1/plugins/github:run")
+	require.NotEmpty(t, op.Name)
+	return op.Name
+}
+
+// -----------------------------------------------------------------------------
+// Test Helpers (Copied from depl_calls_svc integration test)
+// -----------------------------------------------------------------------------
 
 // buildAndStart builds pkg, trying to use the same command line used in our
 // Dockerfiles, then starts the resulting binary as a background process with
@@ -373,15 +388,6 @@ type apiOperation struct {
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
-}
-
-func requestPluginRun(ctx context.Context, t *testing.T, catalogBaseURL, token string) string {
-	t.Helper()
-
-	op, status := doJSON[apiOperation](ctx, t, http.MethodPost, catalogBaseURL+"/v1/plugins/github:run", token)
-	require.Equal(t, http.StatusAccepted, status, "POST /v1/plugins/github:run")
-	require.NotEmpty(t, op.Name)
-	return op.Name
 }
 
 func operationErrorMessage(op apiOperation) string {
