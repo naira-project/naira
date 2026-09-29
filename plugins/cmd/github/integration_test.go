@@ -72,10 +72,7 @@ const (
 //
 // Test output assertion: only the first Deployment should end up linked, via
 // the catalog API, to a git_repository node for naira-project/naira, which
-// itself should have at least one CODEOWNERS-derived owner (exact owner
-// handles aren't asserted, to avoid coupling the test to CODEOWNERS
-// content). The other three Deployments must not produce any "built_from"
-// relation.
+// itself should have at two CODEOWNERS-derived owner.
 //
 // NOTE: In case of problems with the test, try increasing kernel inotify limit:
 //
@@ -101,7 +98,7 @@ func TestGithubPlugin_Integration(t *testing.T) {
 	var (
 		// githubTest... are ours real GitHub repository data used
 		// to exercise attestation verification, repo metadata and CODEOWNERS
-		// lookup against the real GitHub API and a real "gh" CLI.
+		// lookup against the real GitHub API
 		githubTestOrg     = "naira-project"
 		githubTestPackage = "naira-catalog"
 		githubTestRepo    = "naira"
@@ -184,12 +181,10 @@ plugins:
 	//
 
 	var (
-		pathPrefix     = clusterID + "/default/"
-		repoPath       = "github.com/" + githubTestOrg + "/" + githubTestRepo
-		attestedDepl   = pathPrefix + "app-attested"
-		unattestedDepl = pathPrefix + "app-unattested"
-		otherOrgDepl   = pathPrefix + "app-other-org"
-		multiDepl      = pathPrefix + "app-multi-container"
+		wantRepoPath            = "github.com/" + githubTestOrg + "/" + githubTestRepo
+		wantDeplPath            = clusterID + "/default/app-attested"
+		wantOwnerDevPath        = "github.com/@naira-project/dev"
+		wantOwnerMaintainerPath = "github.com/@naira-project/maintainer"
 	)
 
 	type node struct {
@@ -200,21 +195,14 @@ plugins:
 		Nodes []node `json:"nodes"`
 	}](ctx, t, http.MethodGet, catalogBaseURL+"/v1/nodes", token)
 	assert.Equal(t, http.StatusOK, status, "GET /v1/nodes")
-	// TODO: when catalog API allows filtering by path prefix, tighten these
-	// assertions. (Currently, there are extra namespaces and nodes from k8s
-	// in the response, and we deliberately don't assert on exact CODEOWNERS
-	// content, only that owners were found - see the test's godoc.)
-	assert.Contains(t, nodes.Nodes, node{Kind: "git_repository", Path: repoPath},
-		"expected a git_repository node for %s", repoPath)
-	assert.Contains(t, nodes.Nodes, node{Kind: "deployment", Path: attestedDepl})
-
-	var ownerCount int
-	for _, n := range nodes.Nodes {
-		if n.Kind == "owner" {
-			ownerCount++
-		}
-	}
-	assert.Positive(t, ownerCount, "expected at least one owner node from CODEOWNERS")
+	// TODO: when catalog API allows filtering by path prefix, switch to assert.ElementsMatch
+	// (Currently, there are extra namespaces and nodes from k8s in the response.)
+	assert.Subset(t, nodes.Nodes, []node{
+		{Kind: "git_repository", Path: wantRepoPath},
+		{Kind: "deployment", Path: wantDeplPath},
+		{Kind: "owner", Path: wantOwnerDevPath},
+		{Kind: "owner", Path: wantOwnerMaintainerPath},
+	})
 
 	type relation struct {
 		Kind     string `json:"kind"`
@@ -225,28 +213,23 @@ plugins:
 		Relations []relation `json:"relations"`
 	}](ctx, t, http.MethodGet, catalogBaseURL+"/v1/relations", token)
 	assert.Equal(t, http.StatusOK, status, "GET /v1/relations")
-
-	assert.Contains(t, relations.Relations, relation{
-		Kind:     "built_from",
-		FromNode: "nodes/deployment/" + attestedDepl,
-		ToNode:   "nodes/git_repository/" + repoPath,
+	assert.ElementsMatch(t, relations.Relations, []relation{
+		{
+			Kind:     "built_from",
+			FromNode: "nodes/deployment/" + wantDeplPath,
+			ToNode:   "nodes/git_repository/" + wantRepoPath,
+		},
+		{
+			Kind:     "owned_by",
+			FromNode: "nodes/git_repository/" + wantRepoPath,
+			ToNode:   "nodes/owner/" + wantOwnerDevPath,
+		},
+		{
+			Kind:     "owned_by",
+			FromNode: "nodes/git_repository/" + wantRepoPath,
+			ToNode:   "nodes/owner/" + wantOwnerMaintainerPath,
+		},
 	})
-
-	var sawOwnedBy bool
-	for _, r := range relations.Relations {
-		if r.Kind == "owned_by" && r.FromNode == "nodes/git_repository/"+repoPath {
-			sawOwnedBy = true
-			break
-		}
-	}
-	assert.True(t, sawOwnedBy, "expected an owned_by relation from %s", repoPath)
-
-	for _, deplPath := range []string{unattestedDepl, otherOrgDepl, multiDepl} {
-		for _, r := range relations.Relations {
-			assert.NotEqual(t, "nodes/deployment/"+deplPath, r.FromNode,
-				"deployment %s should not be linked to anything", deplPath)
-		}
-	}
 }
 
 func deploymentWithImages2(name string, images ...string) *appsv1.Deployment {
