@@ -78,12 +78,16 @@ func TestGithub_Integration(t *testing.T) {
 
 	githubToken := os.Getenv("GITHUB_TOKEN")
 	if githubToken == "" {
-		t.Skip("skipping: GITHUB_TOKEN not set")
+		t.Fatal("GITHUB_TOKEN is not set. Either set GITHUB_TOKEN " +
+			"(a classic token with no scopes is enough), or disable this test: " +
+			"go test ./... -skip 'TestGithub_Integration'")
 	}
 
 	ghPath, err := exec.LookPath("gh")
 	if err != nil {
-		t.Skip("skipping: gh CLI not found on PATH")
+		t.Fatal("gh CLI not found on PATH. Install project tools with mise " +
+			"(see the mise instructions in README.md), or disable this test: " +
+			"go test ./... -skip 'TestGithub_Integration'")
 	}
 
 	ctx, cancel := context.WithTimeout(t.Context(), integrationTestTimeout)
