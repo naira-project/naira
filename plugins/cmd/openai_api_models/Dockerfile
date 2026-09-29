@@ -11,7 +11,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 # ARG cannot be declared earlier because BuildKit includes it in the cache key
 # and we want to reuse cache across different plugins.
-ARG PLUGIN=fluxcd
+ARG PLUGIN=openai_api_models
 
 COPY plugins/pkg/ ./plugins/pkg/
 COPY plugins/internal/ ./plugins/internal/
@@ -31,3 +31,4 @@ EXPOSE 50051
 USER nonroot:nonroot
 
 ENTRYPOINT ["/plugin"]
+

@@ -57,10 +57,11 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	models, err := openaicompat.FetchModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey)
-	if err != nil {
+	var resp openaicompat.SimpleModelsResponse
+	if err := openaicompat.GetModels(ctx, p.httpClient, p.config.BaseURL, p.config.APIKey, &resp); err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("fetching LiteLLM models: %w", err)
 	}
+	models := resp.Data
 
 	nodes := make([]pluginapi.NodeClaim, 0, len(models))
 	relations := make([]pluginapi.RelationClaim, 0)
@@ -165,10 +166,7 @@ func (p *Plugin) fetchAllowedModels(ctx context.Context, key string) ([]string, 
 	query := req.URL.Query()
 	query.Set("key", key)
 	req.URL.RawQuery = query.Encode()
-
-	if strings.TrimSpace(p.config.APIKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
-	}
+	p.addAuthorization(req)
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -186,6 +184,12 @@ func (p *Plugin) fetchAllowedModels(ctx context.Context, key string) ([]string, 
 	}
 
 	return payload.Info.Models, nil
+}
+
+func (p *Plugin) addAuthorization(req *http.Request) {
+	if strings.TrimSpace(p.config.APIKey) != "" {
+		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
+	}
 }
 
 func newAppIdentityProvider(logger *log.Logger) AppIdentityProvider {
