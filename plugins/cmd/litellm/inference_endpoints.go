@@ -41,12 +41,6 @@ const (
 	endpointStatusUnhealthy = "unhealthy"
 	endpointStatusUnknown   = "unknown"
 
-	// The LiteLLM proxy exposes every deployment through its OpenAI-compatible
-	// API, regardless of the upstream provider's native protocol.
-	apiProtocolOpenAI = "openai"
-
-	// Endpoints are only emitted once they received traffic in the lookback
-	// window, so every emitted endpoint is active.
 	lifecycleStatusActive = "active"
 )
 
@@ -246,7 +240,6 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 			propertyKeyEndpointType:   entry.LiteLLMParams.endpointType(),
 			propertyKeyProvider:       entry.LiteLLMParams.provider(),
 			propertyKeyEndpointStatus: status,
-			propertyKeyAPIProtocol:    apiProtocolOpenAI,
 			propertyKeyAPIBase:        entry.LiteLLMParams.APIBase,
 			propertyKeyRegionName:     strings.TrimSpace(entry.LiteLLMParams.RegionName),
 			propertyKeyModelName:      modelName,

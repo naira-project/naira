@@ -8,6 +8,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	bedrocktypes "github.com/aws/aws-sdk-go-v2/service/bedrock/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
@@ -36,8 +37,6 @@ func fakeCloudWatchClient(output *cloudwatch.GetMetricDataOutput, err error) get
 	}
 }
 
-func strp(s string) *string { return &s }
-
 func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDataFunc, cwErr error) *Plugin {
 	return &Plugin{
 		logger: log.New(io.Discard, "", 0),
@@ -59,9 +58,9 @@ func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDa
 
 func TestCollect(t *testing.T) {
 	novaMicro := bedrocktypes.FoundationModelSummary{
-		ModelId:      strp("amazon.nova-micro-v1:0"),
-		ModelName:    strp("Nova Micro"),
-		ProviderName: strp("Amazon"),
+		ModelId:      aws.String("amazon.nova-micro-v1:0"),
+		ModelName:    aws.String("Nova Micro"),
+		ProviderName: aws.String("Amazon"),
 		ModelLifecycle: &bedrocktypes.FoundationModelLifecycle{
 			Status: bedrocktypes.FoundationModelLifecycleStatusActive,
 		},
@@ -71,15 +70,15 @@ func TestCollect(t *testing.T) {
 	usage := &cloudwatch.GetMetricDataOutput{
 		MetricDataResults: []cwtypes.MetricDataResult{
 			{
-				Id:     strp("in0"),
+				Id:     aws.String("in0"),
 				Values: []float64{3},
 			},
 			{
-				Id:     strp("out0"),
+				Id:     aws.String("out0"),
 				Values: []float64{5},
 			},
 			{
-				Id:     strp("inv0"),
+				Id:     aws.String("inv0"),
 				Values: []float64{1},
 			},
 		},
@@ -88,15 +87,15 @@ func TestCollect(t *testing.T) {
 	usageAtIndex1 := &cloudwatch.GetMetricDataOutput{
 		MetricDataResults: []cwtypes.MetricDataResult{
 			{
-				Id:     strp("in1"),
+				Id:     aws.String("in1"),
 				Values: []float64{3},
 			},
 			{
-				Id:     strp("out1"),
+				Id:     aws.String("out1"),
 				Values: []float64{5},
 			},
 			{
-				Id:     strp("inv1"),
+				Id:     aws.String("inv1"),
 				Values: []float64{1},
 			},
 		},
@@ -165,7 +164,7 @@ func TestCollect(t *testing.T) {
 			regions: []string{"us-east-1"},
 			models: []bedrocktypes.FoundationModelSummary{
 				{
-					ModelId: strp("amazon.titan-text-express-v1"),
+					ModelId: aws.String("amazon.titan-text-express-v1"),
 				},
 			},
 			cw: noUsage,
@@ -188,7 +187,7 @@ func TestCollect(t *testing.T) {
 			regions: []string{"us-east-1"},
 			models: []bedrocktypes.FoundationModelSummary{
 				{
-					ModelId: strp("amazon.titan-text-express-v1"),
+					ModelId: aws.String("amazon.titan-text-express-v1"),
 				},
 			},
 			cwErr: assert.AnError,
@@ -211,10 +210,10 @@ func TestCollect(t *testing.T) {
 			regions: []string{"us-east-1"},
 			models: []bedrocktypes.FoundationModelSummary{
 				{
-					ModelId: strp("  "),
+					ModelId: aws.String("  "),
 				},
 				{
-					ModelId: strp("amazon.titan-text-express-v1"),
+					ModelId: aws.String("amazon.titan-text-express-v1"),
 				},
 			},
 			cw: usageAtIndex1,
@@ -264,7 +263,7 @@ func TestCollect(t *testing.T) {
 			regions: []string{"us-east-1", "eu-central-1"},
 			models: []bedrocktypes.FoundationModelSummary{
 				{
-					ModelId: strp("amazon.titan-text-express-v1"),
+					ModelId: aws.String("amazon.titan-text-express-v1"),
 				},
 			},
 			cw: usage,
@@ -366,7 +365,7 @@ func TestCollect_ListFoundationModelsErrorIsReportedPerRegion(t *testing.T) {
 	goodModels := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
 		ModelSummaries: []bedrocktypes.FoundationModelSummary{
 			{
-				ModelId: strp("amazon.titan-text-express-v1"),
+				ModelId: aws.String("amazon.titan-text-express-v1"),
 			},
 		},
 	}, nil)
@@ -402,7 +401,7 @@ func TestCollect_BatchesAndPaginatesMetricQueries(t *testing.T) {
 	models := make([]bedrocktypes.FoundationModelSummary, modelCount)
 	for i := range models {
 		models[i] = bedrocktypes.FoundationModelSummary{
-			ModelId: strp(fmt.Sprintf("model-%d", i)),
+			ModelId: aws.String(fmt.Sprintf("model-%d", i)),
 		}
 	}
 	bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
@@ -431,17 +430,17 @@ func TestCollect_BatchesAndPaginatesMetricQueries(t *testing.T) {
 			return &cloudwatch.GetMetricDataOutput{
 				MetricDataResults: []cwtypes.MetricDataResult{
 					{
-						Id:     strp(fmt.Sprintf("inv%d", lastIndex)),
+						Id:     aws.String(fmt.Sprintf("inv%d", lastIndex)),
 						Values: []float64{2},
 					},
 				},
-				NextToken: strp("page-2"),
+				NextToken: aws.String("page-2"),
 			}, nil
 		}
 		return &cloudwatch.GetMetricDataOutput{
 			MetricDataResults: []cwtypes.MetricDataResult{
 				{
-					Id:     strp(fmt.Sprintf("inv%d", lastIndex)),
+					Id:     aws.String(fmt.Sprintf("inv%d", lastIndex)),
 					Values: []float64{3},
 				},
 			},
@@ -470,11 +469,11 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 			cw: &cloudwatch.GetMetricDataOutput{
 				MetricDataResults: []cwtypes.MetricDataResult{
 					{
-						Id:     strp("inv0"),
+						Id:     aws.String("inv0"),
 						Values: []float64{5},
 					},
 					{
-						Id:     strp("cerr0"),
+						Id:     aws.String("cerr0"),
 						Values: []float64{2},
 					},
 				},
@@ -485,11 +484,11 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 			cw: &cloudwatch.GetMetricDataOutput{
 				MetricDataResults: []cwtypes.MetricDataResult{
 					{
-						Id:     strp("inv0"),
+						Id:     aws.String("inv0"),
 						Values: []float64{5},
 					},
 					{
-						Id:     strp("serr0"),
+						Id:     aws.String("serr0"),
 						Values: []float64{1},
 					},
 				},
@@ -500,11 +499,11 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 			cw: &cloudwatch.GetMetricDataOutput{
 				MetricDataResults: []cwtypes.MetricDataResult{
 					{
-						Id:     strp("inv0"),
+						Id:     aws.String("inv0"),
 						Values: []float64{5},
 					},
 					{
-						Id:     strp("thr0"),
+						Id:     aws.String("thr0"),
 						Values: []float64{3},
 					},
 				},
@@ -517,7 +516,7 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 			bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
 				ModelSummaries: []bedrocktypes.FoundationModelSummary{
 					{
-						ModelId: strp("amazon.titan-text-express-v1"),
+						ModelId: aws.String("amazon.titan-text-express-v1"),
 					},
 				},
 			}, nil)
