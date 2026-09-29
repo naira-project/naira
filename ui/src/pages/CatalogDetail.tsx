@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router';
 import PropertiesPanel from '../components/PropertiesPanel';
 import RelatedNodes from '../components/RelatedNodes';
 import { Button } from '../components/ui/button';
-import { detailTabsForKind, relatedCardForKind } from '../config/detailTabs';
+import { relatedCardForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
@@ -29,14 +29,11 @@ export default function CatalogDetail() {
   const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
   const backPath = findViewpointForKind(decodedKind)?.path;
 
-  // Kind-specific tabs come from configuration;
-  const kindTabs = detailTabsForKind(decodedKind);
   const relatedConfig = relatedCardForKind(decodedKind);
-  const landingTab = kindTabs.find((tab) => tab.primary)?.value ?? GRAPH_TAB;
+  const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 
   const tabs = [
-    ...kindTabs.map((tab) => ({ value: tab.value, label: tab.value })),
     { value: GRAPH_TAB, label: GRAPH_TAB },
     { value: PROPERTIES_TAB, label: PROPERTIES_TAB },
   ];
@@ -109,12 +106,6 @@ export default function CatalogDetail() {
                   <div className="h-[500px]">
                     <CatalogGraph rootNode={{ name: node.name }} />
                   </div>
-                )}
-
-                {kindTabs.map(({ value, config }) =>
-                  currentTab === value ? (
-                    <RelatedNodes key={value} node={node} config={config} />
-                  ) : null,
                 )}
 
                 {currentTab === PROPERTIES_TAB && (
