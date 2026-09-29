@@ -1,5 +1,5 @@
 // Integration test for the github plugin.
-// See the godoc of TestGithubPlugin_Integration for more details.
+// See the godoc of TestGithub_Integration for more details.
 package main
 
 import (
