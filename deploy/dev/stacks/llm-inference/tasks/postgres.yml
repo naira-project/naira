@@ -1,0 +1,20 @@
+version: '3'
+
+vars:
+  POSTGRES_NAMESPACE: litellm-db
+  POSTGRES_MANIFEST: ./infra/kubernetes/postgres.yaml
+
+tasks:
+  deploy:
+    internal: true
+    desc: Deploy PostgreSQL for LiteLLM to kind
+    cmds:
+      - kubectl apply -f {{.POSTGRES_MANIFEST}}
+      - kubectl -n {{.POSTGRES_NAMESPACE}} rollout status deploy/postgres --timeout=180s
+      - kubectl -n {{.POSTGRES_NAMESPACE}} get pods
+
+  undeploy:
+    internal: true
+    desc: Remove PostgreSQL for LiteLLM from kind
+    cmds:
+      - kubectl delete -f {{.POSTGRES_MANIFEST}} --ignore-not-found

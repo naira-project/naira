@@ -9,13 +9,42 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
+
+const testBearerToken = "test-token"
+const testIssuer = "http://localhost:8080/realms/naira"
+
+type stubTokenDecoder struct{}
+
+func (stubTokenDecoder) DecodeAccessToken(_ context.Context, accessToken, _ string) (*jwt.Token, *jwt.MapClaims, error) {
+	if accessToken != testBearerToken {
+		return nil, nil, errors.New("invalid token")
+	}
+
+	claims := jwt.MapClaims{
+		"sub":                "test-user",
+		"preferred_username": "test-user",
+		"iss":                testIssuer,
+	}
+	return nil, &claims, nil
+}
+
+func withAuth(req *http.Request, bearerToken string) *http.Request {
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
+	return req
+}
 
 type stubPlugin struct {
 	response catalog.CollectResponse
@@ -26,11 +55,43 @@ func (p stubPlugin) Collect(context.Context) (catalog.CollectResponse, error) {
 	return p.response, p.err
 }
 
+// blockingStubPlugin blocks Collect until the block channel is closed.
+type blockingStubPlugin struct {
+	block    chan struct{}
+	response catalog.CollectResponse
+	err      error
+}
+
+func (p blockingStubPlugin) Collect(ctx context.Context) (catalog.CollectResponse, error) {
+	select {
+	case <-p.block:
+	case <-ctx.Done():
+		return catalog.CollectResponse{}, ctx.Err()
+	}
+	return p.response, p.err
+}
+
 func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
 	t.Helper()
 
 	_, _, err := store.ApplyPluginSnapshot("test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
 	require.NoError(t, err)
+}
+
+// newTestRouter wires a fresh catalog.Service and pluginrun.Runner sharing a
+// single graph store, mirroring how main.go wires the real router.
+func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.Store, plugins map[string]pluginrun.Plugin) http.Handler {
+	t.Helper()
+
+	catalogService := catalog.NewService(store)
+	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
+	configs := make(catalog.PluginConfigsByName, len(plugins))
+	for name := range plugins {
+		configs[name] = catalog.PluginConfig{}
+	}
+	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	require.NoError(t, err)
+	return router
 }
 
 func TestRouterServesCurrentEndpoints(t *testing.T) {
@@ -65,11 +126,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 			}},
 	)
 
-	router := NewRouter(catalog.NewService(
-		store,
-		map[string]catalog.Plugin{"seed": stubPlugin{}},
-		log.New(io.Discard, "", 0),
-	), log.New(io.Discard, "", 0))
+	router := newTestRouter(t, store, operations.NewMemoryStore(), map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
 	tests := []struct {
 		name               string
@@ -175,28 +232,11 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				assert.Equal(t, expected, payload)
 			},
 		},
-		{
-			name:               "run all plugins",
-			method:             http.MethodPost,
-			path:               "/v1/plugins:run",
-			expectedStatusCode: http.StatusAccepted,
-			validatePayload: func(t *testing.T, body []byte) {
-				var payload RunPluginsResponse
-				require.NoError(t, json.Unmarshal(body, &payload))
-
-				expected := RunPluginsResponse{
-					Results: []RunPluginResult{
-						{Plugin: "seed", Error: ""},
-					},
-				}
-				assert.Equal(t, expected, payload)
-			},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, tt.path, nil)
+			req := withAuth(httptest.NewRequest(tt.method, tt.path, nil), testBearerToken)
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
@@ -209,30 +249,29 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 	}
 }
 
-func TestRunAllPluginsReturnsPluginErrorsInResults(t *testing.T) {
-	router := NewRouter(catalog.NewService(
-		catalog.NewMemoryStore(),
-		map[string]catalog.Plugin{"seed": stubPlugin{err: errors.New("seed failed")}},
-		log.New(io.Discard, "", 0),
-	), log.New(io.Discard, "", 0))
+func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
+	store := catalog.NewMemoryStore()
+	applyPluginSnapshot(t, store, []catalog.NodeClaim{{
+		ID: catalog.NodeID{Kind: "owner", Path: "@naira-project/dev"},
+	}}, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/plugins:run", nil)
+	router := newTestRouter(t, store, operations.NewMemoryStore(), nil)
+	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/nodes/owner/%40naira-project/dev", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusAccepted, rec.Code)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
-	var payload RunPluginsResponse
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
-
-	expected := RunPluginsResponse{
-		Results: []RunPluginResult{
-			{
-				Plugin: "seed",
-				Error:  `collecting response from plugin "seed": seed failed`,
-			},
-		},
-	}
-	assert.Equal(t, expected, payload)
+	var response Node
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+	assert.Equal(t, Node{
+		Name: "nodes/owner/@naira-project/dev",
+		Kind: "owner",
+		Path: "@naira-project/dev",
+		PluginClaims: []PluginClaim{{
+			Plugin: "test-plugin",
+			Props:  map[string]string{},
+		}},
+	}, response)
 }

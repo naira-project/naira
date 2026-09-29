@@ -12,6 +12,7 @@ import (
 
 var (
 	ErrInvalidIngestion = errors.New("invalid ingestion payload")
+	ErrNodeNotFound     = errors.New("node not found")
 )
 
 type Store interface {
@@ -246,14 +247,14 @@ func validateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 	return nil
 }
 
-func lessNodeID(left NodeID, right NodeID) bool {
+func lessNodeID(left, right NodeID) bool {
 	if left.Kind != right.Kind {
 		return left.Kind < right.Kind
 	}
 	return left.Path < right.Path
 }
 
-func lessRelation(left Relation, right Relation) bool {
+func lessRelation(left, right Relation) bool {
 	if left.Kind != right.Kind {
 		return left.Kind < right.Kind
 	}

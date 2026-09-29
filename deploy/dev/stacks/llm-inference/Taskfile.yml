@@ -1,0 +1,50 @@
+version: '3'
+
+includes:
+  postgres:
+    taskfile: ./tasks/postgres.yml
+    dir: .
+  litellm-svc:
+    taskfile: ./tasks/litellm.yml
+    dir: .
+  llamacpp:
+    taskfile: ./tasks/llamacpp.yml
+    dir: .
+  monitoring:
+    taskfile: ./tasks/monitoring.yml
+    dir: .
+  vllm:
+    taskfile: ./tasks/vllm.yml
+    dir: .
+
+tasks:
+  deploy:
+    desc: Deploy the LLM Inference stack (postgres + litellm + llamacpp + monitoring)
+    cmds:
+      - task: litellm:deploy
+      - task: llamacpp:deploy
+      - task: monitoring:deploy
+
+  undeploy:
+    desc: Remove the full LLM Inference stack from kind
+    cmds:
+      - task: monitoring:undeploy
+      - task: llamacpp:undeploy
+      - task: litellm:undeploy
+
+  litellm:deploy:
+    desc: Deploy only LiteLLM (postgres + litellm)
+    cmds:
+      - task: postgres:deploy
+      - task: litellm-svc:deploy
+
+  litellm:undeploy:
+    desc: Remove only LiteLLM and its database
+    cmds:
+      - task: litellm-svc:undeploy
+      - task: postgres:undeploy
+
+  litellm:port-forward:
+    desc: Expose LiteLLM on localhost:4000
+    cmds:
+      - task: litellm-svc:port-forward

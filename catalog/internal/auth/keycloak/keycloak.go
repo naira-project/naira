@@ -1,0 +1,113 @@
+package keycloak
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strings"
+
+	"github.com/golang-jwt/jwt/v5"
+)
+
+type contextKey string
+
+const claimsKey contextKey = "claims"
+
+type TokenDecoder interface {
+	DecodeAccessToken(ctx context.Context, accessToken, realm string) (*jwt.Token, *jwt.MapClaims, error)
+}
+
+// Config holds the client, realm, and expected issuer needed for token verification.
+type Config struct {
+	Client TokenDecoder
+	Realm  string
+	Issuer string
+}
+
+// TokenClaims holds the user identity extracted from a verified Keycloak JWT.
+type TokenClaims struct {
+	UserID            string
+	Email             string
+	PreferredUsername string
+}
+
+// NewAuthMiddleware returns an HTTP middleware that validates the Bearer
+// token from each request's Authorization header against cfg.Issuer via
+// cfg.Client, rejecting the request with 401 if the header is missing, the
+// token is malformed or invalid, or the issuer does not match. It does not
+// perform any authorization/permission checks. On success, it parses the
+// token's claims into a TokenClaims and stores them on the request context.
+func NewAuthMiddleware(cfg Config) (func(http.Handler) http.Handler, error) {
+	if cfg.Client == nil {
+		return nil, errors.New("keycloak: Config.Client must not be nil")
+	}
+	if cfg.Issuer == "" {
+		return nil, errors.New("keycloak: Config.Issuer must not be empty")
+	}
+
+	middleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authHeader := r.Header.Get("Authorization")
+			if authHeader == "" {
+				writeJSONError(w, http.StatusUnauthorized, "missing authorization header")
+				return
+			}
+
+			before, after, found := strings.Cut(authHeader, " ")
+			if !found || !strings.EqualFold(before, "Bearer") {
+				writeJSONError(w, http.StatusUnauthorized, "authorization header must be Bearer {token}")
+				return
+			}
+			tokenString := strings.TrimSpace(after)
+
+			_, rawClaims, err := cfg.Client.DecodeAccessToken(r.Context(), tokenString, cfg.Realm)
+			if err != nil || rawClaims == nil {
+				writeJSONError(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
+
+			if stringClaim(*rawClaims, "iss") != cfg.Issuer {
+				writeJSONError(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
+
+			claims := parseTokenClaims(rawClaims)
+			if claims.UserID == "" {
+				writeJSONError(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), claimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+
+	return middleware, nil
+}
+
+func writeJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
+}
+
+func parseTokenClaims(rawClaims *jwt.MapClaims) TokenClaims {
+	claims := *rawClaims
+	tc := TokenClaims{
+		UserID:            stringClaim(claims, "sub"),
+		Email:             stringClaim(claims, "email"),
+		PreferredUsername: stringClaim(claims, "preferred_username"),
+	}
+
+	return tc
+}
+
+func stringClaim(claims map[string]interface{}, key string) string {
+	if v, ok := claims[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}

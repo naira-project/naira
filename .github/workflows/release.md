@@ -4,7 +4,7 @@ Releases are automated via [Release Please](https://github.com/googleapis/releas
 
 ---
 
-## Commit Message Format
+## Pull Request Title Format
 
 ```
 <type>: <description>
@@ -27,7 +27,7 @@ chore: update dependencies
 ## Lifecycle
 
 ```
-feat/fix commits → main
+feat/fix pull requests → main (squash merged)
         ↓
 Release Please opens RC PR  (e.g. v0.12.0-rc.1)
         ↓
@@ -46,7 +46,7 @@ Merge Stable PR → GitHub Release published, Docker image built
 
 ## For Developers
 
-**Day-to-day:** Just merge PRs with conventional commit messages. Release Please handles the rest.
+**Day-to-day:** Use a Conventional Commit title for each PR and squash merge it. Individual commits within the PR do not need to follow the Conventional Commits specification. Release Please handles the rest.
 
 **To release a new stable version:**
 
@@ -79,5 +79,5 @@ Docker images are published to the GitHub Container Registry (`ghcr.io`) on ever
 | Symptom | Fix |
 |---------|-----|
 | Release Please proposes wrong version | Run **Promote RC to Stable** workflow — it heals the manifest and pins `release-as` automatically |
-| RC PR not appearing after merging a feature | Check that the commit message uses a valid conventional commit type (`feat:` or `fix:`) |
+| RC PR not appearing after merging a feature | Check that the squash-merged PR title uses a valid conventional commit type (`feat:` or `fix:`) |
 | Stable PR shows 0 user-facing commits | The promotion commit uses `fix:` to wake up Release Please — this is expected |

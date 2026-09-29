@@ -1,0 +1,105 @@
+# llama.cpp uses less RAM than vLLM, which is why vLLM isn't in the llm-inference taskfiles
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vllm
+---
+# ── Chat template for opt-125m (base model, no default chat template) ───────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-chat-template
+  namespace: vllm
+data:
+  chat-template.jinja: |
+    {% for message in messages %}
+    {% if message['role'] == 'system' %}System: {{ message['content'] }}
+    {% elif message['role'] == 'user' %}User: {{ message['content'] }}
+    {% elif message['role'] == 'assistant' %}Assistant: {{ message['content'] }}
+    {% endif %}
+    {% endfor %}
+    Assistant:
+---
+# ── vLLM serving facebook/opt-125m (125M params, CPU-friendly) ──────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-opt125m
+  namespace: vllm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-opt125m
+  template:
+    metadata:
+      labels:
+        app: vllm-opt125m
+    spec:
+      enableServiceLinks: false
+      volumes:
+      - name: chat-template
+        configMap:
+          name: vllm-chat-template
+      # vLLM's needs >64Mi of /dev/shm (the K8s default)
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 1Gi
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai-cpu:latest
+        args:
+        - facebook/opt-125m
+        - --served-model-name
+        - opt-125m
+        - --chat-template
+        - /etc/vllm/chat-template.jinja
+        env:
+        - name: VLLM_CPU_KVCACHE_SPACE
+          value: "1"
+        ports:
+        - containerPort: 8000
+          name: http
+        volumeMounts:
+        - name: chat-template
+          mountPath: /etc/vllm/chat-template.jinja
+          subPath: chat-template.jinja
+          readOnly: true
+        - name: dshm
+          mountPath: /dev/shm
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 120
+          periodSeconds: 30
+          timeoutSeconds: 10
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-opt125m
+  namespace: vllm
+spec:
+  selector:
+    app: vllm-opt125m
+  ports:
+  - name: http
+    port: 8001
+    targetPort: http
+  type: ClusterIP
