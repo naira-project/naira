@@ -119,8 +119,8 @@ const (
 type config struct {
 	PathPrefix string `env:"PATH_PREFIX" default:"bedrock"`
 	// Regions is a space-separated list of AWS regions to query, e.g. "us-east-1 eu-central-1".
-	Regions         []string      `env:"BEDROCK_REGIONS" default:"us-east-1"`
-	MetricsLookback time.Duration `env:"BEDROCK_METRICS_LOOKBACK" default:"24h"`
+	Regions         []string      `env:"REGIONS" default:"us-east-1"`
+	MetricsLookback time.Duration `env:"METRICS_LOOKBACK" default:"24h"`
 }
 
 type Plugin struct {
@@ -217,7 +217,10 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 		}
 
 		modelNode := pluginapi.NodeClaim{
-			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + modelID},
+			ID: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindModel,
+				Path: p.config.PathPrefix + "/" + modelID,
+			},
 			Properties: pluginapi.PropertyMap{
 				propertyKeyOwnedBy: model.ProviderName,
 			},
@@ -237,7 +240,10 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 		// must stay "bedrock" (matching the litellm plugin's endpoint paths),
 		// not the region.
 		endpointNode := pluginapi.NodeClaim{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: p.config.PathPrefix + "/" + modelID + "-" + region},
+			ID: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindInferenceEndpoint,
+				Path: p.config.PathPrefix + "/" + modelID + "-" + region,
+			},
 			Properties: model.properties(region, usage[modelID]),
 		}
 		nodes = append(nodes, endpointNode)
@@ -262,18 +268,18 @@ type foundationModel struct {
 }
 
 type modelUsage struct {
-	InputTokens  float64
-	OutputTokens float64
-	Invocations  float64
-	ClientErrors float64
-	ServerErrors float64
-	Throttles    float64
+	InputTokens            float64
+	OutputTokens           float64
+	Invocations            float64
+	InvocationClientErrors float64
+	InvocationServerErrors float64
+	InvocationThrottles    float64
 }
 
 // status reports whether the model showed any client errors, server errors
 // or throttles in the lookback window. This is for active inference endpoints.
 func (u modelUsage) status() string {
-	if u.ClientErrors != 0 || u.ServerErrors != 0 || u.Throttles != 0 {
+	if u.InvocationClientErrors != 0 || u.InvocationServerErrors != 0 || u.InvocationThrottles != 0 {
 		return endpointStatusUnhealthy
 	}
 	return endpointStatusHealthy
@@ -415,12 +421,12 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 			continue
 		}
 		usage[modelID] = modelUsage{
-			InputTokens:  usageByQueryID[fmt.Sprintf("in%d", i)],
-			OutputTokens: usageByQueryID[fmt.Sprintf("out%d", i)],
-			Invocations:  usageByQueryID[fmt.Sprintf("inv%d", i)],
-			ClientErrors: usageByQueryID[fmt.Sprintf("cerr%d", i)],
-			ServerErrors: usageByQueryID[fmt.Sprintf("serr%d", i)],
-			Throttles:    usageByQueryID[fmt.Sprintf("thr%d", i)],
+			InputTokens:            usageByQueryID[fmt.Sprintf("in%d", i)],
+			OutputTokens:           usageByQueryID[fmt.Sprintf("out%d", i)],
+			Invocations:            usageByQueryID[fmt.Sprintf("inv%d", i)],
+			InvocationClientErrors: usageByQueryID[fmt.Sprintf("cerr%d", i)],
+			InvocationServerErrors: usageByQueryID[fmt.Sprintf("serr%d", i)],
+			InvocationThrottles:    usageByQueryID[fmt.Sprintf("thr%d", i)],
 		}
 	}
 

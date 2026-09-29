@@ -59,10 +59,12 @@ func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDa
 
 func TestCollect(t *testing.T) {
 	novaMicro := bedrocktypes.FoundationModelSummary{
-		ModelId:          strp("amazon.nova-micro-v1:0"),
-		ModelName:        strp("Nova Micro"),
-		ProviderName:     strp("Amazon"),
-		ModelLifecycle:   &bedrocktypes.FoundationModelLifecycle{Status: bedrocktypes.FoundationModelLifecycleStatusActive},
+		ModelId:      strp("amazon.nova-micro-v1:0"),
+		ModelName:    strp("Nova Micro"),
+		ProviderName: strp("Amazon"),
+		ModelLifecycle: &bedrocktypes.FoundationModelLifecycle{
+			Status: bedrocktypes.FoundationModelLifecycleStatusActive,
+		},
 		InputModalities:  []bedrocktypes.ModelModality{bedrocktypes.ModelModalityText},
 		OutputModalities: []bedrocktypes.ModelModality{bedrocktypes.ModelModalityText},
 	}
@@ -161,8 +163,12 @@ func TestCollect(t *testing.T) {
 		{
 			name:    "no CloudWatch usage means the model node is kept but no endpoint is created",
 			regions: []string{"us-east-1"},
-			models:  []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
-			cw:      noUsage,
+			models: []bedrocktypes.FoundationModelSummary{
+				{
+					ModelId: strp("amazon.titan-text-express-v1"),
+				},
+			},
+			cw: noUsage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{
@@ -180,8 +186,12 @@ func TestCollect(t *testing.T) {
 		{
 			name:    "CloudWatch failure falls back to no usage, so no endpoint is created",
 			regions: []string{"us-east-1"},
-			models:  []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
-			cwErr:   assert.AnError,
+			models: []bedrocktypes.FoundationModelSummary{
+				{
+					ModelId: strp("amazon.titan-text-express-v1"),
+				},
+			},
+			cwErr: assert.AnError,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{
@@ -200,8 +210,12 @@ func TestCollect(t *testing.T) {
 			name:    "model with blank ID is skipped",
 			regions: []string{"us-east-1"},
 			models: []bedrocktypes.FoundationModelSummary{
-				{ModelId: strp("  ")},
-				{ModelId: strp("amazon.titan-text-express-v1")},
+				{
+					ModelId: strp("  "),
+				},
+				{
+					ModelId: strp("amazon.titan-text-express-v1"),
+				},
 			},
 			cw: usageAtIndex1,
 			want: pluginapi.CollectResponse{
@@ -248,8 +262,12 @@ func TestCollect(t *testing.T) {
 		{
 			name:    "the same invoked model in multiple regions produces one endpoint per region",
 			regions: []string{"us-east-1", "eu-central-1"},
-			models:  []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
-			cw:      usage,
+			models: []bedrocktypes.FoundationModelSummary{
+				{
+					ModelId: strp("amazon.titan-text-express-v1"),
+				},
+			},
+			cw: usage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{
@@ -329,7 +347,9 @@ func TestCollect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{ModelSummaries: tt.models}, nil)
+			bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
+				ModelSummaries: tt.models,
+			}, nil)
 			cw := fakeCloudWatchClient(tt.cw, nil)
 			p := newTestPlugin(tt.regions, bc, cw, tt.cwErr)
 
@@ -344,7 +364,11 @@ func TestCollect(t *testing.T) {
 // listFoundationModelsFunc per region, so it doesn't fit the table above.
 func TestCollect_ListFoundationModelsErrorIsReportedPerRegion(t *testing.T) {
 	goodModels := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
-		ModelSummaries: []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
+		ModelSummaries: []bedrocktypes.FoundationModelSummary{
+			{
+				ModelId: strp("amazon.titan-text-express-v1"),
+			},
+		},
 	}, nil)
 	failing := fakeBedrockClient(nil, assert.AnError)
 
@@ -377,9 +401,13 @@ func TestCollect_BatchesAndPaginatesMetricQueries(t *testing.T) {
 	const modelCount = 140
 	models := make([]bedrocktypes.FoundationModelSummary, modelCount)
 	for i := range models {
-		models[i] = bedrocktypes.FoundationModelSummary{ModelId: strp(fmt.Sprintf("model-%d", i))}
+		models[i] = bedrocktypes.FoundationModelSummary{
+			ModelId: strp(fmt.Sprintf("model-%d", i)),
+		}
 	}
-	bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{ModelSummaries: models}, nil)
+	bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
+		ModelSummaries: models,
+	}, nil)
 
 	lastIndex := modelCount - 1
 	var batchSizes []int
@@ -439,49 +467,59 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 	}{
 		{
 			name: "client errors",
-			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
-				{
-					Id:     strp("inv0"),
-					Values: []float64{5},
+			cw: &cloudwatch.GetMetricDataOutput{
+				MetricDataResults: []cwtypes.MetricDataResult{
+					{
+						Id:     strp("inv0"),
+						Values: []float64{5},
+					},
+					{
+						Id:     strp("cerr0"),
+						Values: []float64{2},
+					},
 				},
-				{
-					Id:     strp("cerr0"),
-					Values: []float64{2},
-				},
-			}},
+			},
 		},
 		{
 			name: "server errors",
-			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
-				{
-					Id:     strp("inv0"),
-					Values: []float64{5},
+			cw: &cloudwatch.GetMetricDataOutput{
+				MetricDataResults: []cwtypes.MetricDataResult{
+					{
+						Id:     strp("inv0"),
+						Values: []float64{5},
+					},
+					{
+						Id:     strp("serr0"),
+						Values: []float64{1},
+					},
 				},
-				{
-					Id:     strp("serr0"),
-					Values: []float64{1},
-				},
-			}},
+			},
 		},
 		{
 			name: "throttles",
-			cw: &cloudwatch.GetMetricDataOutput{MetricDataResults: []cwtypes.MetricDataResult{
-				{
-					Id:     strp("inv0"),
-					Values: []float64{5},
+			cw: &cloudwatch.GetMetricDataOutput{
+				MetricDataResults: []cwtypes.MetricDataResult{
+					{
+						Id:     strp("inv0"),
+						Values: []float64{5},
+					},
+					{
+						Id:     strp("thr0"),
+						Values: []float64{3},
+					},
 				},
-				{
-					Id:     strp("thr0"),
-					Values: []float64{3},
-				},
-			}},
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
-				ModelSummaries: []bedrocktypes.FoundationModelSummary{{ModelId: strp("amazon.titan-text-express-v1")}},
+				ModelSummaries: []bedrocktypes.FoundationModelSummary{
+					{
+						ModelId: strp("amazon.titan-text-express-v1"),
+					},
+				},
 			}, nil)
 			cw := fakeCloudWatchClient(tt.cw, nil)
 			p := newTestPlugin([]string{"us-east-1"}, bc, cw, nil)

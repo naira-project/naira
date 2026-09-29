@@ -612,7 +612,7 @@ spec:
               value: "50060"
             - name: PATH_PREFIX
               value: bedrock
-            - name: BEDROCK_REGIONS
+            - name: REGIONS
               value: "us-east-1 eu-central-1"
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
@@ -624,7 +624,7 @@ spec:
                 secretKeyRef:
                   name: catalog-secrets
                   key: BEDROCK_AWS_SECRET_ACCESS_KEY
-            - name: BEDROCK_METRICS_LOOKBACK
+            - name: METRICS_LOOKBACK
               value: "24h"
           resources:
             requests:
