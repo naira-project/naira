@@ -100,14 +100,17 @@ func TestGithub_Integration(t *testing.T) {
 		githubTestPackage = "naira-catalog"
 		githubTestRepo    = "naira"
 
-		// attestedImageSHA is attestation triggerred by Naira's "Dev Publish" workflow
-		// link to attestation: https://github.com/naira-project/naira/attestations/49777757
-		attestedImageSHA = "sha-c6364a1"
-		// unattestedImageSHA points to first build, where attestation provenance action was not enabled yet
-		unattestedImageSHA = "sha-c8b0666"
+		// attestedImageTag identifies an image published from a main branch commit, on 25 Aug 2026.
+		// The image has a GitHub artifact attestation created by Naira's
+		// "Dev Publish" workflow.
+		// See: https://github.com/naira-project/naira/attestations/49777757
+		attestedImageTag = "sha-e6093a9"
+		// unattestedImageTag identifies an older image published before the
+		// attestation provenance action was enabled.
+		unattestedImageTag = "sha-c8b0666"
 
-		attestedImage   = "ghcr.io/" + githubTestOrg + "/" + githubTestPackage + ":" + attestedImageSHA
-		unattestedImage = "ghcr.io/" + githubTestOrg + "/" + githubTestPackage + ":" + unattestedImageSHA
+		attestedImage   = "ghcr.io/" + githubTestOrg + "/" + githubTestPackage + ":" + attestedImageTag
+		unattestedImage = "ghcr.io/" + githubTestOrg + "/" + githubTestPackage + ":" + unattestedImageTag
 
 		// otherOrgImage doesn't need to exist for real
 		otherOrgImage = "ghcr.io/other-org/service:v1"
