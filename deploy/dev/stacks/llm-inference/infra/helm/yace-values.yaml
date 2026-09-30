@@ -35,47 +35,31 @@ testConnection: false
 
 # YACE job config: https://github.com/prometheus-community/yet-another-cloudwatch-exporter/blob/master/docs/configuration.md
 # Metric names follow aws_<namespace>_<metric>_<statistic>, all lowercase,
-# e.g. AWS/EC2 CPUUtilization Average → aws_ec2_cpuutilization_average.
+# e.g. AWS/Bedrock Invocations Sum → aws_bedrock_invocations_sum.
 config: |-
   apiVersion: v1alpha1
   sts-region: eu-central-1
-  discovery:
-    # Copy these resource tags onto the exported metrics as tag_<Key> labels.
-    exportedTagsOnMetrics:
-      AWS/EC2:
-        - Name
-    jobs:
-      # Discovery jobs find resources via the Resource Groups Tagging API, so
-      # only resources that carry at least one tag are picked up.
-      - type: AWS/EC2
-        regions:
-          - eu-central-1
-        # EC2 basic monitoring publishes datapoints every 5 minutes.
-        period: 300
-        length: 600
-        metrics:
-          - name: CPUUtilization
-            statistics: [Average, Maximum]
-          - name: NetworkIn
-            statistics: [Sum]
-          - name: NetworkOut
-            statistics: [Sum]
-
-  # Namespaces without taggable resources (e.g. Bedrock invocation metrics,
-  # dimensioned by ModelId) go under customNamespace instead of discovery.
-  # customNamespace:
-  #   - name: bedrock
-  #     namespace: AWS/Bedrock
-  #     regions:
-  #       - eu-central-1
-  #     period: 300
-  #     length: 600
-  #     metrics:
-  #       - name: Invocations
-  #         statistics: [Sum]
-  #       - name: InvocationLatency
-  #         statistics: [Average]
-  #       - name: InputTokenCount
-  #         statistics: [Sum]
-  #       - name: OutputTokenCount
-  #         statistics: [Sum]
+  # Bedrock invocation metrics are dimensioned by ModelId and have no taggable
+  # resources, so they go under customNamespace instead of discovery.
+  customNamespace:
+    - name: bedrock
+      namespace: AWS/Bedrock
+      # Keep in sync with the Bedrock plugin's REGIONS (core/infra/kubernetes/catalog.yaml),
+      # since the UI's per-endpoint panels filter on region.
+      regions:
+        - us-east-1
+        - eu-central-1
+      period: 300
+      length: 600
+      # Report 0 instead of dropping the series when a model had no traffic in
+      # the last period, so per-endpoint charts show idle time rather than gaps.
+      nilToZero: true
+      metrics:
+        - name: Invocations
+          statistics: [Sum]
+        - name: InvocationLatency
+          statistics: [Average]
+        - name: InputTokenCount
+          statistics: [Sum]
+        - name: OutputTokenCount
+          statistics: [Sum]

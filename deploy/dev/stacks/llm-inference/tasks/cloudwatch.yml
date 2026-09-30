@@ -12,10 +12,10 @@ tasks:
   deploy:
     desc: Deploy YACE to export AWS CloudWatch metrics into Prometheus (needs AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
     preconditions:
-      - sh: '[ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]'
-        msg: 'Export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (and AWS_SESSION_TOKEN for temporary credentials) first'
       - sh: kubectl get crd servicemonitors.monitoring.coreos.com
         msg: 'Prometheus stack not found — run `task llm-inference:monitoring:deploy` first'
+      - sh: '[ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]'
+        msg: 'Export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (and AWS_SESSION_TOKEN for temporary credentials) first'
     cmds:
       - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
       - helm repo update prometheus-community 2>/dev/null

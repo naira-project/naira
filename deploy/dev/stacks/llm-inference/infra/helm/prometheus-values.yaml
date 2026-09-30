@@ -43,6 +43,15 @@ prometheus:
 grafana:
   enabled: true
   adminPassword: admin
+  # Loki is deployed by `task llm-inference:logging:deploy` (loki-values.yaml).
+  # The fixed uid is what the UI's "View Logs" links target, so keep them in
+  # sync (ui/src/lib/endpointLogs.ts).
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
   resources:
     requests:
       cpu: 100m
