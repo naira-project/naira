@@ -71,8 +71,13 @@ func relationName(kind string, from, to pluginapi.NodeID) string {
 // Supported relation filter fields: name, kind, fromNode, toNode.
 func newListRelationsHandler(service *catalog.Service, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-		relations := make([]Relation, 0)
-		for _, relation := range service.ListRelations(r.Context()) {
+		catalogRelations, err := service.ListRelations(r.Context())
+		if err != nil {
+			return fmt.Errorf("listing relations: %w", err)
+		}
+
+		relations := make([]Relation, 0, len(catalogRelations))
+		for _, relation := range catalogRelations {
 			resource := relationFromCatalogRelation(relation)
 			matches, err := matchRelationFilter(resource, options.filter)
 			if err != nil {

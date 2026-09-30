@@ -16,9 +16,9 @@ var (
 )
 
 type Store interface {
-	ListNodes() []Node
+	ListNodes() ([]Node, error)
 	GetNode(id NodeID) (Node, error)
-	ListRelations() []Relation
+	ListRelations() ([]Relation, error)
 	ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error)
 }
 
@@ -58,7 +58,7 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-func (s *MemoryStore) ListNodes() []Node {
+func (s *MemoryStore) ListNodes() ([]Node, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -71,7 +71,7 @@ func (s *MemoryStore) ListNodes() []Node {
 		return lessNodeID(result[i].ID, result[j].ID)
 	})
 
-	return result
+	return result, nil
 }
 
 func (s *MemoryStore) GetNode(id NodeID) (Node, error) {
@@ -86,7 +86,7 @@ func (s *MemoryStore) GetNode(id NodeID) (Node, error) {
 	return node, nil
 }
 
-func (s *MemoryStore) ListRelations() []Relation {
+func (s *MemoryStore) ListRelations() ([]Relation, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -98,14 +98,14 @@ func (s *MemoryStore) ListRelations() []Relation {
 		return lessRelation(result[i], result[j])
 	})
 
-	return result
+	return result, nil
 }
 
 func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := validateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
+	if err := ValidateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
 		return 0, 0, fmt.Errorf("validate snapshot input: %w", err)
 	}
 
@@ -199,7 +199,7 @@ func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
 	}
 }
 
-func validateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) error {
+func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) error {
 	if pluginName == "" {
 		return fmt.Errorf("%w: plugin name is empty", ErrInvalidIngestion)
 	}

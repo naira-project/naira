@@ -53,11 +53,14 @@ func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nodes := store.ListNodes()
+	nodes, err := store.ListNodes()
+	require.NoError(t, err)
 	require.Len(t, nodes, 2)
 	assert.Equal(t, NodeID{Kind: "application", Path: "litellm/current-app"}, nodes[0].ID)
 	assert.Equal(t, NodeID{Kind: "model", Path: "mlflow/new-model"}, nodes[1].ID)
-	assert.Empty(t, store.ListRelations())
+	relations, err := store.ListRelations()
+	require.NoError(t, err)
+	assert.Empty(t, relations)
 }
 
 func TestMultiplePluginsContributingToSameNode(t *testing.T) {
@@ -102,7 +105,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 				},
 			},
 		},
-	}, store.ListNodes())
+	}, mustListNodes(t, store))
 
 	// 4. Update mlflow with a snapshot that doesn't contain the shared-model
 	_, _, err = store.ApplyPluginSnapshot(
@@ -125,7 +128,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 				// mlflow claim pruned
 			},
 		},
-	}, store.ListNodes())
+	}, mustListNodes(t, store))
 
 	// 6. Update litellm with a snapshot that doesn't contain the shared-model
 	_, _, err = store.ApplyPluginSnapshot(
@@ -137,7 +140,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// 7. Verify the node is deleted now
-	assert.Empty(t, store.ListNodes())
+	assert.Empty(t, mustListNodes(t, store))
 }
 
 func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
@@ -196,7 +199,7 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 				},
 			},
 		},
-	}, store.ListRelations())
+	}, mustListRelations(t, store))
 
 	// 3. mlflow stops reporting this relation
 	_, _, err = store.ApplyPluginSnapshot(
@@ -224,7 +227,7 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 				// mlflow claim pruned
 			},
 		},
-	}, store.ListRelations())
+	}, mustListRelations(t, store))
 
 	// 5. litellm also stops reporting the relation
 	_, _, err = store.ApplyPluginSnapshot(
@@ -239,5 +242,19 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	require.NoError(t, err)
 
 	// 6. Relation is gone now
-	assert.Empty(t, store.ListRelations())
+	assert.Empty(t, mustListRelations(t, store))
+}
+
+func mustListNodes(t *testing.T, store *MemoryStore) []Node {
+	t.Helper()
+	nodes, err := store.ListNodes()
+	require.NoError(t, err)
+	return nodes
+}
+
+func mustListRelations(t *testing.T, store *MemoryStore) []Relation {
+	t.Helper()
+	relations, err := store.ListRelations()
+	require.NoError(t, err)
+	return relations
 }

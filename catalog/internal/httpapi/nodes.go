@@ -70,8 +70,13 @@ func nodeName(id pluginapi.NodeID) string {
 // Supported node filter fields: name, kind, path.
 func newListNodesHandler(service *catalog.Service, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(nodeListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-		nodes := make([]Node, 0)
-		for _, node := range service.ListNodes(r.Context()) {
+		catalogNodes, err := service.ListNodes(r.Context())
+		if err != nil {
+			return fmt.Errorf("listing nodes: %w", err)
+		}
+
+		nodes := make([]Node, 0, len(catalogNodes))
+		for _, node := range catalogNodes {
 			node := nodeFromCatalogNode(node)
 			matches, err := matchNodeFilter(node, options.filter)
 			if err != nil {
