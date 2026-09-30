@@ -227,9 +227,9 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 
 	endpoints := make([]inferenceEndpoint, 0, len(payload.Data))
 	for _, entry := range payload.Data {
-		status, ok := statusByKey[entry.LiteLLMParams.normalizedMAAB()]
+		endpointStatus, ok := statusByKey[entry.LiteLLMParams.normalizedMAAB()]
 		if !ok {
-			status = endpointStatusUnknown
+			endpointStatus = endpointStatusUnknown
 		}
 
 		modelName := strings.TrimSpace(entry.ModelName)
@@ -239,7 +239,7 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 			propertyKeyID:             entry.ModelInfo.ID,
 			propertyKeyEndpointType:   entry.LiteLLMParams.endpointType(),
 			propertyKeyProvider:       entry.LiteLLMParams.provider(),
-			propertyKeyEndpointStatus: status,
+			propertyKeyEndpointStatus: endpointStatus,
 			propertyKeyAPIBase:        entry.LiteLLMParams.APIBase,
 			propertyKeyRegionName:     strings.TrimSpace(entry.LiteLLMParams.RegionName),
 			propertyKeyModelName:      modelName,
