@@ -104,7 +104,6 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 				"endpoint_type":                  "external",
 				"provider":                       "anthropic",
 				"status":                         "healthy",
-				"api_protocol":                   "openai",
 				"api_base":                       "https://api.anthropic.com",
 				"region_name":                    "us-east-1",
 				"model_name":                     "idp-claude-sonnet",

@@ -23,7 +23,6 @@ const (
 	* (healthy/unhealthy/unknown), propertyKeyEndpointStatus with the value 'status' will be used.
 	 */
 	propertyKeyEndpointStatus             = "status"
-	propertyKeyAPIProtocol                = "api_protocol"
 	propertyKeyAPIBase                    = "api_base"
 	propertyKeyRegionName                 = "region_name"
 	propertyKeyModelName                  = "model_name"
