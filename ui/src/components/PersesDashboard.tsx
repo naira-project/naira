@@ -126,8 +126,10 @@ function litellmPanels(modelId?: string): PanelConfig[] {
 // YACE exports each CloudWatch datapoint as a gauge holding the statistic over
 // its 5m period (see deploy/dev/stacks/llm-inference/infra/helm/yace-values.yaml),
 // so these are plotted as-is rather than rate()d.
-function bedrockPanels(modelId: string, region: string): PanelConfig[] {
-  const selector = `{dimension_ModelId="${modelId}", region="${region}"}`;
+// A model node has no region, so without one every region is drawn as its own line.
+function bedrockPanels(modelId: string, region?: string): PanelConfig[] {
+  const regionFilter = region ? `, region="${region}"` : "";
+  const selector = `{dimension_ModelId="${modelId}"${regionFilter}}`;
   return [
     {
       title: "Invocations (per 5m)",
@@ -135,15 +137,15 @@ function bedrockPanels(modelId: string, region: string): PanelConfig[] {
     },
     {
       title: "Input Tokens (per 5m)",
-      query: `sum by (dimension_ModelId, region) (aws_bedrock_inputtokencount_sum${selector})`,
+      query: `sum by (dimension_ModelId, region) (aws_bedrock_input_token_count_sum${selector})`,
     },
     {
       title: "Output Tokens (per 5m)",
-      query: `sum by (dimension_ModelId, region) (aws_bedrock_outputtokencount_sum${selector})`,
+      query: `sum by (dimension_ModelId, region) (aws_bedrock_output_token_count_sum${selector})`,
     },
     {
       title: "Average Invocation Latency (ms)",
-      query: `avg by (dimension_ModelId, region) (aws_bedrock_invocationlatency_average${selector})`,
+      query: `avg by (dimension_ModelId, region) (aws_bedrock_invocation_latency_average${selector})`,
     },
   ];
 }
@@ -151,10 +153,12 @@ function bedrockPanels(modelId: string, region: string): PanelConfig[] {
 function panelsForNode(node: NodeResource): PanelConfig[] {
   const props = nodeProps(node);
   const fromBedrock = (node.pluginClaims ?? []).some((claim) => claim.plugin === "bedrock");
-  if (fromBedrock && props.model_id && props.region) {
+  if (fromBedrock && props.model_id) {
     return bedrockPanels(props.model_id, props.region);
   }
-  return litellmPanels(props.model_id);
+  // The LiteLLM plugin stores the deployment's model_info.id as `id`, which is
+  // the `model_id` label on LiteLLM's Prometheus metrics.
+  return litellmPanels(props.id);
 }
 
 export function PersesDashboard({ node }: { node: NodeResource }) {

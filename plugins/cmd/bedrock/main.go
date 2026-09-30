@@ -242,6 +242,7 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 			},
 			Properties: pluginapi.PropertyMap{
 				propertyKeyOwnedBy: model.ProviderName,
+				propertyKeyModelID: modelID,
 			},
 		}
 		nodes = append(nodes, modelNode)

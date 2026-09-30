@@ -34,8 +34,8 @@ serviceMonitor:
 testConnection: false
 
 # YACE job config: https://github.com/prometheus-community/yet-another-cloudwatch-exporter/blob/master/docs/configuration.md
-# Metric names follow aws_<namespace>_<metric>_<statistic>, all lowercase,
-# e.g. AWS/Bedrock Invocations Sum → aws_bedrock_invocations_sum.
+# Metric names follow aws_<namespace>_<metric>_<statistic> in snake_case,
+# e.g. AWS/Bedrock InputTokenCount Sum → aws_bedrock_input_token_count_sum.
 config: |-
   apiVersion: v1alpha1
   sts-region: eu-central-1

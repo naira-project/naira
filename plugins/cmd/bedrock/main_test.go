@@ -123,6 +123,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"owned_by": "Amazon",
+							"model_id": "amazon.nova-micro-v1:0",
 						},
 					},
 					{
@@ -178,6 +179,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"owned_by": "",
+							"model_id": "amazon.titan-text-express-v1",
 						},
 					},
 				},
@@ -201,6 +203,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"owned_by": "",
+							"model_id": "amazon.titan-text-express-v1",
 						},
 					},
 				},
@@ -227,6 +230,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"owned_by": "",
+							"model_id": "amazon.titan-text-express-v1",
 						},
 					},
 					{
@@ -278,6 +282,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"owned_by": "",
+							"model_id": "amazon.titan-text-express-v1",
 						},
 					},
 					{
@@ -302,6 +307,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"owned_by": "",
+							"model_id": "amazon.titan-text-express-v1",
 						},
 					},
 					{
