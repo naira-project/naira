@@ -108,7 +108,7 @@ const (
 	metricNameInvocationClientErrors = "InvocationClientErrors"
 	metricNameInvocationServerErrors = "InvocationServerErrors"
 	metricNameInvocationThrottles    = "InvocationThrottles"
-	metricDimensionModelID           = "ModelId"
+	metricModelID                    = "ModelId"
 	metricPeriodSeconds              = 3600
 
 	// maxMetricDataQueriesPerRequest is the CloudWatch GetMetricData limit on
@@ -371,7 +371,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 			continue
 		}
 		dimensions := []cwtypes.Dimension{
-			{Name: aws.String(metricDimensionModelID), Value: aws.String(modelID)},
+			{Name: aws.String(metricModelID), Value: aws.String(modelID)},
 		}
 
 		queries = append(queries,

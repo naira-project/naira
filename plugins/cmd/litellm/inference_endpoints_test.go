@@ -91,13 +91,13 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 		listInferenceEndpoints(t.Context(), map[string]string{"idp-claude-sonnet": "team-a"})
 	require.NoError(t, err)
 
-	// The region is appended to the path to disambiguate endpoints serving
-	// the same model.
+	// The region and the deployment's model_info.id are appended to the path;
+	// the id disambiguates deployments serving the same model_name.
 	assert.Equal(t, []pluginapi.NodeClaim{
 		{
 			ID: pluginapi.NodeID{
 				Kind: "inference_endpoint",
-				Path: "litellm/idp-claude-sonnet-us-east-1",
+				Path: "litellm/idp-claude-sonnet-us-east-1-model-1",
 			},
 			Properties: pluginapi.PropertyMap{
 				"id":                             "model-1",
@@ -123,7 +123,7 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 			Kind: "serves_model",
 			From: pluginapi.NodeID{
 				Kind: "inference_endpoint",
-				Path: "litellm/idp-claude-sonnet-us-east-1",
+				Path: "litellm/idp-claude-sonnet-us-east-1-model-1",
 			},
 			To: pluginapi.NodeID{
 				Kind: "model",
@@ -133,9 +133,103 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 	}, relations)
 }
 
+func TestListInferenceEndpointsEmitsOneNodePerDeploymentOfSameModel(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": [
+			{
+			"model_name": "idp-gpt-4o",
+			"litellm_params": {
+				"model": "azure/gpt-4o",
+				"api_base": "https://idp.openai.azure.com",
+				"region_name": "eastus"
+			},
+			"model_info": {"id": "deployment-azure"}
+			},
+			{
+			"model_name": "idp-gpt-4o",
+			"litellm_params": {
+				"model": "openai/gpt-4o",
+				"api_base": "https://api.openai.com"
+			},
+			"model_info": {"id": "deployment-openai"}
+			}
+		]
+	}`
+	const healthResponse = `{
+		"healthy_endpoints": [
+			{
+			"model": "azure/gpt-4o",
+			"api_base": "https://idp.openai.azure.com"
+			}
+		],
+		"unhealthy_endpoints": [
+			{
+			"model": "openai/gpt-4o",
+			"api_base": "https://api.openai.com"
+			}
+		]
+	}`
+	const dailyActivityResponse = `{
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-gpt-4o": {"metrics": {"api_requests": 3}}
+				}
+			}
+			}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, dailyActivityResponse)
+
+	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err)
+
+	endpoints := nodePaths(nodes, "inference_endpoint")
+	require.Len(t, endpoints, 2)
+	assert.Equal(t, "azure", endpoints["litellm/idp-gpt-4o-eastus-deployment-azure"]["provider"])
+	assert.Equal(t, "healthy", endpoints["litellm/idp-gpt-4o-eastus-deployment-azure"]["status"])
+	assert.Equal(t, "openai", endpoints["litellm/idp-gpt-4o-deployment-openai"]["provider"])
+	assert.Equal(t, "unhealthy", endpoints["litellm/idp-gpt-4o-deployment-openai"]["status"])
+
+	assert.ElementsMatch(t, []pluginapi.RelationClaim{
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-gpt-4o-eastus-deployment-azure",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-gpt-4o",
+			},
+		},
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-gpt-4o-deployment-openai",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-gpt-4o",
+			},
+		},
+	}, relations, "both deployments serve the same model")
+}
+
 func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
-	const modelInfoResponse = `{"data": [{"model_name": "idp-unused-model"}]}`
-	const healthResponse = `{"healthy_endpoints": [{"model": "idp-unused-model"}]}`
+	const modelInfoResponse = `{
+		"data": 
+			[
+				{"model_name": "idp-unused-model"}
+			]
+	}`
+	const healthResponse = `{
+		"healthy_endpoints": [
+			{"model": "idp-unused-model"}
+		]
+	}`
 	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, noDailyActivity)
 
 	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
@@ -145,7 +239,11 @@ func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
 }
 
 func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
-	const modelInfoResponse = `{"data": [{"model_name": "  "}]}`
+	const modelInfoResponse = `{
+		"data": [
+			{"model_name": "  "}
+		]
+	}`
 	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, `{}`, noDailyActivity)
 
 	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
@@ -155,7 +253,11 @@ func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
 }
 
 func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testing.T) {
-	const modelInfoResponse = `{"data": [{"model_name": "idp-model"}]}`
+	const modelInfoResponse = `{
+		"data": [
+			{"model_name": "idp-model"}
+		]
+	}`
 	const dailyActivityResponse = `{
 		"results": [
 			{
