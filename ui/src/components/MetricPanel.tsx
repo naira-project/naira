@@ -21,6 +21,7 @@ export function MetricPanel({ title, query }: MetricPanelProps) {
         },
       ]}
     >
+      <h3 className="mb-2 text-sm font-semibold text-foreground">{title}</h3>
       <div style={{ height: 300, width: "100%", position: "relative" }}>
         <Panel
           panelOptions={{ hideHeader: true }}
