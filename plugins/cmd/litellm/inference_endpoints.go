@@ -22,10 +22,14 @@ const (
 	* using propertyKeyStatus. LiteLLM API returns  Hence, here, for displaying the status of a single inference endpoint in Naira
 	* (healthy/unhealthy/unknown), propertyKeyEndpointStatus with the value 'status' will be used.
 	 */
-	propertyKeyEndpointStatus             = "status"
-	propertyKeyAPIBase                    = "api_base"
-	propertyKeyRegionName                 = "region_name"
-	propertyKeyModelName                  = "model_name"
+	propertyKeyEndpointStatus = "status"
+	propertyKeyAPIBase        = "api_base"
+	propertyKeyRegionName     = "region_name"
+	propertyKeyModelName      = "model_name"
+	// propertyKeyModel is litellm_params.model, e.g. "openai/gpt-4o-mini".
+	// LiteLLM logs requests under this name rather than the model_name alias,
+	// so the UI filters the proxy's logs by it.
+	propertyKeyModel              = "model"
 	propertyKeyLifecycleStatus            = "lifecycle_status"
 	propertyKeyMode                       = "mode"
 	propertyKeyMaxTokens                  = "max_tokens"
@@ -250,6 +254,7 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 			propertyKeyAPIBase:        entry.LiteLLMParams.APIBase,
 			propertyKeyRegionName:     strings.TrimSpace(entry.LiteLLMParams.RegionName),
 			propertyKeyModelName:      modelName,
+			propertyKeyModel:  strings.TrimSpace(entry.LiteLLMParams.Model),
 			propertyKeyMode:           entry.ModelInfo.Mode,
 		} {
 			if value != "" {
