@@ -24,6 +24,7 @@ import {
 } from "@perses-dev/client";
 import * as prometheusPlugin from "@perses-dev/prometheus-plugin";
 import * as timeseriesChartPlugin from "@perses-dev/timeseries-chart-plugin";
+import { type NodeResource, nodeProps } from "../lib/catalogApi";
 import { MetricPanel } from "./MetricPanel";
 
 const fakeDatasource: GlobalDatasourceResource = {
@@ -95,38 +96,72 @@ function toKeyedPluginModule(
 
 interface PanelConfig {
   title: string;
-  query: (filter: string) => string;
+  query: string;
 }
 
-const PANELS: PanelConfig[] = [
-  {
-    title: "Input Token Rate",
-    query: (filter) =>
-      `sum by (requested_model, model_id) (rate(litellm_input_tokens_metric_total{job="litellm", model!~"MCP:.*"${filter}}[5m]))`,
-  },
-  {
-    title: "Failure Rate per Deployment",
-    query: (filter) =>
-      `sum by (requested_model, model_id) (rate(litellm_deployment_failure_responses_total{job="litellm"${filter}}[5m]))`,
-  },
-  {
-    title: "P95 Latency",
-    query: (filter) =>
-      `histogram_quantile(0.95, sum by (le, requested_model, model_id) (rate(litellm_request_total_latency_metric_bucket{job="litellm"${filter}}[5m])))`,
-  },
-  {
-    title: "Request rate per Deployment",
-    query: (filter) =>
-      `sum by (requested_model, model_id) (rate(litellm_deployment_total_requests_total{job="litellm"${filter}}[5m]))`,
-  },
-];
+// model_id disambiguates deployments that share the same requested_model
+// (e.g. the two idp-claude-sonnet regional entries in litellm.yaml).
+function litellmPanels(modelId?: string): PanelConfig[] {
+  const filter = modelId ? `, model_id="${modelId}"` : "";
+  return [
+    {
+      title: "Input Token Rate",
+      query: `sum by (requested_model, model_id) (rate(litellm_input_tokens_metric_total{job="litellm", model!~"MCP:.*"${filter}}[5m]))`,
+    },
+    {
+      title: "Failure Rate per Deployment",
+      query: `sum by (requested_model, model_id) (rate(litellm_deployment_failure_responses_total{job="litellm"${filter}}[5m]))`,
+    },
+    {
+      title: "P95 Latency",
+      query: `histogram_quantile(0.95, sum by (le, requested_model, model_id) (rate(litellm_request_total_latency_metric_bucket{job="litellm"${filter}}[5m])))`,
+    },
+    {
+      title: "Request rate per Deployment",
+      query: `sum by (requested_model, model_id) (rate(litellm_deployment_total_requests_total{job="litellm"${filter}}[5m]))`,
+    },
+  ];
+}
 
-export function PersesDashboard({ modelId }: { modelId?: string }) {
+// YACE exports each CloudWatch datapoint as a gauge holding the statistic over
+// its 5m period (see deploy/dev/stacks/llm-inference/infra/helm/yace-values.yaml),
+// so these are plotted as-is rather than rate()d.
+function bedrockPanels(modelId: string, region: string): PanelConfig[] {
+  const selector = `{dimension_ModelId="${modelId}", region="${region}"}`;
+  return [
+    {
+      title: "Invocations (per 5m)",
+      query: `sum by (dimension_ModelId, region) (aws_bedrock_invocations_sum${selector})`,
+    },
+    {
+      title: "Input Tokens (per 5m)",
+      query: `sum by (dimension_ModelId, region) (aws_bedrock_inputtokencount_sum${selector})`,
+    },
+    {
+      title: "Output Tokens (per 5m)",
+      query: `sum by (dimension_ModelId, region) (aws_bedrock_outputtokencount_sum${selector})`,
+    },
+    {
+      title: "Average Invocation Latency (ms)",
+      query: `avg by (dimension_ModelId, region) (aws_bedrock_invocationlatency_average${selector})`,
+    },
+  ];
+}
+
+function panelsForNode(node: NodeResource): PanelConfig[] {
+  const props = nodeProps(node);
+  const fromBedrock = (node.pluginClaims ?? []).some((claim) => claim.plugin === "bedrock");
+  if (fromBedrock && props.model_id && props.region) {
+    return bedrockPanels(props.model_id, props.region);
+  }
+  return litellmPanels(props.model_id);
+}
+
+export function PersesDashboard({ node }: { node: NodeResource }) {
   const [timeRange, setTimeRange] = React.useState<TimeRangeValue>({ pastDuration: "30m" });
   const [refreshInterval, setRefreshInterval] = React.useState<DurationString>("0s");
 
-
-  const filter = modelId ? `, model_id="${modelId}"` : "";
+  const panels = panelsForNode(node);
   const muiTheme = getTheme("light");
   const chartsTheme = generateChartsTheme(muiTheme, {});
   const pluginLoader = dynamicImportPluginLoader([
@@ -173,10 +208,8 @@ export function PersesDashboard({ modelId }: { modelId?: string }) {
                   <DatasourceStoreProvider
                     datasourceApi={fakeDatasourceApi}
                   >
-                    {/* model_id disambiguates deployments that share the same requested_model
-                        (e.g. the two idp-claude-sonnet regional entries in litellm.yaml). */}
-                    {PANELS.map(({ title, query }) => (
-                      <MetricPanel key={title} title={title} query={query(filter)} />
+                    {panels.map(({ title, query }) => (
+                      <MetricPanel key={title} title={title} query={query} />
                     ))}
                   </DatasourceStoreProvider>
                 </VariableProvider>
