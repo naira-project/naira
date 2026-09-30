@@ -52,11 +52,10 @@ const (
 //
 //   - a "gh" binary available on PATH,
 //   - a GITHUB_TOKEN environment variable with a valid GitHub token (a
-//     classic token with no selected scopes is sufficient); the test is
-//     skipped if either of these is missing, so local test runs don't
-//     require a "gh" and GitHub token by default,
+//     classic token with no selected scopes is sufficient); the test
+//     fails if either of these is missing
 //   - github.com/naira-project/naira to be a real, public repository with
-//     a top-level CODEOWNERS "*" rules, and one known image digest
+//     a top-level CODEOWNERS "*" rules, and one attested image
 //     published to ghcr.io/naira-project/naira.
 //
 // The plugin & catalog binaries are built as part of the test (should be
