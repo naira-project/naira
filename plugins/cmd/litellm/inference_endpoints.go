@@ -133,8 +133,8 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 		// into the last segment rather than added as their own, since the UI
 		// reads the second-to-last segment as the endpoint's source.
 		endpointName := modelName
-		if region := endpoint.Props[propertyKeyRegionName]; region != "" {
-			endpointName += "-" + region
+		if regionName := endpoint.Props[propertyKeyRegionName]; regionName != "" {
+			endpointName += "-" + regionName
 		}
 		if id := endpoint.Props[propertyKeyID]; id != "" {
 			endpointName += "-" + id
@@ -184,8 +184,8 @@ func (m litellmParams) endpointType() string {
 }
 
 func (m litellmParams) provider() string {
-	if p := strings.TrimSpace(m.CustomLLMProvider); p != "" {
-		return p
+	if customLLMProvider := strings.TrimSpace(m.CustomLLMProvider); customLLMProvider != "" {
+		return customLLMProvider
 	}
 	if provider, _, ok := strings.Cut(m.Model, "/"); ok {
 		return strings.TrimSpace(provider)
@@ -285,15 +285,15 @@ func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[modelAndAPIBase]s
 		return nil, fmt.Errorf("fetching LiteLLM /health: %w", err)
 	}
 
-	status := make(map[modelAndAPIBase]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
+	endpointStatus := make(map[modelAndAPIBase]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
 	for _, entry := range payload.UnhealthyEndpoints {
-		status[entry.normalizedMAAB()] = endpointStatusUnhealthy
+		endpointStatus[entry.normalizedMAAB()] = endpointStatusUnhealthy
 	}
 	for _, entry := range payload.HealthyEndpoints {
-		status[entry.normalizedMAAB()] = endpointStatusHealthy
+		endpointStatus[entry.normalizedMAAB()] = endpointStatusHealthy
 	}
 
-	return status, nil
+	return endpointStatus, nil
 }
 
 // fetchModelInvocations queries LiteLLM's /user/daily/activity for the
