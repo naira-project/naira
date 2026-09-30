@@ -40,7 +40,7 @@ const (
 	k3sImage = "rancher/k3s:v1.28.2-k3s1"
 )
 
-// TestGithub_Integration tests a real binary of the github plugin
+// TestGithub_Integration tests a real binary of the GitHub plugin
 // against its "neighbor" components:
 //
 //   - the real GitHub API (api.github.com),
@@ -55,7 +55,7 @@ const (
 //     classic token with no selected scopes is sufficient); the test
 //     fails if either of these is missing
 //   - github.com/naira-project/naira to be a real, public repository with
-//     a top-level CODEOWNERS "*" rules, and one attested image
+//     a top-level CODEOWNERS "*" rule, and one attested image
 //     published to ghcr.io/naira-project/naira.
 //
 // The plugin & catalog binaries are built as part of the test (should be
@@ -93,7 +93,7 @@ func TestGithub_Integration(t *testing.T) {
 	defer cancel()
 
 	var (
-		// githubTest... are ours real GitHub repository data used
+		// githubTest... are our real GitHub repository data used
 		// to exercise attestation verification, repo metadata and CODEOWNERS
 		// lookup against the real GitHub API
 		githubTestOrg     = "naira-project"

@@ -43,9 +43,14 @@ tasks:
       - cd {{.PROTO_DIR}} && buf lint
 
   go:test:
-    desc: Run unit tests
+    desc: Run unit and integration tests
     cmds:
       - go test -race ./...
+
+  go:unit-test:
+    desc: Run unit tests
+    cmds:
+      - go test -race ./... -short
 
   go:lint:
     desc: Lint go files
