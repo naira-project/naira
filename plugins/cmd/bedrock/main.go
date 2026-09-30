@@ -84,40 +84,43 @@ import (
 )
 
 const (
-	propertyKeyOwnedBy          = "owned_by"
-	propertyKeyProvider         = "provider"
-	propertyKeyRegion           = "region"
-	propertyKeyModelName        = "model_name"
-	propertyKeyLifecycleStatus  = "lifecycle_status"
-	propertyKeyInputModalities  = "input_modalities"
-	propertyKeyOutputModalities = "output_modalities"
-	propertyKeyInputTokens      = "input_tokens_total"
-	propertyKeyOutputTokens     = "output_tokens_total"
-	propertyKeyInvocations      = "invocations_total"
-	propertyKeyEndpointStatus   = "status"
+	propertyKeyOwnedBy           = "owned_by"
+	propertyKeyProvider          = "provider"
+	propertyKeyRegion            = "region"
+	propertyKeyModelName         = "model_name"
+	propertyKeyLifecycleStatus   = "lifecycle_status"
+	propertyKeyInputModalities   = "input_modalities"
+	propertyKeyOutputModalities  = "output_modalities"
+	propertyKeyInputTokensTotal  = "input_tokens_total"
+	propertyKeyOutputTokensTotal = "output_tokens_total"
+	propertyKeyInvocationsTotal  = "invocations_total"
+	propertyKeyStatus            = "status"
 
 	providerNameBedrock = "bedrock"
 
 	endpointStatusHealthy   = "healthy"
 	endpointStatusUnhealthy = "unhealthy"
 
-	metricNamespaceBedrock = "AWS/Bedrock"
-	metricNameInputTokens  = "InputTokenCount"
-	metricNameOutputTokens = "OutputTokenCount"
-	metricNameInvocations  = "Invocations"
-	metricNameClientErrors = "InvocationClientErrors"
-	metricNameServerErrors = "InvocationServerErrors"
-	metricNameThrottles    = "InvocationThrottles"
-	metricDimensionModelID = "ModelId"
-	metricLookbackWindow   = 24 * time.Hour
-	metricPeriodSeconds    = 3600
+	metricNamespaceBedrock           = "AWS/Bedrock"
+	metricNameInputTokenCount        = "InputTokenCount"
+	metricNameOutputTokenCount       = "OutputTokenCount"
+	metricNameInvocations            = "Invocations"
+	metricNameInvocationClientErrors = "InvocationClientErrors"
+	metricNameInvocationServerErrors = "InvocationServerErrors"
+	metricNameInvocationThrottles    = "InvocationThrottles"
+	metricModelID                    = "ModelId"
+	metricPeriodSeconds              = 3600
+
+	// maxMetricDataQueriesPerRequest is the CloudWatch GetMetricData limit on
+	// MetricDataQueries per call.
+	maxMetricDataQueriesPerRequest = 500
 )
 
 type config struct {
 	PathPrefix string `env:"PATH_PREFIX" default:"bedrock"`
 	// Regions is a space-separated list of AWS regions to query, e.g. "us-east-1 eu-central-1".
-	Regions         []string      `env:"BEDROCK_REGIONS" default:"us-east-1"`
-	MetricsLookback time.Duration `env:"BEDROCK_METRICS_LOOKBACK" default:"24h"`
+	Regions         []string      `env:"REGIONS" default:"us-east-1"`
+	MetricsLookback time.Duration `env:"METRICS_LOOKBACK" default:"24h"`
 }
 
 type Plugin struct {
@@ -125,6 +128,24 @@ type Plugin struct {
 	config              config
 	newBedrockClient    func(ctx context.Context, region string) (listFoundationModelsFunc, error)
 	newCloudWatchClient func(ctx context.Context, region string) (getMetricDataFunc, error)
+}
+
+type foundationModel struct {
+	ModelID      string
+	ProviderName string
+	// Props holds the properties already converted to their final string
+	// form (lifecycle status, modalities, ...), ready to be merged into a
+	// node's PropertyMap.
+	Props pluginapi.PropertyMap
+}
+
+type modelUsage struct {
+	InputTokens            float64
+	OutputTokens           float64
+	Invocations            float64
+	InvocationClientErrors float64
+	InvocationServerErrors float64
+	InvocationThrottles    float64
 }
 
 // listFoundationModelsFunc is the subset of *bedrock.Client used by this
@@ -214,7 +235,10 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 		}
 
 		modelNode := pluginapi.NodeClaim{
-			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + modelID},
+			ID: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindModel,
+				Path: p.config.PathPrefix + "/" + modelID,
+			},
 			Properties: pluginapi.PropertyMap{
 				propertyKeyOwnedBy: model.ProviderName,
 			},
@@ -234,7 +258,10 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 		// must stay "bedrock" (matching the litellm plugin's endpoint paths),
 		// not the region.
 		endpointNode := pluginapi.NodeClaim{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindInferenceEndpoint, Path: p.config.PathPrefix + "/" + modelID + "-" + region},
+			ID: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindInferenceEndpoint,
+				Path: p.config.PathPrefix + "/" + modelID + "-" + region,
+			},
 			Properties: model.properties(region, usage[modelID]),
 		}
 		nodes = append(nodes, endpointNode)
@@ -249,28 +276,10 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 	return nodes, relations, nil
 }
 
-type foundationModel struct {
-	ModelID      string
-	ProviderName string
-	// Props holds the properties already converted to their final string
-	// form (lifecycle status, modalities, ...), ready to be merged into a
-	// node's PropertyMap.
-	Props pluginapi.PropertyMap
-}
-
-type modelUsage struct {
-	InputTokens  float64
-	OutputTokens float64
-	Invocations  float64
-	ClientErrors float64
-	ServerErrors float64
-	Throttles    float64
-}
-
 // status reports whether the model showed any client errors, server errors
 // or throttles in the lookback window. This is for active inference endpoints.
 func (u modelUsage) status() string {
-	if u.ClientErrors != 0 || u.ServerErrors != 0 || u.Throttles != 0 {
+	if u.InvocationClientErrors != 0 || u.InvocationServerErrors != 0 || u.InvocationThrottles != 0 {
 		return endpointStatusUnhealthy
 	}
 	return endpointStatusHealthy
@@ -286,14 +295,14 @@ func (m foundationModel) properties(region string, usage modelUsage) pluginapi.P
 	}
 
 	if usage.InputTokens != 0 {
-		properties[propertyKeyInputTokens] = strconv.FormatFloat(usage.InputTokens, 'f', 0, 64)
+		properties[propertyKeyInputTokensTotal] = strconv.FormatFloat(usage.InputTokens, 'f', 0, 64)
 	}
 	if usage.OutputTokens != 0 {
-		properties[propertyKeyOutputTokens] = strconv.FormatFloat(usage.OutputTokens, 'f', 0, 64)
+		properties[propertyKeyOutputTokensTotal] = strconv.FormatFloat(usage.OutputTokens, 'f', 0, 64)
 	}
 	if usage.Invocations != 0 {
-		properties[propertyKeyInvocations] = strconv.FormatFloat(usage.Invocations, 'f', 0, 64)
-		properties[propertyKeyEndpointStatus] = usage.status()
+		properties[propertyKeyInvocationsTotal] = strconv.FormatFloat(usage.Invocations, 'f', 0, 64)
+		properties[propertyKeyStatus] = usage.status()
 	}
 
 	return properties
@@ -302,10 +311,10 @@ func (m foundationModel) properties(region string, usage modelUsage) pluginapi.P
 func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]foundationModel, error) {
 	client, err := p.newBedrockClient(ctx, region)
 	if err != nil {
-		return nil, fmt.Errorf("Error while initializing Bedrock client: %v", err)
+		return nil, fmt.Errorf("creating Bedrock client for region %q: %w", region, err)
 	}
 
-	//TODO next step to do filtering by specifying the properties to fill ListFoundationModelsInput struct.
+	// TODO next step to do filtering by specifying the properties to fill ListFoundationModelsInput struct.
 	out, err := client(ctx, &bedrock.ListFoundationModelsInput{})
 	if err != nil {
 		return nil, fmt.Errorf("calling Bedrock ListFoundationModels: %w", err)
@@ -347,10 +356,10 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 
 	client, err := p.newCloudWatchClient(ctx, region)
 	if err != nil {
-		return nil, fmt.Errorf("Error while initializing CloudWatch client: %v", err)
+		return nil, fmt.Errorf("creating CloudWatch client for region %q: %w", region, err)
 	}
 
-	//TODO: use dynamic time intervals in the UI, not just from BEDROCK_METRICS_LOOKBACK
+	// TODO: use dynamic time intervals in the UI, not just from BEDROCK_METRICS_LOOKBACK
 	lookback := p.config.MetricsLookback
 	endTime := time.Now().UTC()
 	startTime := endTime.Add(-lookback)
@@ -362,31 +371,47 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 			continue
 		}
 		dimensions := []cwtypes.Dimension{
-			{Name: aws.String(metricDimensionModelID), Value: aws.String(modelID)},
+			{Name: aws.String(metricModelID), Value: aws.String(modelID)},
 		}
 
 		queries = append(queries,
-			metricQuery(fmt.Sprintf("in%d", i), metricNameInputTokens, dimensions),
-			metricQuery(fmt.Sprintf("out%d", i), metricNameOutputTokens, dimensions),
+			metricQuery(fmt.Sprintf("in%d", i), metricNameInputTokenCount, dimensions),
+			metricQuery(fmt.Sprintf("out%d", i), metricNameOutputTokenCount, dimensions),
 			metricQuery(fmt.Sprintf("inv%d", i), metricNameInvocations, dimensions),
-			metricQuery(fmt.Sprintf("cerr%d", i), metricNameClientErrors, dimensions),
-			metricQuery(fmt.Sprintf("serr%d", i), metricNameServerErrors, dimensions),
-			metricQuery(fmt.Sprintf("thr%d", i), metricNameThrottles, dimensions),
+			metricQuery(fmt.Sprintf("cerr%d", i), metricNameInvocationClientErrors, dimensions),
+			metricQuery(fmt.Sprintf("serr%d", i), metricNameInvocationServerErrors, dimensions),
+			metricQuery(fmt.Sprintf("thr%d", i), metricNameInvocationThrottles, dimensions),
 		)
 	}
 
-	out, err := client(ctx, &cloudwatch.GetMetricDataInput{
-		StartTime:         &startTime,
-		EndTime:           &endTime,
-		MetricDataQueries: queries,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("calling CloudWatch GetMetricData: %w", err)
-	}
+	// GetMetricData accepts at most maxMetricDataQueriesPerRequest queries per
+	// call, and a single batch may still be split across pages via NextToken,
+	// so values are accumulated per query ID across batches and pages.
+	usageByQueryID := make(map[string]float64, len(queries))
+	for batchStart := 0; batchStart < len(queries); batchStart += maxMetricDataQueriesPerRequest {
+		batch := queries[batchStart:min(batchStart+maxMetricDataQueriesPerRequest, len(queries))]
 
-	usageByQueryID := make(map[string]float64, len(out.MetricDataResults))
-	for _, result := range out.MetricDataResults {
-		usageByQueryID[derefString(result.Id)] = sumValues(result.Values)
+		var nextToken *string
+		for {
+			out, err := client(ctx, &cloudwatch.GetMetricDataInput{
+				StartTime:         &startTime,
+				EndTime:           &endTime,
+				MetricDataQueries: batch,
+				NextToken:         nextToken,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("calling CloudWatch GetMetricData: %w", err)
+			}
+
+			for _, result := range out.MetricDataResults {
+				usageByQueryID[derefString(result.Id)] += sumValues(result.Values)
+			}
+
+			if derefString(out.NextToken) == "" {
+				break
+			}
+			nextToken = out.NextToken
+		}
 	}
 
 	usage := make(map[string]modelUsage, len(models))
@@ -396,12 +421,12 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 			continue
 		}
 		usage[modelID] = modelUsage{
-			InputTokens:  usageByQueryID[fmt.Sprintf("in%d", i)],
-			OutputTokens: usageByQueryID[fmt.Sprintf("out%d", i)],
-			Invocations:  usageByQueryID[fmt.Sprintf("inv%d", i)],
-			ClientErrors: usageByQueryID[fmt.Sprintf("cerr%d", i)],
-			ServerErrors: usageByQueryID[fmt.Sprintf("serr%d", i)],
-			Throttles:    usageByQueryID[fmt.Sprintf("thr%d", i)],
+			InputTokens:            usageByQueryID[fmt.Sprintf("in%d", i)],
+			OutputTokens:           usageByQueryID[fmt.Sprintf("out%d", i)],
+			Invocations:            usageByQueryID[fmt.Sprintf("inv%d", i)],
+			InvocationClientErrors: usageByQueryID[fmt.Sprintf("cerr%d", i)],
+			InvocationServerErrors: usageByQueryID[fmt.Sprintf("serr%d", i)],
+			InvocationThrottles:    usageByQueryID[fmt.Sprintf("thr%d", i)],
 		}
 	}
 

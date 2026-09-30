@@ -91,33 +91,145 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 		listInferenceEndpoints(t.Context(), map[string]string{"idp-claude-sonnet": "team-a"})
 	require.NoError(t, err)
 
-	endpoints := nodePaths(nodes, pluginapi.NodeKindInferenceEndpoint)
-	require.Contains(t, endpoints, "litellm/idp-claude-sonnet-us-east-1",
-		"the region is appended to disambiguate endpoints serving the same model")
+	// The region and the deployment's model_info.id are appended to the path;
+	// the id disambiguates deployments serving the same model_name.
+	assert.Equal(t, []pluginapi.NodeClaim{
+		{
+			ID: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-claude-sonnet-us-east-1-model-1",
+			},
+			Properties: pluginapi.PropertyMap{
+				"id":                             "model-1",
+				"endpoint_type":                  "external",
+				"provider":                       "anthropic",
+				"status":                         "healthy",
+				"api_base":                       "https://api.anthropic.com",
+				"region_name":                    "us-east-1",
+				"model_name":                     "idp-claude-sonnet",
+				"owned_by":                       "team-a",
+				"lifecycle_status":               "active",
+				"mode":                           "chat",
+				"max_tokens":                     "8192",
+				"input_cost_per_million_tokens":  "3.0000",
+				"output_cost_per_million_tokens": "15.0000",
+				"invocations_total":              "7",
+			},
+		},
+	}, nodes)
 
-	endpoint := endpoints["litellm/idp-claude-sonnet-us-east-1"]
-	assert.Equal(t, "model-1", endpoint[propertyKeyModelID])
-	assert.Equal(t, "7", endpoint[propertyKeyInvocationsTotal])
-	assert.Equal(t, "anthropic", endpoint[propertyKeyProvider])
-	assert.Equal(t, endpointTypeExternal, endpoint[propertyKeyEndpointType])
-	assert.Equal(t, endpointStatusHealthy, endpoint[propertyKeyEndpointStatus])
-	assert.Equal(t, "https://api.anthropic.com", endpoint[propertyKeyEndpointURL])
-	assert.Equal(t, "us-east-1", endpoint[propertyKeyRegion])
-	assert.Equal(t, "idp-claude-sonnet", endpoint[propertyKeyModelName])
-	assert.Equal(t, "team-a", endpoint[propertyKeyOwnedBy])
-	assert.Equal(t, "chat", endpoint[propertyKeyMode])
-	assert.Equal(t, "8192", endpoint[propertyKeyMaxTokens])
-	assert.Equal(t, "3.0000", endpoint[propertyKeyInputCostPerMillionTokens])
-	assert.Equal(t, "15.0000", endpoint[propertyKeyOutputCostPerMillionTokens])
+	assert.Equal(t, []pluginapi.RelationClaim{
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-claude-sonnet-us-east-1-model-1",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-claude-sonnet",
+			},
+		},
+	}, relations)
+}
 
-	require.Len(t, relations, 1)
-	assert.Equal(t, pluginapi.RelationKindServesModel, relations[0].Kind)
-	assert.Equal(t, pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: "litellm/idp-claude-sonnet"}, relations[0].To)
+func TestListInferenceEndpointsEmitsOneNodePerDeploymentOfSameModel(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": [
+			{
+			"model_name": "idp-gpt-4o",
+			"litellm_params": {
+				"model": "azure/gpt-4o",
+				"api_base": "https://idp.openai.azure.com",
+				"region_name": "eastus"
+			},
+			"model_info": {"id": "deployment-azure"}
+			},
+			{
+			"model_name": "idp-gpt-4o",
+			"litellm_params": {
+				"model": "openai/gpt-4o",
+				"api_base": "https://api.openai.com"
+			},
+			"model_info": {"id": "deployment-openai"}
+			}
+		]
+	}`
+	const healthResponse = `{
+		"healthy_endpoints": [
+			{
+			"model": "azure/gpt-4o",
+			"api_base": "https://idp.openai.azure.com"
+			}
+		],
+		"unhealthy_endpoints": [
+			{
+			"model": "openai/gpt-4o",
+			"api_base": "https://api.openai.com"
+			}
+		]
+	}`
+	const dailyActivityResponse = `{
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-gpt-4o": {"metrics": {"api_requests": 3}}
+				}
+			}
+			}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, dailyActivityResponse)
+
+	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err)
+
+	endpoints := nodePaths(nodes, "inference_endpoint")
+	require.Len(t, endpoints, 2)
+	assert.Equal(t, "azure", endpoints["litellm/idp-gpt-4o-eastus-deployment-azure"]["provider"])
+	assert.Equal(t, "healthy", endpoints["litellm/idp-gpt-4o-eastus-deployment-azure"]["status"])
+	assert.Equal(t, "openai", endpoints["litellm/idp-gpt-4o-deployment-openai"]["provider"])
+	assert.Equal(t, "unhealthy", endpoints["litellm/idp-gpt-4o-deployment-openai"]["status"])
+
+	assert.ElementsMatch(t, []pluginapi.RelationClaim{
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-gpt-4o-eastus-deployment-azure",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-gpt-4o",
+			},
+		},
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-gpt-4o-deployment-openai",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-gpt-4o",
+			},
+		},
+	}, relations, "both deployments serve the same model")
 }
 
 func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
-	const modelInfoResponse = `{"data": [{"model_name": "idp-unused-model"}]}`
-	const healthResponse = `{"healthy_endpoints": [{"model": "idp-unused-model"}]}`
+	const modelInfoResponse = `{
+		"data": 
+			[
+				{"model_name": "idp-unused-model"}
+			]
+	}`
+	const healthResponse = `{
+		"healthy_endpoints": [
+			{"model": "idp-unused-model"}
+		]
+	}`
 	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, noDailyActivity)
 
 	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
@@ -127,7 +239,11 @@ func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
 }
 
 func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
-	const modelInfoResponse = `{"data": [{"model_name": "  "}]}`
+	const modelInfoResponse = `{
+		"data": [
+			{"model_name": "  "}
+		]
+	}`
 	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, `{}`, noDailyActivity)
 
 	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
@@ -137,26 +253,30 @@ func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
 }
 
 func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testing.T) {
-	const modelInfoResponse = `{"data": [{"model_name": "idp-model"}]}`
+	const modelInfoResponse = `{
+		"data": [
+			{"model_name": "idp-model"}
+		]
+	}`
 	const dailyActivityResponse = `{
-  "results": [
-    {
-      "breakdown": {
-        "model_groups": {
-          "idp-model": {"metrics": {"api_requests": 1}}
-        }
-      }
-    }
-  ]
-}`
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-model": {"metrics": {"api_requests": 1}}
+				}
+			}
+			}
+		]
+	}`
 	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, "", dailyActivityResponse)
 
 	nodes, _, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
 	require.NoError(t, err, "an unreachable health endpoint should not fail the whole sync")
 
-	endpoints := nodePaths(nodes, pluginapi.NodeKindInferenceEndpoint)
+	endpoints := nodePaths(nodes, "inference_endpoint")
 	require.Contains(t, endpoints, "litellm/idp-model")
-	assert.Equal(t, endpointStatusUnknown, endpoints["litellm/idp-model"][propertyKeyEndpointStatus])
+	assert.Equal(t, "unknown", endpoints["litellm/idp-model"]["status"])
 }
 
 func TestListInferenceEndpointsReportsUnreachableModelInfo(t *testing.T) {
@@ -177,14 +297,14 @@ func TestModelInfoLiteLLMEndpointType(t *testing.T) {
 		apiBase string
 		want    string
 	}{
-		{"empty api_base is external", "", endpointTypeExternal},
-		{"unparsable api_base is external", "://bad-url", endpointTypeExternal},
-		{"localhost is internal", "http://localhost:4000", endpointTypeInternal},
-		{"cluster-local .svc host is internal", "http://litellm.litellm.svc", endpointTypeInternal},
-		{"cluster-local .svc.cluster.local host is internal", "http://litellm.litellm.svc.cluster.local:4000", endpointTypeInternal},
-		{"private IP is internal", "http://10.0.0.5:8080", endpointTypeInternal},
-		{"loopback IP is internal", "http://127.0.0.1:8080", endpointTypeInternal},
-		{"public host is external", "https://api.anthropic.com", endpointTypeExternal},
+		{"empty api_base is external", "", "external"},
+		{"unparsable api_base is external", "://bad-url", "external"},
+		{"localhost is internal", "http://localhost:4000", "internal"},
+		{"cluster-local .svc host is internal", "http://litellm.litellm.svc", "internal"},
+		{"cluster-local .svc.cluster.local host is internal", "http://litellm.litellm.svc.cluster.local:4000", "internal"},
+		{"private IP is internal", "http://10.0.0.5:8080", "internal"},
+		{"loopback IP is internal", "http://127.0.0.1:8080", "internal"},
+		{"public host is external", "https://api.anthropic.com", "external"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

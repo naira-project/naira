@@ -19,15 +19,19 @@ export interface RelatedNodesConfig {
    * 'incoming' – follow edges arriving at this node (toNode === this node).
    */
   direction: 'outgoing' | 'incoming';
-  /** Heading (cards layout) or item-type label (list layout). */
+  /** Heading */
   title: string;
-  /** Icon shown next to each item in list layout. Defaults to a chevron. */
+  /** Icon shown next to each item. Defaults to a chevron. */
   icon?: ComponentType<{ size?: number; className?: string }>;
-  /** Word appended after the item count in list layout, e.g. "exposed". */
+  /** Word appended after the item count, e.g. "exposed". */
   countSuffix?: string;
-  /** Shown instead of nothing when list layout has no items. Cards layout renders nothing either way. */
+  /** Shown instead of nothing. */
   emptyText?: ReactNode;
-  /** Description for the inference endpoints, when they are presented in the card view */
+  /**
+   * Fallback text shown under each item. It is used only when the item has no
+   * 'description' property of its own ('item.description'); otherwise the
+   * item's description takes precedence.
+   */
   description?: string;
 }
 
@@ -46,8 +50,7 @@ interface RelatedNodesProps {
 }
 
 /**
- * Neighbours of `node` reached via one relation kind, rendered either as a
- * detail list (Tools tab) or as clickable cross-link cards (Properties tab).
+ * Neighbours of `node` reached via one relation kind, rendered as clickable cross-link cards (Properties tab).
  *
  * Reads the depth-1 graph slice, which the Graph tab also uses, so this doesn't
  * cost an extra request beyond what's already cached for the node.

@@ -138,7 +138,10 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 			if _, ok := modelKeys[modelName]; !ok {
 				node := pluginapi.NodeClaim{
-					ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + modelName},
+					ID: pluginapi.NodeID{
+						Kind: pluginapi.NodeKindModel,
+						Path: p.config.PathPrefix + "/" + modelName,
+					},
 					Properties: pluginapi.PropertyMap{
 						propertyKeyDiscoveredVia: propertyValueKeyInfo,
 					},

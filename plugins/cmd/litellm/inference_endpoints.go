@@ -15,16 +15,18 @@ import (
 )
 
 const (
-	propertyKeyModelID                    = "model_id"
-	propertyKeyEndpointType               = "endpoint_type"
-	propertyKeyProvider                   = "provider"
+	propertyKeyID           = "id"
+	propertyKeyEndpointType = "endpoint_type"
+	propertyKeyProvider     = "provider"
+	/* In mcp.go, propertyKeyStatus is already used, preventing this file from
+	* using propertyKeyStatus. LiteLLM API returns  Hence, here, for displaying the status of a single inference endpoint in Naira
+	* (healthy/unhealthy/unknown), propertyKeyEndpointStatus with the value 'status' will be used.
+	 */
 	propertyKeyEndpointStatus             = "status"
-	propertyKeyAPIProtocol                = "api_protocol"
-	propertyKeyEndpointURL                = "endpoint_url"
-	propertyKeyRegion                     = "region"
-	propertyKeyModelName                  = "serves_model"
+	propertyKeyAPIBase                    = "api_base"
+	propertyKeyRegionName                 = "region_name"
+	propertyKeyModelName                  = "model_name"
 	propertyKeyLifecycleStatus            = "lifecycle_status"
-	propertyKeyLastSeen                   = "last_seen"
 	propertyKeyMode                       = "mode"
 	propertyKeyMaxTokens                  = "max_tokens"
 	propertyKeyInputCostPerMillionTokens  = "input_cost_per_million_tokens"
@@ -37,27 +39,16 @@ const (
 	endpointStatusHealthy   = "healthy"
 	endpointStatusUnhealthy = "unhealthy"
 	endpointStatusUnknown   = "unknown"
+
+	lifecycleStatusActive = "active"
 )
 
 type inferenceEndpoint struct {
-	ModelID            string  `json:"model_id"`
-	EndpointType       string  `json:"endpoint_type"`
-	Provider           string  `json:"provider"`
-	Status             string  `json:"status"`
-	APIProtocol        string  `json:"api_protocol"`
-	EndpointURL        string  `json:"endpoint_url"`
-	Region             string  `json:"region"`
-	ModelName          string  `json:"model_name"`
-	OwnedBy            string  `json:"owned_by"`
-	LifecycleStatus    string  `json:"lifecycle_status"`
-	DiscoveredVia      string  `json:"discovered_via"`
-	LastSeen           string  `json:"last_seen"`
-	Mode               string  `json:"mode"`
-	MaxTokens          int64   `json:"max_tokens"`
-	InputCostPerToken  float64 `json:"input_cost_per_token"`
-	OutputCostPerToken float64 `json:"output_cost_per_token"`
-
-	Invocations int64 `json:"-"`
+	ModelName string
+	// Props holds the properties already converted to their final string
+	// form (provider, status, costs, ...), ready to be merged into a
+	// node's PropertyMap.
+	Props pluginapi.PropertyMap
 }
 
 type litellmParams struct {
@@ -75,13 +66,8 @@ type modelInfo struct {
 }
 
 type healthResponse struct {
-	HealthyEndpoints   []healthEndpointEntry `json:"healthy_endpoints"`
-	UnhealthyEndpoints []healthEndpointEntry `json:"unhealthy_endpoints"`
-}
-
-type healthEndpointEntry struct {
-	Model   string `json:"model"`
-	APIBase string `json:"api_base"`
+	HealthyEndpoints   []modelAndAPIBase `json:"healthy_endpoints"`
+	UnhealthyEndpoints []modelAndAPIBase `json:"unhealthy_endpoints"`
 }
 
 type modelAndAPIBase struct {
@@ -112,7 +98,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 
 	invocations, err := p.fetchModelInvocations(ctx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Error while fetching model invocations: %v", err)
+		return nil, nil, fmt.Errorf("fetching model invocations: %w", err)
 	}
 
 	var (
@@ -121,7 +107,7 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 	)
 
 	for _, endpoint := range endpoints {
-		modelName := strings.TrimSpace(endpoint.ModelName)
+		modelName := endpoint.ModelName
 		if modelName == "" {
 			if p.logger != nil {
 				p.logger.Printf("WARN: skipping inference endpoint with no model name")
@@ -134,21 +120,32 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 		if invocations[modelName] == 0 {
 			continue
 		}
-		endpoint.Invocations = invocations[modelName]
+		endpoint.Props[propertyKeyInvocationsTotal] = strconv.FormatInt(invocations[modelName], 10)
+		endpoint.Props[propertyKeyLifecycleStatus] = lifecycleStatusActive
 
-		endpoint.OwnedBy = ownerByModelID[modelName]
+		if owner := ownerByModelID[modelName]; owner != "" {
+			endpoint.Props[propertyKeyOwnedBy] = owner
+		}
 
-		regionSuffix := ""
-		if region := strings.TrimSpace(endpoint.Region); region != "" {
-			regionSuffix = "-" + region
+		// Several deployments can serve the same model_name, so the path is keyed
+		// by the deployment's model_info.id. The region, when set, is included
+		// only to make the endpoint's name readable in the UI. Both are folded
+		// into the last segment rather than added as their own, since the UI
+		// reads the second-to-last segment as the endpoint's source.
+		endpointName := modelName
+		if regionName := endpoint.Props[propertyKeyRegionName]; regionName != "" {
+			endpointName += "-" + regionName
+		}
+		if id := endpoint.Props[propertyKeyID]; id != "" {
+			endpointName += "-" + id
 		}
 
 		endpointNode := pluginapi.NodeClaim{
 			ID: pluginapi.NodeID{
 				Kind: pluginapi.NodeKindInferenceEndpoint,
-				Path: p.config.PathPrefix + "/" + modelName + regionSuffix,
+				Path: p.config.PathPrefix + "/" + endpointName,
 			},
-			Properties: endpoint.properties(),
+			Properties: endpoint.Props,
 		}
 		nodes = append(nodes, endpointNode)
 
@@ -187,51 +184,13 @@ func (m litellmParams) endpointType() string {
 }
 
 func (m litellmParams) provider() string {
-	if p := strings.TrimSpace(m.CustomLLMProvider); p != "" {
-		return p
+	if customLLMProvider := strings.TrimSpace(m.CustomLLMProvider); customLLMProvider != "" {
+		return customLLMProvider
 	}
 	if provider, _, ok := strings.Cut(m.Model, "/"); ok {
 		return strings.TrimSpace(provider)
 	}
 	return ""
-}
-
-func (e inferenceEndpoint) properties() pluginapi.PropertyMap {
-	properties := pluginapi.PropertyMap{}
-	for key, value := range map[string]string{
-		propertyKeyModelID:         e.ModelID,
-		propertyKeyEndpointType:    e.EndpointType,
-		propertyKeyProvider:        e.Provider,
-		propertyKeyEndpointStatus:  e.Status,
-		propertyKeyAPIProtocol:     e.APIProtocol,
-		propertyKeyEndpointURL:     e.EndpointURL,
-		propertyKeyRegion:          e.Region,
-		propertyKeyModelName:       e.ModelName,
-		propertyKeyOwnedBy:         e.OwnedBy,
-		propertyKeyLifecycleStatus: e.LifecycleStatus,
-		propertyKeyDiscoveredVia:   e.DiscoveredVia,
-		propertyKeyLastSeen:        e.LastSeen,
-		propertyKeyMode:            e.Mode,
-	} {
-		if value != "" {
-			properties[key] = value
-		}
-	}
-
-	if e.MaxTokens != 0 {
-		properties[propertyKeyMaxTokens] = strconv.FormatInt(e.MaxTokens, 10)
-	}
-	if e.InputCostPerToken != 0 {
-		properties[propertyKeyInputCostPerMillionTokens] = strconv.FormatFloat(e.InputCostPerToken*1_000_000, 'f', 4, 64)
-	}
-	if e.OutputCostPerToken != 0 {
-		properties[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(e.OutputCostPerToken*1_000_000, 'f', 4, 64)
-	}
-	if e.Invocations != 0 {
-		properties[propertyKeyInvocationsTotal] = strconv.FormatInt(e.Invocations, 10)
-	}
-
-	return properties
 }
 
 // getLiteLLMJSON issues an authorized GET against urlStr and decodes the JSON
@@ -275,26 +234,42 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 
 	endpoints := make([]inferenceEndpoint, 0, len(payload.Data))
 	for _, entry := range payload.Data {
-		status, ok := statusByKey[modelAndAPIBase{
-			Model:   strings.TrimSpace(entry.LiteLLMParams.Model),
-			APIBase: strings.TrimSpace(entry.LiteLLMParams.APIBase),
-		}]
+		endpointStatus, ok := statusByKey[entry.LiteLLMParams.normalizedMAAB()]
 		if !ok {
-			status = endpointStatusUnknown
+			endpointStatus = endpointStatusUnknown
+		}
+
+		modelName := strings.TrimSpace(entry.ModelName)
+
+		props := pluginapi.PropertyMap{}
+		for key, value := range map[string]string{
+			propertyKeyID:             strings.TrimSpace(entry.ModelInfo.ID),
+			propertyKeyEndpointType:   entry.LiteLLMParams.endpointType(),
+			propertyKeyProvider:       entry.LiteLLMParams.provider(),
+			propertyKeyEndpointStatus: endpointStatus,
+			propertyKeyAPIBase:        entry.LiteLLMParams.APIBase,
+			propertyKeyRegionName:     strings.TrimSpace(entry.LiteLLMParams.RegionName),
+			propertyKeyModelName:      modelName,
+			propertyKeyMode:           entry.ModelInfo.Mode,
+		} {
+			if value != "" {
+				props[key] = value
+			}
+		}
+
+		if entry.ModelInfo.MaxTokens != 0 {
+			props[propertyKeyMaxTokens] = strconv.FormatInt(entry.ModelInfo.MaxTokens, 10)
+		}
+		if entry.ModelInfo.InputCostPerToken != 0 {
+			props[propertyKeyInputCostPerMillionTokens] = strconv.FormatFloat(entry.ModelInfo.InputCostPerToken*1_000_000, 'f', 4, 64)
+		}
+		if entry.ModelInfo.OutputCostPerToken != 0 {
+			props[propertyKeyOutputCostPerMillionTokens] = strconv.FormatFloat(entry.ModelInfo.OutputCostPerToken*1_000_000, 'f', 4, 64)
 		}
 
 		endpoints = append(endpoints, inferenceEndpoint{
-			ModelID:            entry.ModelInfo.ID,
-			Provider:           entry.LiteLLMParams.provider(),
-			EndpointType:       entry.LiteLLMParams.endpointType(),
-			Status:             status,
-			EndpointURL:        entry.LiteLLMParams.APIBase,
-			Region:             entry.LiteLLMParams.RegionName,
-			ModelName:          strings.TrimSpace(entry.ModelName),
-			Mode:               entry.ModelInfo.Mode,
-			MaxTokens:          entry.ModelInfo.MaxTokens,
-			InputCostPerToken:  entry.ModelInfo.InputCostPerToken,
-			OutputCostPerToken: entry.ModelInfo.OutputCostPerToken,
+			ModelName: modelName,
+			Props:     props,
 		})
 	}
 
@@ -310,21 +285,15 @@ func (p *Plugin) fetchEndpointHealth(ctx context.Context) (map[modelAndAPIBase]s
 		return nil, fmt.Errorf("fetching LiteLLM /health: %w", err)
 	}
 
-	status := make(map[modelAndAPIBase]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
+	endpointStatus := make(map[modelAndAPIBase]string, len(payload.HealthyEndpoints)+len(payload.UnhealthyEndpoints))
 	for _, entry := range payload.UnhealthyEndpoints {
-		status[modelAndAPIBase{
-			Model:   strings.TrimSpace(entry.Model),
-			APIBase: strings.TrimSpace(entry.APIBase),
-		}] = endpointStatusUnhealthy
+		endpointStatus[entry.normalizedMAAB()] = endpointStatusUnhealthy
 	}
 	for _, entry := range payload.HealthyEndpoints {
-		status[modelAndAPIBase{
-			Model:   strings.TrimSpace(entry.Model),
-			APIBase: strings.TrimSpace(entry.APIBase),
-		}] = endpointStatusHealthy
+		endpointStatus[entry.normalizedMAAB()] = endpointStatusHealthy
 	}
 
-	return status, nil
+	return endpointStatus, nil
 }
 
 // fetchModelInvocations queries LiteLLM's /user/daily/activity for the

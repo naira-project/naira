@@ -1,20 +1,6 @@
 import { BrainCircuit, Cloud, Wrench } from 'lucide-react';
 import type { RelatedNodesConfig } from '../components/RelatedNodes';
 
-const MCP_SERVER_KIND = 'mcp_server';
-const SERVES_MODEL_RELATION = 'serves_model';
-
-/**
- * Extra detail-page tabs, per node kind.
- * Every node gets Graph and Properties.
- */
-export interface KindDetailTab {
-  value: string;
-  config: RelatedNodesConfig;
-  /** Land on this tab instead of Graph when opening the page. */
-  primary?: boolean;
-}
-
 export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
   mcp_server: {
     relationKind: 'exposes',
@@ -30,28 +16,22 @@ export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
     ),
   },
   inference_endpoint: {
-    relationKind: SERVES_MODEL_RELATION,
+    relationKind: 'serves_model',
     direction: 'outgoing',
     title: 'Uses Model',
     icon: BrainCircuit,
     description: 'The model this inference endpoint serves.',
   },
   model: {
-    relationKind: SERVES_MODEL_RELATION,
+    relationKind: 'serves_model',
     direction: 'incoming',
     title: 'Served By',
     icon: Cloud,
     description: 'The inference endpoint that serves this model.',
+    emptyText:
+      'No inference endpoint serves this model. Endpoints only appear once the model has received traffic within the metrics lookback window.',
   },
 };
-
-export const KIND_DETAIL_TABS: Record<string, KindDetailTab[]> = {
-  [MCP_SERVER_KIND]: [{ value: 'Tools', config: RELATED_CARDS_BY_KIND.mcp_server, primary: true }],
-};
-
-export function detailTabsForKind(kind: string): KindDetailTab[] {
-  return KIND_DETAIL_TABS[kind] ?? [];
-}
 
 export function relatedCardForKind(kind: string): RelatedNodesConfig | undefined {
   return RELATED_CARDS_BY_KIND[kind];
