@@ -56,6 +56,6 @@ tasks:
   shell:lint:
     desc: Lint shell scripts with ShellCheck
     cmds:
-      # Mirrors ci's ignore_paths (.claude, node_modules) instead of a fixed
-      # file list, so a new script is picked up automatically.
-      - git ls-files '*.sh' ':!:.claude/**' ':!:node_modules/**' | xargs shellcheck
+      # git ls-files only returns tracked files, so gitignored dirs (.claude,
+      # node_modules) never show up here — no need to exclude them.
+      - git ls-files '*.sh' | xargs shellcheck
