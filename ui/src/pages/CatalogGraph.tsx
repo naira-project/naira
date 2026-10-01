@@ -60,8 +60,7 @@ function toFlowNode(
   const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
   // Nodes that differ only by region (e.g. one inference endpoint per region)
   // share the same label, so surface the region to tell them apart.
-  const region = typeof node.properties?.region === 'string' ? node.properties.region : undefined;
-
+  const region = typeof node.properties?.region === 'string' ? node.properties.region : typeof node.properties?.region_name === 'string' ? node.properties.region_name : undefined;
   const displayLabel = (
     <div className="flex gap-2 text-left h-full">
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">

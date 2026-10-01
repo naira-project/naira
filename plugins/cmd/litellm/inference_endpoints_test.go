@@ -91,13 +91,13 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 		listInferenceEndpoints(t.Context(), map[string]string{"idp-claude-sonnet": "team-a"})
 	require.NoError(t, err)
 
-	// The region and the deployment's model_info.id are appended to the path;
+	// The deployment's model_info.id is appended to the path as its own segment;
 	// the id disambiguates deployments serving the same model_name.
 	assert.Equal(t, []pluginapi.NodeClaim{
 		{
 			ID: pluginapi.NodeID{
 				Kind: "inference_endpoint",
-				Path: "litellm/idp-claude-sonnet-us-east-1-model-1",
+				Path: "litellm/idp-claude-sonnet/model-1",
 			},
 			Properties: pluginapi.PropertyMap{
 				"id":                             "model-1",
@@ -123,7 +123,7 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 			Kind: "serves_model",
 			From: pluginapi.NodeID{
 				Kind: "inference_endpoint",
-				Path: "litellm/idp-claude-sonnet-us-east-1-model-1",
+				Path: "litellm/idp-claude-sonnet/model-1",
 			},
 			To: pluginapi.NodeID{
 				Kind: "model",
@@ -187,17 +187,17 @@ func TestListInferenceEndpointsEmitsOneNodePerDeploymentOfSameModel(t *testing.T
 
 	endpoints := nodePaths(nodes, "inference_endpoint")
 	require.Len(t, endpoints, 2)
-	assert.Equal(t, "azure", endpoints["litellm/idp-gpt-4o-eastus-deployment-azure"]["provider"])
-	assert.Equal(t, "healthy", endpoints["litellm/idp-gpt-4o-eastus-deployment-azure"]["status"])
-	assert.Equal(t, "openai", endpoints["litellm/idp-gpt-4o-deployment-openai"]["provider"])
-	assert.Equal(t, "unhealthy", endpoints["litellm/idp-gpt-4o-deployment-openai"]["status"])
+	assert.Equal(t, "azure", endpoints["litellm/idp-gpt-4o/deployment-azure"]["provider"])
+	assert.Equal(t, "healthy", endpoints["litellm/idp-gpt-4o/deployment-azure"]["status"])
+	assert.Equal(t, "openai", endpoints["litellm/idp-gpt-4o/deployment-openai"]["provider"])
+	assert.Equal(t, "unhealthy", endpoints["litellm/idp-gpt-4o/deployment-openai"]["status"])
 
 	assert.ElementsMatch(t, []pluginapi.RelationClaim{
 		{
 			Kind: "serves_model",
 			From: pluginapi.NodeID{
 				Kind: "inference_endpoint",
-				Path: "litellm/idp-gpt-4o-eastus-deployment-azure",
+				Path: "litellm/idp-gpt-4o/deployment-azure",
 			},
 			To: pluginapi.NodeID{
 				Kind: "model",
@@ -208,7 +208,7 @@ func TestListInferenceEndpointsEmitsOneNodePerDeploymentOfSameModel(t *testing.T
 			Kind: "serves_model",
 			From: pluginapi.NodeID{
 				Kind: "inference_endpoint",
-				Path: "litellm/idp-gpt-4o-deployment-openai",
+				Path: "litellm/idp-gpt-4o/deployment-openai",
 			},
 			To: pluginapi.NodeID{
 				Kind: "model",

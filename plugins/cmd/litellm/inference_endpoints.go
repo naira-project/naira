@@ -127,23 +127,17 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 			endpoint.Props[propertyKeyOwnedBy] = owner
 		}
 
-		// Several deployments can serve the same model_name, so the path is keyed
-		// by the deployment's model_info.id. The region, when set, is included
-		// only to make the endpoint's name readable in the UI. Both are folded
-		// into the last segment rather than added as their own, since the UI
-		// reads the second-to-last segment as the endpoint's source.
-		endpointName := modelName
-		if regionName := endpoint.Props[propertyKeyRegionName]; regionName != "" {
-			endpointName += "-" + regionName
-		}
+		// Several deployments can serve the same model_name, so the path ends in
+		// the deployment's model_info.id as its own segment.
+		endpointPath := p.config.PathPrefix + "/" + modelName
 		if id := endpoint.Props[propertyKeyID]; id != "" {
-			endpointName += "-" + id
+			endpointPath += "/" + id
 		}
 
 		endpointNode := pluginapi.NodeClaim{
 			ID: pluginapi.NodeID{
 				Kind: pluginapi.NodeKindInferenceEndpoint,
-				Path: p.config.PathPrefix + "/" + endpointName,
+				Path: endpointPath,
 			},
 			Properties: endpoint.Props,
 		}
