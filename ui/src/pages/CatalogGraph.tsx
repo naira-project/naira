@@ -58,6 +58,9 @@ function toFlowNode(
   onFocus: (node: CatalogGraphNode) => void,
 ): Node {
   const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
+  // Nodes that differ only by region (e.g. one inference endpoint per region)
+  // share the same label, so surface the region to tell them apart.
+  const region = typeof node.properties?.region === 'string' ? node.properties.region : undefined;
 
   const displayLabel = (
     <div className="flex gap-2 text-left h-full">
@@ -88,6 +91,14 @@ function toFlowNode(
         <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
           {node.label}
         </span>
+        {region && (
+          <span
+            className="self-start rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+            title={`Region: ${region}`}
+          >
+            {region}
+          </span>
+        )}
       </div>
     </div>
   );

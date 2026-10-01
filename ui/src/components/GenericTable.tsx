@@ -44,7 +44,9 @@ import {
 import {
   formatPropValue,
   inferColumns,
+  isPluginSourcedKind,
   namespaceColumnLabel,
+  nodePlugins,
   parsePath,
   type RelationSummary,
 } from '@/lib/kindUtils';
@@ -95,6 +97,7 @@ export default function GenericTable({
   }, [nodes, columns]);
   const pluginColCount = pluginColumns.length;
   const namespaceLabel = namespaceColumnLabel(kind);
+  const showPluginColumn = isPluginSourcedKind(kind);
   const hasPluginColumns = pluginColCount > 0;
   const CORE_COL_COUNT = 3; // name + namespace + relations
 
@@ -113,19 +116,33 @@ export default function GenericTable({
           </span>
         ),
       },
-      {
-        id: namespaceLabel,
-        header: namespaceLabel.charAt(0).toUpperCase() + namespaceLabel.slice(1),
-        accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? '—',
-        cell: (info) => (
-          <span
-            className="truncate text-sm text-muted-foreground"
-            title={parsedPaths.get(info.row.original.name)?.namespace}
-          >
-            {info.getValue() as string}
-          </span>
-        ),
-      },
+      showPluginColumn
+        ? {
+            id: 'plugin',
+            header: 'Plugin',
+            accessorFn: (node) => nodePlugins(node).join(', ') || '—',
+            cell: (info) => (
+              <span
+                className="truncate text-sm text-muted-foreground"
+                title={info.getValue() as string}
+              >
+                {info.getValue() as string}
+              </span>
+            ),
+          }
+        : {
+            id: namespaceLabel,
+            header: namespaceLabel.charAt(0).toUpperCase() + namespaceLabel.slice(1),
+            accessorFn: (node) => parsedPaths.get(node.name)?.namespace ?? '—',
+            cell: (info) => (
+              <span
+                className="truncate text-sm text-muted-foreground"
+                title={parsedPaths.get(info.row.original.name)?.namespace}
+              >
+                {info.getValue() as string}
+              </span>
+            ),
+          },
       {
         id: 'relations',
         header: 'Relations',
@@ -169,7 +186,7 @@ export default function GenericTable({
         ),
       },
     ],
-    [namespaceLabel, parsedPaths, pluginColumns, relationSummaries, onSelect],
+    [showPluginColumn, namespaceLabel, parsedPaths, pluginColumns, relationSummaries, onSelect],
   );
 
   const [sorting, setSorting] = useState<SortingState>([]);
