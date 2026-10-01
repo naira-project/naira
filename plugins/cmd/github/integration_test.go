@@ -1,5 +1,8 @@
 // Integration test for the github plugin.
 // See the godoc of TestGithub_Integration for more details.
+//
+// For an overview on integration tests philosophy in the project,
+// see: docs/integration-tests.md.
 package main
 
 import (
@@ -63,7 +66,7 @@ const (
 //
 // Test input: the k3s cluster is seeded with four Deployments:
 //   - one running the attested image (single container),
-//   - one running the unattested image (single container),
+//   - one running an unattested image (single container),
 //   - one running an image on ghcr.io under a different, made-up org
 //   - one running two containers.
 //
@@ -92,25 +95,22 @@ func TestGithub_Integration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), integrationTestTimeout)
 	defer cancel()
 
-	var (
-		// githubTest... are our real GitHub repository data used
+	const (
+		// naira... are our real GitHub repository data used
 		// to exercise attestation verification, repo metadata and CODEOWNERS
 		// lookup against the real GitHub API
-		githubTestOrg     = "naira-project"
-		githubTestPackage = "naira-catalog"
-		githubTestRepo    = "naira"
+		nairaOrg         = "naira-project"
+		nairaRepo        = "naira"
+		nairaImagePrefix = "ghcr.io/" + nairaOrg + "/naira-catalog:"
 
-		// attestedImageTag identifies an image published from a main branch commit, on 25 Aug 2026.
+		// attestedImage identifies an image published from a main branch commit, on 25 Aug 2026.
 		// The image has a GitHub artifact attestation created by Naira's
 		// "Dev Publish" workflow.
 		// See: https://github.com/naira-project/naira/attestations/49777757
-		attestedImageTag = "sha-e6093a9"
-		// unattestedImageTag identifies an older image published before the
+		attestedImage = nairaImagePrefix + "sha-e6093a9"
+		// unattestedImage identifies an older image published before the
 		// attestation provenance action was enabled.
-		unattestedImageTag = "sha-c8b0666"
-
-		attestedImage   = "ghcr.io/" + githubTestOrg + "/" + githubTestPackage + ":" + attestedImageTag
-		unattestedImage = "ghcr.io/" + githubTestOrg + "/" + githubTestPackage + ":" + unattestedImageTag
+		unattestedImage = nairaImagePrefix + "sha-c8b0666"
 
 		// otherOrgImage doesn't need to exist for real
 		otherOrgImage = "ghcr.io/other-org/service:v1"
@@ -132,7 +132,7 @@ func TestGithub_Integration(t *testing.T) {
 	buildAndStart(ctx, t, "github.com/naira-project/naira/plugins/cmd/github", []string{
 		"PORT=" + fmt.Sprint(pluginPort),
 		"KUBECONFIG=" + kubeconfigPath,
-		"GITHUB_ORG=" + githubTestOrg,
+		"GITHUB_ORG=" + nairaOrg,
 		"GITHUB_TOKEN=" + githubToken,
 		"GH_CLI_PATH=" + ghPath,
 	})
@@ -181,7 +181,7 @@ plugins:
 	//
 
 	var (
-		wantRepoPath            = "github.com/" + githubTestOrg + "/" + githubTestRepo
+		wantRepoPath            = "github.com/" + nairaOrg + "/" + nairaRepo
 		wantDeplPath            = clusterID + "/default/app-attested"
 		wantOwnerDevPath        = "github.com/@naira-project/dev"
 		wantOwnerMaintainerPath = "github.com/@naira-project/maintainer"
