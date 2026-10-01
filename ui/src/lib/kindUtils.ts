@@ -19,6 +19,19 @@ export function parsePath(path: string): { name: string; namespace?: string } {
 }
 
 /**
+ * Human-readable name for a node. The last path segment is the short name for
+ * most kinds, but an inference endpoint's last segment is an opaque deployment
+ * ID (litellm) or a model ID, so its `model_name` property is preferred.
+ */
+export function displayName(kind: string, path: string, props?: Record<string, unknown>): string {
+  if (kind === 'inference_endpoint') {
+    const modelName = props?.model_name;
+    if (typeof modelName === 'string' && modelName !== '') return modelName;
+  }
+  return parsePath(path).name;
+}
+
+/**
  * Label for the "second-to-last segment" column produced by `parsePath`, tailored per kind.
  * That segment is a real Kubernetes namespace for kinds sourced from cluster objects
  * (deployment, service, flux resources, litellm applications).

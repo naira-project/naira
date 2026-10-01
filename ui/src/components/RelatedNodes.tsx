@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { type CatalogGraphResponse, useCatalogGraph } from '../hooks/useCatalogGraph';
 import { encodeCatalogPath, type NodeResource } from '../lib/catalogApi';
-import { parsePath } from '../lib/kindUtils';
+import { displayName } from '../lib/kindUtils';
 
 /**
  * Describes one set of neighbours reached from a node via a single relation
@@ -155,7 +155,7 @@ function relatedNodesFromGraph(
       name: n.name,
       kind: n.kind,
       path: n.path,
-      displayName: parsePath(n.path).name,
+      displayName: displayName(n.kind, n.path, n.properties),
       title: typeof n.properties?.title === 'string' ? n.properties.title : undefined,
       description:
         typeof n.properties?.description === 'string' ? n.properties.description : undefined,

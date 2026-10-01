@@ -60,7 +60,15 @@ function toFlowNode(
   const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
   // Nodes that differ only by region (e.g. one inference endpoint per region)
   // share the same label, so surface the region to tell them apart.
-  const region = typeof node.properties?.region === 'string' ? node.properties.region : typeof node.properties?.region_name === 'string' ? node.properties.region_name : undefined;
+  const region =
+    typeof node.properties?.region === 'string'
+      ? node.properties.region
+      : typeof node.properties?.region_name === 'string'
+        ? node.properties.region_name
+        : undefined;
+  // Several deployments can serve the same model, so a short ID tells them apart.
+  const deploymentId = typeof node.properties?.id === 'string' ? node.properties.id : undefined;
+
   const displayLabel = (
     <div className="flex gap-2 text-left h-full">
       <div className="flex-1 min-w-0 flex flex-col gap-1.5">
@@ -90,13 +98,25 @@ function toFlowNode(
         <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
           {node.label}
         </span>
-        {region && (
-          <span
-            className="self-start rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-            title={`Region: ${region}`}
-          >
-            {region}
-          </span>
+        {(region || deploymentId) && (
+          <div className="flex flex-wrap gap-1">
+            {region && (
+              <span
+                className="rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                title={`Region: ${region}`}
+              >
+                {region}
+              </span>
+            )}
+            {deploymentId && (
+              <span
+                className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                title={`ID: ${deploymentId}`}
+              >
+                {deploymentId.slice(0, 8)}
+              </span>
+            )}
+          </div>
         )}
       </div>
     </div>

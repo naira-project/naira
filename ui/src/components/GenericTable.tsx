@@ -42,6 +42,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  displayName,
   formatPropValue,
   inferColumns,
   isPluginSourcedKind,
@@ -106,7 +107,7 @@ export default function GenericTable({
       {
         id: 'name',
         header: 'Name',
-        accessorFn: (node) => parsedPaths.get(node.name)?.name ?? node.name,
+        accessorFn: (node) => displayName(node.kind, node.path, nodeProps(node)),
         cell: (info) => (
           <span
             className="truncate text-sm font-medium text-foreground"
