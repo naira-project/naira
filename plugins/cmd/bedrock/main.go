@@ -53,10 +53,10 @@
 //     user instance. This is used with the access key ID as an authorization
 //     mechanism.
 //
-//   - BEDROCK_REGIONS (optional) - Space-separated list of regions. Defaults
+//   - REGIONS (optional) - Space-separated list of regions. Defaults
 //     to us-east-1.
 //
-//   - BEDROCK_METRICS_LOOKBACK (optional) - Total period over which AWS
+//   - METRICS_LOOKBACK (optional) - Total period over which AWS
 //     CloudWatch is queried for inference endpoint specific metrics.
 //     Defaults to 24h.
 //
@@ -84,19 +84,16 @@ import (
 )
 
 const (
-	propertyKeyOwnedBy           = "owned_by"
-	propertyKeyProvider          = "provider"
+	propertyKeyProviderName      = "provider_name"
 	propertyKeyRegion            = "region"
 	propertyKeyModelName         = "model_name"
-	propertyKeyLifecycleStatus   = "lifecycle_status"
+	propertyKeyModelLifecycle    = "model_lifecycle"
 	propertyKeyInputModalities   = "input_modalities"
 	propertyKeyOutputModalities  = "output_modalities"
 	propertyKeyInputTokensTotal  = "input_tokens_total"
 	propertyKeyOutputTokensTotal = "output_tokens_total"
 	propertyKeyInvocationsTotal  = "invocations_total"
 	propertyKeyStatus            = "status"
-
-	providerNameBedrock = "bedrock"
 
 	endpointStatusHealthy   = "healthy"
 	endpointStatusUnhealthy = "unhealthy"
@@ -189,6 +186,9 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		nodes         []pluginapi.NodeClaim
 		relations     []pluginapi.RelationClaim
 		collectErrors []error
+		// seenModels tracks emitted model node IDs across regions: the same
+		// model is available in several regions but maps to a single node.
+		seenModels = make(map[pluginapi.NodeID]struct{})
 	)
 
 	for _, region := range p.config.Regions {
@@ -197,7 +197,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 			continue
 		}
 
-		regionNodes, regionRelations, err := p.collectRegion(ctx, region)
+		regionNodes, regionRelations, err := p.collectRegion(ctx, region, seenModels)
 		if err != nil {
 			collectErrors = append(collectErrors, fmt.Errorf("collecting Bedrock region %q: %w", region, err))
 			continue
@@ -209,7 +209,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, errors.Join(collectErrors...)
 }
 
-func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
+func (p *Plugin) collectRegion(ctx context.Context, region string, seenModels map[pluginapi.NodeID]struct{}) ([]pluginapi.NodeClaim, []pluginapi.RelationClaim, error) {
 	models, err := p.listFoundationModels(ctx, region)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing foundation models: %w", err)
@@ -240,10 +240,13 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 				Path: p.config.PathPrefix + "/" + modelID,
 			},
 			Properties: pluginapi.PropertyMap{
-				propertyKeyOwnedBy: model.ProviderName,
+				propertyKeyProviderName: model.ProviderName,
 			},
 		}
-		nodes = append(nodes, modelNode)
+		if _, seen := seenModels[modelNode.ID]; !seen {
+			seenModels[modelNode.ID] = struct{}{}
+			nodes = append(nodes, modelNode)
+		}
 
 		// Only models with recorded invocations in the lookback window are
 		// treated as active inference endpoints; ListFoundationModels returns
@@ -252,15 +255,12 @@ func (p *Plugin) collectRegion(ctx context.Context, region string) ([]pluginapi.
 			continue
 		}
 
-		// The region is folded into the path's last segment, alongside the
-		// model ID, rather than inserted as its own segment: the UI reads the
-		// second-to-last path segment as the endpoint's "source", and that
-		// must stay "bedrock" (matching the litellm plugin's endpoint paths),
-		// not the region.
+		// The region is part of the path so the same model served from several
+		// regions yields distinct endpoint nodes, all pointing at one model node.
 		endpointNode := pluginapi.NodeClaim{
 			ID: pluginapi.NodeID{
 				Kind: pluginapi.NodeKindInferenceEndpoint,
-				Path: p.config.PathPrefix + "/" + modelID + "-" + region,
+				Path: p.config.PathPrefix + "/" + region + "/" + modelID,
 			},
 			Properties: model.properties(region, usage[modelID]),
 		}
@@ -287,8 +287,7 @@ func (u modelUsage) status() string {
 
 func (m foundationModel) properties(region string, usage modelUsage) pluginapi.PropertyMap {
 	properties := pluginapi.PropertyMap{
-		propertyKeyProvider: providerNameBedrock,
-		propertyKeyRegion:   region,
+		propertyKeyRegion: region,
 	}
 	for key, value := range m.Props {
 		properties[key] = value
@@ -325,7 +324,7 @@ func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]fou
 		props := pluginapi.PropertyMap{}
 		for key, value := range map[string]string{
 			propertyKeyModelName:        derefString(summary.ModelName),
-			propertyKeyLifecycleStatus:  lifecycleStatus(summary.ModelLifecycle),
+			propertyKeyModelLifecycle:   lifecycleStatus(summary.ModelLifecycle),
 			propertyKeyInputModalities:  joinModalities(summary.InputModalities),
 			propertyKeyOutputModalities: joinModalities(summary.OutputModalities),
 		} {
@@ -374,13 +373,14 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 			{Name: aws.String(metricModelID), Value: aws.String(modelID)},
 		}
 
+		idx := fmt.Sprint(i)
 		queries = append(queries,
-			metricQuery(fmt.Sprintf("in%d", i), metricNameInputTokenCount, dimensions),
-			metricQuery(fmt.Sprintf("out%d", i), metricNameOutputTokenCount, dimensions),
-			metricQuery(fmt.Sprintf("inv%d", i), metricNameInvocations, dimensions),
-			metricQuery(fmt.Sprintf("cerr%d", i), metricNameInvocationClientErrors, dimensions),
-			metricQuery(fmt.Sprintf("serr%d", i), metricNameInvocationServerErrors, dimensions),
-			metricQuery(fmt.Sprintf("thr%d", i), metricNameInvocationThrottles, dimensions),
+			metricQuery("in"+idx, "InputTokenCount", dimensions),
+			metricQuery("out"+idx, "OutputTokenCount", dimensions),
+			metricQuery("inv"+idx, "Invocations", dimensions),
+			metricQuery("cerr"+idx, "InvocationClientErrors", dimensions),
+			metricQuery("serr"+idx, "InvocationServerErrors", dimensions),
+			metricQuery("thr"+idx, "InvocationThrottles", dimensions),
 		)
 	}
 
