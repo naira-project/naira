@@ -18,5 +18,6 @@ Naira doesn't implement directly features e.g. for inferencing, AI Gateways and 
   - `README.md` - Project overview and developer quick start.
   - `Taskfile.yml` - Root developer entrypoints that delegate to the full dev Taskfile.
 
-## Go Error Handling
-- Wrap propagated errors with `%w` and describe the callee operation, not the caller.
+## Go Code
+- Always wrap propagated errors with `%w` and describe the callee operation, not the caller.
+- When passing on raw data from external APIs, keep original field names. If the data is transformed enough to justify a rename, add a comment with rationale.
