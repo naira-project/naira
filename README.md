@@ -69,9 +69,18 @@ To spin up the full environment on your machine:
 
 3. **Open the UI** — once port-forwarding is running, go to:
    ```
-   http://localhost:3001
+   http://localhost:3000
    ```
+   and login to Keycloak with the default credentials:
+
+    - user: `testuser`
+    - password: `testpass`
+
    You should see the Naira dashboard.
+
+   You can then for example go to **"Plugins"** and click **"Run All Plugins"**
+   (it's OK if some of them show "Failed"),
+   then go to **"Catalogs"** and open the "Software Catalog".
 
 ### Repository Structure
 
