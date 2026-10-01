@@ -2,7 +2,6 @@ version: '3'
 
 vars:
   DEV_TASKFILE: ./deploy/dev/Taskfile.yml
-  CATALOG_DIR: ./catalog
   PROTO_DIR: ./plugins/pkg/pluginapi/proto
 
 tasks:
@@ -43,10 +42,15 @@ tasks:
     cmds:
       - cd {{.PROTO_DIR}} && buf lint
 
-  catalog:test:
-    desc: Run catalog unit tests
+  go:test:
+    desc: Run unit and integration tests
     cmds:
-      - cd {{.CATALOG_DIR}} && go test -race ./...
+      - go test -race ./...
+
+  go:unit-test:
+    desc: Run unit tests
+    cmds:
+      - go test -race ./... -short
 
   go:lint:
     desc: Lint go files
