@@ -15,7 +15,7 @@ import (
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
-	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/naira-project/naira/catalog/internal/pgstore"
 	"github.com/naira-project/naira/catalog/internal/pluginmanager"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 	"github.com/naira-project/naira/catalog/internal/scheduling"
@@ -39,12 +39,15 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	store := catalog.NewMemoryStore()
+	pool, err := pgstore.Connect(ctx, config.PostgresDSN)
+	if err != nil {
+		logger.Fatalf("failed to connect to postgres: %v", err)
+	}
+	defer pool.Close()
+
+	store := pgstore.New(pool)
 	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(ctx, pluginrun.SplitStore{
-		Catalog:    store,
-		Operations: operations.NewMemoryStore(),
-	}, registeredPlugins, config.PluginTimeout, logger)
+	runner := pluginrun.NewRunner(ctx, store, registeredPlugins, config.PluginTimeout, logger)
 	scheduler, err := scheduling.NewConfiguredScheduler(config.Plugins, runner.RunPluginAsync, logger)
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
