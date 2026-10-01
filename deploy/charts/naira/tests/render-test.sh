@@ -52,8 +52,7 @@ must_fail() {
 
 # yq selectors for the objects the checks look at.
 CATALOG='select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.template.spec'
-POD='select(.kind == "Deployment" and .metadata.name == "%s") | .spec.template.spec'
-pod() { printf "$POD" "$1"; }
+pod() { printf 'select(.kind == "Deployment" and .metadata.name == "%s") | .spec.template.spec' "$1"; }
 
 # ── Catalog ──────────────────────────────────────────────────────────────────
 check "chart name" \
