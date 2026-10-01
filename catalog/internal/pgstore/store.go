@@ -3,16 +3,24 @@ package pgstore
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/operations"
 )
 
-// Store implements catalog.Store on top of PostgreSQL.
+const (
+	operationTTL           = 3 * 24 * time.Hour
+	maxOperationsPerPlugin = 5
+)
+
+// Store implements catalog.Store and operations.Store on top of PostgreSQL.
 type Store struct {
 	pool *pgxpool.Pool
 }
@@ -225,6 +233,50 @@ func (s *Store) ApplyPluginSnapshot(
 	return upsertedNodes, upsertedRelations, nil
 }
 
+// CompleteSnapshotOperation applies a plugin snapshot and marks the
+// corresponding operation as succeeded in one transaction.
+func (s *Store) CompleteSnapshotOperation(
+	ctx context.Context,
+	operationName, pluginName string,
+	snapshotID uuid.UUID,
+	nodes []catalog.NodeClaim,
+	relations []catalog.RelationClaim,
+) (int, int, error) {
+	if err := catalog.ValidateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
+		return 0, 0, fmt.Errorf("validate snapshot input: %w", err)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	upsertedNodes, upsertedRelations, err := applySnapshot(ctx, tx, pluginName, snapshotID, nodes, relations)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	now := time.Now()
+	tag, err := tx.Exec(ctx, `
+		UPDATE operations
+		SET state = $1, end_time = $2, error_message = NULL,
+		    nodes_upserted = $3, relations_upserted = $4
+		WHERE name = $5
+	`, operations.StateSucceeded, now, upsertedNodes, upsertedRelations, operationName)
+	if err != nil {
+		return 0, 0, fmt.Errorf("marking operation %q succeeded: %w", operationName, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return 0, 0, fmt.Errorf("marking operation %q succeeded: %w", operationName, operations.ErrNotFound)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, fmt.Errorf("committing transaction: %w", err)
+	}
+	return upsertedNodes, upsertedRelations, nil
+}
+
 func applySnapshot(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -317,6 +369,172 @@ func applySnapshot(
 	}
 
 	return upsertedNodes, upsertedRelations, nil
+}
+
+const selectOperationSQL = `
+	SELECT name, plugin, state, start_time, end_time, error_message, nodes_upserted, relations_upserted, created_at
+	FROM operations
+`
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanOperation(row rowScanner) (operations.Operation, error) {
+	var op operations.Operation
+	var startTime *time.Time
+	var errorMessage *string
+
+	if err := row.Scan(
+		&op.Name, &op.Plugin, &op.State, &startTime, &op.EndTime, &errorMessage,
+		&op.NodesUpserted, &op.RelationsUpserted, &op.CreatedAt,
+	); err != nil {
+		return operations.Operation{}, err
+	}
+
+	if startTime != nil {
+		op.StartTime = *startTime
+	}
+	if errorMessage != nil {
+		op.Error = &operations.StatusError{Message: *errorMessage}
+	}
+	return op, nil
+}
+
+func (s *Store) Create(op operations.Operation) error {
+	ctx := context.Background()
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	tag, err := tx.Exec(ctx, `
+		INSERT INTO operations (name, plugin, state, created_at)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (name) DO NOTHING
+	`, op.Name, op.Plugin, op.State, op.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("inserting operation %q: %w", op.Name, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("operation %q: %w", op.Name, operations.ErrAlreadyExists)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM operations
+		WHERE name IN (
+			SELECT name FROM operations
+			WHERE plugin = $1
+			ORDER BY created_at DESC
+			OFFSET $2
+		)
+	`, op.Plugin, maxOperationsPerPlugin); err != nil {
+		return fmt.Errorf("evicting old operations for plugin %q: %w", op.Plugin, err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing transaction: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) Get(name string) (operations.Operation, error) {
+	ctx := context.Background()
+	if err := s.pruneExpiredOperations(ctx); err != nil {
+		return operations.Operation{}, err
+	}
+
+	op, err := scanOperation(s.pool.QueryRow(ctx, selectOperationSQL+` WHERE name = $1`, name))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return operations.Operation{}, fmt.Errorf("operation %q: %w", name, operations.ErrNotFound)
+		}
+		return operations.Operation{}, fmt.Errorf("getting operation %q: %w", name, err)
+	}
+	return op, nil
+}
+
+func (s *Store) List(filter operations.Filter) ([]operations.Operation, error) {
+	ctx := context.Background()
+	if err := s.pruneExpiredOperations(ctx); err != nil {
+		return nil, err
+	}
+
+	query := selectOperationSQL + ` WHERE 1=1`
+	var args []any
+	if filter.Plugin != "" {
+		args = append(args, filter.Plugin)
+		query += fmt.Sprintf(" AND plugin = $%d", len(args))
+	}
+	if filter.State != "" {
+		args = append(args, filter.State)
+		query += fmt.Sprintf(" AND state = $%d", len(args))
+	}
+	query += " ORDER BY created_at DESC"
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("listing operations: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]operations.Operation, 0)
+	for rows.Next() {
+		op, err := scanOperation(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scanning operation: %w", err)
+		}
+		result = append(result, op)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("reading operations: %w", err)
+	}
+	return result, nil
+}
+
+func (s *Store) UpdateState(name string, state operations.State, statusErr *operations.StatusError, nodesUpserted, relationsUpserted int) error {
+	ctx := context.Background()
+	now := time.Now()
+
+	var errorMessage *string
+	if statusErr != nil {
+		errorMessage = &statusErr.Message
+	}
+
+	query := `UPDATE operations SET state = $1, error_message = $2`
+	args := []any{state, errorMessage}
+	if state == operations.StateRunning {
+		query += fmt.Sprintf(", start_time = COALESCE(start_time, $%d)", len(args)+1)
+		args = append(args, now)
+	}
+	if state == operations.StateSucceeded || state == operations.StateFailed {
+		query += fmt.Sprintf(", end_time = $%d", len(args)+1)
+		args = append(args, now)
+	}
+	if state == operations.StateSucceeded {
+		query += fmt.Sprintf(", nodes_upserted = $%d, relations_upserted = $%d", len(args)+1, len(args)+2)
+		args = append(args, nodesUpserted, relationsUpserted)
+	}
+	query += fmt.Sprintf(" WHERE name = $%d", len(args)+1)
+	args = append(args, name)
+
+	tag, err := s.pool.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("updating operation %q: %w", name, err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("operation %q: %w", name, operations.ErrNotFound)
+	}
+	return nil
+}
+
+func (s *Store) pruneExpiredOperations(ctx context.Context) error {
+	if _, err := s.pool.Exec(ctx, `DELETE FROM operations WHERE created_at < $1`, time.Now().Add(-operationTTL)); err != nil {
+		return fmt.Errorf("pruning expired operations: %w", err)
+	}
+	return nil
 }
 
 func encodeProperties(properties map[string]string) ([]byte, error) {
