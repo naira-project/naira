@@ -280,6 +280,44 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+
+  container-publish-plugin-openai-api-models:
+    name: Publish · Plugin OpenAI API Models
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: "naira-plugin-openai-api-models"
+      dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  sbom-plugin-openai-api-models:
+    name: SBOM · Plugin OpenAI API Models
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    needs: [release-please, container-publish-plugin-openai-api-models]
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: ${{ needs.container-publish-plugin-openai-api-models.outputs.image-name }}
+      image-digest: ${{ needs.container-publish-plugin-openai-api-models.outputs.image-digest }}
+      release-tag: ${{ needs.release-please.outputs.target_tag }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   container-publish-plugin-depl-calls-svc:
     name: Publish · Plugin Depl Calls Svc
     permissions:
@@ -532,6 +570,8 @@ jobs:
       - sbom-plugin-mcp-servers
       - container-publish-plugin-depl-uses-litellm
       - sbom-plugin-depl-uses-litellm
+      - container-publish-plugin-openai-api-models
+      - sbom-plugin-openai-api-models
     if: always() && needs.release-please.outputs.target_tag != ''
     runs-on: ubuntu-latest
     steps:
