@@ -71,7 +71,6 @@ Pod-level fields shared by the three Deployments; unset values render nothing.
 Usage: include "naira.podSpec" (dict "root" $ "name" "catalog" "cfg" .Values.catalog)
 */}}
 {{- define "naira.podSpec" -}}
-{{- $selector := dict "app.kubernetes.io/name" .name "app.kubernetes.io/instance" (toString .root.Release.Name) -}}
 {{- with .root.Values.imagePullSecrets }}
 imagePullSecrets:
   {{- toYaml . | nindent 2 }}
@@ -91,29 +90,8 @@ nodeSelector:
 tolerations:
   {{- toYaml . | nindent 2 }}
 {{- end }}
-{{- $affinity := deepCopy (.cfg.affinity | default dict) }}
-{{- if and .cfg.podAntiAffinity (not (hasKey $affinity "podAntiAffinity")) }}
-{{- $term := dict "labelSelector" (dict "matchLabels" $selector) "topologyKey" "kubernetes.io/hostname" }}
-{{- if eq .cfg.podAntiAffinity "hard" }}
-{{- $_ := set $affinity "podAntiAffinity" (dict "requiredDuringSchedulingIgnoredDuringExecution" (list $term)) }}
-{{- else }}
-{{- $_ := set $affinity "podAntiAffinity" (dict "preferredDuringSchedulingIgnoredDuringExecution" (list (dict "weight" 100 "podAffinityTerm" $term))) }}
-{{- end }}
-{{- end }}
-{{- with $affinity }}
+{{- with .cfg.affinity }}
 affinity:
-  {{- toYaml . | nindent 2 }}
-{{- end }}
-{{- $spread := list }}
-{{- range .cfg.topologySpreadConstraints }}
-{{- $c := deepCopy . }}
-{{- if not (hasKey $c "labelSelector") }}
-{{- $_ := set $c "labelSelector" (dict "matchLabels" $selector) }}
-{{- end }}
-{{- $spread = append $spread $c }}
-{{- end }}
-{{- with $spread }}
-topologySpreadConstraints:
   {{- toYaml . | nindent 2 }}
 {{- end }}
 {{- end -}}

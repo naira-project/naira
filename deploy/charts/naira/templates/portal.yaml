@@ -9,9 +9,7 @@ metadata:
     {{- include "naira.labels" . | nindent 4 }}
     {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 4 }}
 spec:
-  {{- if not .Values.portal.autoscaling.enabled }}
   replicas: {{ .Values.portal.replicas }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 6 }}

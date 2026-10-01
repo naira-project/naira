@@ -8,9 +8,7 @@ metadata:
     {{- include "naira.labels" . | nindent 4 }}
     {{- include "naira.selector" (dict "root" . "name" "ui") | nindent 4 }}
 spec:
-  {{- if not .Values.ui.autoscaling.enabled }}
   replicas: {{ .Values.ui.replicas }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "naira.selector" (dict "root" . "name" "ui") | nindent 6 }}
