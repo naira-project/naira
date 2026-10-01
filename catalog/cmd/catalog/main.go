@@ -21,6 +21,8 @@ import (
 	"github.com/naira-project/naira/catalog/internal/scheduling"
 )
 
+const resyncLookback = 30 * 24 * time.Hour
+
 func main() {
 	logger := log.New(os.Stdout, "catalog ", log.LstdFlags)
 
@@ -52,6 +54,8 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
+
+	scheduling.ResyncStale(ctx, config.Plugins, store, runner.RunPluginAsync, time.Now(), resyncLookback, logger)
 
 	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
