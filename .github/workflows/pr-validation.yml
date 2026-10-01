@@ -54,9 +54,9 @@ jobs:
       # revisit once the test suite reaches meaningful coverage.
       coverage-threshold: 0
 
-  # ── 4. Go formatting, linting ───────────────────────────
+  # ── 4. Go formatting, linting & ShellCheck ───────────────────────────
   backend-check:
-    name: Check · Go
+    name: Check · Go & ShellCheck
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -82,6 +82,11 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
           version: v2.13.2
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
+        with:
+          version: v0.11.0 # keep in sync with mise.toml's shellcheck version
 
   # ── 5. UI checks (TypeScript and Biome) ───────────────────────────────────
   ui-check:
