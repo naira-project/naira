@@ -19,6 +19,12 @@ Then:
  4. Verify Bedrock model access in the configured regions (Bedrock -> Model catalog, matching BEDROCK\_REGIONS), and confirm you've invoked at least one model per region. CloudWatch only reports InputTokenCount, OutputTokenCount and Invocations for models that have received traffic. Otherwise the plugin just shows zero usage.
  5. No AWS\_REGION env var is needed in the initContainer, since the region is passed explicitly per call via awsconfig.WithRegion(region).
 
+## Nodes and Relations
+
+Every foundation model becomes a model node with the path \<prefix>/\<modelID>. A model available in several regions is emitted once.
+
+A model with recorded invocations in the CloudWatch lookback window also becomes an inference\_endpoint node with the path \<prefix>/\<region>/\<modelID>, one per region, connected to its model node by a serves\_model relation. Endpoint nodes carry the region, the model's name, lifecycle and modalities, the input/output token and invocation totals, and a healthy or unhealthy status. The status is unhealthy if the model had any client errors, server errors or throttles in the lookback window.
+
 ## Known Issues
 
 Currently, AWS Bedrock model fetches all foundational models and their inference endpoints available for a specific IAM user. However, this fetch now results in ~140 available inference endpoints if the region is selected as us-east-1, and ~40-50 available inference endpoints if the selected region is eu-central-1. This fetch mechanism causes a small delay on the fetch, but with more regions available for a specific IAM user, this mechanism must be optimized.
@@ -29,9 +35,9 @@ Currently, AWS Bedrock model fetches all foundational models and their inference
 
   - AWS\_SECRET\_ACCESS\_KEY (mandatory) - Access key secret of a specific IAM user instance. This is used with the access key ID as an authorization mechanism.
 
-  - BEDROCK\_REGIONS (optional) - Space-separated list of regions. Defaults to us-east-1.
+  - REGIONS (optional) - Space-separated list of regions. Defaults to us-east-1.
 
-  - BEDROCK\_METRICS\_LOOKBACK (optional) - Total period over which AWS CloudWatch is queried for inference endpoint specific metrics. Defaults to 24h.
+  - METRICS\_LOOKBACK (optional) - Total period over which AWS CloudWatch is queried for inference endpoint specific metrics. Defaults to 24h.
 
 ---
 Readme created from Go doc with [goreadme](https://github.com/posener/goreadme)

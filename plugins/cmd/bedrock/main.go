@@ -32,6 +32,19 @@
 //  5. No AWS_REGION env var is needed in the initContainer, since the region
 //     is passed explicitly per call via awsconfig.WithRegion(region).
 //
+// # Nodes and Relations
+//
+// Every foundation model becomes a model node with the path
+// <prefix>/<modelID>. A model available in several regions is emitted once.
+//
+// A model with recorded invocations in the CloudWatch lookback window also
+// becomes an inference_endpoint node with the path <prefix>/<region>/<modelID>,
+// one per region, connected to its model node by a serves_model relation.
+// Endpoint nodes carry the region, the model's name, lifecycle and modalities,
+// the input/output token and invocation totals, and a healthy or unhealthy
+// status. The status is unhealthy if the model had any client errors, server
+// errors or throttles in the lookback window.
+//
 // # Known Issues
 //
 // Currently, AWS Bedrock model fetches all foundational models and their
