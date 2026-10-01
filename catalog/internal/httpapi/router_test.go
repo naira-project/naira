@@ -84,7 +84,7 @@ func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.
 	t.Helper()
 
 	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
+	runner := pluginrun.NewRunner(context.Background(), pluginrun.SplitStore{Catalog: store, Operations: opStore}, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
 	configs := make(catalog.PluginConfigsByName, len(plugins))
 	for name := range plugins {
 		configs[name] = catalog.PluginConfig{}

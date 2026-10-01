@@ -22,15 +22,32 @@ import (
 
 type Plugin = pluginapi.Plugin
 
+// snapshotCommitTimeout bounds the database write that applies a plugin's
+// snapshot and marks its operation as SUCCEEDED.
+const snapshotCommitTimeout = 30 * time.Second
+
 var (
 	ErrInvalidPluginName    = errors.New("invalid plugin name")
 	ErrPluginNotFound       = errors.New("plugin not found")
 	ErrPluginAlreadyRunning = errors.New("plugin already has a running operation")
 )
 
+// SnapshotStore is the persistence dependency the runner needs: tracking
+// operations, and committing a plugin's collected snapshot together with
+// that operation's SUCCEEDED status in a single atomic write.
+type SnapshotStore interface {
+	operations.Store
+	CompleteSnapshotOperation(
+		ctx context.Context,
+		operationName, pluginName string,
+		snapshotID uuid.UUID,
+		nodes []catalog.NodeClaim,
+		relations []catalog.RelationClaim,
+	) (nodesUpserted, relationsUpserted int, err error)
+}
+
 type Runner struct {
-	store         catalog.Store
-	operations    operations.Store
+	store         SnapshotStore
 	plugins       map[string]Plugin
 	logger        *log.Logger
 	wg            sync.WaitGroup
@@ -42,8 +59,7 @@ func NewRunner(
 	// appCtx is used as the parent context for asynchronous plugin runs; it
 	// should be cancelled on application shutdown.
 	appCtx context.Context,
-	store catalog.Store,
-	operationStore operations.Store,
+	store SnapshotStore,
 	plugins map[string]Plugin,
 	pluginTimeout time.Duration,
 	logger *log.Logger,
@@ -59,7 +75,6 @@ func NewRunner(
 	return &Runner{
 		appCtx:        appCtx,
 		store:         store,
-		operations:    operationStore,
 		plugins:       registeredPlugins,
 		pluginTimeout: pluginTimeout,
 		logger:        logger,
@@ -93,7 +108,7 @@ func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operation
 		State:     operations.StatePending,
 		CreatedAt: time.Now(),
 	}
-	if err := r.operations.Create(op); err != nil {
+	if err := r.store.Create(op); err != nil {
 		return operations.Operation{}, fmt.Errorf("creating operation for plugin %q: %w", pluginName, err)
 	}
 
@@ -131,7 +146,7 @@ func (r *Runner) RunAllPluginsAsync(ctx context.Context) []operations.Operation 
 }
 
 func (r *Runner) GetOperation(_ context.Context, name string) (operations.Operation, error) {
-	op, err := r.operations.Get(name)
+	op, err := r.store.Get(name)
 	if err != nil {
 		return operations.Operation{}, fmt.Errorf("getting operation %q: %w", name, err)
 	}
@@ -150,7 +165,7 @@ func (r *Runner) ListPlugins() []string {
 // ListOperations returns all operations, optionally filtered by plugin and
 // state, ordered by creation time descending.
 func (r *Runner) ListOperations(_ context.Context, filter operations.Filter) ([]operations.Operation, error) {
-	result, err := r.operations.List(filter)
+	result, err := r.store.List(filter)
 	if err != nil {
 		return nil, fmt.Errorf("listing operations: %w", err)
 	}
@@ -164,7 +179,7 @@ func (r *Runner) Wait() {
 
 // executePluginRun runs a single plugin and updates the operation outcome.
 func (r *Runner) executePluginRun(operationName, pluginName string) {
-	if err := r.operations.UpdateState(operationName, operations.StateRunning, nil, 0, 0); err != nil {
+	if err := r.store.UpdateState(operationName, operations.StateRunning, nil, 0, 0); err != nil {
 		r.logf("marking operation %q as running: %v", operationName, err)
 		return
 	}
@@ -185,17 +200,17 @@ func (r *Runner) executePluginRun(operationName, pluginName string) {
 	}
 
 	snapshotID := uuid.New()
-	upsertedNodes, upsertedRelations, err := r.store.ApplyPluginSnapshot(pluginName, snapshotID, response.Nodes, response.Relations)
+	commitCtx, commitCancel := context.WithTimeout(r.appCtx, snapshotCommitTimeout)
+	defer commitCancel()
+
+	upsertedNodes, upsertedRelations, err := r.store.CompleteSnapshotOperation(commitCtx, operationName, pluginName, snapshotID, response.Nodes, response.Relations)
 	if err != nil {
-		r.failOperation(operationName, pluginName, fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err))
+		r.failOperation(operationName, pluginName, fmt.Errorf("committing snapshot from plugin %q: %w", pluginName, err))
 		return
 	}
 
 	r.logf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
 
-	if err := r.operations.UpdateState(operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
-		r.logf("marking operation %q as succeeded: %v", operationName, err)
-	}
 }
 
 func (r *Runner) failOperation(operationName, pluginName string, err error) {
@@ -203,13 +218,13 @@ func (r *Runner) failOperation(operationName, pluginName string, err error) {
 
 	r.logf("plugin %q run failed: %v", pluginName, err)
 
-	if updateErr := r.operations.UpdateState(operationName, operations.StateFailed, statusErr, 0, 0); updateErr != nil {
+	if updateErr := r.store.UpdateState(operationName, operations.StateFailed, statusErr, 0, 0); updateErr != nil {
 		r.logf("marking operation %q as failed: %v", operationName, updateErr)
 	}
 }
 
 func (r *Runner) hasActiveOperation(pluginName string) bool {
-	ops, err := r.operations.List(operations.Filter{Plugin: pluginName})
+	ops, err := r.store.List(operations.Filter{Plugin: pluginName})
 	if err != nil {
 		r.logf("listing operations for plugin %q: %v", pluginName, err)
 		return false

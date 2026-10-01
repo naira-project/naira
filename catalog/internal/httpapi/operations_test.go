@@ -129,7 +129,7 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	block := make(chan struct{})
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
+	runner := pluginrun.NewRunner(context.Background(), pluginrun.SplitStore{Catalog: store, Operations: opStore}, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
 	router, err := NewRouter(catalogService, runner, catalog.PluginConfigsByName{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 

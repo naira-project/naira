@@ -29,8 +29,7 @@ func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) htt
 	store := catalog.NewMemoryStore()
 	runner := pluginrun.NewRunner(
 		context.Background(),
-		store,
-		operations.NewMemoryStore(),
+		pluginrun.SplitStore{Catalog: store, Operations: operations.NewMemoryStore()},
 		plugins,
 		5*time.Minute,
 		log.New(io.Discard, "", 0),

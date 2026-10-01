@@ -41,7 +41,10 @@ func main() {
 
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
+	runner := pluginrun.NewRunner(ctx, pluginrun.SplitStore{
+		Catalog:    store,
+		Operations: operations.NewMemoryStore(),
+	}, registeredPlugins, config.PluginTimeout, logger)
 	scheduler, err := scheduling.NewConfiguredScheduler(config.Plugins, runner.RunPluginAsync, logger)
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
