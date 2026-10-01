@@ -45,6 +45,7 @@ const (
 
 type inferenceEndpoint struct {
 	ModelName string
+	ID        string
 	// Props holds the properties already converted to their final string
 	// form (provider, status, costs, ...), ready to be merged into a
 	// node's PropertyMap.
@@ -108,9 +109,19 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 
 	for _, endpoint := range endpoints {
 		modelName := endpoint.ModelName
+		id := endpoint.ID
 		if modelName == "" {
 			if p.logger != nil {
 				p.logger.Printf("WARN: skipping inference endpoint with no model name")
+			}
+			continue
+		}
+
+		// Without an ID, endpoints serving the same model_name would share a
+		// path and collide as duplicate nodes.
+		if id == "" {
+			if p.logger != nil {
+				p.logger.Printf("ERROR: skipping inference endpoint for model %q with no model_info.id", modelName)
 			}
 			continue
 		}
@@ -127,17 +138,10 @@ func (p *Plugin) listInferenceEndpoints(ctx context.Context, ownerByModelID map[
 			endpoint.Props[propertyKeyOwnedBy] = owner
 		}
 
-		// Several deployments can serve the same model_name, so the path ends in
-		// the deployment's model_info.id as its own segment.
-		endpointPath := p.config.PathPrefix + "/" + modelName
-		if id := endpoint.Props[propertyKeyID]; id != "" {
-			endpointPath += "/" + id
-		}
-
 		endpointNode := pluginapi.NodeClaim{
 			ID: pluginapi.NodeID{
 				Kind: pluginapi.NodeKindInferenceEndpoint,
-				Path: endpointPath,
+				Path: p.config.PathPrefix + "/" + modelName + "/" + id,
 			},
 			Properties: endpoint.Props,
 		}
@@ -234,10 +238,11 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 		}
 
 		modelName := strings.TrimSpace(entry.ModelName)
+		id := strings.TrimSpace(entry.ModelInfo.ID)
 
 		props := pluginapi.PropertyMap{}
 		for key, value := range map[string]string{
-			propertyKeyID:             strings.TrimSpace(entry.ModelInfo.ID),
+			propertyKeyID:             id,
 			propertyKeyEndpointType:   entry.LiteLLMParams.endpointType(),
 			propertyKeyProvider:       entry.LiteLLMParams.provider(),
 			propertyKeyEndpointStatus: endpointStatus,
@@ -263,6 +268,7 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 
 		endpoints = append(endpoints, inferenceEndpoint{
 			ModelName: modelName,
+			ID:        id,
 			Props:     props,
 		})
 	}

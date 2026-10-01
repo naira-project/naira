@@ -252,10 +252,36 @@ func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
 	assert.Empty(t, relations)
 }
 
+func TestListInferenceEndpointsSkipsEntryWithNoID(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": [
+			{"model_name": "idp-model", "model_info": {"id": "  "}},
+			{"model_name": "idp-model"}
+		]
+	}`
+	const dailyActivityResponse = `{
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-model": {"metrics": {"api_requests": 1}}
+				}
+			}
+			}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, `{}`, dailyActivityResponse)
+
+	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, nodes, "an endpoint with no model_info.id would collide with others serving the same model_name")
+	assert.Empty(t, relations)
+}
+
 func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testing.T) {
 	const modelInfoResponse = `{
 		"data": [
-			{"model_name": "idp-model"}
+			{"model_name": "idp-model", "model_info": {"id": "model-1"}}
 		]
 	}`
 	const dailyActivityResponse = `{
@@ -275,8 +301,8 @@ func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testin
 	require.NoError(t, err, "an unreachable health endpoint should not fail the whole sync")
 
 	endpoints := nodePaths(nodes, "inference_endpoint")
-	require.Contains(t, endpoints, "litellm/idp-model")
-	assert.Equal(t, "unknown", endpoints["litellm/idp-model"]["status"])
+	require.Contains(t, endpoints, "litellm/idp-model/model-1")
+	assert.Equal(t, "unknown", endpoints["litellm/idp-model/model-1"]["status"])
 }
 
 func TestListInferenceEndpointsReportsUnreachableModelInfo(t *testing.T) {

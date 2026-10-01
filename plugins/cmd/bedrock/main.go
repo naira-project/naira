@@ -111,16 +111,9 @@ const (
 	endpointStatusHealthy   = "healthy"
 	endpointStatusUnhealthy = "unhealthy"
 
-	metricNamespaceBedrock           = "AWS/Bedrock"
-	metricNameInputTokenCount        = "InputTokenCount"
-	metricNameOutputTokenCount       = "OutputTokenCount"
-	metricNameInvocations            = "Invocations"
-	metricNameInvocationClientErrors = "InvocationClientErrors"
-	metricNameInvocationServerErrors = "InvocationServerErrors"
-	metricNameInvocationThrottles    = "InvocationThrottles"
-	metricModelID                    = "ModelId"
-	metricPeriodSeconds              = 3600
-
+	metricNamespaceBedrock = "AWS/Bedrock"
+	metricModelID          = "ModelId"
+	metricPeriodSeconds    = 3600
 	// maxMetricDataQueriesPerRequest is the CloudWatch GetMetricData limit on
 	// MetricDataQueries per call.
 	maxMetricDataQueriesPerRequest = 500
