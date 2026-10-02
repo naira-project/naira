@@ -21,6 +21,14 @@ plus Secrets supplied by the operator: `catalog-secrets` (keys
 `LITELLM_API_KEY`, `OPENMETADATA_ADMIN_PASSWORD`) and `portal-oidc` (key
 `client-secret`).
 
+Released charts are also published to ghcr.io as OCI artifacts, so no checkout
+is needed:
+
+```
+helm install naira oci://ghcr.io/naira-project/charts/naira --version <release> \
+  -n idp-system --create-namespace -f my-values.yaml
+```
+
 For kind, add `-f deploy/charts/naira/values-dev.yaml` instead — it creates
 development Secrets from values.
 
