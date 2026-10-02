@@ -5,18 +5,12 @@ FROM golang:1.26-alpine AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
-# Cache mounts: BuildKit persists these across this run's sequential image
-# builds (catalog + each plugin), so shared packages/deps aren't recompiled
-# from scratch for every image.
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go mod download
 
-# ARG declared here, not before go mod download: BuildKit's cache key for a
-# RUN includes the build-arg environment in scope at that point, so an ARG
-# declared earlier — even unused by go mod download — busts that layer's
-# cache across different plugin builds despite identical go.mod/go.sum,
-# forcing a redundant full module download per plugin image.
+# ARG cannot be declared earlier because BuildKit includes it in the cache key
+# and we want to reuse cache across different plugins.
 ARG PLUGIN=bedrock
 
 COPY plugins/pkg/ ./plugins/pkg/
