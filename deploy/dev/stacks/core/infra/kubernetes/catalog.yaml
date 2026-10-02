@@ -12,9 +12,17 @@ type: Opaque
 stringData:
   LITELLM_API_KEY: sk-local-litellm
   OPENMETADATA_ADMIN_PASSWORD: admin
-  # Local/kind dev only. In a real cluster, drop these two keys and instead
-  # annotate the "catalog" ServiceAccount with an IAM role ARN (IRSA) so the
-  # AWS SDK's default credential chain picks up temporary credentials instead.
+  # Local/kind dev only. Long-lived IAM user credentials must not be used in a
+  # real cluster; AWS recommends workload identity (IRSA or EKS Pod Identity):
+  # https://docs.aws.amazon.com/sdkref/latest/guide/access.html
+  # TODO: Move the Bedrock plugin out of the catalog Pod into its own
+  # Deployment with a dedicated ServiceAccount carrying the IAM role. While it
+  # is a sidecar, a role on the catalog ServiceAccount is available to the whole
+  # Pod, not just this container. Once that is done, drop these two keys.
+  # TODO: Dropping these keys alone breaks the Pod: the plugin-bedrock env
+  # entries use secretKeyRef without "optional: true", so real clusters fail
+  # with CreateContainerConfigError. Remove the AWS_* env entries from
+  # plugin-bedrock (or mark them optional) at the same time.
   BEDROCK_AWS_ACCESS_KEY_ID: ""
   BEDROCK_AWS_SECRET_ACCESS_KEY: ""
 ---
@@ -614,6 +622,10 @@ spec:
               value: bedrock
             - name: REGIONS
               value: "us-east-1 eu-central-1"
+            # TODO: Local/kind dev only. Replace these static credentials with
+            # IRSA / EKS Pod Identity on a dedicated ServiceAccount (see the
+            # catalog-secrets comment above). Without "optional: true", a
+            # missing secret key fails the Pod with CreateContainerConfigError.
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
