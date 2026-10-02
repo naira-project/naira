@@ -1,6 +1,7 @@
 # Naira — first-party components only (RFC-009 §1). Keycloak, LiteLLM, MLflow,
 # OpenMetadata and MCP servers come from the test-dependencies chart or the
-# operator's own; this chart only needs their addresses (`dependencies`).
+# operator's own; the chart only needs their addresses, set in `keycloak` and
+# in each plugin's `env`.
 
 image:
   # Chart-local, not a Helm global. Empty for images loaded into kind.
@@ -12,25 +13,16 @@ image:
 # Pull Secrets for every workload, e.g. [{name: regcred}].
 imagePullSecrets: []
 
-# Defaults match test-dependencies installed into namespace naira-deps.
-dependencies:
-  keycloak:
-    baseUrl: http://keycloak.naira-deps.svc.cluster.local:8080
-    realm: naira
-    # Browser-facing. Differs from baseUrl wherever the browser cannot resolve
-    # cluster DNS, i.e. every environment reached by port-forward.
-    issuer: http://localhost:8080/realms/naira
-    authUrl: http://localhost:8080/realms/naira/protocol/openid-connect/auth
-    baseDomain: localhost
-  litellm:
-    baseUrl: http://litellm.naira-deps.svc.cluster.local:4000
-  mlflow:
-    baseUrl: http://mlflow.naira-deps.svc.cluster.local:5000
-  openmetadata:
-    baseUrl: http://openmetadata.naira-deps.svc.cluster.local:8585
-    adminEmail: admin@open-metadata.org
-  mcp:
-    endpoints: mock-knowledge-base=http://mcp-mock.naira-deps.svc.cluster.local:8080/mcp
+# Identity provider. Not installed by this chart. Defaults match the
+# test-dependencies chart installed into namespace naira-deps.
+keycloak:
+  baseUrl: http://keycloak.naira-deps.svc.cluster.local:8080
+  realm: naira
+  # Browser-facing. Differs from baseUrl wherever the browser cannot resolve
+  # cluster DNS, i.e. every environment reached by port-forward.
+  issuer: http://localhost:8080/realms/naira
+  authUrl: http://localhost:8080/realms/naira/protocol/openid-connect/auth
+  baseDomain: localhost
 
 catalog:
   enabled: true
@@ -113,7 +105,7 @@ catalog:
       schedule: "0 0 * * *"
       pathPrefix: litellm
       env:
-        LITELLM_BASE_URL: "{{ .Values.dependencies.litellm.baseUrl }}"
+        LITELLM_BASE_URL: http://litellm.naira-deps.svc.cluster.local:4000
         LITELLM_API_KEY: {secretKeyRef: {key: LITELLM_API_KEY}}
 
     mlflow:
@@ -123,7 +115,7 @@ catalog:
       schedule: "0 0 * * *"
       pathPrefix: mlflow
       env:
-        MLFLOW_BASE_URL: "{{ .Values.dependencies.mlflow.baseUrl }}"
+        MLFLOW_BASE_URL: http://mlflow.naira-deps.svc.cluster.local:5000
 
     depl-calls-svc:
       enabled: true
@@ -143,14 +135,14 @@ catalog:
 
     depl-uses-litellm:
       # Off by default: cluster-wide get/list on Secrets, on the ServiceAccount
-      # shared by the catalog and every sidecar. Enabled in values-dev.yaml.
+      # shared by the catalog and every sidecar.
       enabled: false
       image: {repository: naira-plugin-depl-uses-litellm, tag: ""}
       port: 50054
       schedule: "0 * * * *"
       env:
         DEPL_USES_LITELLM_KUBECONFIG: ""
-        DEPL_USES_LITELLM_NAMED_HOSTS: "litellm={{ .Values.dependencies.litellm.baseUrl }}"
+        DEPL_USES_LITELLM_NAMED_HOSTS: "litellm=http://litellm.naira-deps.svc.cluster.local:4000"
       rbac:
         rules:
           - apiGroups: [""]
@@ -186,8 +178,8 @@ catalog:
       port: 50056
       pathPrefix: openmetadata
       env:
-        OPENMETADATA_BASE_URL: "{{ .Values.dependencies.openmetadata.baseUrl }}"
-        OPENMETADATA_ADMIN_EMAIL: "{{ .Values.dependencies.openmetadata.adminEmail }}"
+        OPENMETADATA_BASE_URL: http://openmetadata.naira-deps.svc.cluster.local:8585
+        OPENMETADATA_ADMIN_EMAIL: admin@open-metadata.org
         OPENMETADATA_ADMIN_PASSWORD: {secretKeyRef: {key: OPENMETADATA_ADMIN_PASSWORD}}
 
     tech-radar:
@@ -208,11 +200,11 @@ catalog:
       port: 50058
       pathPrefix: mcp
       env:
-        MCP_ENDPOINTS: "{{ .Values.dependencies.mcp.endpoints }}"
+        MCP_ENDPOINTS: mock-knowledge-base=http://mcp-mock.naira-deps.svc.cluster.local:8080/mcp
 
     github:
       # Off by default: GITHUB_TOKEN is required. Add it to the catalog Secret
-      # (key GITHUB_TOKEN) before enabling. No schedule: manual trigger only.
+      # (key GITHUB_TOKEN) before enabling.
       enabled: false
       image: {repository: naira-plugin-github, tag: ""}
       port: 50059

@@ -2,8 +2,8 @@
 
 Installs the catalog with its plugin sidecars, plus `ui` and `portal`. It does
 not install Keycloak, LiteLLM, MLflow, OpenMetadata or MCP servers — this
-chart only needs their addresses (`dependencies.*`); see the
-test-dependencies chart.
+chart only needs their addresses (`keycloak.*` and each plugin's `env`); see
+the test-dependencies chart.
 
 ## Install
 
@@ -37,7 +37,7 @@ development Secrets from values.
   selectors differ and are immutable.
 - The UI works only in namespace `idp-system` for now: `ui/nginx.conf.template`
   still proxies to `catalog.idp-system` regardless of `ui.catalogUpstream`.
-- `dependencies.keycloak.issuer`, `authUrl`, `baseDomain` and `portal.uiBaseUrl`
+- `keycloak.issuer`, `authUrl`, `baseDomain` and `portal.uiBaseUrl`
   default to `localhost` (kind, port-forward). Anywhere else, set them to the
   addresses the browser uses; the catalog accepts only tokens whose `iss`
   equals `issuer`.

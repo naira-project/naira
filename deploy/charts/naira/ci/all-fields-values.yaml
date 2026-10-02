@@ -1,5 +1,6 @@
-# Every optional scheduling and network field switched on, so
-# lint and kubeconform see them rendered.
+# Every optional field switched on (pod placement, pull Secrets, NetworkPolicy),
+# so lint, kubeconform and the render tests see them rendered. Not a
+# production recommendation.
 imagePullSecrets:
   - name: regcred
 catalog:

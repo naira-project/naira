@@ -1,5 +1,5 @@
 {{- if .Values.portal.enabled }}
-{{- $kc := .Values.dependencies.keycloak }}
+{{- $kc := .Values.keycloak }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

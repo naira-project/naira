@@ -9,11 +9,7 @@ Catalog plugins:
 {{- end }}
 {{- end }}
 
-Dependencies (not installed by this chart):
-  keycloak      {{ .Values.dependencies.keycloak.baseUrl }}
-  litellm       {{ .Values.dependencies.litellm.baseUrl }}
-  mlflow        {{ .Values.dependencies.mlflow.baseUrl }}
-  openmetadata  {{ .Values.dependencies.openmetadata.baseUrl }}
+Keycloak (not installed by this chart): {{ .Values.keycloak.baseUrl }}
 {{- if or .Values.catalog.secret.create .Values.portal.oidc.secret.create }}
 
 WARNING: Secrets rendered from values. Development only.

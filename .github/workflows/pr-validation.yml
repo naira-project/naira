@@ -170,26 +170,16 @@ jobs:
           tar -xzf kubeconform.tar.gz kubeconform
           sudo mv kubeconform /usr/local/bin/kubeconform
       - name: kubeconform
-        # Validates the rendered manifests against the Kubernetes API schemas;
-        # helm lint does not see wrong field names or types. One run per values
-        # file the chart supports (bare defaults do not render by design).
-        shell: bash # pipefail: a chart that fails to render must not pass on empty input
-        env:
-          KUBERNETES_VERSION: "1.36.1" # keep in sync with the kind node image below and deploy/dev/stacks/core/infra/kind/kind-config.yaml
-        run: |
-          for values in ci/default-values.yaml ci/hardened-values.yaml values-dev.yaml; do
-            helm template naira deploy/charts/naira --namespace idp-system -f "deploy/charts/naira/${values}" \
-              | kubeconform -strict -summary -kubernetes-version "${KUBERNETES_VERSION}"
-          done
+        run: deploy/charts/naira/tests/kubeconform.sh
 
   # ── 8. Helm chart — install on kind ──────────────────────────────────────
   # The chart and its dependency tier on a throwaway cluster, then the same
   # functional probe a developer runs locally: every plugin registers with the
   # catalog and a run of every plugin succeeds. Images are built from this PR's
   # tree, so unpublished plugin images are no obstacle.
-  # Not part of the all-checks gate yet: it checks out test-dependencies at a
-  # commit of that repo's open PR branch. Add it to the gate once that PR is
-  # merged and the pin below points at a default-branch commit.
+  # TODO: add to the all-checks gate once the test-dependencies PR is merged and
+  # the pin below points at a default-branch commit. Until then it checks out
+  # that repo's open PR branch.
   helm-chart-install:
     name: Check · Helm Chart Install
     needs: helm-chart
@@ -218,20 +208,22 @@ jobs:
           cluster_name: naira-ci
           node_image: kindest/node:v1.36.1 # the version kubeconform validates against
       - name: Build images
-        # Same names and tag the chart's values-dev.yaml expects; loaded into
-        # the node, never pushed.
+        # Same names and tag the chart's values-dev.yaml expects (the chart's
+        # appVersion); loaded into the node, never pushed. One image per
+        # plugins/cmd/<name>/, so a new plugin needs no edit here.
         run: |
-          docker build -q -t naira-catalog:0.1.0 -f catalog/Dockerfile .
-          for p in depl-calls-svc depl-uses-litellm fluxcd litellm mcp-servers mlflow tech-radar; do
-            docker build -q -t "naira-plugin-${p}:0.1.0" -f "plugins/cmd/${p//-/_}/Dockerfile" .
+          TAG=$(yq '.appVersion' deploy/charts/naira/Chart.yaml)
+          images=("naira-catalog:${TAG}" "naira-ui:${TAG}" "naira-portal:${TAG}")
+          docker build -q -t "naira-catalog:${TAG}" -f catalog/Dockerfile .
+          docker build -q -t "naira-ui:${TAG}" ui
+          docker build -q -t "naira-portal:${TAG}" naira-openmfp-portal
+          for dir in plugins/cmd/*/; do
+            name=$(basename "$dir")
+            image="naira-plugin-${name//_/-}:${TAG}"
+            docker build -q -t "$image" -f "${dir}Dockerfile" .
+            images+=("$image")
           done
-          docker build -q -t naira-ui:0.1.0 ui
-          docker build -q -t naira-portal:0.1.0 naira-openmfp-portal
-          kind load docker-image --name naira-ci \
-            naira-catalog:0.1.0 naira-ui:0.1.0 naira-portal:0.1.0 \
-            naira-plugin-depl-calls-svc:0.1.0 naira-plugin-depl-uses-litellm:0.1.0 \
-            naira-plugin-fluxcd:0.1.0 naira-plugin-litellm:0.1.0 naira-plugin-mcp-servers:0.1.0 \
-            naira-plugin-mlflow:0.1.0 naira-plugin-tech-radar:0.1.0
+          kind load docker-image --name naira-ci "${images[@]}"
       - name: Install test-dependencies
         # No --wait: Helm fails the release once the LiteLLM migrations Job is
         # garbage-collected (after 120s).

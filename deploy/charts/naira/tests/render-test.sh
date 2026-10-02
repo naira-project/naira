@@ -103,12 +103,12 @@ check "plugin PORT" \
 check "plugin PATH_PREFIX" \
   "litellm" \
   "$(render | yq "$LITELLM_ENV | select(.name == \"PATH_PREFIX\") | .value")"
-check "plugin env tpl-rendered from dependencies" \
+check "plugin env default" \
   "http://litellm.naira-deps.svc.cluster.local:4000" \
   "$(render | yq "$LITELLM_ENV | select(.name == \"LITELLM_BASE_URL\") | .value")"
-check "one dependency URL override reaches the plugin" \
+check "plugin env override" \
   "http://litellm.run1.svc.cluster.local:4000" \
-  "$(render --set dependencies.litellm.baseUrl=http://litellm.run1.svc.cluster.local:4000 \
+  "$(render --set catalog.plugins.litellm.env.LITELLM_BASE_URL=http://litellm.run1.svc.cluster.local:4000 \
     | yq "$LITELLM_ENV | select(.name == \"LITELLM_BASE_URL\") | .value")"
 check "plugin secret env defaults to catalog-secrets" \
   "catalog-secrets/LITELLM_API_KEY" \
@@ -332,9 +332,9 @@ check "helm lint default values" \
 check "helm lint dev values" \
   "ok" \
   "$(helm lint "$CHART" "${DEV[@]}" >/dev/null && echo ok)"
-check "helm lint hardened values" \
+check "helm lint all-fields values" \
   "ok" \
-  "$(helm lint "$CHART" -f "$CHART/ci/hardened-values.yaml" >/dev/null && echo ok)"
+  "$(helm lint "$CHART" -f "$CHART/ci/all-fields-values.yaml" >/dev/null && echo ok)"
 
 # ── Edge cases ───────────────────────────────────────────────────────────────
 check "numeric release name renders a string label" \
@@ -501,8 +501,8 @@ check "NetworkPolicy extraIngress is appended" \
       --set 'catalog.networkPolicy.extraIngress[0].from[0].namespaceSelector.matchLabels.n=ingress-nginx' \
     | yq "$NETWORK_POLICY | (.ingress | length | tostring) + \" \"
           + .ingress[1].from[0].namespaceSelector.matchLabels.n")"
-check "hardened values render" \
+check "all-fields values render" \
   "ok" \
-  "$(render_raw -f "$CHART/ci/hardened-values.yaml" >/dev/null && echo ok)"
+  "$(render_raw -f "$CHART/ci/all-fields-values.yaml" >/dev/null && echo ok)"
 
 exit $fail

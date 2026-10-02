@@ -66,11 +66,11 @@ spec:
             - name: PORT
               value: {{ .Values.catalog.port | quote }}
             - name: KEYCLOAK_BASE_URL
-              value: {{ .Values.dependencies.keycloak.baseUrl | quote }}
+              value: {{ .Values.keycloak.baseUrl | quote }}
             - name: KEYCLOAK_REALM
-              value: {{ .Values.dependencies.keycloak.realm | quote }}
+              value: {{ .Values.keycloak.realm | quote }}
             - name: KEYCLOAK_ISSUER
-              value: {{ .Values.dependencies.keycloak.issuer | quote }}
+              value: {{ .Values.keycloak.issuer | quote }}
           ports:
             - {name: http, containerPort: {{ .Values.catalog.port }}}
           startupProbe:
