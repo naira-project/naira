@@ -131,7 +131,7 @@ func TestCollect(t *testing.T) {
 							Path: "bedrock/us-east-1/amazon.nova-micro-v1:0",
 						},
 						Properties: pluginapi.PropertyMap{
-							"region":              "us-east-1",
+							"region_name":         "us-east-1",
 							"model_name":          "Nova Micro",
 							"model_lifecycle":     "active",
 							"input_modalities":    "text",
@@ -233,7 +233,7 @@ func TestCollect(t *testing.T) {
 							Path: "bedrock/us-east-1/amazon.titan-text-express-v1",
 						},
 						Properties: pluginapi.PropertyMap{
-							"region":              "us-east-1",
+							"region_name":         "us-east-1",
 							"input_tokens_total":  "3",
 							"output_tokens_total": "5",
 							"invocations_total":   "1",
@@ -282,7 +282,7 @@ func TestCollect(t *testing.T) {
 							Path: "bedrock/us-east-1/amazon.titan-text-express-v1",
 						},
 						Properties: pluginapi.PropertyMap{
-							"region":              "us-east-1",
+							"region_name":         "us-east-1",
 							"input_tokens_total":  "3",
 							"output_tokens_total": "5",
 							"invocations_total":   "1",
@@ -295,7 +295,7 @@ func TestCollect(t *testing.T) {
 							Path: "bedrock/eu-central-1/amazon.titan-text-express-v1",
 						},
 						Properties: pluginapi.PropertyMap{
-							"region":              "eu-central-1",
+							"region_name":         "eu-central-1",
 							"input_tokens_total":  "3",
 							"output_tokens_total": "5",
 							"invocations_total":   "1",

@@ -98,7 +98,7 @@ import (
 
 const (
 	propertyKeyProviderName      = "provider_name"
-	propertyKeyRegion            = "region"
+	propertyKeyRegionName        = "region_name"
 	propertyKeyModelName         = "model_name"
 	propertyKeyModelLifecycle    = "model_lifecycle"
 	propertyKeyInputModalities   = "input_modalities"
@@ -291,9 +291,9 @@ func (u modelUsage) status() string {
 	return endpointStatusHealthy
 }
 
-func (m foundationModel) properties(region string, usage modelUsage) pluginapi.PropertyMap {
+func (m foundationModel) properties(regionName string, usage modelUsage) pluginapi.PropertyMap {
 	properties := pluginapi.PropertyMap{
-		propertyKeyRegion: region,
+		propertyKeyRegionName: regionName,
 	}
 	for key, value := range m.Props {
 		properties[key] = value

@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import '@xyflow/react/dist/style.css';
 
+import InferenceEndpointDetails from '../components/details/InferenceEndpointDetails';
 import PropertiesPanel from '../components/PropertiesPanel';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -52,22 +53,18 @@ function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
+/** Extra, kind-specific content rendered below the label of a graph node. */
+const kindDetails: Record<string, React.ComponentType<{ node: CatalogGraphNode }>> = {
+  inference_endpoint: InferenceEndpointDetails,
+};
+
 function toFlowNode(
   node: CatalogGraphNode,
   position: { x: number; y: number },
   onFocus: (node: CatalogGraphNode) => void,
 ): Node {
   const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
-  // Nodes that differ only by region (e.g. one inference endpoint per region)
-  // share the same label, so surface the region to tell them apart.
-  const region =
-    typeof node.properties?.region === 'string'
-      ? node.properties.region
-      : typeof node.properties?.region_name === 'string'
-        ? node.properties.region_name
-        : undefined;
-  // Several deployments can serve the same model, so a short ID tells them apart.
-  const deploymentId = typeof node.properties?.id === 'string' ? node.properties.id : undefined;
+  const KindDetails = kindDetails[node.kind];
 
   const displayLabel = (
     <div className="flex gap-2 text-left h-full">
@@ -98,26 +95,7 @@ function toFlowNode(
         <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
           {node.label}
         </span>
-        {(region || deploymentId) && (
-          <div className="flex flex-wrap gap-1">
-            {region && (
-              <span
-                className="rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
-                title={`Region: ${region}`}
-              >
-                {region}
-              </span>
-            )}
-            {deploymentId && (
-              <span
-                className="rounded bg-black/5 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-                title={`ID: ${deploymentId}`}
-              >
-                {deploymentId.slice(0, 8)}
-              </span>
-            )}
-          </div>
-        )}
+        {KindDetails && <KindDetails node={node} />}
       </div>
     </div>
   );
