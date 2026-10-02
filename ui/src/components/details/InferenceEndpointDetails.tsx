@@ -1,15 +1,13 @@
 import type { CatalogGraphNode } from '../../hooks/useCatalogGraph';
 
 /**
- * Region and short ID badges for inference endpoints. When connecting in the graph 
+ * Region and short ID badges for inference endpoints. When connecting in the graph
  * inference endpoints have the same display name. To differentiate different inference endpoints,
  * their regions or beginning of their inference endpoint ID are provided as a chip under the label node.
  */
 export default function InferenceEndpointDetails({ node }: { node: CatalogGraphNode }) {
   const region =
-    typeof node.properties?.region_name === 'string'
-        ? node.properties.region_name
-        : undefined;
+    typeof node.properties?.region_name === 'string' ? node.properties.region_name : undefined;
 
   const id = typeof node.properties?.id === 'string' ? node.properties.id : undefined;
 
