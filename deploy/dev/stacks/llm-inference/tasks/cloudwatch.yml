@@ -1,0 +1,61 @@
+version: '3'
+
+vars:
+  MONITORING_NAMESPACE: monitoring
+  YACE_RELEASE: yace
+  YACE_CHART: prometheus-community/yet-another-cloudwatch-exporter
+  YACE_VALUES: ./infra/helm/yace-values.yaml
+  YACE_SECRET: yace-aws-credentials
+  YACE_LOCAL_PORT: '5005'
+
+tasks:
+  deploy:
+    desc: Deploy YACE to export AWS CloudWatch metrics into Prometheus (needs AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
+    preconditions:
+      - sh: kubectl get crd servicemonitors.monitoring.coreos.com
+        msg: 'Prometheus stack not found — run `task llm-inference:monitoring:deploy` first'
+      - sh: '[ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]'
+        msg: 'Export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (and AWS_SESSION_TOKEN for temporary credentials) first'
+    cmds:
+      - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
+      - helm repo update prometheus-community 2>/dev/null
+
+      # Credentials live only in the cluster Secret, never in the values file.
+      # The chart expects the keys access_key, secret_key and security_token.
+      - |
+        set -- --from-literal=access_key="$AWS_ACCESS_KEY_ID" --from-literal=secret_key="$AWS_SECRET_ACCESS_KEY"
+        if [ -n "$AWS_SESSION_TOKEN" ]; then
+          set -- "$@" --from-literal=security_token="$AWS_SESSION_TOKEN"
+        fi
+        kubectl -n {{.MONITORING_NAMESPACE}} create secret generic {{.YACE_SECRET}} "$@" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+      - |
+        INCLUDES_SESSION_TOKEN=false
+        if [ -n "$AWS_SESSION_TOKEN" ]; then INCLUDES_SESSION_TOKEN=true; fi
+        helm upgrade --install {{.YACE_RELEASE}} {{.YACE_CHART}} \
+          --namespace {{.MONITORING_NAMESPACE}} \
+          --values {{.YACE_VALUES}} \
+          --set aws.secret.name={{.YACE_SECRET}} \
+          --set aws.secret.includesSessionToken=$INCLUDES_SESSION_TOKEN \
+          --wait --timeout 5m
+
+      # Session tokens are only read at pod start, so roll the pod to pick up refreshed ones.
+      - kubectl -n {{.MONITORING_NAMESPACE}} rollout restart deployment/{{.YACE_RELEASE}}-yet-another-cloudwatch-exporter
+      - kubectl -n {{.MONITORING_NAMESPACE}} rollout status deployment/{{.YACE_RELEASE}}-yet-another-cloudwatch-exporter --timeout 2m
+
+  undeploy:
+    desc: Remove YACE and its AWS credentials Secret from kind
+    cmds:
+      - helm uninstall {{.YACE_RELEASE}} --namespace {{.MONITORING_NAMESPACE}} --ignore-not-found
+      - kubectl -n {{.MONITORING_NAMESPACE}} delete secret {{.YACE_SECRET}} --ignore-not-found
+
+  logs:
+    desc: Tail YACE logs (useful for AWS permission errors)
+    cmds:
+      - kubectl -n {{.MONITORING_NAMESPACE}} logs -f deployment/{{.YACE_RELEASE}}-yet-another-cloudwatch-exporter
+
+  port-forward:
+    desc: Expose YACE's raw /metrics on localhost:5005
+    cmds:
+      - kubectl -n {{.MONITORING_NAMESPACE}} port-forward svc/{{.YACE_RELEASE}}-yet-another-cloudwatch-exporter {{.YACE_LOCAL_PORT}}:80

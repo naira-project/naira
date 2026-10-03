@@ -1,0 +1,43 @@
+version: '3'
+
+vars:
+  MONITORING_NAMESPACE: monitoring
+  LOKI_RELEASE: loki
+  LOKI_CHART: grafana/loki
+  LOKI_VALUES: ./infra/helm/loki-values.yaml
+  ALLOY_RELEASE: alloy
+  ALLOY_CHART: grafana/alloy
+  ALLOY_VALUES: ./infra/helm/alloy-values.yaml
+
+tasks:
+  deploy:
+    desc: Deploy Loki + Alloy so pod logs are queryable from Grafana
+    preconditions:
+      - sh: kubectl get namespace {{.MONITORING_NAMESPACE}}
+        msg: 'Monitoring namespace not found — run `task llm-inference:monitoring:deploy` first'
+    cmds:
+      - helm repo add grafana https://grafana.github.io/helm-charts 2>/dev/null || true
+      - helm repo update grafana 2>/dev/null
+
+      - |
+        helm upgrade --install {{.LOKI_RELEASE}} {{.LOKI_CHART}} \
+          --namespace {{.MONITORING_NAMESPACE}} \
+          --values {{.LOKI_VALUES}} \
+          --wait --timeout 10m
+
+      - |
+        helm upgrade --install {{.ALLOY_RELEASE}} {{.ALLOY_CHART}} \
+          --namespace {{.MONITORING_NAMESPACE}} \
+          --values {{.ALLOY_VALUES}} \
+          --wait --timeout 5m
+
+  undeploy:
+    desc: Remove Loki + Alloy from kind
+    cmds:
+      - helm uninstall {{.ALLOY_RELEASE}} --namespace {{.MONITORING_NAMESPACE}} --ignore-not-found
+      - helm uninstall {{.LOKI_RELEASE}} --namespace {{.MONITORING_NAMESPACE}} --ignore-not-found
+
+  logs:
+    desc: Tail Alloy logs (useful when no logs reach Loki)
+    cmds:
+      - kubectl -n {{.MONITORING_NAMESPACE}} logs -f deployment/{{.ALLOY_RELEASE}}
