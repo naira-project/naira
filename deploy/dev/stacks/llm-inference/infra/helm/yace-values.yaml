@@ -1,0 +1,65 @@
+# ── yet-another-cloudwatch-exporter (YACE) values for local kind dev environment ──
+# Pulls metrics from AWS CloudWatch and exposes them on /metrics so the
+# in-cluster Prometheus (kube-prometheus-stack) scrapes them like any other
+# target. Perses then queries them through the existing Prometheus datasource.
+#
+# AWS credentials are NOT set here. `task llm-inference:cloudwatch:deploy`
+# creates the `yace-aws-credentials` Secret from your shell's AWS_* env vars
+# and points aws.secret.name at it.
+#
+# Cost note: every scrape cycle issues CloudWatch GetMetricData calls, which
+# AWS bills per metric requested. Keep the job list small in dev.
+
+# How often YACE queries CloudWatch (seconds). Prometheus scrapes the cached
+# result in between, so this — not the ServiceMonitor interval — drives cost.
+extraArgs:
+  scraping-interval: 300
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+
+# Picked up by Prometheus because prometheus-values.yaml sets
+# serviceMonitorSelectorNilUsesHelmValues: false.
+serviceMonitor:
+  enabled: true
+  interval: 60s
+  timeout: 30s
+
+# The chart's connection test pod is not needed in dev.
+testConnection: false
+
+# YACE job config: https://github.com/prometheus-community/yet-another-cloudwatch-exporter/blob/master/docs/configuration.md
+# Metric names follow aws_<namespace>_<metric>_<statistic> in snake_case,
+# e.g. AWS/Bedrock InputTokenCount Sum → aws_bedrock_input_token_count_sum.
+config: |-
+  apiVersion: v1alpha1
+  sts-region: eu-central-1
+  # Bedrock invocation metrics are dimensioned by ModelId and have no taggable
+  # resources, so they go under customNamespace instead of discovery.
+  customNamespace:
+    - name: bedrock
+      namespace: AWS/Bedrock
+      # Keep in sync with the Bedrock plugin's REGIONS (core/infra/kubernetes/catalog.yaml),
+      # since the UI's per-endpoint panels filter on region.
+      regions:
+        - us-east-1
+        - eu-central-1
+      period: 300
+      length: 600
+      # Report 0 instead of dropping the series when a model had no traffic in
+      # the last period, so per-endpoint charts show idle time rather than gaps.
+      nilToZero: true
+      metrics:
+        - name: Invocations
+          statistics: [Sum]
+        - name: InvocationLatency
+          statistics: [Average]
+        - name: InputTokenCount
+          statistics: [Sum]
+        - name: OutputTokenCount
+          statistics: [Sum]
