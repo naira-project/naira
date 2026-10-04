@@ -16,6 +16,10 @@ includes:
   vllm:
     taskfile: ./tasks/vllm.yml
     dir: .
+  # Opt-in: needs AWS credentials, so not part of `deploy`.
+  cloudwatch:
+    taskfile: ./tasks/cloudwatch.yml
+    dir: .
 
 tasks:
   deploy:
@@ -31,6 +35,7 @@ tasks:
       - task: monitoring:undeploy
       - task: llamacpp:undeploy
       - task: litellm:undeploy
+      - task: cloudwatch:undeploy
 
   litellm:deploy:
     desc: Deploy only LiteLLM (postgres + litellm)
