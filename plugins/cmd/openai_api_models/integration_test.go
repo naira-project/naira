@@ -91,7 +91,12 @@ RUN mkdir -p /models && \
 			"--alias", "test-model-name",
 			"--api-key", llamaCppAPIKey,
 			"--no-webui",
-			"-c", "512",
+			// Flags below ported from "tinyllama2" in https://github.com/ggml-org/llama.cpp/blob/806eee9841de5f2c20f9d43914117f157d2baacc/tools/server/tests/utils.py#L543
+			// (Small values to keep memory usage low.)
+			"--ctx-size", "512",
+			"--batch-size", "32",
+			"--parallel", "1", // smaller than in ggml-org tests as we don't even need to access the model
+			"--n-predict", "64",
 		),
 		testcontainers.WithWaitStrategy(wait.ForHTTP("/health").WithPort(llamaCppPort)),
 	)

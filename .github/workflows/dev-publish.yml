@@ -105,23 +105,6 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-  container-publish-plugin-openai-api-models:
-    name: Publish · Plugin OpenAI API Models
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
-    with:
-      image-name: "naira-plugin-openai-api-models"
-      dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
-      context: "."
-      platforms: "linux/amd64,linux/arm64"
-    secrets:
-      registry-password: ${{ secrets.GITHUB_TOKEN }}
-
   container-publish-plugin-depl-calls-svc:
     name: Publish · Plugin Depl Calls Svc
     permissions:
@@ -241,6 +224,23 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  container-publish-plugin-openai-api-models:
+    name: Publish · Plugin OpenAI API Models
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-openai-api-models"
+      dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Gate: surfaces overall publish status as a single check ───────────────
   all-published:
     name: All Images Published
@@ -250,7 +250,6 @@ jobs:
       - container-publish-portal
       - container-publish-plugin-mlflow
       - container-publish-plugin-litellm
-      - container-publish-plugin-openai-api-models
       - container-publish-plugin-depl-calls-svc
       - container-publish-plugin-fluxcd
       - container-publish-plugin-depl-uses-litellm
@@ -258,6 +257,7 @@ jobs:
       - container-publish-plugin-mcp-servers
       - container-publish-plugin-tech-radar
       - container-publish-plugin-github
+      - container-publish-plugin-openai-api-models
     if: always()
     permissions:
       contents: read
@@ -271,7 +271,6 @@ jobs:
             "${{ needs.container-publish-portal.result }}"
             "${{ needs.container-publish-plugin-mlflow.result }}"
             "${{ needs.container-publish-plugin-litellm.result }}"
-            "${{ needs.container-publish-plugin-openai-api-models.result }}"
             "${{ needs.container-publish-plugin-depl-calls-svc.result }}"
             "${{ needs.container-publish-plugin-fluxcd.result }}"
             "${{ needs.container-publish-plugin-depl-uses-litellm.result }}"
@@ -279,6 +278,7 @@ jobs:
             "${{ needs.container-publish-plugin-mcp-servers.result }}"
             "${{ needs.container-publish-plugin-tech-radar.result }}"
             "${{ needs.container-publish-plugin-github.result }}"
+            "${{ needs.container-publish-plugin-openai-api-models.result }}"
           )
           for r in "${RESULTS[@]}"; do
             if [[ "$r" != "success" ]]; then

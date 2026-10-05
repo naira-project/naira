@@ -54,7 +54,6 @@ func (d *datum) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return fmt.Errorf("unmarshaling extra model fields: %w", err)
 	}
-	delete(raw, "id")
 	d.Props = raw
 
 	return nil
@@ -130,12 +129,16 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		for k, v := range model.Props {
 			setProperty(properties, k, v)
 		}
+		delete(properties, "id") // we already included ID in path
 		if len(properties) == 0 {
 			properties = nil
 		}
 
 		nodes = append(nodes, pluginapi.NodeClaim{
-			ID:         pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: path},
+			ID: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindModel,
+				Path: path,
+			},
 			Properties: properties,
 		})
 	}

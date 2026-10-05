@@ -10,9 +10,6 @@ vars:
     - name: litellm
       dir: '{{.PLUGINS_BASE}}/litellm'
       image: litellm:local
-    - name: openai-api-models
-      dir: '{{.PLUGINS_BASE}}/openai_api_models'
-      image: openai-api-models:local
     - name: depl-calls-svc
       dir: '{{.PLUGINS_BASE}}/depl_calls_svc'
       image: depl-calls-svc:local
@@ -34,6 +31,9 @@ vars:
     - name: github
       dir: '{{.PLUGINS_BASE}}/github'
       image: github:local
+    - name: openai-api-models
+      dir: '{{.PLUGINS_BASE}}/openai_api_models'
+      image: openai-api-models:local
 
 tasks:
   image:build:
