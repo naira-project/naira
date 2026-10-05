@@ -13,6 +13,21 @@ stringData:
   LITELLM_API_KEY: sk-local-litellm
   OPENMETADATA_ADMIN_PASSWORD: admin
 ---
+# Default langfuse plugin config: no projects, so it collects nothing.
+# The catalog pod mounts this, so it must exist before the pod starts — hence
+# a default in the core stack. `task langfuse:deploy` replaces it; `undeploy`
+# restores it. A Secret, not a ConfigMap, because it carries API key pairs.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: langfuse-config
+  namespace: idp-system
+type: Opaque
+stringData:
+  config.yaml: |
+    schema_version: 1
+    projects: []
+---
 # The tech radar is rendered read-only from this admin-managed config.
 # Schema reference: plugins/cmd/tech_radar/README.md; annotated example kept
 # valid by the plugin's unit tests: plugins/cmd/tech_radar/sample_config.yaml.
@@ -405,6 +420,10 @@ data:
         address: localhost:50058
       github:
         address: localhost:50059
+      langfuse:
+        address: localhost:50060
+        schedule: "*/15 * * * *"
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -596,6 +615,28 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+        - name: plugin-langfuse
+          image: langfuse:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            # Must match the langfuse entry in catalog-plugin-config above.
+            - name: PORT
+              value: "50060"
+            - name: LANGFUSE_CONFIG_PATH
+              value: /etc/naira/langfuse/config.yaml
+          # A directory mount (no subPath) so Secret updates reach the pod.
+          volumeMounts:
+            - name: langfuse-config
+              mountPath: /etc/naira/langfuse
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
       containers:
         - name: catalog
           image: catalog:local
@@ -643,6 +684,9 @@ spec:
         - name: tech-radar-config
           configMap:
             name: tech-radar-config
+        - name: langfuse-config
+          secret:
+            secretName: langfuse-config
 ---
 apiVersion: v1
 kind: Service

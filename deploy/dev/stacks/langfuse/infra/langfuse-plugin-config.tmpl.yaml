@@ -1,0 +1,49 @@
+# Langfuse plugin configuration for the local development cluster.
+#
+# Rendered into the "langfuse-config" Secret by `task langfuse:config:apply`,
+# which substitutes __CLUSTER_ID__. It is a template because the catalog
+# derives deployment node paths from the kube-system namespace UID, which is
+# new for every kind cluster, so the bindings cannot be committed as literals.
+#
+# Schema: plugins/cmd/langfuse/README.md; example kept valid by the plugin's
+# unit tests: plugins/cmd/langfuse/sample_config.yaml.
+#
+# The project id and keys are what LANGFUSE_INIT_* bootstraps (see
+# infra/helm/langfuse-values.yaml). Still a Secret, not a ConfigMap, because
+# against a real instance this file holds live API secrets.
+schema_version: 1
+
+# Both entries share one Langfuse project and key pair. They are separate
+# because window and score name are per-entry and the two apps want different
+# ones — the realistic shape: one project per team, split by trace name.
+projects:
+  - id: rag-assistant
+    host: http://langfuse-web.langfuse.svc.cluster.local:3000
+    # The browser cannot resolve the in-cluster address above; this is the
+    # port-forward from `task forward:langfuse`.
+    ui_host: http://localhost:3003
+    project_id: naira-demo
+    public_key: pk-lf-naira-dev
+    secret_key: sk-lf-naira-dev
+    window: 24h
+    # A thumbs up/down ratio, so the mean is the share of positive ratings.
+    score_name: user_feedback
+    observes:
+      - kind: deployment
+        path: __CLUSTER_ID__/langfuse-demo/rag-assistant
+        # Keeps the two apps' numbers apart inside one shared project.
+        trace_name: rag-assistant
+
+  - id: triage-agent
+    host: http://langfuse-web.langfuse.svc.cluster.local:3000
+    ui_host: http://localhost:3003
+    project_id: naira-demo
+    public_key: pk-lf-naira-dev
+    secret_key: sk-lf-naira-dev
+    window: 168h # 7 days; Go duration syntax has no day unit
+    # A 1-5 rating: why the UI shows scores as plain numbers, not percentages.
+    score_name: helpfulness
+    observes:
+      - kind: deployment
+        path: __CLUSTER_ID__/langfuse-demo/triage-agent
+        trace_name: triage-agent

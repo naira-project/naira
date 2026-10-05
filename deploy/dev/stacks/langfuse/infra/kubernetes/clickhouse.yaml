@@ -1,0 +1,125 @@
+# Single-node ClickHouse for the local Langfuse instance, which stores its
+# traces, observations and scores here (Postgres holds only configuration).
+#
+# The Helm chart can deploy its own, but only via the ClickHouse Operator,
+# which also wants cert-manager cluster-wide — both solely for this stack. So
+# the chart points here instead (clickhouse.deploy=false). Langfuse's own
+# docker-compose runs the same plain single-node server.
+#
+# Credentials are local-dev values matched by infra/helm/langfuse-values.yaml.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: langfuse
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-credentials
+  namespace: langfuse
+type: Opaque
+stringData:
+  username: langfuse
+  password: langfuse
+  database: langfuse
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: langfuse
+spec:
+  selector:
+    app: clickhouse
+  ports:
+    # Langfuse queries over HTTP and migrates over the native protocol.
+    - name: http
+      port: 8123
+      targetPort: http
+    - name: native
+      port: 9000
+      targetPort: native
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  namespace: langfuse
+spec:
+  serviceName: clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+    spec:
+      containers:
+        # The version Langfuse's own docker-compose ships, so its migrations
+        # are tested against it. The documented floor is 24.3, but an older
+        # version risks a migration failing partway and marking the schema
+        # dirty, which blocks every later startup.
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:25.12
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: username
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: password
+            - name: CLICKHOUSE_DB
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-credentials
+                  key: database
+            # Migrations create tables and dictionaries, which the image's
+            # generated user cannot do without access management.
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          ports:
+            - containerPort: 8123
+              name: http
+            - containerPort: 9000
+              name: native
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          # The request is a scheduling reservation, not a cap. Keeping it
+          # low is what lets one kind node fit this beside the other stacks.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

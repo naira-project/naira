@@ -29,7 +29,7 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
     heading: 'Software Catalog',
     subheading: 'Deployments and services running in the cluster.',
     kinds: ['deployment', 'service'],
-    plugins: ['depl-calls-svc', 'depl-uses-litellm', 'fluxcd'],
+    plugins: ['depl-calls-svc', 'depl-uses-litellm', 'fluxcd', 'langfuse'],
   },
   {
     path: 'model',

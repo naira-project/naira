@@ -1,0 +1,117 @@
+# Stand-in LLM applications for the Langfuse demo.
+#
+# They exist so depl-calls-svc catalogs real deployment nodes for the langfuse
+# plugin to attach metrics to; otherwise the metrics would hang off nodes with
+# no other reason to exist.
+#
+# Stock nginx, because it is small and has a health endpoint. They emit no
+# traces: tools/seed/seed_langfuse.py writes their supposed LLM activity to
+# Langfuse directly, under trace names matching these deployments.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: langfuse-demo
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-assistant
+  namespace: langfuse-demo
+  labels:
+    app: rag-assistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-assistant
+  template:
+    metadata:
+      labels:
+        app: rag-assistant
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.30-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-assistant
+  namespace: langfuse-demo
+spec:
+  selector:
+    app: rag-assistant
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triage-agent
+  namespace: langfuse-demo
+  labels:
+    app: triage-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triage-agent
+  template:
+    metadata:
+      labels:
+        app: triage-agent
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.30-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: triage-agent
+  namespace: langfuse-demo
+spec:
+  selector:
+    app: triage-agent
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  type: ClusterIP

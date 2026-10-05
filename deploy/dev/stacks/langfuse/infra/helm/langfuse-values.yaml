@@ -1,0 +1,126 @@
+# Langfuse Helm values for the local kind cluster.
+# Chart: langfuse/langfuse (https://langfuse.github.io/langfuse-k8s)
+#
+# Minimal and non-production: one replica of everything, no ingress, no TLS.
+# Postgres, Valkey and SeaweedFS come from the chart's subcharts; only
+# ClickHouse is external (see infra/kubernetes/clickhouse.yaml).
+#
+# Credentials are fixed local-dev values, committed deliberately: the plugin's
+# config template must reference the same project and keys, and none of this
+# is reachable from outside the cluster.
+langfuse:
+  # The browser-facing address, via `task forward:langfuse`. Langfuse builds
+  # auth redirects from it, and the plugin's deep links must resolve here.
+  nextauth:
+    url: "http://localhost:3003"
+    secret:
+      value: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+  # 32 bytes, base64. Hashes API keys; changing it invalidates stored keys.
+  salt:
+    value: "bmFpcmEtZGV2LWxhbmdmdXNlLXNhbHQtMzJieXRlcyE="
+
+  # 64 hex characters. Encrypts secrets at rest.
+  encryptionKey:
+    value: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+
+  #ADDED
+  features:
+    # Currently don't report basic usage statistics
+    telemetryEnabled: false
+
+  
+  web:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+
+  worker:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        cpu: "1"
+        memory: 2Gi
+
+  additionalEnv:
+    # Headless initialization: without it the org, project and key pair would
+    # have to be clicked together in the UI, and the committed plugin config
+    # edited with whatever keys that produced. Applied once at startup and
+    # skipped if the entities exist, so a restart overwrites nothing.
+    - name: LANGFUSE_INIT_ORG_ID
+      value: "naira-dev"
+    - name: LANGFUSE_INIT_ORG_NAME
+      value: "Naira Dev"
+    # Appears in Langfuse's URLs, so the plugin's deep links use it too.
+    - name: LANGFUSE_INIT_PROJECT_ID
+      value: "naira-demo"
+    - name: LANGFUSE_INIT_PROJECT_NAME
+      value: "Naira Demo"
+    - name: LANGFUSE_INIT_PROJECT_PUBLIC_KEY
+      value: "pk-lf-naira-dev"
+    - name: LANGFUSE_INIT_PROJECT_SECRET_KEY
+      value: "sk-lf-naira-dev"
+    # Sign in at http://localhost:3003 to see what the plugin aggregates.
+    - name: LANGFUSE_INIT_USER_EMAIL
+      value: "dev@naira.local"
+    - name: LANGFUSE_INIT_USER_NAME
+      value: "Naira Dev"
+    - name: LANGFUSE_INIT_USER_PASSWORD
+      value: "naira-dev-password"
+
+
+postgresql:
+  deploy: true
+  auth:
+    username: langfuse
+    password: langfuse
+    database: langfuse
+
+clickhouse:
+  # Deployed by infra/kubernetes/clickhouse.yaml instead; see the header there.
+  deploy: false
+  host: clickhouse.langfuse.svc.cluster.local
+  httpPort: 8123
+  nativePort: 9000
+  database: langfuse
+  auth:
+    username: langfuse
+    password: langfuse
+  # Becomes CLICKHOUSE_CLUSTER_ENABLED=false, stopping migrations from
+  # issuing ON CLUSTER statements a single node rejects.
+  cluster:
+    enabled: false
+  # Skips the operator CRD preflight; no ClickHouse is deployed by the chart.
+  crdCheck: false
+
+redis:
+  deploy: true
+  auth:
+    password: langfuse
+
+s3:
+  deploy: true
+  auth:
+    rootUser: langfuse
+    rootPassword: langfuse-s3-password
+
+  # Event upload has no toggle and must stay on: in v3+ every ingested event
+  # lands in blob storage before the worker writes it to ClickHouse, so it is
+  # the ingestion path itself.
+
+  # Media upload is for images and audio on traces; nothing here produces any.
+  mediaUpload:
+    enabled: false
+
+  # Scheduled CSV/JSON dumps; the plugin reads the metrics API instead.
+  # Langfuse's own default is off, the chart turns it on.
+  batchExport:
+    enabled: false

@@ -1,0 +1,122 @@
+version: '3'
+
+vars:
+  CATALOG_NAMESPACE: idp-system
+  LANGFUSE_NAMESPACE: langfuse
+  LANGFUSE_DEMO_NAMESPACE: langfuse-demo
+  LANGFUSE_HELM_REPO_NAME: langfuse
+  LANGFUSE_HELM_REPO_URL: https://langfuse.github.io/langfuse-k8s
+  LANGFUSE_RELEASE: langfuse
+  LANGFUSE_CHART: langfuse/langfuse
+  # Pinned for reproducibility: this stack verifies the plugin against a
+  # known API. Chart 2.1.3 ships Langfuse 4.46.0.
+  LANGFUSE_CHART_VERSION: '2.1.3'
+  LANGFUSE_VALUES: ./infra/helm/langfuse-values.yaml
+  CLICKHOUSE_MANIFEST: infra/kubernetes/clickhouse.yaml
+  DEMO_APPS_MANIFEST: infra/kubernetes/demo-apps.yaml
+  CONFIG_TEMPLATE: infra/langfuse-plugin-config.tmpl.yaml
+  CONFIG_SECRET: langfuse-config
+  LANGFUSE_SERVICE: svc/langfuse-web
+  # 3000 is the portal, 3001 the UI, 3002 Grafana. Langfuse's own container
+  # port stays 3000; only the local side moves.
+  LANGFUSE_LOCAL_PORT: '3003'
+  LANGFUSE_REMOTE_PORT: '3000'
+  LOCAL_WORK_DIR: ../../../../.local
+  LANGFUSE_TOOL_DIR: ./tools/seed
+  LANGFUSE_SEED_SCRIPT: '{{.LANGFUSE_TOOL_DIR}}/seed_langfuse.py'
+  LANGFUSE_REQUIREMENTS: '{{.LANGFUSE_TOOL_DIR}}/requirements.txt'
+  LANGFUSE_VENV_DIR: '{{.LOCAL_WORK_DIR}}/venvs/langfuse-seed'
+
+tasks:
+  deploy:
+    desc: Deploy Langfuse (ClickHouse + chart + demo apps + plugin config) to kind
+    cmds:
+      - helm repo add {{.LANGFUSE_HELM_REPO_NAME}} {{.LANGFUSE_HELM_REPO_URL}} --force-update
+      - helm repo update {{.LANGFUSE_HELM_REPO_NAME}}
+      # First: the chart migrates at startup and needs it accepting.
+      - kubectl apply -f {{.CLICKHOUSE_MANIFEST}}
+      - kubectl -n {{.LANGFUSE_NAMESPACE}} rollout status statefulset/clickhouse --timeout=300s
+      - helm upgrade --install {{.LANGFUSE_RELEASE}} {{.LANGFUSE_CHART}} --version {{.LANGFUSE_CHART_VERSION}} --namespace {{.LANGFUSE_NAMESPACE}} --create-namespace --values {{.LANGFUSE_VALUES}} --wait --timeout 15m
+      - kubectl -n {{.LANGFUSE_NAMESPACE}} rollout status deploy/langfuse-web --timeout=600s
+      - kubectl apply -f {{.DEMO_APPS_MANIFEST}}
+      - kubectl -n {{.LANGFUSE_DEMO_NAMESPACE}} rollout status deploy/rag-assistant --timeout=180s
+      - kubectl -n {{.LANGFUSE_DEMO_NAMESPACE}} rollout status deploy/triage-agent --timeout=180s
+      - task: config:apply
+      - kubectl -n {{.LANGFUSE_NAMESPACE}} get pods
+      - |
+        echo
+        echo "Langfuse is up. Next, from deploy/dev:"
+        echo "  1. task forward:langfuse   (port-forward to localhost:3003)"
+        echo "  2. task langfuse:seed      (write demo traces and verify the API)"
+        echo "  Sign in at http://localhost:3003 as dev@naira.local / naira-dev-password"
+
+  undeploy:
+    desc: Remove Langfuse from kind
+    cmds:
+      - task: config:clear
+      - kubectl delete -f {{.DEMO_APPS_MANIFEST}} --ignore-not-found
+      - |
+        if helm status {{.LANGFUSE_RELEASE}} -n {{.LANGFUSE_NAMESPACE}} >/dev/null 2>&1; then
+          helm uninstall {{.LANGFUSE_RELEASE}} -n {{.LANGFUSE_NAMESPACE}}
+        fi
+      - kubectl delete -f {{.CLICKHOUSE_MANIFEST}} --ignore-not-found
+      # Subcharts and the StatefulSet leave PVCs behind, which the next
+      # deploy would reuse with data hashed against a possibly-different salt.
+      - kubectl delete namespace {{.LANGFUSE_NAMESPACE}} --ignore-not-found
+
+  config:apply:
+    desc: Render the langfuse plugin config into its Secret for this cluster
+    cmds:
+      # The catalog derives a deployment's node path from the kube-system
+      # namespace UID, which differs per kind cluster, so the binding paths are
+      # substituted here rather than committed.
+      - |
+        set -e
+        CLUSTER_ID=$(kubectl get namespace kube-system -o jsonpath='{.metadata.uid}')
+        if [ -z "$CLUSTER_ID" ]; then
+          echo "could not read the kube-system namespace UID; is the cluster up?" >&2
+          exit 1
+        fi
+        RENDERED=$(mktemp)
+        trap 'rm -f "$RENDERED"' EXIT
+        sed "s|__CLUSTER_ID__|$CLUSTER_ID|g" {{.CONFIG_TEMPLATE}} > "$RENDERED"
+        kubectl -n {{.CATALOG_NAMESPACE}} create secret generic {{.CONFIG_SECRET}} \
+          --from-file=config.yaml="$RENDERED" \
+          --dry-run=client -o yaml | kubectl apply -f -
+        echo "langfuse plugin config applied for cluster $CLUSTER_ID"
+        echo "The catalog pod sees the change within ~1 minute; metrics appear on"
+        echo "the next langfuse sync, or immediately if you trigger the plugin"
+        echo "from the UI's Plugins & Ingestion dialog."
+
+  config:clear:
+    desc: Replace the langfuse plugin config with an empty one
+    cmds:
+      # Emptied, not deleted: the catalog mounts it. An empty projects list
+      # is valid and collects nothing.
+      - |
+        set -e
+        EMPTY=$(mktemp)
+        trap 'rm -f "$EMPTY"' EXIT
+        printf 'schema_version: 1\nprojects: []\n' > "$EMPTY"
+        kubectl -n {{.CATALOG_NAMESPACE}} create secret generic {{.CONFIG_SECRET}} \
+          --from-file=config.yaml="$EMPTY" \
+          --dry-run=client -o yaml | kubectl apply -f -
+
+  port-forward:
+    desc: Expose Langfuse on localhost:3003
+    cmds:
+      - kubectl -n {{.LANGFUSE_NAMESPACE}} port-forward {{.LANGFUSE_SERVICE}} {{.LANGFUSE_LOCAL_PORT}}:{{.LANGFUSE_REMOTE_PORT}}
+
+  seed:
+    desc: Write demo LLM traces to Langfuse and verify the plugin's queries (requires port-forward)
+    cmds:
+      - |
+        mkdir -p '{{.LOCAL_WORK_DIR}}/venvs'
+      - |
+        python3 -m venv '{{.LANGFUSE_VENV_DIR}}'
+      - |
+        '{{.LANGFUSE_VENV_DIR}}/bin/pip' install --upgrade pip
+      - |
+        '{{.LANGFUSE_VENV_DIR}}/bin/pip' install -r '{{.LANGFUSE_REQUIREMENTS}}'
+      - |
+        LANGFUSE_HOST=http://127.0.0.1:{{.LANGFUSE_LOCAL_PORT}} '{{.LANGFUSE_VENV_DIR}}/bin/python' '{{.LANGFUSE_SEED_SCRIPT}}'

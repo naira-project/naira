@@ -15,6 +15,7 @@ const (
 	NodeKindMCPTool           = "mcp_tool"
 	NodeKindTechRadar         = "tech_radar"
 	NodeKindTechRadarEntry    = "tech_radar_entry"
+	NodeKindLangfuseProject   = "langfuse_project"
 )
 
 const (
@@ -29,4 +30,5 @@ const (
 	RelationKindOwnedBy      = "owned_by"
 	RelationKindExposes      = "exposes"
 	RelationKindBuiltFrom    = "built_from"
+	RelationKindObservedBy   = "observed_by"
 )

@@ -31,6 +31,9 @@ vars:
     - name: github
       dir: '{{.PLUGINS_BASE}}/github'
       image: github:local
+    - name: langfuse
+      dir: '{{.PLUGINS_BASE}}/langfuse'
+      image: langfuse:local
 
 tasks:
   image:build:

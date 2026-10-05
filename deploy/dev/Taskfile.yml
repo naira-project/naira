@@ -18,6 +18,9 @@ includes:
   llm-inference:
     taskfile: ./stacks/llm-inference/Taskfile.yml
     dir: ./stacks/llm-inference
+  langfuse:
+    taskfile: ./stacks/langfuse/Taskfile.yml
+    dir: ./stacks/langfuse
   mlops:
     taskfile: ./stacks/mlops/Taskfile.yml
     dir: ./stacks/mlops
@@ -46,10 +49,16 @@ tasks:
     cmds:
       - task: core:deploy
       - task: llm-inference:deploy
+      # langfuse:deploy is deliberately not here, for the same reason
+      # mlops:deploy is not: it brings up ClickHouse, Postgres, Valkey and
+      # object storage, which is too much to impose on every platform deploy.
+      # Run `task langfuse:deploy` from this directory when you want it. Its
+      # undeploy stays below so a full teardown still removes it.
 
   platform:undeploy:
     desc: Remove the full platform from kind
     cmds:
+      - task: langfuse:undeploy
       - task: llm-inference:undeploy
       - task: mlops:undeploy
       - task: core:undeploy
@@ -68,6 +77,7 @@ tasks:
       - forward:core
       - forward:mlops
       - forward:llm-inference
+      - forward:langfuse
 
   forward:core:
     desc: Port-forward core services (catalog, portal, ui)
@@ -127,9 +137,26 @@ tasks:
         echo "  Prometheus: http://localhost:9090"
         echo "  Grafana:    http://localhost:3002  (admin/admin)"
 
+  forward:langfuse:
+    desc: Port-forward Langfuse
+    silent: true
+    deps:
+      - forward:langfuse:urls
+      - langfuse:port-forward
+
+  forward:langfuse:urls:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        echo "Langfuse service URLs:"
+        echo "  Langfuse: http://localhost:3003  (dev@naira.local/naira-dev-password)"
+        echo "  (the 'View traces in Langfuse' deep link resolves here)"
+
   # Seeding sample data
   seed:all:
-    desc: Seed sample data in MLflow and OpenMetadata (requires port-forward)
+    desc: Seed sample data in MLflow, OpenMetadata and Langfuse (requires port-forward)
     cmds:
       - task: mlops:mlflow:seed
       - task: mlops:openmetadata:seed
+      - task: langfuse:seed
