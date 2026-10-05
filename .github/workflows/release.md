@@ -72,6 +72,8 @@ The Release Pipeline automatically populates the GitHub Release body with the sq
 
 Docker images are published to the GitHub Container Registry (`ghcr.io`) on every RC tag and every stable release. Images are tagged with the full version (e.g. `v0.12.0-rc.1`, `v0.12.0`).
 
+The Helm chart is packaged from the release tag and pushed to `oci://ghcr.io/naira-project/charts/naira`. Its `version` is the release version without the `v` (e.g. `0.12.0`); its `appVersion` is the image tag (e.g. `v0.12.0`), so the default image tag resolves to a published image.
+
 ---
 
 ## Troubleshooting
