@@ -12,6 +12,8 @@
 # Requires helm and mikefarah yq v4 (both pinned in mise.toml).
 set -euo pipefail
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
+# Release PRs bump Chart.yaml, so image tags are read from it, not hardcoded.
+APP_VERSION=$(yq '.appVersion' "$CHART/Chart.yaml")
 fail=0
 
 # BASE lists flags to add a minimal set of values required to render the chart.
@@ -59,7 +61,7 @@ check "chart name" \
   "naira" \
   "$(helm show chart "$CHART" | yq '.name')"
 check "catalog image from registry and AppVersion" \
-  "ghcr.io/naira-project/naira-catalog:0.1.0" \
+  "ghcr.io/naira-project/naira-catalog:${APP_VERSION}" \
   "$(render | yq "$CATALOG | .containers[0].image")"
 check "local image with one tag" \
   "naira-catalog:abc" \
@@ -95,7 +97,7 @@ check "sidecars are native sidecars" \
   "Always" \
   "$(render | yq ea "[$CATALOG | .initContainers[].restartPolicy] | unique | join(\",\")")"
 check "plugin image" \
-  "ghcr.io/naira-project/naira-plugin-litellm:0.1.0" \
+  "ghcr.io/naira-project/naira-plugin-litellm:${APP_VERSION}" \
   "$(render | yq "$LITELLM_SIDECAR | .image")"
 check "plugin PORT" \
   "50051" \
@@ -241,7 +243,7 @@ check "ui catalog upstream override" \
   "$(render --set ui.catalogUpstream=http://x:1 \
     | yq "$UI | .env[] | select(.name == \"CATALOG_UPSTREAM\") | .value")"
 check "ui image" \
-  "ghcr.io/naira-project/naira-ui:0.1.0" \
+  "ghcr.io/naira-project/naira-ui:${APP_VERSION}" \
   "$(render | yq "$UI | .image")"
 check "ui Service" \
   "ui 80" \
@@ -310,7 +312,7 @@ check "disabled plugin may share a port" \
 DEV=(-f "$CHART/values-dev.yaml")
 
 check "dev: local image names" \
-  "naira-catalog:0.1.0" \
+  "naira-catalog:${APP_VERSION}" \
   "$(render_raw "${DEV[@]}" | yq "$CATALOG | .containers[0].image")"
 check "dev: sidecars (openmetadata off, tech-radar on)" \
   "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-tech-radar" \
