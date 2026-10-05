@@ -57,6 +57,13 @@ tasks:
     cmds:
       - golangci-lint run
 
+  chart:check:
+    desc: Run the Helm chart checks CI runs (render tests, ct lint, kubeconform)
+    cmds:
+      - deploy/charts/naira/tests/render-test.sh
+      - ct lint --config ct.yaml --target-branch main
+      - deploy/charts/naira/tests/kubeconform.sh
+
   shell:lint:
     desc: Lint shell scripts with ShellCheck
     cmds:

@@ -140,6 +140,119 @@ jobs:
       context: "ui"
       platforms: "linux/amd64,linux/arm64"
 
+  # ── 7. Helm chart ─────────────────────────────────────────────────────────
+  helm-chart:
+    name: Check · Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # ct lint diffs against the target branch
+          persist-credentials: false
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
+      - name: Render tests
+        run: deploy/charts/naira/tests/render-test.sh
+      - name: ct lint
+        env:
+          TARGET_BRANCH: ${{ github.event.repository.default_branch }}
+        run: ct lint --config ct.yaml --target-branch "$TARGET_BRANCH"
+      - name: Set up kubeconform
+        env:
+          KUBECONFORM_VERSION: v0.8.0
+          KUBECONFORM_SHA256: 9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883
+        run: |
+          curl -sSLo kubeconform.tar.gz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tar.gz" | sha256sum -c -
+          tar -xzf kubeconform.tar.gz kubeconform
+          sudo mv kubeconform /usr/local/bin/kubeconform
+      - name: kubeconform
+        run: deploy/charts/naira/tests/kubeconform.sh
+
+  # ── 8. Helm chart — install on kind ──────────────────────────────────────
+  # The chart and its dependency tier on a throwaway cluster, then the same
+  # functional probe a developer runs locally: every plugin registers with the
+  # catalog and a run of every plugin succeeds. Images are built from this PR's
+  # tree, so unpublished plugin images are no obstacle.
+  # TODO: add to the all-checks gate once the test-dependencies PR is merged and
+  # the pin below points at a default-branch commit. Until then it checks out
+  # that repo's open PR branch.
+  helm-chart-install:
+    name: Check · Helm Chart Install
+    needs: helm-chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Checkout test-dependencies
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: naira-project/test-dependencies
+          # Pinned commit of the test-dependencies chart this PR is verified against.
+          ref: 4b7b36fadaca77e3d02394f1cdc0b5d8650f0c95
+          path: test-dependencies
+          persist-credentials: false
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+      - name: Create kind cluster
+        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        with:
+          cluster_name: naira-ci
+          node_image: kindest/node:v1.36.1 # the version kubeconform validates against
+      - name: Build images
+        # Same names and tag the chart's values-dev.yaml expects (the chart's
+        # appVersion); loaded into the node, never pushed. One image per
+        # plugins/cmd/<name>/, so a new plugin needs no edit here.
+        run: |
+          TAG=$(yq '.appVersion' deploy/charts/naira/Chart.yaml)
+          images=("naira-catalog:${TAG}" "naira-ui:${TAG}" "naira-portal:${TAG}")
+          docker build -q -t "naira-catalog:${TAG}" -f catalog/Dockerfile .
+          docker build -q -t "naira-ui:${TAG}" ui
+          docker build -q -t "naira-portal:${TAG}" naira-openmfp-portal
+          for dir in plugins/cmd/*/; do
+            name=$(basename "$dir")
+            image="naira-plugin-${name//_/-}:${TAG}"
+            docker build -q -t "$image" -f "${dir}Dockerfile" .
+            images+=("$image")
+          done
+          kind load docker-image --name naira-ci "${images[@]}"
+      - name: Install test-dependencies
+        # No --wait: Helm fails the release once the LiteLLM migrations Job is
+        # garbage-collected (after 120s).
+        run: |
+          # Helm 4 does not fetch from an unregistered HTTP repository.
+          helm repo add community-charts https://community-charts.github.io/helm-charts
+          helm repo add open-metadata https://helm.open-metadata.org
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm dependency build test-dependencies/charts/test-dependencies
+          helm install test-dependencies test-dependencies/charts/test-dependencies \
+            --namespace naira-deps --create-namespace \
+            -f test-dependencies/charts/test-dependencies/values-dev.yaml
+          kubectl -n naira-deps wait --for=condition=Available deployment --all --timeout=12m
+          kubectl -n naira-deps wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset --all --timeout=12m
+      - name: Install naira
+        run: |
+          helm install naira deploy/charts/naira \
+            --namespace idp-system --create-namespace \
+            -f deploy/charts/naira/values-dev.yaml
+          kubectl -n idp-system wait --for=condition=Available deployment --all --timeout=5m
+      - name: Probe the catalog through its API
+        run: deploy/charts/naira/tests/probe-catalog.sh
+      - name: Show state
+        if: always()
+        run: |
+          kubectl -n naira-deps get pods
+          kubectl -n idp-system get pods
+          kubectl -n idp-system logs deploy/catalog -c catalog --tail=50 || true
+
   # ── Gate: single required status check for branch protection ──────────────
   all-checks:
     name: All Checks Passed
@@ -152,6 +265,7 @@ jobs:
         ui-check,
         container-build-catalog,
         container-build-ui,
+        helm-chart,
       ]
     if: always()
     runs-on: ubuntu-latest
@@ -166,6 +280,7 @@ jobs:
             "${{ needs.ui-check.result }}"
             "${{ needs.container-build-catalog.result }}"
             "${{ needs.container-build-ui.result }}"
+            "${{ needs.helm-chart.result }}"
           )
           for r in "${RESULTS[@]}"; do
             if [[ "$r" != "success" ]]; then

@@ -1,3 +1,6 @@
 chart-dirs:
   - deploy/charts
 validate-maintainers: false
+# Chart version is bumped by release-please (Chart.yaml); do not
+# require a manual bump on every chart change.
+check-version-increment: false

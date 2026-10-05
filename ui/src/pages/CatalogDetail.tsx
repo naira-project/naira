@@ -125,7 +125,7 @@ export default function CatalogDetail() {
                     <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
 
                     {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
-
+                    
                     <PersesDashboard node={node} />
                   </div>
                 )}
