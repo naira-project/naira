@@ -119,6 +119,11 @@ spec:
           envFrom:
             - secretRef:
                 name: litellm-secrets
+          env:
+            # INFO logs one line per request naming the upstream model, which is
+            # what the UI's "View Logs" link filters the proxy's logs on.
+            - name: LITELLM_LOG
+              value: INFO
           ports:
             - containerPort: 4000
               name: http
