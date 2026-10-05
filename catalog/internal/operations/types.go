@@ -2,7 +2,15 @@
 // long-running asynchronous work (AIP-151).
 package operations
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var (
+	ErrNotFound      = errors.New("operation not found")
+	ErrAlreadyExists = errors.New("operation already exists")
+)
 
 type State string
 
@@ -20,7 +28,7 @@ type StatusError struct {
 	Message string `json:"message"`
 }
 
-// Operation represents a single asynchronous unit of work
+// Operation represents a single asynchronous unit of work.
 type Operation struct {
 	Name      string     `json:"name"`
 	Plugin    string     `json:"plugin"`
