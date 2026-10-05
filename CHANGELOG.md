@@ -5,7 +5,6 @@
 
 ### Features
 
-* add -neo4j graph formatting flag for plugins ([f31a8c6](https://github.com/naira-project/naira/commit/f31a8c63a1ae857dd2121ed59356a59dbc65f497))
 * add -neo4j graph formatting flag for plugins ([4b5afcb](https://github.com/naira-project/naira/commit/4b5afcb041119ee3738c1bf8d37c7184ec31f6cf))
 * add e2e test infra with smoke test ([#154](https://github.com/naira-project/naira/issues/154)) ([304ef27](https://github.com/naira-project/naira/commit/304ef27481b555242a4171b4c63f988ab811b9ed))
 * add plugin scheduling and display schedules in UI ([#173](https://github.com/naira-project/naira/issues/173)) ([7228b95](https://github.com/naira-project/naira/commit/7228b958fb550e5061c32315252d7f502b23b525))
