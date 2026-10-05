@@ -224,6 +224,23 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  container-publish-plugin-openai-api-models:
+    name: Publish · Plugin OpenAI API Models
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    with:
+      image-name: "naira-plugin-openai-api-models"
+      dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   # ── Gate: surfaces overall publish status as a single check ───────────────
   all-published:
     name: All Images Published
@@ -240,6 +257,7 @@ jobs:
       - container-publish-plugin-mcp-servers
       - container-publish-plugin-tech-radar
       - container-publish-plugin-github
+      - container-publish-plugin-openai-api-models
     if: always()
     permissions:
       contents: read
@@ -260,6 +278,7 @@ jobs:
             "${{ needs.container-publish-plugin-mcp-servers.result }}"
             "${{ needs.container-publish-plugin-tech-radar.result }}"
             "${{ needs.container-publish-plugin-github.result }}"
+            "${{ needs.container-publish-plugin-openai-api-models.result }}"
           )
           for r in "${RESULTS[@]}"; do
             if [[ "$r" != "success" ]]; then

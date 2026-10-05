@@ -31,6 +31,9 @@ vars:
     - name: github
       dir: '{{.PLUGINS_BASE}}/github'
       image: github:local
+    - name: openai-api-models
+      dir: '{{.PLUGINS_BASE}}/openai_api_models'
+      image: openai-api-models:local
 
 tasks:
   image:build:
