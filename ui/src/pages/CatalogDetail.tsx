@@ -1,14 +1,17 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ScrollText } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import PropertiesPanel from '../components/PropertiesPanel';
+import RelatedNodes from '../components/RelatedNodes';
 import { Button } from '../components/ui/button';
-import { detailTabsForKind } from '../config/detailTabs';
+import { relatedCardForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
+import { endpointLogsUrl } from '../lib/endpointLogs';
 import { cn } from '../lib/utils';
 import CatalogGraph from './CatalogGraph';
+import { PersesDashboard } from '@/components/PersesDashboard';
 
 const GRAPH_TAB = 'Graph';
 const PROPERTIES_TAB = 'Properties';
@@ -28,13 +31,12 @@ export default function CatalogDetail() {
   const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
   const backPath = findViewpointForKind(decodedKind)?.path;
 
-  // Kind-specific tabs come from configuration;
-  const kindTabs = detailTabsForKind(decodedKind);
-  const landingTab = kindTabs.find((tab) => tab.primary)?.value ?? GRAPH_TAB;
+  const relatedConfig = relatedCardForKind(decodedKind);
+  const logsUrl = node ? endpointLogsUrl(node) : undefined;
+  const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 
   const tabs = [
-    ...kindTabs.map((tab) => ({ value: tab.value, label: tab.value })),
     { value: GRAPH_TAB, label: GRAPH_TAB },
     { value: PROPERTIES_TAB, label: PROPERTIES_TAB },
   ];
@@ -70,6 +72,15 @@ export default function CatalogDetail() {
                 {node.name}
               </h1>
             </>
+          )}
+
+          {logsUrl && (
+            <Button asChild variant="outline" size="sm" className="ml-auto shrink-0">
+              <a href={logsUrl} target="_blank" rel="noopener noreferrer">
+                <ScrollText size={16} />
+                View Logs
+              </a>
+            </Button>
           )}
         </header>
 
@@ -109,12 +120,14 @@ export default function CatalogDetail() {
                   </div>
                 )}
 
-                {kindTabs.map(({ value, component: TabComponent }) =>
-                  currentTab === value ? <TabComponent key={value} node={node} /> : null,
-                )}
-
                 {currentTab === PROPERTIES_TAB && (
-                  <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+                  <div className="flex flex-col gap-6">
+                    <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+
+                    {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
+
+                    <PersesDashboard node={node} />
+                  </div>
                 )}
               </div>
             </div>
