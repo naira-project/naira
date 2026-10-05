@@ -4,9 +4,7 @@
 # a single Deployment cover the whole cluster, which is enough for kind.
 #
 # Every stream is labelled with namespace, pod, container and app (the pod's
-# `app` label). The UI's "View Logs" link filters on namespace + app, so
-# workloads that should be reachable from an Inference Endpoint must set an
-# `app` label matching their Service name (as llamacpp.yaml and litellm.yaml do).
+# `app` label).
 
 controller:
   type: deployment
