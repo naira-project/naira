@@ -501,6 +501,43 @@ jobs:
       release-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
+  
+  container-publish-plugin-bedrock:
+    name: Publish · Plugin Bedrock
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: "naira-plugin-bedrock"
+      dockerfile: "plugins/cmd/bedrock/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  sbom-plugin-bedrock:
+    name: SBOM · Plugin Bedrock
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    needs: [release-please, container-publish-plugin-bedrock]
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: ${{ needs.container-publish-plugin-bedrock.outputs.image-name }}
+      image-digest: ${{ needs.container-publish-plugin-bedrock.outputs.image-digest }}
+      release-tag: ${{ needs.release-please.outputs.target_tag }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   # ── 5. Helm chart ──────────────────────────────────────────────────────────
   # Packaged from the release tag and pushed as an OCI artifact. The chart
@@ -557,6 +594,8 @@ jobs:
       - sbom-plugin-mlflow
       - container-publish-plugin-litellm
       - sbom-plugin-litellm
+      - container-publish-plugin-bedrock
+      - sbom-plugin-bedrock
       - container-publish-plugin-depl-calls-svc
       - sbom-plugin-depl-calls-svc
       - container-publish-plugin-fluxcd
