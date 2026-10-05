@@ -251,11 +251,11 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 			propertyKeyRegionName:     strings.TrimSpace(entry.LiteLLMParams.RegionName),
 			propertyKeyModelName:      modelName,
 			/*
-			* LiteLLM writes request logs under the upstream model name, not the alias. 
+			* LiteLLM writes request logs under the upstream model name, not the alias.
 			* Hence, adding this property here with the 'propertyKeyUpstreamModel' is necessary.
-			*/
-			propertyKeyUpstreamModel:  strings.TrimSpace(entry.LiteLLMParams.Model),
-			propertyKeyMode:           entry.ModelInfo.Mode,
+			 */
+			propertyKeyUpstreamModel: strings.TrimSpace(entry.LiteLLMParams.Model),
+			propertyKeyMode:          entry.ModelInfo.Mode,
 		} {
 			if value != "" {
 				props[key] = value

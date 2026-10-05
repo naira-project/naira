@@ -38,7 +38,6 @@ testConnection: false
 # e.g. AWS/Bedrock InputTokenCount Sum → aws_bedrock_input_token_count_sum.
 config: |-
   apiVersion: v1alpha1
-  sts-region: eu-central-1
   # Bedrock invocation metrics are dimensioned by ModelId and have no taggable
   # resources, so they go under customNamespace instead of discovery.
   customNamespace:
