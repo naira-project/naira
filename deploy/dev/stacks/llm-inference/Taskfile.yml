@@ -16,6 +16,9 @@ includes:
   vllm:
     taskfile: ./tasks/vllm.yml
     dir: .
+  logging:
+    taskfile: ./tasks/logging.yml
+    dir: .
   # Opt-in: needs AWS credentials, so not part of `deploy`.
   cloudwatch:
     taskfile: ./tasks/cloudwatch.yml
@@ -23,19 +26,21 @@ includes:
 
 tasks:
   deploy:
-    desc: Deploy the LLM Inference stack (postgres + litellm + llamacpp + monitoring)
+    desc: Deploy the LLM Inference stack (postgres + litellm + llamacpp + monitoring + logging)
     cmds:
       - task: litellm:deploy
       - task: llamacpp:deploy
       - task: monitoring:deploy
+      - task: logging:deploy
 
   undeploy:
     desc: Remove the full LLM Inference stack from kind
     cmds:
+      - task: cloudwatch:undeploy
+      - task: logging:undeploy
       - task: monitoring:undeploy
       - task: llamacpp:undeploy
       - task: litellm:undeploy
-      - task: cloudwatch:undeploy
 
   litellm:deploy:
     desc: Deploy only LiteLLM (postgres + litellm)
