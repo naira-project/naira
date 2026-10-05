@@ -15,34 +15,37 @@ tasks:
       - sh: kubectl get crd servicemonitors.monitoring.coreos.com
         msg: 'Prometheus stack not found — run `task llm-inference:monitoring:deploy` first'
       - sh: '[ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]'
-        msg: 'Export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (and AWS_SESSION_TOKEN for temporary credentials) first'
+        msg: 'Export AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY first'
     cmds:
       - helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
       - helm repo update prometheus-community 2>/dev/null
 
       # Credentials live only in the cluster Secret, never in the values file.
-      # The chart expects the keys access_key, secret_key and security_token.
+      # The chart expects the keys access_key and secret_key.
       - |
-        set -- --from-literal=access_key="$AWS_ACCESS_KEY_ID" --from-literal=secret_key="$AWS_SECRET_ACCESS_KEY"
-        if [ -n "$AWS_SESSION_TOKEN" ]; then
-          set -- "$@" --from-literal=security_token="$AWS_SESSION_TOKEN"
-        fi
-        kubectl -n {{.MONITORING_NAMESPACE}} create secret generic {{.YACE_SECRET}} "$@" \
+        kubectl -n {{.MONITORING_NAMESPACE}} create secret generic {{.YACE_SECRET}} \
+          --from-literal=access_key="$AWS_ACCESS_KEY_ID" \
+          --from-literal=secret_key="$AWS_SECRET_ACCESS_KEY" \
           --dry-run=client -o yaml | kubectl apply -f -
 
       - |
-        INCLUDES_SESSION_TOKEN=false
-        if [ -n "$AWS_SESSION_TOKEN" ]; then INCLUDES_SESSION_TOKEN=true; fi
         helm upgrade --install {{.YACE_RELEASE}} {{.YACE_CHART}} \
           --namespace {{.MONITORING_NAMESPACE}} \
           --values {{.YACE_VALUES}} \
           --set aws.secret.name={{.YACE_SECRET}} \
-          --set aws.secret.includesSessionToken=$INCLUDES_SESSION_TOKEN \
           --wait --timeout 5m
 
-      # Session tokens are only read at pod start, so roll the pod to pick up refreshed ones.
+      # Credentials are only read at pod start, so roll the pod to pick up rotated ones.
       - kubectl -n {{.MONITORING_NAMESPACE}} rollout restart deployment/{{.YACE_RELEASE}}-yet-another-cloudwatch-exporter
       - kubectl -n {{.MONITORING_NAMESPACE}} rollout status deployment/{{.YACE_RELEASE}}-yet-another-cloudwatch-exporter --timeout 2m
+
+  deploy-if-configured:
+    desc: Deploy YACE when AWS credentials are exported, otherwise skip with a notice
+    cmds:
+      - task: deploy
+        if: '[ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]'
+      - cmd: echo "Skipping YACE (CloudWatch metrics) - AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY not set"
+        if: '[ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]'
 
   undeploy:
     desc: Remove YACE and its AWS credentials Secret from kind
