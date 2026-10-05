@@ -18,6 +18,8 @@ import (
 const (
 	operationTTL           = 3 * 24 * time.Hour
 	maxOperationsPerPlugin = 5
+
+	interruptedOperationMessage = "operation was interrupted because the catalog process restarted before it could complete"
 )
 
 // Store implements catalog.Store and operations.Store on top of PostgreSQL.
@@ -528,6 +530,24 @@ func (s *Store) UpdateState(name string, state operations.State, statusErr *oper
 		return fmt.Errorf("operation %q: %w", name, operations.ErrNotFound)
 	}
 	return nil
+}
+
+// MarkInterrupted transitions every operation currently PENDING or RUNNING
+// to StateInterrupted
+func (s *Store) MarkInterrupted() (int, error) {
+	ctx := context.Background()
+	now := time.Now()
+
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE operations
+		SET state = $1, end_time = $2, error_message = $3
+		WHERE state IN ($4, $5)
+	`, operations.StateInterrupted, now, interruptedOperationMessage, operations.StatePending, operations.StateRunning)
+	if err != nil {
+		return 0, fmt.Errorf("marking interrupted operations: %w", err)
+	}
+
+	return int(tag.RowsAffected()), nil
 }
 
 func (s *Store) pruneExpiredOperations(ctx context.Context) error {

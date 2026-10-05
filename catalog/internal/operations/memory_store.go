@@ -124,6 +124,27 @@ func (s *MemoryStore) UpdateState(name string, state State, err *StatusError, no
 	return nil
 }
 
+// MarkInterrupted transitions every operation currently PENDING or RUNNING
+// to StateInterrupted
+func (s *MemoryStore) MarkInterrupted(message string) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	count := 0
+	for name, op := range s.operations {
+		if op.State != StatePending && op.State != StateRunning {
+			continue
+		}
+		op.State = StateInterrupted
+		op.Error = &StatusError{Message: message}
+		op.EndTime = &now
+		s.operations[name] = op
+		count++
+	}
+	return count, nil
+}
+
 // evictOldestForPlugin removes the oldest operation for the given plugin if
 // the per-plugin cap has been reached.
 func (s *MemoryStore) evictOldestForPlugin(plugin string) {

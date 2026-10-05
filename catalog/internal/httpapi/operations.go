@@ -59,7 +59,9 @@ var operationListOptionsSpec = listOptionsSpec{
 }
 
 func operationFromCatalogOperation(op operations.Operation) OperationResource {
-	done := op.State == operations.StateSucceeded || op.State == operations.StateFailed
+	done := op.State == operations.StateSucceeded ||
+		op.State == operations.StateFailed ||
+		op.State == operations.StateInterrupted
 
 	resource := OperationResource{
 		Name: op.Name,
@@ -80,6 +82,12 @@ func operationFromCatalogOperation(op operations.Operation) OperationResource {
 		}
 	case operations.StateFailed:
 		message := "operation failed without an error"
+		if op.Error != nil {
+			message = op.Error.Message
+		}
+		resource.Error = &ErrorResource{Message: message}
+	case operations.StateInterrupted:
+		message := "operation was interrupted"
 		if op.Error != nil {
 			message = op.Error.Message
 		}

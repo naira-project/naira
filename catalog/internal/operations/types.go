@@ -7,10 +7,11 @@ import "time"
 type State string
 
 const (
-	StatePending   State = "PENDING"
-	StateRunning   State = "RUNNING"
-	StateSucceeded State = "SUCCEEDED"
-	StateFailed    State = "FAILED"
+	StatePending     State = "PENDING"
+	StateRunning     State = "RUNNING"
+	StateSucceeded   State = "SUCCEEDED"
+	StateFailed      State = "FAILED"
+	StateInterrupted State = "INTERRUPTED"
 )
 
 // StatusError is an AIP-193 compliant error representation carried by
@@ -47,4 +48,5 @@ type Store interface {
 	Get(name string) (Operation, error)
 	List(filter Filter) ([]Operation, error)
 	UpdateState(name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error
+	MarkInterrupted() (int, error)
 }

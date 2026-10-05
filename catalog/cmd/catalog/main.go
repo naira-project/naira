@@ -41,13 +41,22 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgstore.Connect(ctx, config.PostgresDSN)
+	pgPool, err := pgstore.Connect(ctx, config.PostgresDSN)
 	if err != nil {
 		logger.Fatalf("failed to connect to postgres: %v", err)
 	}
-	defer pool.Close()
+	defer pgPool.Close()
 
-	store := pgstore.New(pool)
+	store := pgstore.New(pgPool)
+
+	interrupted, err := store.MarkInterrupted()
+	if err != nil {
+		logger.Fatalf("failed to reconcile interrupted operations: %v", err)
+	}
+	if interrupted > 0 {
+		logger.Printf("marked %d interrupted operation(s) after restart", interrupted)
+	}
+
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(ctx, store, registeredPlugins, config.PluginTimeout, logger)
 	scheduler, err := scheduling.NewConfiguredScheduler(config.Plugins, runner.RunPluginAsync, logger)
@@ -55,7 +64,7 @@ func main() {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
 
-	scheduling.ResyncStale(ctx, config.Plugins, store, runner.RunPluginAsync, time.Now(), resyncLookback, logger)
+	scheduling.ResyncAtStartup(ctx, config.Plugins, store, runner.RunPluginAsync, time.Now(), resyncLookback, logger)
 
 	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
