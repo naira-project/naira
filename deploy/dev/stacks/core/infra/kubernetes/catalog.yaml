@@ -12,6 +12,19 @@ type: Opaque
 stringData:
   LITELLM_API_KEY: sk-local-litellm
   OPENMETADATA_ADMIN_PASSWORD: admin
+  # Local/kind dev only. Long-lived IAM user credentials must not be used in a
+  # real cluster; AWS recommends workload identity (IRSA or EKS Pod Identity):
+  # https://docs.aws.amazon.com/sdkref/latest/guide/access.html
+  # TODO: Move the Bedrock plugin out of the catalog Pod into its own
+  # Deployment with a dedicated ServiceAccount carrying the IAM role. While it
+  # is a sidecar, a role on the catalog ServiceAccount is available to the whole
+  # Pod, not just this container. Once that is done, drop these two keys.
+  # TODO: Dropping these keys alone breaks the Pod: the plugin-bedrock env
+  # entries use secretKeyRef without "optional: true", so real clusters fail
+  # with CreateContainerConfigError. Remove the AWS_* env entries from
+  # plugin-bedrock (or mark them optional) at the same time.
+  BEDROCK_AWS_ACCESS_KEY_ID: ""
+  BEDROCK_AWS_SECRET_ACCESS_KEY: ""
 ---
 # The tech radar is rendered read-only from this admin-managed config.
 # Schema reference: plugins/cmd/tech_radar/README.md; annotated example kept
@@ -407,6 +420,8 @@ data:
         address: localhost:50059
       openai-api-models-litellm:
         address: localhost:50060
+      bedrock:
+        address: localhost:50061
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -614,6 +629,40 @@ spec:
                 secretKeyRef:
                   name: catalog-secrets
                   key: LITELLM_API_KEY
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-bedrock
+          image: bedrock:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50061"
+            - name: PATH_PREFIX
+              value: bedrock
+            - name: REGIONS
+              value: "us-east-1 eu-central-1"
+            # TODO: Local/kind dev only. Replace these static credentials with
+            # IRSA / EKS Pod Identity on a dedicated ServiceAccount (see the
+            # catalog-secrets comment above). Without "optional: true", a
+            # missing secret key fails the Pod with CreateContainerConfigError.
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: BEDROCK_AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: catalog-secrets
+                  key: BEDROCK_AWS_SECRET_ACCESS_KEY
+            - name: METRICS_LOOKBACK
+              value: "24h"
           resources:
             requests:
               cpu: 50m
