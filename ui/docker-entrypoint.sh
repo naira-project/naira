@@ -1,3 +1,4 @@
 #!/bin/sh
-export NAMESERVER=$(grep '^nameserver' /etc/resolv.conf | head -1 | awk '{print $2}')
+NAMESERVER="$(grep '^nameserver' /etc/resolv.conf | head -1 | awk '{print $2}')"
+export NAMESERVER
 exec /docker-entrypoint.sh "$@"

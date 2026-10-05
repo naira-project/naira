@@ -1,0 +1,16 @@
+{{ .Chart.Name }} {{ .Chart.Version }} installed as {{ .Release.Name }} in {{ .Release.Namespace }}.
+{{- if .Values.catalog.enabled }}
+
+Catalog plugins:
+{{- range $name, $p := .Values.catalog.plugins }}
+{{- if $p.enabled }}
+  {{ $name }}  localhost:{{ $p.port }}{{ with $p.schedule }}  {{ . }}{{ else }}  manual{{ end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+Keycloak (not installed by this chart): {{ .Values.keycloak.baseUrl }}
+{{- if or .Values.catalog.secret.create .Values.portal.oidc.secret.create }}
+
+WARNING: Secrets rendered from values. Development only.
+{{- end }}

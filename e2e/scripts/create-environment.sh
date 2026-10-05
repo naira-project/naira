@@ -167,6 +167,7 @@ apply() {
   # Restrict substitution to our template vars — manifests embed shell
   # snippets (e.g. postgres.yaml's $POSTGRES_DB) with their own $VAR syntax
   # that an unrestricted envsubst would blank out.
+  # shellcheck disable=SC2016 # envsubst takes a literal list of var names
   envsubst '${NAMESPACE} ${TAG}' < "$1" | kubectl apply -f -
 }
 
@@ -174,6 +175,7 @@ apply() {
 # PLUGIN_CONFIG_FILE — catalog/cmd/catalog/config.go — required, no
 # PLUGIN_ADDRESSES env fallback exists) plus the catalog Deployment, built
 # from header.yaml + one plugin-<name>.yaml per scenario plugin + footer.yaml.
+# shellcheck disable=SC2016 # envsubst takes a literal list of var names
 render_catalog() {
   echo "==> Rendering catalog (plugins: ${PLUGINS:-<none>})"
 
