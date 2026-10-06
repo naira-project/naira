@@ -27,9 +27,11 @@ func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) htt
 		plugins[name] = stubPlugin{}
 	}
 
+	snapshotStore := pluginruntest.NewMockSnapshotStore()
 	runner := pluginrun.NewRunner(
 		context.Background(),
-		pluginruntest.NewMockSnapshotStore(),
+		snapshotStore,
+		snapshotStore,
 		plugins,
 		5*time.Minute,
 		log.New(io.Discard, "", 0),

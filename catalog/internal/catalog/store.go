@@ -17,7 +17,6 @@ type Store interface {
 	ListNodes() ([]Node, error)
 	GetNode(id NodeID) (Node, error)
 	ListRelations() ([]Relation, error)
-	ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error)
 }
 
 type PluginClaim struct {

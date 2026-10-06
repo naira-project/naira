@@ -13,7 +13,7 @@ import (
 
 // CompleteSnapshotOperation applies a plugin snapshot and marks the
 // corresponding operation as succeeded in one transaction.
-func (s *SnapshotStore) CompleteSnapshotOperation(
+func (s *SnapshotCommitter) CompleteSnapshotOperation(
 	ctx context.Context,
 	operationName, pluginName string,
 	snapshotID uuid.UUID,
@@ -53,26 +53,4 @@ func (s *SnapshotStore) CompleteSnapshotOperation(
 		return 0, 0, fmt.Errorf("committing transaction: %w", err)
 	}
 	return upsertedNodes, upsertedRelations, nil
-}
-
-// --- operations.Store delegation -------------------------------------------
-
-func (s *SnapshotStore) Create(op operations.Operation) error {
-	return s.ops.Create(op)
-}
-
-func (s *SnapshotStore) Get(name string) (operations.Operation, error) {
-	return s.ops.Get(name)
-}
-
-func (s *SnapshotStore) List(filter operations.Filter) ([]operations.Operation, error) {
-	return s.ops.List(filter)
-}
-
-func (s *SnapshotStore) UpdateState(name string, state operations.State, statusErr *operations.StatusError, nodesUpserted, relationsUpserted int) error {
-	return s.ops.UpdateState(name, state, statusErr, nodesUpserted, relationsUpserted)
-}
-
-func (s *SnapshotStore) MarkInterrupted() (int, error) {
-	return s.ops.MarkInterrupted()
 }

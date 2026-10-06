@@ -49,7 +49,7 @@ func main() {
 
 	graphStore := pgstore.NewGraphStore(pgPool)
 	operationStore := pgstore.NewOperationStore(pgPool)
-	snapshotStore := pgstore.NewSnapshotStore(pgPool)
+	snapshotCommitter := pgstore.NewSnapshotCommitter(pgPool)
 
 	interrupted, err := operationStore.MarkInterrupted()
 	if err != nil {
@@ -60,7 +60,7 @@ func main() {
 	}
 
 	catalogService := catalog.NewService(graphStore)
-	runner := pluginrun.NewRunner(ctx, snapshotStore, registeredPlugins, config.PluginTimeout, logger)
+	runner := pluginrun.NewRunner(ctx, operationStore, snapshotCommitter, registeredPlugins, config.PluginTimeout, logger)
 	scheduler, err := scheduling.NewConfiguredScheduler(config.Plugins, runner.RunPluginAsync, logger)
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)

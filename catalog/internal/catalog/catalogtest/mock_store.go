@@ -1,17 +1,12 @@
 // Package catalogtest provides a mock of catalog.Store
 package catalogtest
 
-import (
-	"github.com/google/uuid"
-
-	"github.com/naira-project/naira/catalog/internal/catalog"
-)
+import "github.com/naira-project/naira/catalog/internal/catalog"
 
 type MockStore struct {
-	ListNodesFunc           func() ([]catalog.Node, error)
-	GetNodeFunc             func(id catalog.NodeID) (catalog.Node, error)
-	ListRelationsFunc       func() ([]catalog.Relation, error)
-	ApplyPluginSnapshotFunc func(pluginName string, snapshotID uuid.UUID, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) (int, int, error)
+	ListNodesFunc     func() ([]catalog.Node, error)
+	GetNodeFunc       func(id catalog.NodeID) (catalog.Node, error)
+	ListRelationsFunc func() ([]catalog.Relation, error)
 }
 
 func (m *MockStore) ListNodes() ([]catalog.Node, error) {
@@ -33,11 +28,4 @@ func (m *MockStore) ListRelations() ([]catalog.Relation, error) {
 		return m.ListRelationsFunc()
 	}
 	return nil, nil
-}
-
-func (m *MockStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) (int, int, error) {
-	if m.ApplyPluginSnapshotFunc != nil {
-		return m.ApplyPluginSnapshotFunc(pluginName, snapshotID, nodes, relations)
-	}
-	return len(nodes), len(relations), nil
 }

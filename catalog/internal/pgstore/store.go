@@ -12,12 +12,10 @@ type OperationStore struct {
 	pool *pgxpool.Pool
 }
 
-// SnapshotStore composes operation persistence with the atomic cross-aggregate
-// commit used by plugin runs. It wraps an OperationStore for operations.Store
-// methods and adds CompleteSnapshotOperation for the two-phase commit.
-type SnapshotStore struct {
+// SnapshotCommitter atomically persists a graph snapshot and updates the
+// corresponding operation in one transaction.
+type SnapshotCommitter struct {
 	pool *pgxpool.Pool
-	ops  *OperationStore
 }
 
 func NewGraphStore(pool *pgxpool.Pool) *GraphStore {
@@ -28,9 +26,6 @@ func NewOperationStore(pool *pgxpool.Pool) *OperationStore {
 	return &OperationStore{pool: pool}
 }
 
-func NewSnapshotStore(pool *pgxpool.Pool) *SnapshotStore {
-	return &SnapshotStore{
-		pool: pool,
-		ops:  NewOperationStore(pool),
-	}
+func NewSnapshotCommitter(pool *pgxpool.Pool) *SnapshotCommitter {
+	return &SnapshotCommitter{pool: pool}
 }
