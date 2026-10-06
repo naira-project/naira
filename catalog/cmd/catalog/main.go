@@ -47,9 +47,11 @@ func main() {
 	}
 	defer pgPool.Close()
 
-	store := pgstore.New(pgPool)
+	graphStore := pgstore.NewGraphStore(pgPool)
+	operationStore := pgstore.NewOperationStore(pgPool)
+	snapshotStore := pgstore.NewSnapshotStore(pgPool)
 
-	interrupted, err := store.MarkInterrupted()
+	interrupted, err := operationStore.MarkInterrupted()
 	if err != nil {
 		logger.Fatalf("failed to reconcile interrupted operations: %v", err)
 	}
@@ -57,14 +59,14 @@ func main() {
 		logger.Printf("marked %d interrupted operation(s) after restart", interrupted)
 	}
 
-	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(ctx, store, registeredPlugins, config.PluginTimeout, logger)
+	catalogService := catalog.NewService(graphStore)
+	runner := pluginrun.NewRunner(ctx, snapshotStore, registeredPlugins, config.PluginTimeout, logger)
 	scheduler, err := scheduling.NewConfiguredScheduler(config.Plugins, runner.RunPluginAsync, logger)
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
 
-	scheduling.ResyncAtStartup(ctx, config.Plugins, store, runner.RunPluginAsync, time.Now(), resyncLookback, logger)
+	scheduling.ResyncAtStartup(ctx, config.Plugins, operationStore, runner.RunPluginAsync, time.Now(), resyncLookback, logger)
 
 	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
