@@ -183,3 +183,32 @@ func (s *GraphStore) ListRelations() ([]catalog.Relation, error) {
 	}
 	return result, nil
 }
+
+func (s *GraphStore) ApplyPluginSnapshot(
+	pluginName string,
+	snapshotID uuid.UUID,
+	nodes []catalog.NodeClaim,
+	relations []catalog.RelationClaim,
+) (int, int, error) {
+	ctx := context.Background()
+
+	if err := catalog.ValidateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
+		return 0, 0, fmt.Errorf("validate snapshot input: %w", err)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("beginning transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	upsertedNodes, upsertedRelations, err := applySnapshot(ctx, tx, pluginName, snapshotID, nodes, relations)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, 0, fmt.Errorf("committing transaction: %w", err)
+	}
+	return upsertedNodes, upsertedRelations, nil
+}
