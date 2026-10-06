@@ -13,18 +13,20 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/naira-project/naira/catalog/internal/catalog/catalogtest"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
-	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/naira-project/naira/catalog/internal/pluginrun/pluginruntest"
 )
 
 const testBearerToken = "test-token"
 const testIssuer = "http://localhost:8080/realms/naira"
+
+var testSnapshotID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
 type stubTokenDecoder struct{}
 
@@ -71,62 +73,84 @@ func (p blockingStubPlugin) Collect(ctx context.Context) (catalog.CollectRespons
 	return p.response, p.err
 }
 
-func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
+func newTestRouter(t *testing.T, store *catalogtest.MockStore, snapshotStore *pluginruntest.MockSnapshotStore, plugins map[string]pluginrun.Plugin) (http.Handler, *pluginrun.Runner) {
 	t.Helper()
 
-	_, _, err := store.ApplyPluginSnapshot("test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
-	require.NoError(t, err)
-}
-
-// newTestRouter wires a fresh catalog.Service and pluginrun.Runner sharing a
-// single graph store, mirroring how main.go wires the real router.
-func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.Store, plugins map[string]pluginrun.Plugin) http.Handler {
-	t.Helper()
+	if store == nil {
+		store = &catalogtest.MockStore{}
+	}
+	if snapshotStore == nil {
+		snapshotStore = pluginruntest.NewMockSnapshotStore()
+	}
 
 	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), pluginrun.SplitStore{Catalog: store, Operations: opStore}, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
+	runner := pluginrun.NewRunner(context.Background(), snapshotStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
 	configs := make(catalog.PluginConfigsByName, len(plugins))
 	for name := range plugins {
 		configs[name] = catalog.PluginConfig{}
 	}
 	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
-	return router
+	return router, runner
 }
 
 func TestRouterServesCurrentEndpoints(t *testing.T) {
-	store := catalog.NewMemoryStore()
-	applyPluginSnapshot(t, store,
-		[]catalog.NodeClaim{
-			{
-				ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				Properties: pluginapi.PropertyMap{
-					"source":      "mlflow",
-					"description": "registry model",
-				},
-			},
-			{
-				ID: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-				Properties: pluginapi.PropertyMap{
-					"namespace": "apps",
+	nodes := []catalog.Node{
+		{
+			ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+			PluginClaims: map[string]catalog.PluginClaim{
+				"test-plugin": {
+					SnapshotID: testSnapshotID,
+					Properties: map[string]string{
+						"source":      "mlflow",
+						"description": "registry model",
+					},
 				},
 			},
 		},
-		[]catalog.RelationClaim{
-			{
-				Kind:       "uses_model",
-				From:       catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-				To:         catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				Properties: pluginapi.PropertyMap{"via": "virtual-key"},
+		{
+			ID: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+			PluginClaims: map[string]catalog.PluginClaim{
+				"test-plugin": {
+					SnapshotID: testSnapshotID,
+					Properties: map[string]string{"namespace": "apps"},
+				},
 			},
-			{
-				Kind: "used_by",
-				From: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				To:   catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-			}},
-	)
+		},
+	}
+	relations := []catalog.Relation{
+		{
+			Kind: "uses_model",
+			From: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+			To:   catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+			PluginClaims: map[string]catalog.PluginClaim{
+				"test-plugin": {SnapshotID: testSnapshotID, Properties: map[string]string{"via": "virtual-key"}},
+			},
+		},
+		{
+			Kind: "used_by",
+			From: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+			To:   catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+			PluginClaims: map[string]catalog.PluginClaim{
+				"test-plugin": {SnapshotID: testSnapshotID},
+			},
+		},
+	}
 
-	router := newTestRouter(t, store, operations.NewMemoryStore(), map[string]pluginrun.Plugin{"seed": stubPlugin{}})
+	store := &catalogtest.MockStore{
+		ListNodesFunc:     func() ([]catalog.Node, error) { return nodes, nil },
+		ListRelationsFunc: func() ([]catalog.Relation, error) { return relations, nil },
+		GetNodeFunc: func(id catalog.NodeID) (catalog.Node, error) {
+			for _, n := range nodes {
+				if n.ID == id {
+					return n, nil
+				}
+			}
+			return catalog.Node{}, catalog.ErrNodeNotFound
+		},
+	}
+
+	router, _ := newTestRouter(t, store, nil, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
 	tests := []struct {
 		name               string
@@ -156,22 +180,18 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &payload))
 
 				expected := ListNodesResponse{
-					Nodes: []Node{
-						{
-							Name: "nodes/model/mlflow/fraud-detector",
-							Kind: "model",
-							Path: "mlflow/fraud-detector",
-							PluginClaims: []PluginClaim{
-								{
-									Plugin: "test-plugin",
-									Props: map[string]string{
-										"source":      "mlflow",
-										"description": "registry model",
-									},
-								},
+					Nodes: []Node{{
+						Name: "nodes/model/mlflow/fraud-detector",
+						Kind: "model",
+						Path: "mlflow/fraud-detector",
+						PluginClaims: []PluginClaim{{
+							Plugin: "test-plugin",
+							Props: map[string]string{
+								"source":      "mlflow",
+								"description": "registry model",
 							},
-						},
-					},
+						}},
+					}},
 					TotalSize: 1,
 				}
 				assert.Equal(t, expected, payload)
@@ -190,15 +210,13 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 					Kind: "model",
 					Path: "mlflow/fraud-detector",
 					Name: "nodes/model/mlflow/fraud-detector",
-					PluginClaims: []PluginClaim{
-						{
-							Plugin: "test-plugin",
-							Props: map[string]string{
-								"source":      "mlflow",
-								"description": "registry model",
-							},
+					PluginClaims: []PluginClaim{{
+						Plugin: "test-plugin",
+						Props: map[string]string{
+							"source":      "mlflow",
+							"description": "registry model",
 						},
-					},
+					}},
 				}
 				assert.Equal(t, expected, payload)
 			},
@@ -213,20 +231,16 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 				require.NoError(t, json.Unmarshal(body, &payload))
 
 				expected := ListRelationsResponse{
-					Relations: []Relation{
-						{
-							Name:     "relations/uses_model/nodes%2Fapplication%2Flitellm%2Ffraud-assistant|nodes%2Fmodel%2Fmlflow%2Ffraud-detector",
-							Kind:     "uses_model",
-							FromNode: "nodes/application/litellm/fraud-assistant",
-							ToNode:   "nodes/model/mlflow/fraud-detector",
-							PluginClaims: []PluginClaim{
-								{
-									Plugin: "test-plugin",
-									Props:  map[string]string{"via": "virtual-key"},
-								},
-							},
-						},
-					},
+					Relations: []Relation{{
+						Name:     "relations/uses_model/nodes%2Fapplication%2Flitellm%2Ffraud-assistant|nodes%2Fmodel%2Fmlflow%2Ffraud-detector",
+						Kind:     "uses_model",
+						FromNode: "nodes/application/litellm/fraud-assistant",
+						ToNode:   "nodes/model/mlflow/fraud-detector",
+						PluginClaims: []PluginClaim{{
+							Plugin: "test-plugin",
+							Props:  map[string]string{"via": "virtual-key"},
+						}},
+					}},
 					TotalSize: 1,
 				}
 				assert.Equal(t, expected, payload)
@@ -250,12 +264,23 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 }
 
 func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
-	store := catalog.NewMemoryStore()
-	applyPluginSnapshot(t, store, []catalog.NodeClaim{{
+	node := catalog.Node{
 		ID: catalog.NodeID{Kind: "owner", Path: "@naira-project/dev"},
-	}}, nil)
+		PluginClaims: map[string]catalog.PluginClaim{
+			"test-plugin": {SnapshotID: testSnapshotID},
+		},
+	}
 
-	router := newTestRouter(t, store, operations.NewMemoryStore(), nil)
+	store := &catalogtest.MockStore{
+		GetNodeFunc: func(id catalog.NodeID) (catalog.Node, error) {
+			if id == node.ID {
+				return node, nil
+			}
+			return catalog.Node{}, catalog.ErrNodeNotFound
+		},
+	}
+
+	router, _ := newTestRouter(t, store, nil, nil)
 	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/nodes/owner/%40naira-project/dev", nil), testBearerToken)
 	rec := httptest.NewRecorder()
 
