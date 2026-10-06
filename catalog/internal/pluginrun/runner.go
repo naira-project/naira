@@ -22,9 +22,10 @@ import (
 
 type Plugin = pluginapi.Plugin
 
-// snapshotCommitTimeout bounds the database write that applies a plugin's
-// snapshot and marks its operation as SUCCEEDED.
-const snapshotCommitTimeout = 30 * time.Second
+const (
+	snapshotCommitTimeout  = 30 * time.Second
+	operationUpdateTimeout = 5 * time.Second
+)
 
 var (
 	ErrInvalidPluginName    = errors.New("invalid plugin name")
@@ -180,7 +181,9 @@ func (r *Runner) Wait() {
 
 // executePluginRun runs a single plugin and updates the operation outcome.
 func (r *Runner) executePluginRun(operationName, pluginName string) {
-	if err := r.operations.UpdateState(r.appCtx, operationName, operations.StateRunning, nil, 0, 0); err != nil {
+	updateCtx, updateCancel := context.WithTimeout(r.appCtx, operationUpdateTimeout)
+	defer updateCancel()
+	if err := r.operations.UpdateState(updateCtx, operationName, operations.StateRunning, nil, 0, 0); err != nil {
 		r.logf("marking operation %q as running: %v", operationName, err)
 		return
 	}
@@ -219,7 +222,9 @@ func (r *Runner) failOperation(operationName, pluginName string, err error) {
 
 	r.logf("plugin %q run failed: %v", pluginName, err)
 
-	if updateErr := r.operations.UpdateState(r.appCtx, operationName, operations.StateFailed, statusErr, 0, 0); updateErr != nil {
+	updateCtx, updateCancel := context.WithTimeout(r.appCtx, operationUpdateTimeout)
+	defer updateCancel()
+	if updateErr := r.operations.UpdateState(updateCtx, operationName, operations.StateFailed, statusErr, 0, 0); updateErr != nil {
 		r.logf("marking operation %q as failed: %v", operationName, updateErr)
 	}
 }
