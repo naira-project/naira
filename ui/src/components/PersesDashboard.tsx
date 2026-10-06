@@ -1,45 +1,45 @@
-import React from "react";
+import type {
+  DashboardResource,
+  DatasourceApi,
+  DatasourceResource,
+  GlobalDatasourceResource,
+} from '@perses-dev/client';
 
 import {
   ChartsProvider,
   generateChartsTheme,
   getTheme,
   SnackbarProvider,
-} from "@perses-dev/components";
+} from '@perses-dev/components';
+import { DatasourceStoreProvider, VariableProvider } from '@perses-dev/dashboards';
 import {
   dynamicImportPluginLoader,
   getPluginModuleCompoundKey,
-  PluginModuleResource,
+  type PluginModuleResource,
   PluginRegistry,
   TimeRangeProvider,
-} from "@perses-dev/plugin-system";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DatasourceStoreProvider, VariableProvider } from "@perses-dev/dashboards";
-import { DurationString, TimeRangeValue } from "@perses-dev/spec";
-import {
-  DashboardResource,
-  GlobalDatasourceResource,
-  DatasourceResource,
-  DatasourceApi,
-} from "@perses-dev/client";
-import * as prometheusPlugin from "@perses-dev/prometheus-plugin";
-import * as timeseriesChartPlugin from "@perses-dev/timeseries-chart-plugin";
-import { RELATED_CARDS_BY_KIND } from "../config/detailTabs";
-import { type NodeResource, nodeProps } from "../lib/catalogApi";
-import { MetricPanel } from "./MetricPanel";
-import { useRelatedNodes } from "./RelatedNodes";
+} from '@perses-dev/plugin-system';
+import * as prometheusPlugin from '@perses-dev/prometheus-plugin';
+import type { DurationString, TimeRangeValue } from '@perses-dev/spec';
+import * as timeseriesChartPlugin from '@perses-dev/timeseries-chart-plugin';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import React from 'react';
+import { RELATED_CARDS_BY_KIND } from '../config/detailTabs';
+import { type NodeResource, nodeProps } from '../lib/catalogApi';
+import { MetricPanel } from './MetricPanel';
+import { useRelatedNodes } from './RelatedNodes';
 
 const fakeDatasource: GlobalDatasourceResource = {
-  kind: "GlobalDatasource",
-  metadata: { name: "hello" },
+  kind: 'GlobalDatasource',
+  metadata: { name: 'hello' },
   spec: {
     default: true,
     plugin: {
-      kind: "PrometheusDatasource",
+      kind: 'PrometheusDatasource',
       spec: {
         // Same-origin path proxied to the in-cluster Prometheus by nginx
         // (see ui/nginx.conf.template's /prometheus/ location block).
-        directUrl: "/prometheus",
+        directUrl: '/prometheus',
       },
     },
   },
@@ -63,13 +63,13 @@ class DatasourceApiImpl implements DatasourceApi {
   }
 
   buildProxyUrl(): string {
-    return "/prometheus";
+    return '/prometheus';
   }
 }
 export const fakeDatasourceApi = new DatasourceApiImpl();
 export const fakeDashboard = {
-  kind: "Dashboard",
-  metadata: { name: "litellm-endpoint-metrics" },
+  kind: 'Dashboard',
+  metadata: { name: 'litellm-endpoint-metrics' },
   spec: {},
 } as DashboardResource;
 
@@ -111,24 +111,24 @@ interface LitellmScope {
 
 function litellmPanels({ deploymentId, requestedModel }: LitellmScope): PanelConfig[] {
   const filter = [
-    deploymentId ? `, model_id="${deploymentId}"` : "",
-    requestedModel ? `, requested_model=${JSON.stringify(requestedModel)}` : "",
-  ].join("");
+    deploymentId ? `, model_id="${deploymentId}"` : '',
+    requestedModel ? `, requested_model=${JSON.stringify(requestedModel)}` : '',
+  ].join('');
   return [
     {
-      title: "Input Token Rate",
+      title: 'Input Token Rate',
       query: `sum by (requested_model, model_id) (rate(litellm_input_tokens_metric_total{job="litellm", model!~"MCP:.*"${filter}}[5m]))`,
     },
     {
-      title: "Failure Rate per Deployment",
+      title: 'Failure Rate per Deployment',
       query: `sum by (requested_model, model_id) (rate(litellm_deployment_failure_responses_total{job="litellm"${filter}}[5m]))`,
     },
     {
-      title: "P95 Latency",
+      title: 'P95 Latency',
       query: `histogram_quantile(0.95, sum by (le, requested_model, model_id) (rate(litellm_request_total_latency_metric_bucket{job="litellm"${filter}}[5m])))`,
     },
     {
-      title: "Request rate per Deployment",
+      title: 'Request rate per Deployment',
       query: `sum by (requested_model, model_id) (rate(litellm_deployment_total_requests_total{job="litellm"${filter}}[5m]))`,
     },
   ];
@@ -139,23 +139,23 @@ function litellmPanels({ deploymentId, requestedModel }: LitellmScope): PanelCon
 // so these are plotted as-is rather than rate()d.
 // A model node has no region, so without one every region is drawn as its own line.
 function bedrockPanels(modelId: string, region?: string): PanelConfig[] {
-  const regionFilter = region ? `, region="${region}"` : "";
+  const regionFilter = region ? `, region="${region}"` : '';
   const selector = `{dimension_ModelId="${modelId}"${regionFilter}}`;
   return [
     {
-      title: "Invocations (per 5m)",
+      title: 'Invocations (per 5m)',
       query: `sum by (dimension_ModelId, region) (aws_bedrock_invocations_sum${selector})`,
     },
     {
-      title: "Input Tokens (per 5m)",
+      title: 'Input Tokens (per 5m)',
       query: `sum by (dimension_ModelId, region) (aws_bedrock_input_token_count_sum${selector})`,
     },
     {
-      title: "Output Tokens (per 5m)",
+      title: 'Output Tokens (per 5m)',
       query: `sum by (dimension_ModelId, region) (aws_bedrock_output_token_count_sum${selector})`,
     },
     {
-      title: "Average Invocation Latency (ms)",
+      title: 'Average Invocation Latency (ms)',
       query: `avg by (dimension_ModelId, region) (aws_bedrock_invocation_latency_average${selector})`,
     },
   ];
@@ -163,14 +163,14 @@ function bedrockPanels(modelId: string, region?: string): PanelConfig[] {
 
 function panelsForNode(node: NodeResource): PanelConfig[] {
   const props = nodeProps(node);
-  const fromBedrock = (node.pluginClaims ?? []).some((claim) => claim.plugin === "bedrock");
+  const fromBedrock = (node.pluginClaims ?? []).some((claim) => claim.plugin === 'bedrock');
   if (fromBedrock && props.model_id) {
     return bedrockPanels(props.model_id, props.region_name);
   }
-  if (node.kind === "model") {
+  if (node.kind === 'model') {
     // A LiteLLM model page covers every deployment behind the alias. The alias
     // is the path minus its plugin prefix, e.g. "litellm/idp-llama-qwen25-05b".
-    return litellmPanels({ requestedModel: node.path.split("/").slice(1).join("/") });
+    return litellmPanels({ requestedModel: node.path.split('/').slice(1).join('/') });
   }
   // The LiteLLM plugin stores the deployment's model_info.id as `id`, which is
   // the `model_id` label on LiteLLM's Prometheus metrics.
@@ -178,7 +178,7 @@ function panelsForNode(node: NodeResource): PanelConfig[] {
 }
 
 export function PersesDashboard({ node }: { node: NodeResource }) {
-  if (node.kind === "model") {
+  if (node.kind === 'model') {
     return <ModelDashboard node={node} />;
   }
   return <DashboardPanels panels={panelsForNode(node)} />;
@@ -196,18 +196,16 @@ function ModelDashboard({ node }: { node: NodeResource }) {
 }
 
 function DashboardPanels({ panels }: { panels: PanelConfig[] }) {
-  const [timeRange, setTimeRange] = React.useState<TimeRangeValue>({ pastDuration: "6h" });
-  const [refreshInterval, setRefreshInterval] = React.useState<DurationString>("0s");
+  const [timeRange, setTimeRange] = React.useState<TimeRangeValue>({ pastDuration: '6h' });
+  const [refreshInterval, setRefreshInterval] = React.useState<DurationString>('0s');
 
-  const muiTheme = getTheme("light");
+  const muiTheme = getTheme('light');
   const chartsTheme = generateChartsTheme(muiTheme, {});
   const pluginLoader = dynamicImportPluginLoader([
     {
       resource: prometheusPlugin.getPluginModule(),
       importPlugin: () =>
-        Promise.resolve(
-          toKeyedPluginModule(prometheusPlugin.getPluginModule(), prometheusPlugin),
-        ),
+        Promise.resolve(toKeyedPluginModule(prometheusPlugin.getPluginModule(), prometheusPlugin)),
     },
     {
       resource: timeseriesChartPlugin.getPluginModule(),
@@ -227,33 +225,36 @@ function DashboardPanels({ panels }: { panels: PanelConfig[] }) {
     },
   });
   return (
-      <ChartsProvider chartsTheme={chartsTheme}>
-        <SnackbarProvider
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-          variant="default"
+    <ChartsProvider chartsTheme={chartsTheme}>
+      <SnackbarProvider
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        variant="default"
+      >
+        <PluginRegistry
+          pluginLoader={pluginLoader}
+          defaultPluginKinds={{
+            Panel: 'TimeSeriesChart',
+            TimeSeriesQuery: 'PrometheusTimeSeriesQuery',
+          }}
         >
-          <PluginRegistry
-            pluginLoader={pluginLoader}
-            defaultPluginKinds={{
-              Panel: "TimeSeriesChart",
-              TimeSeriesQuery: "PrometheusTimeSeriesQuery",
-            }}
-          >
-            <QueryClientProvider client={queryClient}>
-              <TimeRangeProvider timeRange={timeRange} refreshInterval={refreshInterval} setTimeRange={setTimeRange} setRefreshInterval={setRefreshInterval}>
-                <VariableProvider>
-                  <DatasourceStoreProvider
-                    datasourceApi={fakeDatasourceApi}
-                  >
-                    {panels.map(({ title, query }) => (
-                      <MetricPanel key={title} title={title} query={query} />
-                    ))}
-                  </DatasourceStoreProvider>
-                </VariableProvider>
-              </TimeRangeProvider>
-            </QueryClientProvider>
-          </PluginRegistry>
-        </SnackbarProvider>
-      </ChartsProvider>
+          <QueryClientProvider client={queryClient}>
+            <TimeRangeProvider
+              timeRange={timeRange}
+              refreshInterval={refreshInterval}
+              setTimeRange={setTimeRange}
+              setRefreshInterval={setRefreshInterval}
+            >
+              <VariableProvider>
+                <DatasourceStoreProvider datasourceApi={fakeDatasourceApi}>
+                  {panels.map(({ title, query }) => (
+                    <MetricPanel key={title} title={title} query={query} />
+                  ))}
+                </DatasourceStoreProvider>
+              </VariableProvider>
+            </TimeRangeProvider>
+          </QueryClientProvider>
+        </PluginRegistry>
+      </SnackbarProvider>
+    </ChartsProvider>
   );
 }

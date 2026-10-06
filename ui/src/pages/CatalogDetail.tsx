@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { PersesDashboard } from '@/components/PersesDashboard';
 import PropertiesPanel from '../components/PropertiesPanel';
 import RelatedNodes from '../components/RelatedNodes';
 import { Button } from '../components/ui/button';
@@ -10,7 +11,6 @@ import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
 import { cn } from '../lib/utils';
 import CatalogGraph from './CatalogGraph';
-import { PersesDashboard } from '@/components/PersesDashboard';
 
 const GRAPH_TAB = 'Graph';
 const PROPERTIES_TAB = 'Properties';
@@ -114,7 +114,7 @@ export default function CatalogDetail() {
                     <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
 
                     {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
-                    
+
                     <PersesDashboard node={node} />
                   </div>
                 )}
