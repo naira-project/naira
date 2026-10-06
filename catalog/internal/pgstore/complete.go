@@ -3,7 +3,6 @@ package pgstore
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -35,18 +34,8 @@ func (s *SnapshotCommitter) CompleteSnapshotOperation(
 		return 0, 0, err
 	}
 
-	now := time.Now()
-	tag, err := tx.Exec(ctx, `
-		UPDATE operations
-		SET state = $1, end_time = $2, error_message = NULL,
-		    nodes_upserted = $3, relations_upserted = $4
-		WHERE name = $5
-	`, operations.StateSucceeded, now, upsertedNodes, upsertedRelations, operationName)
-	if err != nil {
+	if err := updateOperationState(ctx, tx, operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
 		return 0, 0, fmt.Errorf("marking operation %q succeeded: %w", operationName, err)
-	}
-	if tag.RowsAffected() == 0 {
-		return 0, 0, fmt.Errorf("marking operation %q succeeded: %w", operationName, operations.ErrNotFound)
 	}
 
 	if err := tx.Commit(ctx); err != nil {

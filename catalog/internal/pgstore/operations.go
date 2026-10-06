@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/naira-project/naira/catalog/internal/operations"
 )
@@ -20,31 +21,6 @@ const selectOperationSQL = `
 	SELECT name, plugin, state, start_time, end_time, error_message, nodes_upserted, relations_upserted, created_at
 	FROM operations
 `
-
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanOperation(row rowScanner) (operations.Operation, error) {
-	var op operations.Operation
-	var startTime *time.Time
-	var errorMessage *string
-
-	if err := row.Scan(
-		&op.Name, &op.Plugin, &op.State, &startTime, &op.EndTime, &errorMessage,
-		&op.NodesUpserted, &op.RelationsUpserted, &op.CreatedAt,
-	); err != nil {
-		return operations.Operation{}, err
-	}
-
-	if startTime != nil {
-		op.StartTime = *startTime
-	}
-	if errorMessage != nil {
-		op.Error = &operations.StatusError{Message: *errorMessage}
-	}
-	return op, nil
-}
 
 func (s *OperationStore) Create(ctx context.Context, op operations.Operation) error {
 	tx, err := s.pool.Begin(ctx)
@@ -128,6 +104,38 @@ func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]
 }
 
 func (s *OperationStore) UpdateState(ctx context.Context, name string, state operations.State, statusErr *operations.StatusError, nodesUpserted, relationsUpserted int) error {
+	return updateOperationState(ctx, s.pool, name, state, statusErr, nodesUpserted, relationsUpserted)
+}
+
+// MarkInterrupted transitions every operation currently PENDING or RUNNING
+// to StateInterrupted
+func (s *OperationStore) MarkInterrupted(ctx context.Context) (int, error) {
+	now := time.Now()
+
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE operations
+		SET state = $1, end_time = $2, error_message = $3
+		WHERE state IN ($4, $5)
+	`, operations.StateInterrupted, now, interruptedOperationMessage, operations.StatePending, operations.StateRunning)
+	if err != nil {
+		return 0, fmt.Errorf("marking interrupted operations: %w", err)
+	}
+
+	return int(tag.RowsAffected()), nil
+}
+
+type operationQuerier interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+func updateOperationState(
+	ctx context.Context,
+	q operationQuerier,
+	name string,
+	state operations.State,
+	statusErr *operations.StatusError,
+	nodesUpserted, relationsUpserted int,
+) error {
 	now := time.Now()
 
 	var errorMessage *string
@@ -152,7 +160,7 @@ func (s *OperationStore) UpdateState(ctx context.Context, name string, state ope
 	query += fmt.Sprintf(" WHERE name = $%d", len(args)+1)
 	args = append(args, name)
 
-	tag, err := s.pool.Exec(ctx, query, args...)
+	tag, err := q.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("updating operation %q: %w", name, err)
 	}
@@ -162,19 +170,27 @@ func (s *OperationStore) UpdateState(ctx context.Context, name string, state ope
 	return nil
 }
 
-// MarkInterrupted transitions every operation currently PENDING or RUNNING
-// to StateInterrupted
-func (s *OperationStore) MarkInterrupted(ctx context.Context) (int, error) {
-	now := time.Now()
+type rowScanner interface {
+	Scan(dest ...any) error
+}
 
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE operations
-		SET state = $1, end_time = $2, error_message = $3
-		WHERE state IN ($4, $5)
-	`, operations.StateInterrupted, now, interruptedOperationMessage, operations.StatePending, operations.StateRunning)
-	if err != nil {
-		return 0, fmt.Errorf("marking interrupted operations: %w", err)
+func scanOperation(row rowScanner) (operations.Operation, error) {
+	var op operations.Operation
+	var startTime *time.Time
+	var errorMessage *string
+
+	if err := row.Scan(
+		&op.Name, &op.Plugin, &op.State, &startTime, &op.EndTime, &errorMessage,
+		&op.NodesUpserted, &op.RelationsUpserted, &op.CreatedAt,
+	); err != nil {
+		return operations.Operation{}, err
 	}
 
-	return int(tag.RowsAffected()), nil
+	if startTime != nil {
+		op.StartTime = *startTime
+	}
+	if errorMessage != nil {
+		op.Error = &operations.StatusError{Message: *errorMessage}
+	}
+	return op, nil
 }
