@@ -10,7 +10,6 @@ import (
 )
 
 func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
-
 	rows, err := s.pool.Query(ctx, `
 		SELECT n.kind, n.path, c.plugin_name, c.snapshot_id, c.properties
 		FROM nodes n
@@ -66,7 +65,6 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 }
 
 func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.Node, error) {
-
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.plugin_name, c.snapshot_id, c.properties
 		FROM nodes n
@@ -113,7 +111,6 @@ func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.No
 }
 
 func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, error) {
-
 	rows, err := s.pool.Query(ctx, `
 		SELECT r.kind, r.from_kind, r.from_path, r.to_kind, r.to_path,
 		       c.plugin_name, c.snapshot_id, c.properties

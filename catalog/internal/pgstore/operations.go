@@ -12,9 +12,7 @@ import (
 )
 
 const (
-	operationTTL           = 3 * 24 * time.Hour
-	maxOperationsPerPlugin = 5
-
+	maxOperationsPerPlugin      = 5
 	interruptedOperationMessage = "operation was interrupted because the catalog process restarted before it could complete"
 )
 
@@ -49,7 +47,6 @@ func scanOperation(row rowScanner) (operations.Operation, error) {
 }
 
 func (s *OperationStore) Create(ctx context.Context, op operations.Operation) error {
-
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -87,10 +84,6 @@ func (s *OperationStore) Create(ctx context.Context, op operations.Operation) er
 }
 
 func (s *OperationStore) Get(ctx context.Context, name string) (operations.Operation, error) {
-	if err := s.pruneExpiredOperations(ctx); err != nil {
-		return operations.Operation{}, err
-	}
-
 	op, err := scanOperation(s.pool.QueryRow(ctx, selectOperationSQL+` WHERE name = $1`, name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -102,10 +95,6 @@ func (s *OperationStore) Get(ctx context.Context, name string) (operations.Opera
 }
 
 func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]operations.Operation, error) {
-	if err := s.pruneExpiredOperations(ctx); err != nil {
-		return nil, err
-	}
-
 	query := selectOperationSQL + ` WHERE 1=1`
 	var args []any
 	if filter.Plugin != "" {
@@ -188,11 +177,4 @@ func (s *OperationStore) MarkInterrupted(ctx context.Context) (int, error) {
 	}
 
 	return int(tag.RowsAffected()), nil
-}
-
-func (s *OperationStore) pruneExpiredOperations(ctx context.Context) error {
-	if _, err := s.pool.Exec(ctx, `DELETE FROM operations WHERE created_at < $1`, time.Now().Add(-operationTTL)); err != nil {
-		return fmt.Errorf("pruning expired operations: %w", err)
-	}
-	return nil
 }
