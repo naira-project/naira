@@ -12,8 +12,9 @@ import (
 
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/naira-project/naira/catalog/internal/catalog/catalogtest"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/pluginrun/pluginruntest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -26,16 +27,15 @@ func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) htt
 		plugins[name] = stubPlugin{}
 	}
 
-	store := catalog.NewMemoryStore()
 	runner := pluginrun.NewRunner(
 		context.Background(),
-		pluginrun.SplitStore{Catalog: store, Operations: operations.NewMemoryStore()},
+		pluginruntest.NewMockSnapshotStore(),
 		plugins,
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
 	)
 	router, err := NewRouter(
-		catalog.NewService(store),
+		catalog.NewService(&catalogtest.MockStore{}),
 		runner,
 		configs,
 		log.New(io.Discard, "", 0),

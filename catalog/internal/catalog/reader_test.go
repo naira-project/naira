@@ -1,4 +1,4 @@
-package catalog
+package catalog_test
 
 import (
 	"errors"
@@ -6,150 +6,108 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/catalog/catalogtest"
 )
 
-func TestListNodesProjectsStoredNode(t *testing.T) {
-	store := NewMemoryStore()
-	applyPluginSnapshot(t, store, []NodeClaim{{
-		ID: NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-		Properties: PropertyMap{
-			"source":      "mlflow",
-			"description": "registry model",
-			"owner":       "risk-platform",
-		},
-	}}, nil)
-
-	response, err := NewService(store).ListNodes(t.Context())
-	require.NoError(t, err)
-
-	assert.Equal(t, []Node{
-		{
-			ID: NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-			PluginClaims: map[string]PluginClaim{
-				"test-plugin": {
-					SnapshotID: snapshotV1,
-					Properties: map[string]string{
-						"source":      "mlflow",
-						"description": "registry model",
-						"owner":       "risk-platform",
-					},
+func TestServiceListNodesReturnsWhatTheStoreReturns(t *testing.T) {
+	want := []catalog.Node{{
+		ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+		PluginClaims: map[string]catalog.PluginClaim{
+			"mlflow": {
+				Properties: map[string]string{
+					"source":      "mlflow",
+					"description": "registry model",
+					"owner":       "risk-platform",
 				},
 			},
 		},
-	}, response)
+	}}
+
+	store := &catalogtest.MockStore{
+		ListNodesFunc: func() ([]catalog.Node, error) {
+			return want, nil
+		},
+	}
+
+	response, err := catalog.NewService(store).ListNodes(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, want, response)
 }
 
-func TestGetNodeReturnsStoredNode(t *testing.T) {
-	store := NewMemoryStore()
-	applyPluginSnapshot(t, store,
-		[]NodeClaim{
-			{
-				ID:         NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				Properties: PropertyMap{"source": "mlflow"},
-			},
-			{
-				ID: NodeID{Kind: "application", Path: "litellm/alpha-assistant"},
-				Properties: PropertyMap{
-					"namespace":           "apps",
-					"team":                "risk",
-					"litellm_virtual_key": "vk-alpha",
-				},
-			},
-			{
-				ID: NodeID{Kind: "application", Path: "litellm/beta-assistant"},
-				Properties: PropertyMap{
-					"namespace":           "apps",
-					"team":                "risk",
-					"litellm_virtual_key": "vk-beta",
-				},
-			},
+func TestServiceListNodesWrapsStoreError(t *testing.T) {
+	store := &catalogtest.MockStore{
+		ListNodesFunc: func() ([]catalog.Node, error) {
+			return nil, errors.New("connection reset")
 		},
-		[]RelationClaim{
-			{
-				Kind: "uses_model",
-				From: NodeID{Kind: "application", Path: "litellm/beta-assistant"},
-				To:   NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-			},
-			{
-				Kind: "uses_model",
-				From: NodeID{Kind: "application", Path: "litellm/alpha-assistant"},
-				To:   NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-			},
-		},
-	)
+	}
 
-	service := NewService(store)
-
-	response, err := service.GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/fraud-detector"})
-	require.NoError(t, err)
-	assert.Equal(t, "model", response.ID.Kind)
-	assert.Equal(t, "mlflow/fraud-detector", response.ID.Path)
-
-	_, err = service.GetNode(t.Context(), NodeID{Kind: "model", Path: "mlflow/missing"})
-	assert.True(t, errors.Is(err, ErrNodeNotFound))
+	_, err := catalog.NewService(store).ListNodes(t.Context())
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "listing nodes")
+	assert.ErrorContains(t, err, "connection reset")
 }
 
-func TestListRelationsReturnsStoredRelations(t *testing.T) {
-	store := NewMemoryStore()
-	applyPluginSnapshot(t, store,
-		[]NodeClaim{
-			{
-				ID:         NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-				Properties: PropertyMap{"source": "litellm"},
-			},
-			{
-				ID:         NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				Properties: PropertyMap{"source": "mlflow"},
-			},
-			{
-				ID:         NodeID{Kind: "dataset", Path: "mlflow/transactions-v1"},
-				Properties: PropertyMap{"source": "mlflow"},
-			},
-			{
-				ID:         NodeID{Kind: "dataset", Path: "openmetadata/orphan-table"},
-				Properties: PropertyMap{"source": "openmetadata"},
-			},
-		},
-		[]RelationClaim{
-			{
-				Kind:       "uses_model",
-				From:       NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-				To:         NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				Properties: PropertyMap{"via": "virtual-key"},
-			},
-			{
-				Kind: "trained_on",
-				From: NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				To:   NodeID{Kind: "dataset", Path: "mlflow/transactions-v1"},
-			},
-		},
-	)
+func TestServiceGetNodeReturnsWhatTheStoreReturns(t *testing.T) {
+	id := catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"}
+	want := catalog.Node{ID: id}
 
-	response, err := NewService(store).ListRelations(t.Context())
+	store := &catalogtest.MockStore{
+		GetNodeFunc: func(gotID catalog.NodeID) (catalog.Node, error) {
+			assert.Equal(t, id, gotID)
+			return want, nil
+		},
+	}
+
+	response, err := catalog.NewService(store).GetNode(t.Context(), id)
 	require.NoError(t, err)
+	assert.Equal(t, want, response)
+}
 
-	assert.Equal(t, []Relation{
-		{
-			Kind: "trained_on",
-			From: NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-			To:   NodeID{Kind: "dataset", Path: "mlflow/transactions-v1"},
-			PluginClaims: map[string]PluginClaim{
-				"test-plugin": {
-					SnapshotID: snapshotV1,
-					Properties: nil,
-				},
+func TestServiceGetNodePropagatesNotFound(t *testing.T) {
+	store := &catalogtest.MockStore{
+		GetNodeFunc: func(catalog.NodeID) (catalog.Node, error) {
+			return catalog.Node{}, catalog.ErrNodeNotFound
+		},
+	}
+
+	_, err := catalog.NewService(store).GetNode(t.Context(), catalog.NodeID{Kind: "model", Path: "missing"})
+	assert.ErrorIs(t, err, catalog.ErrNodeNotFound)
+}
+
+func TestServiceListRelationsReturnsWhatTheStoreReturns(t *testing.T) {
+	want := []catalog.Relation{{
+		Kind: "uses_model",
+		From: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+		To:   catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+		PluginClaims: map[string]catalog.PluginClaim{
+			"mlflow": {
+				Properties: map[string]string{"via": "virtual-key"},
 			},
 		},
-		{
-			Kind: "uses_model",
-			From: NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-			To:   NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-			PluginClaims: map[string]PluginClaim{
-				"test-plugin": {
-					SnapshotID: snapshotV1,
-					Properties: map[string]string{"via": "virtual-key"},
-				},
-			},
+	}}
+
+	store := &catalogtest.MockStore{
+		ListRelationsFunc: func() ([]catalog.Relation, error) {
+			return want, nil
 		},
-	}, response)
+	}
+
+	response, err := catalog.NewService(store).ListRelations(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, want, response)
+}
+
+func TestServiceListRelationsWrapsStoreError(t *testing.T) {
+	store := &catalogtest.MockStore{
+		ListRelationsFunc: func() ([]catalog.Relation, error) {
+			return nil, errors.New("timeout")
+		},
+	}
+
+	_, err := catalog.NewService(store).ListRelations(t.Context())
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "listing relations")
+	assert.ErrorContains(t, err, "timeout")
 }
