@@ -96,8 +96,8 @@ func LastScheduledTime(expr string, now time.Time, lookback time.Duration) (time
 
 // lastOperation returns the most recently created operation recorded for
 // plugin, or found=false if it has never run
-func lastOperation(store operations.Store, plugin string) (op operations.Operation, found bool, err error) {
-	ops, err := store.List(operations.Filter{Plugin: plugin})
+func lastOperation(ctx context.Context, store operations.Store, plugin string) (op operations.Operation, found bool, err error) {
+	ops, err := store.List(ctx, operations.Filter{Plugin: plugin})
 	if err != nil {
 		return operations.Operation{}, false, err
 	}
@@ -138,7 +138,7 @@ func ResyncAtStartup(
 	logger *log.Logger,
 ) {
 	for plugin, config := range configs {
-		last, found, err := lastOperation(opsStore, plugin)
+		last, found, err := lastOperation(ctx, opsStore, plugin)
 		if err != nil {
 			if logger != nil {
 				logger.Printf("startup resync check for plugin %q: listing operations: %v", plugin, err)

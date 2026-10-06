@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestServiceListNodesReturnsWhatTheStoreReturns(t *testing.T) {
 	}}
 
 	store := &catalogtest.MockStore{
-		ListNodesFunc: func() ([]catalog.Node, error) {
+		ListNodesFunc: func(_ context.Context) ([]catalog.Node, error) {
 			return want, nil
 		},
 	}
@@ -38,7 +39,7 @@ func TestServiceListNodesReturnsWhatTheStoreReturns(t *testing.T) {
 
 func TestServiceListNodesWrapsStoreError(t *testing.T) {
 	store := &catalogtest.MockStore{
-		ListNodesFunc: func() ([]catalog.Node, error) {
+		ListNodesFunc: func(_ context.Context) ([]catalog.Node, error) {
 			return nil, errors.New("connection reset")
 		},
 	}
@@ -54,7 +55,7 @@ func TestServiceGetNodeReturnsWhatTheStoreReturns(t *testing.T) {
 	want := catalog.Node{ID: id}
 
 	store := &catalogtest.MockStore{
-		GetNodeFunc: func(gotID catalog.NodeID) (catalog.Node, error) {
+		GetNodeFunc: func(_ context.Context, gotID catalog.NodeID) (catalog.Node, error) {
 			assert.Equal(t, id, gotID)
 			return want, nil
 		},
@@ -67,7 +68,7 @@ func TestServiceGetNodeReturnsWhatTheStoreReturns(t *testing.T) {
 
 func TestServiceGetNodePropagatesNotFound(t *testing.T) {
 	store := &catalogtest.MockStore{
-		GetNodeFunc: func(catalog.NodeID) (catalog.Node, error) {
+		GetNodeFunc: func(context.Context, catalog.NodeID) (catalog.Node, error) {
 			return catalog.Node{}, catalog.ErrNodeNotFound
 		},
 	}
@@ -89,7 +90,7 @@ func TestServiceListRelationsReturnsWhatTheStoreReturns(t *testing.T) {
 	}}
 
 	store := &catalogtest.MockStore{
-		ListRelationsFunc: func() ([]catalog.Relation, error) {
+		ListRelationsFunc: func(_ context.Context) ([]catalog.Relation, error) {
 			return want, nil
 		},
 	}
@@ -101,7 +102,7 @@ func TestServiceListRelationsReturnsWhatTheStoreReturns(t *testing.T) {
 
 func TestServiceListRelationsWrapsStoreError(t *testing.T) {
 	store := &catalogtest.MockStore{
-		ListRelationsFunc: func() ([]catalog.Relation, error) {
+		ListRelationsFunc: func(_ context.Context) ([]catalog.Relation, error) {
 			return nil, errors.New("timeout")
 		},
 	}

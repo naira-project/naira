@@ -138,9 +138,9 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 	}
 
 	store := &catalogtest.MockStore{
-		ListNodesFunc:     func() ([]catalog.Node, error) { return nodes, nil },
-		ListRelationsFunc: func() ([]catalog.Relation, error) { return relations, nil },
-		GetNodeFunc: func(id catalog.NodeID) (catalog.Node, error) {
+		ListNodesFunc:     func(context.Context) ([]catalog.Node, error) { return nodes, nil },
+		ListRelationsFunc: func(context.Context) ([]catalog.Relation, error) { return relations, nil },
+		GetNodeFunc: func(_ context.Context, id catalog.NodeID) (catalog.Node, error) {
 			for _, n := range nodes {
 				if n.ID == id {
 					return n, nil
@@ -272,7 +272,7 @@ func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 	}
 
 	store := &catalogtest.MockStore{
-		GetNodeFunc: func(id catalog.NodeID) (catalog.Node, error) {
+		GetNodeFunc: func(_ context.Context, id catalog.NodeID) (catalog.Node, error) {
 			if id == node.ID {
 				return node, nil
 			}

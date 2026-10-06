@@ -9,8 +9,7 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
-func (s *GraphStore) ListNodes() ([]catalog.Node, error) {
-	ctx := context.Background()
+func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT n.kind, n.path, c.plugin_name, c.snapshot_id, c.properties
@@ -66,8 +65,7 @@ func (s *GraphStore) ListNodes() ([]catalog.Node, error) {
 	return result, nil
 }
 
-func (s *GraphStore) GetNode(id catalog.NodeID) (catalog.Node, error) {
-	ctx := context.Background()
+func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.Node, error) {
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.plugin_name, c.snapshot_id, c.properties
@@ -114,8 +112,7 @@ func (s *GraphStore) GetNode(id catalog.NodeID) (catalog.Node, error) {
 	return node, nil
 }
 
-func (s *GraphStore) ListRelations() ([]catalog.Relation, error) {
-	ctx := context.Background()
+func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, error) {
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT r.kind, r.from_kind, r.from_path, r.to_kind, r.to_path,

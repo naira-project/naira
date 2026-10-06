@@ -89,7 +89,7 @@ func NewRunner(
 // are not atomic. This creates a possible race where two concurrent requests for
 // the same plugin could both pass the check before either creates the operation.
 // The ErrPluginAlreadyRunning error is therefore "best effort" rather than a strict guarantee.
-func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operations.Operation, error) {
+func (r *Runner) RunPluginAsync(ctx context.Context, pluginName string) (operations.Operation, error) {
 	pluginName = normalizePluginName(pluginName)
 	if pluginName == "" {
 		return operations.Operation{}, fmt.Errorf("normalize plugin name: %w", ErrInvalidPluginName)
@@ -99,7 +99,7 @@ func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operation
 		return operations.Operation{}, fmt.Errorf("looking up plugin %q: %w", pluginName, ErrPluginNotFound)
 	}
 
-	if r.hasActiveOperation(pluginName) {
+	if r.hasActiveOperation(ctx, pluginName) {
 		return operations.Operation{}, fmt.Errorf("plugin %q: %w", pluginName, ErrPluginAlreadyRunning)
 	}
 
@@ -109,7 +109,7 @@ func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operation
 		State:     operations.StatePending,
 		CreatedAt: time.Now(),
 	}
-	if err := r.operations.Create(op); err != nil {
+	if err := r.operations.Create(ctx, op); err != nil {
 		return operations.Operation{}, fmt.Errorf("creating operation for plugin %q: %w", pluginName, err)
 	}
 
@@ -146,8 +146,8 @@ func (r *Runner) RunAllPluginsAsync(ctx context.Context) []operations.Operation 
 	return result
 }
 
-func (r *Runner) GetOperation(_ context.Context, name string) (operations.Operation, error) {
-	op, err := r.operations.Get(name)
+func (r *Runner) GetOperation(ctx context.Context, name string) (operations.Operation, error) {
+	op, err := r.operations.Get(ctx, name)
 	if err != nil {
 		return operations.Operation{}, fmt.Errorf("getting operation %q: %w", name, err)
 	}
@@ -165,8 +165,8 @@ func (r *Runner) ListPlugins() []string {
 
 // ListOperations returns all operations, optionally filtered by plugin and
 // state, ordered by creation time descending.
-func (r *Runner) ListOperations(_ context.Context, filter operations.Filter) ([]operations.Operation, error) {
-	result, err := r.operations.List(filter)
+func (r *Runner) ListOperations(ctx context.Context, filter operations.Filter) ([]operations.Operation, error) {
+	result, err := r.operations.List(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("listing operations: %w", err)
 	}
@@ -180,7 +180,7 @@ func (r *Runner) Wait() {
 
 // executePluginRun runs a single plugin and updates the operation outcome.
 func (r *Runner) executePluginRun(operationName, pluginName string) {
-	if err := r.operations.UpdateState(operationName, operations.StateRunning, nil, 0, 0); err != nil {
+	if err := r.operations.UpdateState(r.appCtx, operationName, operations.StateRunning, nil, 0, 0); err != nil {
 		r.logf("marking operation %q as running: %v", operationName, err)
 		return
 	}
@@ -219,13 +219,13 @@ func (r *Runner) failOperation(operationName, pluginName string, err error) {
 
 	r.logf("plugin %q run failed: %v", pluginName, err)
 
-	if updateErr := r.operations.UpdateState(operationName, operations.StateFailed, statusErr, 0, 0); updateErr != nil {
+	if updateErr := r.operations.UpdateState(r.appCtx, operationName, operations.StateFailed, statusErr, 0, 0); updateErr != nil {
 		r.logf("marking operation %q as failed: %v", operationName, updateErr)
 	}
 }
 
-func (r *Runner) hasActiveOperation(pluginName string) bool {
-	ops, err := r.operations.List(operations.Filter{Plugin: pluginName})
+func (r *Runner) hasActiveOperation(ctx context.Context, pluginName string) bool {
+	ops, err := r.operations.List(ctx, operations.Filter{Plugin: pluginName})
 	if err != nil {
 		r.logf("listing operations for plugin %q: %v", pluginName, err)
 		return false

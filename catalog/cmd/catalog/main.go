@@ -51,7 +51,7 @@ func main() {
 	operationStore := pgstore.NewOperationStore(pgPool)
 	snapshotCommitter := pgstore.NewSnapshotCommitter(pgPool)
 
-	interrupted, err := operationStore.MarkInterrupted()
+	interrupted, err := operationStore.MarkInterrupted(ctx)
 	if err != nil {
 		logger.Fatalf("failed to reconcile interrupted operations: %v", err)
 	}

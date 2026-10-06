@@ -3,6 +3,7 @@
 package operations
 
 import (
+	"context"
 	"errors"
 	"time"
 )
@@ -52,9 +53,9 @@ type Filter struct {
 }
 
 type Store interface {
-	Create(op Operation) error
-	Get(name string) (Operation, error)
-	List(filter Filter) ([]Operation, error)
-	UpdateState(name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error
-	MarkInterrupted() (int, error)
+	Create(ctx context.Context, op Operation) error
+	Get(ctx context.Context, name string) (Operation, error)
+	List(ctx context.Context, filter Filter) ([]Operation, error)
+	UpdateState(ctx context.Context, name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error
+	MarkInterrupted(ctx context.Context) (int, error)
 }

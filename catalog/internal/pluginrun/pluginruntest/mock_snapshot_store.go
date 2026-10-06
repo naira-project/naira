@@ -48,7 +48,7 @@ func (m *MockSnapshotStore) CompleteSnapshotOperation(
 	}
 
 	nodesUpserted, relationsUpserted := len(nodes), len(relations)
-	if err := m.MockStore.UpdateState(operationName, operations.StateSucceeded, nil, nodesUpserted, relationsUpserted); err != nil {
+	if err := m.MockStore.UpdateState(ctx, operationName, operations.StateSucceeded, nil, nodesUpserted, relationsUpserted); err != nil {
 		return 0, 0, err
 	}
 	return nodesUpserted, relationsUpserted, nil

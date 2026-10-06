@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,9 +15,9 @@ var (
 )
 
 type Store interface {
-	ListNodes() ([]Node, error)
-	GetNode(id NodeID) (Node, error)
-	ListRelations() ([]Relation, error)
+	ListNodes(ctx context.Context) ([]Node, error)
+	GetNode(ctx context.Context, id NodeID) (Node, error)
+	ListRelations(ctx context.Context) ([]Relation, error)
 }
 
 type PluginClaim struct {

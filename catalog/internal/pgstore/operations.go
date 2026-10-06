@@ -48,8 +48,7 @@ func scanOperation(row rowScanner) (operations.Operation, error) {
 	return op, nil
 }
 
-func (s *OperationStore) Create(op operations.Operation) error {
-	ctx := context.Background()
+func (s *OperationStore) Create(ctx context.Context, op operations.Operation) error {
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -87,8 +86,7 @@ func (s *OperationStore) Create(op operations.Operation) error {
 	return nil
 }
 
-func (s *OperationStore) Get(name string) (operations.Operation, error) {
-	ctx := context.Background()
+func (s *OperationStore) Get(ctx context.Context, name string) (operations.Operation, error) {
 	if err := s.pruneExpiredOperations(ctx); err != nil {
 		return operations.Operation{}, err
 	}
@@ -103,8 +101,7 @@ func (s *OperationStore) Get(name string) (operations.Operation, error) {
 	return op, nil
 }
 
-func (s *OperationStore) List(filter operations.Filter) ([]operations.Operation, error) {
-	ctx := context.Background()
+func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]operations.Operation, error) {
 	if err := s.pruneExpiredOperations(ctx); err != nil {
 		return nil, err
 	}
@@ -141,8 +138,7 @@ func (s *OperationStore) List(filter operations.Filter) ([]operations.Operation,
 	return result, nil
 }
 
-func (s *OperationStore) UpdateState(name string, state operations.State, statusErr *operations.StatusError, nodesUpserted, relationsUpserted int) error {
-	ctx := context.Background()
+func (s *OperationStore) UpdateState(ctx context.Context, name string, state operations.State, statusErr *operations.StatusError, nodesUpserted, relationsUpserted int) error {
 	now := time.Now()
 
 	var errorMessage *string
@@ -179,8 +175,7 @@ func (s *OperationStore) UpdateState(name string, state operations.State, status
 
 // MarkInterrupted transitions every operation currently PENDING or RUNNING
 // to StateInterrupted
-func (s *OperationStore) MarkInterrupted() (int, error) {
-	ctx := context.Background()
+func (s *OperationStore) MarkInterrupted(ctx context.Context) (int, error) {
 	now := time.Now()
 
 	tag, err := s.pool.Exec(ctx, `
