@@ -27,7 +27,7 @@ func (s *OperationStore) Create(ctx context.Context, op operations.Operation) er
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx)
 
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO operations (name, plugin, state, created_at)

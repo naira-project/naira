@@ -158,17 +158,6 @@ func TestRunAllPluginsAsyncReturnsOperations(t *testing.T) {
 	runner.Wait()
 }
 
-func TestListPluginsReturnsSortedNames(t *testing.T) {
-	store := pluginruntest.NewMockSnapshotStore()
-	runner := NewRunner(t.Context(), store, store, map[string]Plugin{
-		"mlflow":  stubPlugin{},
-		"litellm": stubPlugin{},
-		"fluxcd":  stubPlugin{},
-	}, 5*time.Minute, nil)
-
-	assert.Equal(t, []string{"fluxcd", "litellm", "mlflow"}, runner.ListPlugins())
-}
-
 func TestGetOperationNotFound(t *testing.T) {
 	store := pluginruntest.NewMockSnapshotStore()
 	runner := NewRunner(t.Context(), store, store, nil, 5*time.Minute, nil)

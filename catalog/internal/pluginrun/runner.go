@@ -155,15 +155,6 @@ func (r *Runner) GetOperation(ctx context.Context, name string) (operations.Oper
 	return op, nil
 }
 
-func (r *Runner) ListPlugins() []string {
-	names := make([]string, 0, len(r.plugins))
-	for name := range r.plugins {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
-
 // ListOperations returns all operations, optionally filtered by plugin and
 // state, ordered by creation time descending.
 func (r *Runner) ListOperations(ctx context.Context, filter operations.Filter) ([]operations.Operation, error) {
