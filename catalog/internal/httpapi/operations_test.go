@@ -1,11 +1,8 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,12 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
-	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/operations"
-	"github.com/naira-project/naira/catalog/internal/pluginrun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/naira-project/naira/catalog/internal/catalog/catalogtest"
+	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/pluginrun/pluginruntest"
 )
 
 func TestRunPluginFlowJSONContract(t *testing.T) {
@@ -77,8 +75,8 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opStore := operations.NewMemoryStore()
-			router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{
+			snapshotStore := pluginruntest.NewMockSnapshotStore()
+			router, _ := newTestRouter(t, &catalogtest.MockStore{}, snapshotStore, map[string]pluginrun.Plugin{
 				"mlflow": tt.pluginImpl,
 			})
 
@@ -96,7 +94,7 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 				return
 			}
 
-			completed := waitForTerminalState(t, opStore, opRes.Name)
+			completed := waitForTerminalState(t, snapshotStore, opRes.Name)
 
 			getRec := doRequest(t, router, http.MethodGet, "/v1/operations/"+url.PathEscape(completed.Name))
 			require.Equal(t, http.StatusOK, getRec.Code)
@@ -118,20 +116,18 @@ func TestOperationFromCatalogOperationFailedWithoutError(t *testing.T) {
 }
 
 func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
+	router, _ := newTestRouter(t, nil, nil, nil)
 
 	rec := doRequest(t, router, http.MethodPost, "/v1/plugins/missing:run")
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestRunPluginAsyncEndpointConflict(t *testing.T) {
-	opStore := operations.NewMemoryStore()
+	snapshotStore := pluginruntest.NewMockSnapshotStore()
 	block := make(chan struct{})
-	store := catalog.NewMemoryStore()
-	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), pluginrun.SplitStore{Catalog: store, Operations: opStore}, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, catalog.PluginConfigsByName{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
-	require.NoError(t, err)
+	router, runner := newTestRouter(t, &catalogtest.MockStore{}, snapshotStore, map[string]pluginrun.Plugin{
+		"mlflow": blockingStubPlugin{block: block},
+	})
 
 	rec1 := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
 	assert.Equal(t, http.StatusAccepted, rec1.Code)
@@ -139,7 +135,7 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	var firstOp OperationResource
 	require.NoError(t, json.Unmarshal(rec1.Body.Bytes(), &firstOp))
 
-	waitForState(t, opStore, firstOp.Name, func(op operations.Operation) bool {
+	waitForState(t, snapshotStore, firstOp.Name, func(op operations.Operation) bool {
 		return op.State == operations.StateRunning
 	})
 
@@ -151,8 +147,8 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 }
 
 func TestGetOperationsEndpoint(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
+	snapshotStore := pluginruntest.NewMockSnapshotStore()
+	router, _ := newTestRouter(t, &catalogtest.MockStore{}, snapshotStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
 	// Trigger "seed" plugin flow
 	runRec := doRequest(t, router, http.MethodPost, "/v1/plugins:run")
@@ -163,7 +159,7 @@ func TestGetOperationsEndpoint(t *testing.T) {
 	require.Len(t, runResp.Operations, 1)
 
 	opName := runResp.Operations[0].Name
-	waitForTerminalState(t, opStore, opName)
+	waitForTerminalState(t, snapshotStore, opName)
 
 	// Fetch operations list
 	rec := doRequest(t, router, http.MethodGet, "/v1/operations")
@@ -199,27 +195,27 @@ func doRequest(t *testing.T, router http.Handler, method, path string) *httptest
 }
 
 // waitForTerminalState polls until the operation reaches SUCCEEDED or FAILED.
-func waitForTerminalState(t *testing.T, opStore operations.Store, name string) operations.Operation {
+func waitForTerminalState(t *testing.T, store *pluginruntest.MockSnapshotStore, name string) operations.Operation {
 	t.Helper()
-	return waitForState(t, opStore, name, func(op operations.Operation) bool {
+	return waitForState(t, store, name, func(op operations.Operation) bool {
 		return op.State == operations.StateSucceeded || op.State == operations.StateFailed
 	})
 }
 
 // waitForState polls until condition is met or times out.
-func waitForState(t *testing.T, opStore operations.Store, name string, condition func(operations.Operation) bool) operations.Operation {
+func waitForState(t *testing.T, store *pluginruntest.MockSnapshotStore, name string, condition func(operations.Operation) bool) operations.Operation {
 	t.Helper()
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		op, err := opStore.Get(name)
+		op, err := store.Get(name)
 		if err == nil && condition(op) {
 			return op
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	op, err := opStore.Get(name)
+	op, err := store.Get(name)
 	require.NoError(t, err, "operation %q not found", name)
 	t.Fatalf("timed out waiting for operation %q; final state = %s", name, op.State)
 	return operations.Operation{}
