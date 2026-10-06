@@ -123,22 +123,20 @@ jobs:
   # ── 6. Container build — catalog (build-only, no push on PRs) ─────────────
   container-build-catalog:
     name: Container Build · Catalog
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@9d11293b6fdfb550b5b8d43ae551639591bcf468
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@47828e26feb1a916603512312148622613d5bd26
     with:
       image-name: "naira-catalog"
       dockerfile: "catalog/Dockerfile"
       context: "."
-      platforms: "linux/amd64,linux/arm64"
 
   # ── 7. Container build — ui (build-only, no push on PRs) ──────────────────
   container-build-ui:
     name: Container Build · UI
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@9d11293b6fdfb550b5b8d43ae551639591bcf468
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build-only.yml@47828e26feb1a916603512312148622613d5bd26
     with:
       image-name: "naira-ui"
       dockerfile: "ui/Dockerfile"
       context: "ui"
-      platforms: "linux/amd64,linux/arm64"
 
   # ── 7. Helm chart ─────────────────────────────────────────────────────────
   helm-chart:
