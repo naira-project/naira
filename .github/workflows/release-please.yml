@@ -145,17 +145,25 @@ jobs:
             image-name: "naira-plugin-depl-uses-litellm"
             dockerfile: "plugins/cmd/depl_uses_litellm/Dockerfile"
             context: "."
-          - name: Plugin OpenAI API Models
-            image-name: "naira-plugin-openai-api-models"
-            dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
-            context: "."
           - name: Plugin GitHub
             image-name: "naira-plugin-github"
             dockerfile: "plugins/cmd/github/Dockerfile"
             context: "."
+          - name: Plugin OpenAI API Models
+            image-name: "naira-plugin-openai-api-models"
+            dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
+            context: "."
           - name: Plugin Bedrock
             image-name: "naira-plugin-bedrock"
             dockerfile: "plugins/cmd/bedrock/Dockerfile"
+            context: "."
+          - name: Plugin Thalamus
+            image-name: "naira-plugin-thalamus"
+            dockerfile: "plugins/cmd/thalamus/Dockerfile"
+            context: "."
+          - name: Plugin Depl Uses Thalamus
+            image-name: "naira-plugin-depl-uses-thalamus"
+            dockerfile: "plugins/cmd/depl_uses_thalamus/Dockerfile"
             context: "."
     # Each matrix entry calls a nested reusable workflow that chains its own
     # build -> SBOM jobs, rather than matrixing build and SBOM separately:

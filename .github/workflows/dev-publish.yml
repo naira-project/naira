@@ -80,6 +80,14 @@ jobs:
             image-name: "naira-plugin-bedrock"
             dockerfile: "plugins/cmd/bedrock/Dockerfile"
             context: "."
+          - name: Plugin Thalamus
+            image-name: "naira-plugin-thalamus"
+            dockerfile: "plugins/cmd/thalamus/Dockerfile"
+            context: "."
+          - name: Plugin Depl Uses Thalamus
+            image-name: "naira-plugin-depl-uses-thalamus"
+            dockerfile: "plugins/cmd/depl_uses_thalamus/Dockerfile"
+            context: "."
     permissions:
       contents: read
       packages: write
