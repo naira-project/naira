@@ -501,6 +501,116 @@ jobs:
       release-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
+  
+  container-publish-plugin-bedrock:
+    name: Publish · Plugin Bedrock
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: "naira-plugin-bedrock"
+      dockerfile: "plugins/cmd/bedrock/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  sbom-plugin-bedrock:
+    name: SBOM · Plugin Bedrock
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    needs: [release-please, container-publish-plugin-bedrock]
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: ${{ needs.container-publish-plugin-bedrock.outputs.image-name }}
+      image-digest: ${{ needs.container-publish-plugin-bedrock.outputs.image-digest }}
+      release-tag: ${{ needs.release-please.outputs.target_tag }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  container-publish-plugin-openai-api-models:
+    name: Publish · Plugin OpenAI API Models
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    needs: release-please
+    # Only run if the release-please job successfully output a tag
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: "naira-plugin-openai-api-models"
+      dockerfile: "plugins/cmd/openai_api_models/Dockerfile"
+      context: "."
+      platforms: "linux/amd64,linux/arm64"
+      image-tag: ${{ needs.release-please.outputs.target_tag }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  sbom-plugin-openai-api-models:
+    name: SBOM · Plugin OpenAI API Models
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    needs: [release-please, container-publish-plugin-openai-api-models]
+    if: needs.release-please.outputs.target_tag != ''
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: ${{ needs.container-publish-plugin-openai-api-models.outputs.image-name }}
+      image-digest: ${{ needs.container-publish-plugin-openai-api-models.outputs.image-digest }}
+      release-tag: ${{ needs.release-please.outputs.target_tag }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── 5. Helm chart ──────────────────────────────────────────────────────────
+  # Packaged from the release tag and pushed as an OCI artifact. The chart
+  # version is the release version. appVersion is the image tag (with the "v"),
+  # so the chart's default image tag exists in the registry: the build workflow
+  # only adds the plain semver tag on git tag refs, and this one builds from main.
+  chart-publish:
+    name: Publish · Helm Chart
+    permissions:
+      contents: read
+      packages: write
+    needs: release-please
+    if: needs.release-please.outputs.target_tag != ''
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.release-please.outputs.target_tag }}
+      CHART_REGISTRY: oci://ghcr.io/naira-project/charts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.target_tag }}
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.0
+      - name: Log in to ghcr.io
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$REGISTRY_PASSWORD" | helm registry login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - name: Package and push
+        run: |
+          helm package deploy/charts/naira --version "${TAG#v}" --app-version "$TAG"
+          helm push "naira-${TAG#v}.tgz" "$CHART_REGISTRY"
+      - name: Verify the pushed chart
+        run: helm show chart "${CHART_REGISTRY}/naira" --version "${TAG#v}" | grep -E '^(version|appVersion):'
 
   # ── 5. Gate: fail the run loudly if any image/SBOM didn't publish ─────────
   # release-please already created the tag + GitHub Release by this point, so
@@ -510,6 +620,7 @@ jobs:
     name: All Images Published
     needs:
       - release-please
+      - chart-publish
       - container-publish-catalog
       - sbom-catalog
       - container-publish-ui
@@ -520,6 +631,8 @@ jobs:
       - sbom-plugin-mlflow
       - container-publish-plugin-litellm
       - sbom-plugin-litellm
+      - container-publish-plugin-bedrock
+      - sbom-plugin-bedrock
       - container-publish-plugin-depl-calls-svc
       - sbom-plugin-depl-calls-svc
       - container-publish-plugin-fluxcd
@@ -532,6 +645,8 @@ jobs:
       - sbom-plugin-mcp-servers
       - container-publish-plugin-depl-uses-litellm
       - sbom-plugin-depl-uses-litellm
+      - container-publish-plugin-openai-api-models
+      - sbom-plugin-openai-api-models
     if: always() && needs.release-please.outputs.target_tag != ''
     runs-on: ubuntu-latest
     steps:
@@ -545,4 +660,4 @@ jobs:
             echo "$FAILED" | while read -r line; do echo "::error::  $line"; done
             exit 1
           fi
-          echo "All images and SBOMs published for ${{ needs.release-please.outputs.target_tag }}."
+          echo "All images, SBOMs and the chart published for ${{ needs.release-please.outputs.target_tag }}."

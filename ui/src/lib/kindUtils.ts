@@ -19,11 +19,22 @@ export function parsePath(path: string): { name: string; namespace?: string } {
 }
 
 /**
- * Label for the "second segment" column produced by `parsePath`, tailored per kind.
+ * Human-readable name for a node. The last path segment is the short name for
+ * most kinds, but an inference endpoint's last segment is an opaque deployment
+ * ID (litellm) or a model ID, so its `model_name` property is preferred.
+ */
+export function displayName(kind: string, path: string, props?: Record<string, unknown>): string {
+  if (kind === 'inference_endpoint') {
+    const modelName = props?.model_name;
+    if (typeof modelName === 'string' && modelName !== '') return modelName;
+  }
+  return parsePath(path).name;
+}
+
+/**
+ * Label for the "second-to-last segment" column produced by `parsePath`, tailored per kind.
  * That segment is a real Kubernetes namespace for kinds sourced from cluster objects
- * (deployment, service, flux resources, litellm applications), but for kinds sourced
- * from external systems (model, dataset, git_repository) it's actually the owning
- * plugin/system or provider org — calling it "namespace" there is misleading.
+ * (deployment, service, flux resources, litellm applications).
  */
 const NAMESPACE_COLUMN_LABELS: Record<string, string> = {
   application: 'namespace',
@@ -31,13 +42,30 @@ const NAMESPACE_COLUMN_LABELS: Record<string, string> = {
   service: 'namespace',
   'Kustomization.fluxcd': 'namespace',
   'HelmChart.fluxcd': 'namespace',
-  model: 'source',
-  dataset: 'source',
-  git_repository: 'source',
 };
 
 export function namespaceColumnLabel(kind: string): string {
   return NAMESPACE_COLUMN_LABELS[kind] ?? 'group';
+}
+
+/**
+ * Kinds sourced from external systems. For these, the path segment before the name is
+ * just a configurable plugin path prefix, so the table shows the plugins that claimed
+ * the node (see `nodePlugins`) instead of a path-derived column.
+ */
+const PLUGIN_COLUMN_KINDS = new Set(['model', 'dataset', 'git_repository', 'inference_endpoint']);
+
+export function isPluginSourcedKind(kind: string): boolean {
+  return PLUGIN_COLUMN_KINDS.has(kind);
+}
+
+/** Names of the plugins that claimed `node`, deduplicated and sorted. */
+export function nodePlugins(node: NodeResource): string[] {
+  const plugins = new Set<string>();
+  for (const claim of node.pluginClaims ?? []) {
+    if (claim.plugin) plugins.add(claim.plugin);
+  }
+  return Array.from(plugins).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 /**

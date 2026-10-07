@@ -28,9 +28,15 @@ vars:
     - name: tech-radar
       dir: '{{.PLUGINS_BASE}}/tech_radar'
       image: tech-radar:local
+    - name: bedrock
+      dir: '{{.PLUGINS_BASE}}/bedrock'
+      image: bedrock:local
     - name: github
       dir: '{{.PLUGINS_BASE}}/github'
       image: github:local
+    - name: openai-api-models
+      dir: '{{.PLUGINS_BASE}}/openai_api_models'
+      image: openai-api-models:local
     - name: langfuse
       dir: '{{.PLUGINS_BASE}}/langfuse'
       image: langfuse:local

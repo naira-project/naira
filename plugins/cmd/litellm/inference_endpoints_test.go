@@ -1,0 +1,361 @@
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// noDailyActivity is a /user/daily/activity response with no recorded
+// requests for any model.
+const noDailyActivity = `{"results": []}`
+
+// startLiteLLMModelInfo serves /model/info, /health and /user/daily/activity
+// with the given raw JSON bodies, mirroring the endpoints
+// listInferenceEndpoints depends on. An empty health makes /health respond
+// with 503 Service Unavailable.
+func startLiteLLMModelInfo(t *testing.T, modelInfo, health, dailyActivity string) string {
+	t.Helper()
+
+	serveJSON := func(body string) http.HandlerFunc {
+		return func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, body)
+		}
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/model/info", serveJSON(modelInfo))
+	if health == "" {
+		mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "unavailable", http.StatusServiceUnavailable)
+		})
+	} else {
+		mux.HandleFunc("/health", serveJSON(health))
+	}
+	mux.HandleFunc("/user/daily/activity", serveJSON(dailyActivity))
+
+	httpServer := httptest.NewServer(mux)
+	t.Cleanup(httpServer.Close)
+
+	return httpServer.URL
+}
+
+func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": [
+			{
+			"model_name": "idp-claude-sonnet",
+			"litellm_params": {
+				"model": "anthropic/claude-3-5-sonnet-latest",
+				"api_base": "https://api.anthropic.com",
+				"region_name": "us-east-1"
+			},
+			"model_info": {
+				"id": "model-1",
+				"mode": "chat",
+				"max_tokens": 8192,
+				"input_cost_per_token": 0.000003,
+				"output_cost_per_token": 0.000015
+			}
+			}
+		]
+	}`
+	const healthResponse = `{
+		"healthy_endpoints": [
+			{
+			"model": "anthropic/claude-3-5-sonnet-latest",
+			"api_base": "https://api.anthropic.com"
+			}
+		]
+	}`
+	const dailyActivityResponse = `{
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-claude-sonnet": {"metrics": {"api_requests": 7}}
+				}
+			}
+			}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, dailyActivityResponse)
+
+	nodes, relations, err := testPlugin(t, baseURL).
+		listInferenceEndpoints(t.Context(), map[string]string{"idp-claude-sonnet": "team-a"})
+	require.NoError(t, err)
+
+	// The deployment's model_info.id is appended to the path as its own segment;
+	// the id disambiguates deployments serving the same model_name.
+	assert.Equal(t, []pluginapi.NodeClaim{
+		{
+			ID: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-claude-sonnet/model-1",
+			},
+			Properties: pluginapi.PropertyMap{
+				"id":                             "model-1",
+				"endpoint_type":                  "external",
+				"provider":                       "anthropic",
+				"status":                         "healthy",
+				"api_base":                       "https://api.anthropic.com",
+				"region_name":                    "us-east-1",
+				"model_name":                     "idp-claude-sonnet",
+				"owned_by":                       "team-a",
+				"lifecycle_status":               "active",
+				"mode":                           "chat",
+				"max_tokens":                     "8192",
+				"input_cost_per_million_tokens":  "3.0000",
+				"output_cost_per_million_tokens": "15.0000",
+				"invocations_total":              "7",
+			},
+		},
+	}, nodes)
+
+	assert.Equal(t, []pluginapi.RelationClaim{
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-claude-sonnet/model-1",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-claude-sonnet",
+			},
+		},
+	}, relations)
+}
+
+func TestListInferenceEndpointsEmitsOneNodePerDeploymentOfSameModel(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": [
+			{
+			"model_name": "idp-gpt-4o",
+			"litellm_params": {
+				"model": "azure/gpt-4o",
+				"api_base": "https://idp.openai.azure.com",
+				"region_name": "eastus"
+			},
+			"model_info": {"id": "deployment-azure"}
+			},
+			{
+			"model_name": "idp-gpt-4o",
+			"litellm_params": {
+				"model": "openai/gpt-4o",
+				"api_base": "https://api.openai.com"
+			},
+			"model_info": {"id": "deployment-openai"}
+			}
+		]
+	}`
+	const healthResponse = `{
+		"healthy_endpoints": [
+			{
+			"model": "azure/gpt-4o",
+			"api_base": "https://idp.openai.azure.com"
+			}
+		],
+		"unhealthy_endpoints": [
+			{
+			"model": "openai/gpt-4o",
+			"api_base": "https://api.openai.com"
+			}
+		]
+	}`
+	const dailyActivityResponse = `{
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-gpt-4o": {"metrics": {"api_requests": 3}}
+				}
+			}
+			}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, dailyActivityResponse)
+
+	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err)
+
+	endpoints := nodePaths(nodes, "inference_endpoint")
+	require.Len(t, endpoints, 2)
+	assert.Equal(t, "azure", endpoints["litellm/idp-gpt-4o/deployment-azure"]["provider"])
+	assert.Equal(t, "healthy", endpoints["litellm/idp-gpt-4o/deployment-azure"]["status"])
+	assert.Equal(t, "openai", endpoints["litellm/idp-gpt-4o/deployment-openai"]["provider"])
+	assert.Equal(t, "unhealthy", endpoints["litellm/idp-gpt-4o/deployment-openai"]["status"])
+
+	assert.ElementsMatch(t, []pluginapi.RelationClaim{
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-gpt-4o/deployment-azure",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-gpt-4o",
+			},
+		},
+		{
+			Kind: "serves_model",
+			From: pluginapi.NodeID{
+				Kind: "inference_endpoint",
+				Path: "litellm/idp-gpt-4o/deployment-openai",
+			},
+			To: pluginapi.NodeID{
+				Kind: "model",
+				Path: "litellm/idp-gpt-4o",
+			},
+		},
+	}, relations, "both deployments serve the same model")
+}
+
+func TestListInferenceEndpointsSkipsModelsWithNoInvocations(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": 
+			[
+				{"model_name": "idp-unused-model"}
+			]
+	}`
+	const healthResponse = `{
+		"healthy_endpoints": [
+			{"model": "idp-unused-model"}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, healthResponse, noDailyActivity)
+
+	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, nodes, "/model/info lists every configured deployment, not just ones actually receiving traffic")
+	assert.Empty(t, relations)
+}
+
+func TestListInferenceEndpointsSkipsEntryWithNoModelName(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": [
+			{"model_name": "  "}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, `{}`, noDailyActivity)
+
+	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, nodes)
+	assert.Empty(t, relations)
+}
+
+func TestListInferenceEndpointsSkipsEntryWithNoID(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": [
+			{"model_name": "idp-model", "model_info": {"id": "  "}},
+			{"model_name": "idp-model"}
+		]
+	}`
+	const dailyActivityResponse = `{
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-model": {"metrics": {"api_requests": 1}}
+				}
+			}
+			}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, `{}`, dailyActivityResponse)
+
+	nodes, relations, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err)
+	assert.Empty(t, nodes, "an endpoint with no model_info.id would collide with others serving the same model_name")
+	assert.Empty(t, relations)
+}
+
+func TestListInferenceEndpointsMarksStatusUnknownWhenHealthUnreachable(t *testing.T) {
+	const modelInfoResponse = `{
+		"data": [
+			{"model_name": "idp-model", "model_info": {"id": "model-1"}}
+		]
+	}`
+	const dailyActivityResponse = `{
+		"results": [
+			{
+			"breakdown": {
+				"model_groups": {
+				"idp-model": {"metrics": {"api_requests": 1}}
+				}
+			}
+			}
+		]
+	}`
+	baseURL := startLiteLLMModelInfo(t, modelInfoResponse, "", dailyActivityResponse)
+
+	nodes, _, err := testPlugin(t, baseURL).listInferenceEndpoints(t.Context(), nil)
+	require.NoError(t, err, "an unreachable health endpoint should not fail the whole sync")
+
+	endpoints := nodePaths(nodes, "inference_endpoint")
+	require.Contains(t, endpoints, "litellm/idp-model/model-1")
+	assert.Equal(t, "unknown", endpoints["litellm/idp-model/model-1"]["status"])
+}
+
+func TestListInferenceEndpointsReportsUnreachableModelInfo(t *testing.T) {
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	t.Cleanup(httpServer.Close)
+
+	nodes, relations, err := testPlugin(t, httpServer.URL).listInferenceEndpoints(t.Context(), nil)
+	require.Error(t, err)
+	assert.Empty(t, nodes)
+	assert.Empty(t, relations)
+}
+
+func TestModelInfoLiteLLMEndpointType(t *testing.T) {
+	tests := []struct {
+		name    string
+		apiBase string
+		want    string
+	}{
+		{"empty api_base is external", "", "external"},
+		{"unparsable api_base is external", "://bad-url", "external"},
+		{"localhost is internal", "http://localhost:4000", "internal"},
+		{"cluster-local .svc host is internal", "http://litellm.litellm.svc", "internal"},
+		{"cluster-local .svc.cluster.local host is internal", "http://litellm.litellm.svc.cluster.local:4000", "internal"},
+		{"private IP is internal", "http://10.0.0.5:8080", "internal"},
+		{"loopback IP is internal", "http://127.0.0.1:8080", "internal"},
+		{"public host is external", "https://api.anthropic.com", "external"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := litellmParams{modelAndAPIBase: modelAndAPIBase{APIBase: tt.apiBase}}
+			assert.Equal(t, tt.want, m.endpointType())
+		})
+	}
+}
+
+func TestModelInfoLiteLLMProvider(t *testing.T) {
+	tests := []struct {
+		name              string
+		customLLMProvider string
+		model             string
+		want              string
+	}{
+		{"custom_llm_provider takes precedence", "anthropic", "openai/gpt-4o-mini", "anthropic"},
+		{"derived from the model prefix", "", "anthropic/claude-3-5-sonnet-latest", "anthropic"},
+		{"no provider when model has no prefix", "", "gpt-4o-mini", ""},
+		{"empty when neither is set", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := litellmParams{CustomLLMProvider: tt.customLLMProvider, modelAndAPIBase: modelAndAPIBase{Model: tt.model}}
+			assert.Equal(t, tt.want, m.provider())
+		})
+	}
+}

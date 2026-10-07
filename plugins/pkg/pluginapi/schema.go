@@ -13,6 +13,7 @@ const (
 	NodeKindOwner             = "owner"
 	NodeKindMCPServer         = "mcp_server"
 	NodeKindMCPTool           = "mcp_tool"
+	NodeKindInferenceEndpoint = "inference_endpoint"
 	NodeKindTechRadar         = "tech_radar"
 	NodeKindTechRadarEntry    = "tech_radar_entry"
 	NodeKindLangfuseProject   = "langfuse_project"
@@ -30,5 +31,6 @@ const (
 	RelationKindOwnedBy      = "owned_by"
 	RelationKindExposes      = "exposes"
 	RelationKindBuiltFrom    = "built_from"
+	RelationKindServesModel  = "serves_model"
 	RelationKindObservedBy   = "observed_by"
 )
