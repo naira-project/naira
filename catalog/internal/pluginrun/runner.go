@@ -124,9 +124,9 @@ func (r *Runner) RunPluginAsync(ctx context.Context, pluginName string) (operati
 // RunAllPluginsAsync starts an asynchronous run for every registered plugin
 // and returns the operations that track their progress.
 //
-// NOTE: The ctx parameter is accepted for signature consistency but is not used.
-// Plugin runs use the runner's appCtx and live beyond the lifetime of individual
-// HTTP requests. Canceling ctx will not interrupt in-progress plugin executions.
+// The caller-provided context is used during admission of each individual run.
+// Once a run is accepted, plugin execution uses the runner's appCtx and lives
+// beyond the lifetime of the caller's context.
 func (r *Runner) RunAllPluginsAsync(ctx context.Context) []operations.Operation {
 	pluginNames := make([]string, 0, len(r.plugins))
 	for name := range r.plugins {

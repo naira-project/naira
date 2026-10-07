@@ -25,12 +25,12 @@ type Scheduler struct {
 
 // NewConfiguredScheduler initializes configured plugin schedules and starts the scheduler.
 // The caller must call Scheduler.Stop when the scheduler is no longer needed.
-func NewConfiguredScheduler(configs catalog.PluginConfigsByName, runFunc RunPluginFunc, logger *log.Logger) (*Scheduler, error) {
+func NewConfiguredScheduler(ctx context.Context, configs catalog.PluginConfigsByName, runFunc RunPluginFunc, logger *log.Logger) (*Scheduler, error) {
 	sch := &Scheduler{
 		cron: cron.New(),
 	}
 
-	if err := sch.registerSchedules(configs, runFunc, logger); err != nil {
+	if err := sch.registerSchedules(ctx, configs, runFunc, logger); err != nil {
 		return nil, fmt.Errorf("registering schedules: %w", err)
 	}
 
@@ -38,7 +38,7 @@ func NewConfiguredScheduler(configs catalog.PluginConfigsByName, runFunc RunPlug
 	return sch, nil
 }
 
-func (s *Scheduler) registerSchedules(configs catalog.PluginConfigsByName, runFunc RunPluginFunc, logger *log.Logger) error {
+func (s *Scheduler) registerSchedules(ctx context.Context, configs catalog.PluginConfigsByName, runFunc RunPluginFunc, logger *log.Logger) error {
 	for plugin, config := range configs {
 		expr := config.Schedule
 		if plugin == "" {
@@ -49,7 +49,7 @@ func (s *Scheduler) registerSchedules(configs catalog.PluginConfigsByName, runFu
 		}
 
 		_, err := s.cron.AddFunc(expr, func() {
-			if _, err := runFunc(context.Background(), plugin); err != nil {
+			if _, err := runFunc(ctx, plugin); err != nil {
 				if logger != nil {
 					logger.Printf("scheduled run for plugin %q was not started: %v", plugin, err)
 				}

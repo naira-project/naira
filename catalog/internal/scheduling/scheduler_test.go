@@ -58,7 +58,7 @@ func TestNewConfiguredScheduler_Initialization(t *testing.T) {
 			for plugin, schedule := range tt.schedules {
 				config[plugin] = catalog.PluginConfig{Address: "test", Schedule: schedule}
 			}
-			scheduler, err := NewConfiguredScheduler(config, noopRunFunc, log.New(io.Discard, "", 0))
+			scheduler, err := NewConfiguredScheduler(context.Background(), config, noopRunFunc, log.New(io.Discard, "", 0))
 
 			if tt.wantErr {
 				require.Error(t, err)
@@ -89,6 +89,7 @@ func TestScheduler_Execution(t *testing.T) {
 	}
 
 	scheduler, err := NewConfiguredScheduler(
+		context.Background(),
 		catalog.PluginConfigsByName{"github": {Address: "test", Schedule: "* * * * *"}},
 		runFunc,
 		log.New(io.Discard, "", 0),
