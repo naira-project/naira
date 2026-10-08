@@ -91,6 +91,9 @@ func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]
 	result, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (operations.Operation, error) {
 		return scanOperation(row)
 	})
+	if err != nil {
+		return nil, fmt.Errorf("collecting operations: %w", err)
+	}
 
 	return result, nil
 }
@@ -135,22 +138,36 @@ func updateOperationState(
 		errorMessage = &statusErr.Message
 	}
 
-	query := `UPDATE operations SET state = $1, error_message = $2`
-	args := []any{state, errorMessage}
-	if state == operations.StateRunning {
-		query += fmt.Sprintf(", start_time = COALESCE(start_time, $%d)", len(args)+1)
-		args = append(args, now)
+	var (
+		query string
+		args  []any
+	)
+	switch state {
+	case operations.StateRunning:
+		query = `
+            UPDATE operations
+            SET state = $1, error_message = $2, start_time = COALESCE(start_time, $3)
+            WHERE name = $4`
+		args = []any{state, errorMessage, now, name}
+
+	case operations.StateSucceeded:
+		query = `
+            UPDATE operations
+            SET state = $1, error_message = $2, end_time = $3,
+                nodes_upserted = $4, relations_upserted = $5
+            WHERE name = $6`
+		args = []any{state, errorMessage, now, nodesUpserted, relationsUpserted, name}
+
+	case operations.StateFailed:
+		query = `
+            UPDATE operations
+            SET state = $1, error_message = $2, end_time = $3
+            WHERE name = $4`
+		args = []any{state, errorMessage, now, name}
+
+	default:
+		return fmt.Errorf("operations state %q not handled for operation %q", state, name)
 	}
-	if state == operations.StateSucceeded || state == operations.StateFailed {
-		query += fmt.Sprintf(", end_time = $%d", len(args)+1)
-		args = append(args, now)
-	}
-	if state == operations.StateSucceeded {
-		query += fmt.Sprintf(", nodes_upserted = $%d, relations_upserted = $%d", len(args)+1, len(args)+2)
-		args = append(args, nodesUpserted, relationsUpserted)
-	}
-	query += fmt.Sprintf(" WHERE name = $%d", len(args)+1)
-	args = append(args, name)
 
 	tag, err := q.Exec(ctx, query, args...)
 	if err != nil {
