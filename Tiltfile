@@ -1,10 +1,3 @@
-# Local kind environment: deploy/charts/naira plus its test dependencies.
-#
-#   tilt up                        # create the cluster, build, deploy, port-forward
-#   tilt down                      # remove what tilt deployed
-#   tilt trigger cluster-delete    # delete the kind cluster (while tilt is up),
-#                                  #   or: kind delete cluster --name naira-idp
-#
 # Dependencies (Keycloak, LiteLLM, MLflow, llama.cpp, MCP mock) come from the
 # test-dependencies chart in a local checkout of naira-project/test-dependencies,
 # by default next to this repo:
