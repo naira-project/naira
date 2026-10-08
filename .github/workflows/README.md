@@ -18,7 +18,7 @@ This repository uses [naira-github-workflows](https://github.com/naira-project/n
 Ensures code quality and buildability. Gatekeeper: `All Checks Passed`.
 
 * **`go-test`**: Runs tests in `catalog/` (Go 1.26, race detector enabled).
-* **`container-build-catalog` / `ui**`: Multi-arch build checks (`linux/amd64`, `linux/arm64`)—push disabled.
+* **`container-build-catalog` / `ui**`: Multi-arch build checks (`linux/amd64` + `linux/arm64`, each on a native runner, no QEMU)—push disabled.
 * **`all-checks`**: Required status check; aggregates results from above jobs.
 
 ---
