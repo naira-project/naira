@@ -63,10 +63,6 @@ class StaticDatasourceApi implements DatasourceApi {
   listGlobalDatasources(): Promise<GlobalDatasourceResource[]> {
     return Promise.resolve([prometheusDatasource]);
   }
-
-  buildProxyUrl(): string {
-    return '/prometheus';
-  }
 }
 const datasourceApi = new StaticDatasourceApi();
 
