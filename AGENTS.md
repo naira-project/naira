@@ -42,9 +42,7 @@ Naira doesn't implement directly features e.g. for inferencing, AI Gateways and 
   // elsewhere, so we rename it here to avoid a collision.
   propertyKeyEndpointStatus = "status"
   ```
-- Don't leave dead code: unused consts/vars/fields, parameters never read, boolean-plus-error
-  return pairs where a sentinel error (`var ErrNotFound = errors.New(...)`) would remove the need
-  for the bool. If a reviewer asks "is this used?", that's a sign it should already have been removed.
+- Don't leave dead code: unused consts/vars/fields/functions, parameters never read.
 - Use sentinel errors instead of returning extra boolean values to indicate special failure cases.
   For example, instead of returning `(*Resource, bool, error)` to indicate whether a resource was found,
   return `(*Resource, error)` and define a sentinel error `var ErrNotFound = errors.New("resource not found")`.
@@ -99,8 +97,7 @@ Naira doesn't implement directly features e.g. for inferencing, AI Gateways and 
   (e.g. PR validation that only builds, doesn't push). Grant the minimum permissions the job needs.
 - Avoid hardcoding the list of plugins/images in CI workflows — derive it from
   `plugins/cmd/*/` (or equivalent) so adding a plugin doesn't require also remembering to edit
-  a workflow file. A stale hardcoded list has already caused a real bug: parallel SBOM upload
-  jobs using the same output filename silently overwrote each other's release assets.
+  a workflow file.
 - When a script grows past a few lines embedded in YAML, move it to its own `.sh` file so
   `shellcheck` can lint it, and keep bash readable (prefer multi-line over dense one-liners —
   obfuscated shell is itself a supply-chain risk, cf. the xz backdoor).
@@ -110,10 +107,6 @@ Naira doesn't implement directly features e.g. for inferencing, AI Gateways and 
   `<div>`/`<button>` markup.
 - Abstract API/data-fetching calls into dedicated hooks rather than inlining fetch logic in
   page components.
-- Remove shadcn-CLI-generated boilerplate you don't end up using (unused variants, unused
-  imports like `Geist` font, unused `combobox.tsx`) rather than leaving it as dead code.
-- Run the linter (`biome`) locally before pushing; don't rely on CI to catch
-  `useExhaustiveDependencies` and similar issues.
 
 ## Plugin Design Principles
 - Design a plugin's `NodeID`/`Path` structure from the semantics of the system it scans, not by
