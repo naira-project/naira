@@ -1,13 +1,11 @@
 # ── Loki values for local kind dev environment ────────────────────────────────
 # Single-binary Loki on the local filesystem: one pod, no object storage, no
 # caches. Alloy (alloy-values.yaml) pushes pod logs here, and the Grafana that
-# ships with kube-prometheus-stack queries it through the "loki" datasource
-# (see grafana.additionalDataSources in prometheus-values.yaml).
+# ships with kube-prometheus-stack queries it through the "loki" datasource.
 
 deploymentMode: SingleBinary
 
 loki:
-  # Single tenant; Grafana and Alloy talk to Loki without an X-Scope-OrgID.
   auth_enabled: false
   commonConfig:
     replication_factor: 1
@@ -29,8 +27,6 @@ loki:
     delete_request_store: filesystem
   limits_config:
     retention_period: 72h
-  pattern_ingester:
-    enabled: false
 
 singleBinary:
   replicas: 1
@@ -63,6 +59,4 @@ resultsCache:
 lokiCanary:
   enabled: false
 test:
-  enabled: false
-minio:
   enabled: false
