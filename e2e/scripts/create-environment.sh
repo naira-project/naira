@@ -129,13 +129,12 @@ component_wait_timeout() {
 #
 # catalog and the plugins need the repo root as build context (their
 # Dockerfiles COPY from multiple repo-root-relative paths, e.g.
-# plugins/pkg/pluginapi/) — mirrors deploy/dev/stacks/core/tasks/docker.yml.
+# plugins/pkg/pluginapi/) — as in the root Tiltfile.
 # Each plugin Dockerfile defaults its PLUGIN build arg to its own directory
 # name, so no --build-arg is needed here.
 #
 # ui, portal, and chatbot1 are self-contained frontend/app projects: their
-# own directory *is* the build context (matches
-# deploy/dev/stacks/core/tasks/{portal,ui}.yml exactly — a repo-root context
+# own directory *is* the build context (as in the root Tiltfile — a repo-root context
 # breaks their `COPY frontend/ ./`-style paths).
 # ---------------------------------------------------------------------------
 build_and_load() {
