@@ -1,5 +1,4 @@
 import type {
-  DashboardResource,
   DatasourceApi,
   DatasourceResource,
   GlobalDatasourceResource,
@@ -29,29 +28,32 @@ import { type NodeResource, nodeProps } from '../lib/catalogApi';
 import { MetricPanel } from './MetricPanel';
 import { useRelatedNodes } from './RelatedNodes';
 
-const fakeDatasource: GlobalDatasourceResource = {
+// Perses resolves a query's datasource through DatasourceStoreProvider. Naira has
+// no Perses server, so this serves a single default Prometheus datasource that
+// every panel falls back to (the queries don't name one).
+const prometheusDatasource: GlobalDatasourceResource = {
   kind: 'GlobalDatasource',
-  metadata: { name: 'hello' },
+  metadata: { name: 'prometheus' },
   spec: {
     default: true,
     plugin: {
       kind: 'PrometheusDatasource',
       spec: {
         // Same-origin path proxied to the in-cluster Prometheus by nginx
-        // (see ui/nginx.conf.template's /prometheus/ location block).
+        // (see nginx.conf.template's /prometheus/ location block).
         directUrl: '/prometheus',
       },
     },
   },
 };
 
-class DatasourceApiImpl implements DatasourceApi {
+class StaticDatasourceApi implements DatasourceApi {
   getDatasource(): Promise<DatasourceResource | undefined> {
     return Promise.resolve(undefined);
   }
 
   getGlobalDatasource(): Promise<GlobalDatasourceResource | undefined> {
-    return Promise.resolve(fakeDatasource);
+    return Promise.resolve(prometheusDatasource);
   }
 
   listDatasources(): Promise<DatasourceResource[]> {
@@ -59,23 +61,18 @@ class DatasourceApiImpl implements DatasourceApi {
   }
 
   listGlobalDatasources(): Promise<GlobalDatasourceResource[]> {
-    return Promise.resolve([fakeDatasource]);
+    return Promise.resolve([prometheusDatasource]);
   }
 
   buildProxyUrl(): string {
     return '/prometheus';
   }
 }
-export const fakeDatasourceApi = new DatasourceApiImpl();
-export const fakeDashboard = {
-  kind: 'Dashboard',
-  metadata: { name: 'litellm-endpoint-metrics' },
-  spec: {},
-} as DashboardResource;
+const datasourceApi = new StaticDatasourceApi();
 
 // dynamicImportPluginLoader's registry indexes each loaded module by the exact
 // compound key string (kind:name:registry:version), not by the module's plain
-// named exports (see @perses-dev/plugin-system's mock-plugin-registry.ts).
+// named exports.
 // This rebuilds that keyed shape from a plain `import * as` namespace, relying
 // on each plugin's named export matching its declared spec.name (true for all
 // @perses-dev/* plugin packages).
@@ -195,35 +192,36 @@ function ModelDashboard({ node }: { node: NodeResource }) {
   return <DashboardPanels panels={panelsForNode(node)} />;
 }
 
+const chartsTheme = generateChartsTheme(getTheme('light'), {});
+
+const pluginLoader = dynamicImportPluginLoader([
+  {
+    resource: prometheusPlugin.getPluginModule(),
+    importPlugin: () =>
+      Promise.resolve(toKeyedPluginModule(prometheusPlugin.getPluginModule(), prometheusPlugin)),
+  },
+  {
+    resource: timeseriesChartPlugin.getPluginModule(),
+    importPlugin: () =>
+      Promise.resolve(
+        toKeyedPluginModule(timeseriesChartPlugin.getPluginModule(), timeseriesChartPlugin),
+      ),
+  },
+]);
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 0,
+    },
+  },
+});
+
 function DashboardPanels({ panels }: { panels: PanelConfig[] }) {
   const [timeRange, setTimeRange] = React.useState<TimeRangeValue>({ pastDuration: '6h' });
   const [refreshInterval, setRefreshInterval] = React.useState<DurationString>('0s');
 
-  const muiTheme = getTheme('light');
-  const chartsTheme = generateChartsTheme(muiTheme, {});
-  const pluginLoader = dynamicImportPluginLoader([
-    {
-      resource: prometheusPlugin.getPluginModule(),
-      importPlugin: () =>
-        Promise.resolve(toKeyedPluginModule(prometheusPlugin.getPluginModule(), prometheusPlugin)),
-    },
-    {
-      resource: timeseriesChartPlugin.getPluginModule(),
-      importPlugin: () =>
-        Promise.resolve(
-          toKeyedPluginModule(timeseriesChartPlugin.getPluginModule(), timeseriesChartPlugin),
-        ),
-    },
-  ]);
-
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        refetchOnWindowFocus: false,
-        retry: 0,
-      },
-    },
-  });
   return (
     <ChartsProvider chartsTheme={chartsTheme}>
       <SnackbarProvider
@@ -245,7 +243,7 @@ function DashboardPanels({ panels }: { panels: PanelConfig[] }) {
               setRefreshInterval={setRefreshInterval}
             >
               <VariableProvider>
-                <DatasourceStoreProvider datasourceApi={fakeDatasourceApi}>
+                <DatasourceStoreProvider datasourceApi={datasourceApi}>
                   {panels.map(({ title, query }) => (
                     <MetricPanel key={title} title={title} query={query} />
                   ))}
