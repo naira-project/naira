@@ -1,0 +1,74 @@
+# SPDX-FileCopyrightText: 2026 Naira Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Chains an image build/push with its SBOM generation. Kept as its own
+# workflow (rather than matrixed inline) because the two steps form a
+# produce/consume pair: the SBOM job needs the exact image-name/image-digest
+# that its own build produced. A matrix job's outputs only expose one
+# arbitrary instance's values to dependents, so matrixing build+sbom
+# directly in the caller would risk pairing a plugin's SBOM with another
+# plugin's digest. Called once per image from a matrix in the caller
+# instead, so each call gets its own correctly-scoped build -> sbom chain.
+
+name: Reusable · Publish Image & SBOM
+
+on:
+  workflow_call:
+    inputs:
+      image-name:
+        description: "Container image name (e.g. naira-catalog)"
+        type: string
+        required: true
+      dockerfile:
+        description: "Path to the Dockerfile"
+        type: string
+        required: true
+      context:
+        description: "Docker build context path"
+        type: string
+        required: true
+      platforms:
+        description: "Comma-separated list of target platforms"
+        type: string
+        default: "linux/amd64,linux/arm64"
+      release-tag:
+        description: "GitHub Release tag to apply to the image and attach SBOMs to (e.g. v0.14.0)"
+        type: string
+        required: true
+    secrets:
+      registry-password:
+        required: true
+
+jobs:
+  build:
+    name: Publish
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: ${{ inputs.image-name }}
+      dockerfile: ${{ inputs.dockerfile }}
+      context: ${{ inputs.context }}
+      platforms: ${{ inputs.platforms }}
+      image-tag: ${{ inputs.release-tag }}
+    secrets:
+      registry-password: ${{ secrets.registry-password }}
+
+  sbom:
+    name: SBOM
+    needs: build
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-sbom-generate.yml@adca167d4c02fd306aa46599bd87e495ea936ab4 # main
+    with:
+      image-name: ${{ needs.build.outputs.image-name }}
+      image-digest: ${{ needs.build.outputs.image-digest }}
+      release-tag: ${{ inputs.release-tag }}
+    secrets:
+      registry-password: ${{ secrets.registry-password }}
