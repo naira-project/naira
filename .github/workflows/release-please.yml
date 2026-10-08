@@ -95,6 +95,12 @@ jobs:
   # Add a new image by adding one entry below; no other copy-pasting needed.
   publish:
     name: Publish · ${{ matrix.name }}
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     needs: release-please
     if: needs.release-please.outputs.target_tag != ''
     strategy:
