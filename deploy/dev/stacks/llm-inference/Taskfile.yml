@@ -16,12 +16,12 @@ includes:
   vllm:
     taskfile: ./tasks/vllm.yml
     dir: .
-  logging:
-    taskfile: ./tasks/logging.yml
-    dir: .
   # Part of `deploy` when AWS credentials are exported, skipped otherwise.
   cloudwatch:
     taskfile: ./tasks/cloudwatch.yml
+    dir: .
+  logging:
+    taskfile: ./tasks/logging.yml
     dir: .
 
 tasks:

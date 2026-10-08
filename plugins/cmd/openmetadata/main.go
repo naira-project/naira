@@ -1,18 +1,17 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -173,24 +172,18 @@ func (p *Plugin) collectLineage(ctx context.Context, tables []tableItem, nodeByE
 }
 
 func (p *Plugin) fetchTableLineage(ctx context.Context, tableID, token string) ([]lineageEdge, error) {
-	endpoint, err := url.Parse(p.config.BaseURL + "/api/v1/lineage/table/" + url.PathEscape(tableID))
+	url, err := httpjson.BuildURL(p.config.BaseURL+"/api/v1/lineage/table/"+url.PathEscape(tableID), url.Values{
+		"upstreamDepth":   {"1"},
+		"downstreamDepth": {"1"},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("building API URL: %w", err)
 	}
 
-	query := endpoint.Query()
-	query.Set("upstreamDepth", "1")
-	query.Set("downstreamDepth", "1")
-	endpoint.RawQuery = query.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("building request: %w", err)
-	}
-	addAuthorization(req, token)
-
 	var payload lineageResponse
-	if err := p.doJSON(req, &payload); err != nil {
+	err = httpjson.Get(ctx, p.httpClient, url.String(), &payload,
+		httpjson.WithAuthorizationBearer(token))
+	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
@@ -203,25 +196,19 @@ func (p *Plugin) fetchTableLineage(ctx context.Context, tableID, token string) (
 
 // TODO: add pagination; tables beyond the first page are currently dropped.
 func (p *Plugin) fetchTables(ctx context.Context, token string) ([]tableItem, error) {
-	endpoint, err := url.Parse(p.config.BaseURL + "/api/v1/tables")
+	url, err := httpjson.BuildURL(p.config.BaseURL+"/api/v1/tables", url.Values{
+		"limit":   {"100"},
+		"fields":  {"columns,tags,owners"},
+		"include": {"non-deleted"},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("building API URL: %w", err)
 	}
 
-	query := endpoint.Query()
-	query.Set("limit", "100")
-	query.Set("fields", "columns,tags,owners")
-	query.Set("include", "non-deleted")
-	endpoint.RawQuery = query.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("building request: %w", err)
-	}
-	addAuthorization(req, token)
-
 	var payload tablesResponse
-	if err := p.doJSON(req, &payload); err != nil {
+	err = httpjson.Get(ctx, p.httpClient, url.String(), &payload,
+		httpjson.WithAuthorizationBearer(token))
+	if err != nil {
 		return nil, fmt.Errorf("executing request: %w", err)
 	}
 
@@ -242,25 +229,16 @@ func (p *Plugin) login(ctx context.Context) (string, error) {
 		return "", errors.New("both OPENMETADATA_ADMIN_EMAIL and OPENMETADATA_ADMIN_PASSWORD must be set, or neither")
 	}
 
-	body, err := json.Marshal(map[string]string{
+	endpoint := strings.TrimRight(p.config.BaseURL, "/") + "/api/v1/users/login"
+	reqBody := map[string]string{
 		"email":    email,
 		"password": base64.StdEncoding.EncodeToString([]byte(password)),
-	})
-	if err != nil {
-		return "", fmt.Errorf("encoding request: %w", err)
 	}
-
-	endpoint := strings.TrimRight(p.config.BaseURL, "/") + "/api/v1/users/login"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("building request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
 
 	var loginResponse struct {
 		AccessToken string `json:"accessToken"`
 	}
-	if err := p.doJSON(req, &loginResponse); err != nil {
+	if err := httpjson.Post(ctx, p.httpClient, endpoint, reqBody, &loginResponse); err != nil {
 		return "", fmt.Errorf("executing request: %w", err)
 	}
 
@@ -270,33 +248,6 @@ func (p *Plugin) login(ctx context.Context) (string, error) {
 	}
 
 	return token, nil
-}
-
-// doJSON sends req, treats any non-2xx status as an error (including a snippet
-// of the response body), and decodes a successful JSON response into out.
-func (p *Plugin) doJSON(req *http.Request, out any) error {
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("executing HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("got HTTP status %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("decoding response: %w", err)
-	}
-
-	return nil
-}
-
-func addAuthorization(req *http.Request, token string) {
-	if strings.TrimSpace(token) != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
 }
 
 func (p *Plugin) tableURL(fqn string) string {
