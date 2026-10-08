@@ -41,7 +41,7 @@ Built with and for the cloud-native ecosystem, Naira is designed to integrate cl
 
 ### Prerequisites
 
-This project requires several local tools: (for example `kind`, `task`,`go`).
+This project requires several local tools: (for example `kind`, `tilt`, `go`).
 
 **The Recommended Way (Using mise):**
 We use [mise](https://mise.jdx.dev/) to manage tools automatically. If you have `mise` installed and activated (`eval "$(mise activate zsh)"` - [more info](https://mise.jdx.dev/getting-started.html#activate-mise)), simply run:
@@ -55,19 +55,25 @@ If you prefer not to use mise, you can find the exact versions of all tools in t
 
 To spin up the full environment on your machine:
 
-1. **Deploy the platform** to a local kind cluster:
+1. **Clone the dependencies** next to this repo. Keycloak, LiteLLM, MLflow,
+   llama.cpp and the MCP mock come from the
+   [test-dependencies](https://github.com/naira-project/test-dependencies) chart:
    ```bash
-   task platform:deploy
+   git clone https://github.com/naira-project/test-dependencies ../test-dependencies
    ```
-   This creates a cluster, builds container images, loads them into kind, and applies all Kubernetes manifests.
+   Elsewhere, pass `tilt up -- --deps-repo=<path>`.
 
-2. **Port-forward services** to your localhost:
+2. **Deploy the platform** to a local kind cluster:
    ```bash
-   task forward:all
+   tilt up
    ```
-   Once executed, the terminal will display the specific local endpoints for the UI, APIs, and various backend integrations.
+   This creates the kind cluster `naira-idp` if needed, builds the images,
+   installs the test-dependencies chart into `naira-deps` and the Naira chart
+   into `idp-system`, and port-forwards the services. If `tilt up` created the
+   cluster or switched the kube context, it stops; run it again. `tilt down`
+   removes everything it deployed.
 
-3. **Open the UI** — once port-forwarding is running, go to:
+3. **Open the UI** — once the resources in the Tilt UI are green, go to:
    ```
    http://localhost:3000
    ```
@@ -89,9 +95,9 @@ To spin up the full environment on your machine:
 ├── plugins/              # Collector plugins (mlflow, litellm, fluxcd, ...)
 ├── ui/                   # React/TypeScript UI
 ├── naira-openmfp-portal/ # OpenMFP Portal (This is the backbone for future UI plugins)
-├── deploy/               # Helm charts + dev environment (kind, k8s manifests)
+├── deploy/charts/        # Helm chart
 ├── docs/                 # Documentation
-└── Taskfile.yml          # Root developer entrypoints
+└── Tiltfile              # Local dev environment (kind) and developer tasks
 ```
 
 ## Architecture

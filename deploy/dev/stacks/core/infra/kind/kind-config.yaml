@@ -1,7 +1,0 @@
-kind: Cluster
-apiVersion: kind.x-k8s.io/v1alpha4
-name: naira-idp
-
-nodes:
-  - role: control-plane
-    image: kindest/node:v1.36.1 # update kubectl in mise.toml if changing version 
