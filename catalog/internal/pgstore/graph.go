@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
@@ -20,21 +21,16 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("querying nodes: %w", err)
 	}
-	defer rows.Close()
 
 	byID := make(map[catalog.NodeID]*catalog.Node)
 	var order []catalog.NodeID
 
-	for rows.Next() {
-		var id catalog.NodeID
-		var pluginName *string
-		var snapshotID *uuid.UUID
-		var propsRaw []byte
+	var id catalog.NodeID
+	var pluginName *string
+	var snapshotID *uuid.UUID
+	var propsRaw []byte
 
-		if err := rows.Scan(&id.Kind, &id.Path, &pluginName, &snapshotID, &propsRaw); err != nil {
-			return nil, fmt.Errorf("scanning node row: %w", err)
-		}
-
+	_, err = pgx.ForEachRow(rows, []any{&id.Kind, &id.Path, &pluginName, &snapshotID, &propsRaw}, func() error {
 		node, ok := byID[id]
 		if !ok {
 			node = &catalog.Node{ID: id, PluginClaims: make(map[string]catalog.PluginClaim)}
@@ -45,15 +41,16 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 		if pluginName != nil {
 			props, err := decodeProperties(propsRaw)
 			if err != nil {
-				return nil, fmt.Errorf("decoding properties for node %q/%q plugin %q: %w", id.Kind, id.Path, *pluginName, err)
+				return fmt.Errorf("decoding properties for node %q/%q plugin %q: %w", id.Kind, id.Path, *pluginName, err)
 			}
 			node.PluginClaims[*pluginName] = catalog.PluginClaim{
 				SnapshotID: *snapshotID,
 				Properties: props,
 			}
 		}
-	}
-	if err := rows.Err(); err != nil {
+		return nil
+	})
+	if err != nil {
 		return nil, fmt.Errorf("reading nodes: %w", err)
 	}
 
@@ -75,32 +72,29 @@ func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.No
 	if err != nil {
 		return catalog.Node{}, fmt.Errorf("querying node %q/%q: %w", id.Kind, id.Path, err)
 	}
-	defer rows.Close()
 
 	node := catalog.Node{ID: id, PluginClaims: make(map[string]catalog.PluginClaim)}
 	found := false
 
-	for rows.Next() {
-		found = true
-		var pluginName *string
-		var snapshotID *uuid.UUID
-		var propsRaw []byte
+	var pluginName *string
+	var snapshotID *uuid.UUID
+	var propsRaw []byte
 
-		if err := rows.Scan(&pluginName, &snapshotID, &propsRaw); err != nil {
-			return catalog.Node{}, fmt.Errorf("scanning node %q/%q: %w", id.Kind, id.Path, err)
-		}
+	_, err = pgx.ForEachRow(rows, []any{&pluginName, &snapshotID, &propsRaw}, func() error {
+		found = true
 		if pluginName != nil {
 			props, err := decodeProperties(propsRaw)
 			if err != nil {
-				return catalog.Node{}, fmt.Errorf("decoding properties for node %q/%q plugin %q: %w", id.Kind, id.Path, *pluginName, err)
+				return fmt.Errorf("decoding properties for node %q/%q plugin %q: %w", id.Kind, id.Path, *pluginName, err)
 			}
 			node.PluginClaims[*pluginName] = catalog.PluginClaim{
 				SnapshotID: *snapshotID,
 				Properties: props,
 			}
 		}
-	}
-	if err := rows.Err(); err != nil {
+		return nil
+	})
+	if err != nil {
 		return catalog.Node{}, fmt.Errorf("reading node %q/%q: %w", id.Kind, id.Path, err)
 	}
 	if !found {
@@ -126,24 +120,19 @@ func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, err
 	if err != nil {
 		return nil, fmt.Errorf("querying relations: %w", err)
 	}
-	defer rows.Close()
 
 	byID := make(map[catalog.RelationID]*catalog.Relation)
 	var order []catalog.RelationID
 
-	for rows.Next() {
-		var id catalog.RelationID
-		var pluginName *string
-		var snapshotID *uuid.UUID
-		var propsRaw []byte
+	var id catalog.RelationID
+	var pluginName *string
+	var snapshotID *uuid.UUID
+	var propsRaw []byte
 
-		if err := rows.Scan(
-			&id.Kind, &id.From.Kind, &id.From.Path, &id.To.Kind, &id.To.Path,
-			&pluginName, &snapshotID, &propsRaw,
-		); err != nil {
-			return nil, fmt.Errorf("scanning relation row: %w", err)
-		}
-
+	_, err = pgx.ForEachRow(rows, []any{
+		&id.Kind, &id.From.Kind, &id.From.Path, &id.To.Kind, &id.To.Path,
+		&pluginName, &snapshotID, &propsRaw,
+	}, func() error {
 		relation, ok := byID[id]
 		if !ok {
 			relation = &catalog.Relation{
@@ -159,15 +148,16 @@ func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, err
 		if pluginName != nil {
 			props, err := decodeProperties(propsRaw)
 			if err != nil {
-				return nil, fmt.Errorf("decoding properties for relation %q plugin %q: %w", id.Kind, *pluginName, err)
+				return fmt.Errorf("decoding properties for relation %q plugin %q: %w", id.Kind, *pluginName, err)
 			}
 			relation.PluginClaims[*pluginName] = catalog.PluginClaim{
 				SnapshotID: *snapshotID,
 				Properties: props,
 			}
 		}
-	}
-	if err := rows.Err(); err != nil {
+		return nil
+	})
+	if err != nil {
 		return nil, fmt.Errorf("reading relations: %w", err)
 	}
 

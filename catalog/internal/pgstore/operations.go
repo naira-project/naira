@@ -87,19 +87,11 @@ func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]
 	if err != nil {
 		return nil, fmt.Errorf("listing operations: %w", err)
 	}
-	defer rows.Close()
 
-	result := make([]operations.Operation, 0)
-	for rows.Next() {
-		op, err := scanOperation(rows)
-		if err != nil {
-			return nil, fmt.Errorf("scanning operation: %w", err)
-		}
-		result = append(result, op)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("reading operations: %w", err)
-	}
+	result, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (operations.Operation, error) {
+		return scanOperation(row)
+	})
+
 	return result, nil
 }
 
