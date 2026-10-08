@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.1](https://github.com/naira-project/naira/compare/v0.1.1...v0.1.1) (2026-10-08)
+
+
+### Features
+
+* inference endpoints catalog ([#182](https://github.com/naira-project/naira/issues/182)) ([b668433](https://github.com/naira-project/naira/commit/b668433081ae9dca32fcf37e810da7811cf02048))
+* openai_api_models plugin ([#219](https://github.com/naira-project/naira/issues/219)) ([2c345c1](https://github.com/naira-project/naira/commit/2c345c1cde6f281165efa63e24c982e2c067866a))
+* two thalamus plugins ([#222](https://github.com/naira-project/naira/issues/222)) ([620eaed](https://github.com/naira-project/naira/commit/620eaedd6fbcc3b63521e605dc9779562f9d1fa0))
+
 ## [0.1.1](https://github.com/naira-project/naira/compare/v0.1.0...v0.1.1) (2026-10-05)
 
 
