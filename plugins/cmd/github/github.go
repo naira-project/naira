@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
 )
 
 var errGithubResourceNotFound = errors.New("github resource not found")
@@ -55,33 +55,17 @@ func newGithubClient(httpClient *http.Client, baseURL, token string) *githubClie
 }
 
 func (c *githubClient) get(ctx context.Context, path string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	err := httpjson.Get(ctx, c.httpClient, c.baseURL+path, out,
+		httpjson.WithHeaders{"Accept": "application/vnd.github+json"},
+		httpjson.WithAuthorizationBearer(c.token),
+		httpjson.WithAcceptStatus(func(code int) bool { return code == http.StatusOK }),
+		httpjson.WithMaxResponseBytes(maxGithubResponseBytes),
+	)
 	if err != nil {
-		return fmt.Errorf("building github request for %s: %w", path, err)
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("calling github api %s: %w", path, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return errGithubResourceNotFound
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("github api %s returned status %d", path, resp.StatusCode)
-	}
-
-	if out != nil {
-		limited := io.LimitReader(resp.Body, maxGithubResponseBytes)
-		if err := json.NewDecoder(limited).Decode(out); err != nil {
-			return fmt.Errorf("decoding github api response for %s: %w", path, err)
+		if httpjson.IsStatusAcceptError(err, http.StatusNotFound) {
+			return errGithubResourceNotFound
 		}
+		return fmt.Errorf("calling github api %s: %w", path, err)
 	}
 	return nil
 }

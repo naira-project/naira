@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/naira-project/naira/plugins/internal/mcputil"
@@ -92,25 +90,9 @@ func (s mcpServer) properties() pluginapi.PropertyMap {
 }
 
 func (p *Plugin) fetchMCPServers(ctx context.Context) ([]mcpServer, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/v1/mcp/server", nil)
-	if err != nil {
-		return nil, fmt.Errorf("building LiteLLM MCP server request: %w", err)
-	}
-	p.addAuthorization(req)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("calling LiteLLM MCP server endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("litellm /v1/mcp/server returned %s", resp.Status)
-	}
-
 	var servers []mcpServer
-	if err := json.NewDecoder(resp.Body).Decode(&servers); err != nil {
-		return nil, fmt.Errorf("decoding LiteLLM MCP server response: %w", err)
+	if err := p.getLiteLLMJSON(ctx, p.config.BaseURL+"/v1/mcp/server", &servers); err != nil {
+		return nil, fmt.Errorf("fetching LiteLLM MCP servers: %w", err)
 	}
 
 	return servers, nil
