@@ -1,18 +1,10 @@
 import type { PanelConfig } from '../types';
 
-export interface LitellmScope {
-  // A single deployment. model_id disambiguates deployments that share the same
-  // requested_model (e.g. the two idp-claude-sonnet regional entries in litellm.yaml).
-  deploymentId?: string;
-  // All deployments behind one model alias (the `requested_model` label).
-  requestedModel?: string;
-}
-
-export function litellmPanels({ deploymentId, requestedModel }: LitellmScope): PanelConfig[] {
-  const filter = [
-    deploymentId ? `, model_id="${deploymentId}"` : '',
-    requestedModel ? `, requested_model=${JSON.stringify(requestedModel)}` : '',
-  ].join('');
+// deploymentId is the deployment's model_id label. It disambiguates deployments
+// that share the same requested_model (e.g. the two idp-claude-sonnet regional
+// entries in litellm.yaml).
+export function litellmPanels(deploymentId?: string): PanelConfig[] {
+  const filter = deploymentId ? `, model_id="${deploymentId}"` : '';
   return [
     {
       title: 'Input Token Rate',

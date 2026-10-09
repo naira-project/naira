@@ -8,9 +8,7 @@ import { DatasourceStoreProvider, VariableProvider } from '@perses-dev/dashboard
 import { PluginRegistry, TimeRangeProvider } from '@perses-dev/plugin-system';
 import type { DurationString, TimeRangeValue } from '@perses-dev/spec';
 import React from 'react';
-import { RELATED_NODES_CONFIG_BY_KIND } from '../../config/detailTabs';
 import { type NodeResource, nodeProps } from '../../lib/catalogApi';
-import { useRelatedNodes } from '../RelatedNodes';
 import { bedrockPanels } from './catalogPlugins/bedrock';
 import { litellmPanels } from './catalogPlugins/litellm';
 import { MetricPanel } from './MetricPanel';
@@ -25,27 +23,14 @@ function panelsForNode(node: NodeResource): PanelConfig[] {
   if (fromBedrock && props.model_id) {
     return bedrockPanels(props.model_id, props.region_name);
   }
-  if (node.kind === 'model') {
-    // A LiteLLM model page covers every deployment behind the alias. The alias
-    // is the path minus its plugin prefix, e.g. "litellm/idp-llama-qwen25-05b".
-    return litellmPanels({ requestedModel: node.path.split('/').slice(1).join('/') });
-  }
   // The LiteLLM plugin stores the deployment's model_info.id as `id`, which is
   // the `model_id` label on LiteLLM's Prometheus metrics.
-  return litellmPanels({ deploymentId: props.id });
+  return litellmPanels(props.id);
 }
 
 export function PersesDashboard({ node }: { node: NodeResource }) {
-  if (node.kind === 'model') {
-    return <ModelDashboard node={node} />;
-  }
-  return <DashboardPanels panels={panelsForNode(node)} />;
-}
-
-// A model that no inference endpoint serves (endpoints only exist once a model has traffic) has nothing to plot.
-function ModelDashboard({ node }: { node: NodeResource }) {
-  const { related: endpoints, loading } = useRelatedNodes(node, RELATED_NODES_CONFIG_BY_KIND.model);
-  if (loading || endpoints.length === 0) {
+  // Metrics are per serving deployment, so only inference endpoints get a dashboard.
+  if (node.kind !== 'inference_endpoint') {
     return null;
   }
   return <DashboardPanels panels={panelsForNode(node)} />;
