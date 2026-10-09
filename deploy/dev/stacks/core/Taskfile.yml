@@ -10,6 +10,9 @@ includes:
   plugins:
     taskfile: ./tasks/plugins.yml
     dir: .
+  postgres:
+    taskfile: ./tasks/postgres.yml
+    dir: .
   keycloak:
     taskfile: ./tasks/keycloak.yml
     dir: .
@@ -42,9 +45,10 @@ includes:
 
 tasks:
   deploy:
-    desc: Deploy the core stack (cluster + keycloak + mcp-mock + catalog + portal + ui)
+    desc: Deploy the core stack (cluster + shared PostgreSQL + keycloak + mcp-mock + catalog + portal + ui)
     cmds:
       - task: cluster:create
+      - task: postgres:deploy
       - task: keycloak:deploy
       - task: mcp-mock:deploy
       - task: catalog:deploy
@@ -52,7 +56,7 @@ tasks:
       - task: ui:deploy
 
   undeploy:
-    desc: Remove the core stack from kind
+    desc: Remove the core stack from kind (shared PostgreSQL is retained)
     cmds:
       - task: portal:undeploy
       - task: catalog:undeploy

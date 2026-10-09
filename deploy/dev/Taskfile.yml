@@ -48,11 +48,12 @@ tasks:
       - task: llm-inference:deploy
 
   platform:undeploy:
-    desc: Remove the full platform from kind
+    desc: Remove the full platform and its shared PostgreSQL instance from kind
     cmds:
       - task: llm-inference:undeploy
       - task: mlops:undeploy
       - task: core:undeploy
+      - task: core:postgres:undeploy
 
   # Cluster management
   cluster:delete:

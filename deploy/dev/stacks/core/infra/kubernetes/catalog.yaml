@@ -1,9 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: idp-system
----
-apiVersion: v1
 kind: Secret
 metadata:
   name: catalog-secrets
@@ -614,6 +609,8 @@ spec:
               value: naira
             - name: KEYCLOAK_ISSUER
               value: http://localhost:8080/realms/naira
+            - name: POSTGRES_DSN
+              value: postgres://catalog:catalog-local-password@postgres.idp-system.svc.cluster.local:5432/catalog?sslmode=disable
           ports:
             - containerPort: 8090
               name: http
