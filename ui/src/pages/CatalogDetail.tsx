@@ -1,8 +1,8 @@
 import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { PersesDashboard } from '@/components/PersesDashboard';
 import PropertiesPanel from '../components/PropertiesPanel';
+import { PersesDashboard } from '../components/perses/PersesDashboard';
 import RelatedNodes from '../components/RelatedNodes';
 import { Button } from '../components/ui/button';
 import { relatedNodesConfigForKind } from '../config/detailTabs';
