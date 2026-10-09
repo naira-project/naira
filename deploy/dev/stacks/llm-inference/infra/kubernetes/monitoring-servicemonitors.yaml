@@ -21,6 +21,17 @@ spec:
 
 ---
 # ── LiteLLM proxy ────────────────────────────────────────────────────────────
+# LiteLLM requires the proxy master key as a bearer token on every route,
+# including /metrics.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-proxy-scrape-token
+  namespace: monitoring
+type: Opaque
+stringData:
+  token: sk-local-litellm
+---
 # LiteLLM also exposes Prometheus metrics at /metrics on its HTTP port.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -37,3 +48,7 @@ spec:
       path: /metrics
       interval: 15s
       scrapeTimeout: 10s
+      authorization:
+        credentials:
+          name: litellm-proxy-scrape-token
+          key: token
