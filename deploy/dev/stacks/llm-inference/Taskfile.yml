@@ -20,6 +20,9 @@ includes:
   cloudwatch:
     taskfile: ./tasks/cloudwatch.yml
     dir: .
+  logging:
+    taskfile: ./tasks/logging.yml
+    dir: .
 
 tasks:
   deploy:
@@ -29,6 +32,7 @@ tasks:
       - task: llamacpp:deploy
       - task: monitoring:deploy
       - task: cloudwatch:deploy-if-configured
+      - task: logging:deploy
 
   undeploy:
     desc: Remove the full LLM Inference stack from kind
@@ -37,6 +41,7 @@ tasks:
       - task: llamacpp:undeploy
       - task: litellm:undeploy
       - task: cloudwatch:undeploy
+      - task: logging:undeploy
 
   litellm:deploy:
     desc: Deploy only LiteLLM (postgres + litellm)

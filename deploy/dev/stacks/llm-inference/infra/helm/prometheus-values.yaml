@@ -43,13 +43,20 @@ prometheus:
 grafana:
   enabled: true
   adminPassword: admin
+  # Loki is deployed by `task llm-inference:logging:deploy` (loki-values.yaml).
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
   resources:
     requests:
       cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 200m
       memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 768Mi
   ingress:
     enabled: false
   service:
