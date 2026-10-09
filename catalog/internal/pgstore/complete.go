@@ -27,11 +27,11 @@ func (s *SnapshotCommitter) CompleteSnapshotOperation(
 	if err != nil {
 		return 0, 0, fmt.Errorf("beginning transaction: %w", err)
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback(ctx)
 
 	upsertedNodes, upsertedRelations, err := applySnapshot(ctx, tx, pluginName, snapshotID, nodes, relations)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("applying snapshot: %w", err)
 	}
 
 	if err := updateOperationState(ctx, tx, operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
