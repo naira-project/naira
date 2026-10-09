@@ -8,19 +8,19 @@ export function litellmPanels(deploymentId?: string): PanelConfig[] {
   return [
     {
       title: 'Input Token Rate',
-      query: `sum by (requested_model, model_id) (rate(litellm_input_tokens_metric_total{job="litellm", model!~"MCP:.*"${filter}}[5m]))`,
+      query: `sum by (requested_model, model_id) (rate(litellm_input_tokens_metric_total{job="litellm", model!~"MCP:.*"${filter}}[1m]))`,
     },
     {
       title: 'Failure Rate per Deployment',
-      query: `sum by (requested_model, model_id) (rate(litellm_deployment_failure_responses_total{job="litellm"${filter}}[5m]))`,
+      query: `sum by (requested_model, model_id) (rate(litellm_deployment_failure_responses_total{job="litellm"${filter}}[1m]))`,
     },
     {
       title: 'P95 Latency',
-      query: `histogram_quantile(0.95, sum by (le, requested_model, model_id) (rate(litellm_request_total_latency_metric_bucket{job="litellm"${filter}}[5m])))`,
+      query: `histogram_quantile(0.95, sum by (le, requested_model, model_id) (rate(litellm_request_total_latency_metric_bucket{job="litellm"${filter}}[1m])))`,
     },
     {
       title: 'Request rate per Deployment',
-      query: `sum by (requested_model, model_id) (rate(litellm_deployment_total_requests_total{job="litellm"${filter}}[5m]))`,
+      query: `sum by (requested_model, model_id) (rate(litellm_deployment_total_requests_total{job="litellm"${filter}}[1m]))`,
     },
   ];
 }
