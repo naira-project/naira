@@ -109,6 +109,10 @@ jobs:
           cache-dependency-path: ui/package-lock.json
 
       - name: Install dependencies
+        # Perses packages provide peer dependencies that don't include React 19. 
+        # So, --legacy-peer-deps flag is added for preventing npm ci throwing a ERESOLVE error.
+        # In the future, if Perses would not be able to support React 19, then Perses component can be 
+        # migrated into its own micro-frontend with its own React version.
         run: npm ci --legacy-peer-deps
 
       - name: Run checks
