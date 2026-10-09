@@ -5,7 +5,7 @@ import { PersesDashboard } from '@/components/PersesDashboard';
 import PropertiesPanel from '../components/PropertiesPanel';
 import RelatedNodes from '../components/RelatedNodes';
 import { Button } from '../components/ui/button';
-import { relatedCardForKind } from '../config/detailTabs';
+import { relatedNodesConfigForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
@@ -30,7 +30,7 @@ export default function CatalogDetail() {
   const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
   const backPath = findViewpointForKind(decodedKind)?.path;
 
-  const relatedConfig = relatedCardForKind(decodedKind);
+  const relatedConfig = relatedNodesConfigForKind(decodedKind);
   const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 

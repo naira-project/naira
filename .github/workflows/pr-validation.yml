@@ -87,7 +87,7 @@ jobs:
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # 2.0.0
         with:
           version: v0.11.0 # keep in sync with mise.toml's shellcheck version
-          
+
   # ── 5. UI checks (TypeScript and Biome) ───────────────────────────────────
   ui-check:
     name: Check · UI

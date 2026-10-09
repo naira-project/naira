@@ -21,9 +21,8 @@ import {
 import * as prometheusPlugin from '@perses-dev/prometheus-plugin';
 import type { DurationString, TimeRangeValue } from '@perses-dev/spec';
 import * as timeseriesChartPlugin from '@perses-dev/timeseries-chart-plugin';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { RELATED_CARDS_BY_KIND } from '../config/detailTabs';
+import { RELATED_NODES_CONFIG_BY_KIND } from '../config/detailTabs';
 import { type NodeResource, nodeProps } from '../lib/catalogApi';
 import { MetricPanel } from './MetricPanel';
 import { useRelatedNodes } from './RelatedNodes';
@@ -177,11 +176,9 @@ export function PersesDashboard({ node }: { node: NodeResource }) {
   return <DashboardPanels panels={panelsForNode(node)} />;
 }
 
-// Metrics are recorded per deployment, so a model that no inference endpoint
-// serves (endpoints only exist once a model has traffic) has nothing to plot.
-// The "Served By" card on the same page already explains that.
+// A model that no inference endpoint serves (endpoints only exist once a model has traffic) has nothing to plot.
 function ModelDashboard({ node }: { node: NodeResource }) {
-  const { related: endpoints, loading } = useRelatedNodes(node, RELATED_CARDS_BY_KIND.model);
+  const { related: endpoints, loading } = useRelatedNodes(node, RELATED_NODES_CONFIG_BY_KIND.model);
   if (loading || endpoints.length === 0) {
     return null;
   }
@@ -190,6 +187,11 @@ function ModelDashboard({ node }: { node: NodeResource }) {
 
 const chartsTheme = generateChartsTheme(getTheme('light'), {});
 
+// Tells Perses's PluginRegistry which plugins exist and how to load them.
+// The two plugins we need are bundled statically. Each entry pairs a
+// plugin's module manifest (`resource`, which declares the plugin kinds/names it
+// provides) with an `importPlugin` that resolves to the module itself, rewrapped
+// by toKeyedPluginModule into the shape the registry expects.
 const pluginLoader = dynamicImportPluginLoader([
   {
     resource: prometheusPlugin.getPluginModule(),
@@ -204,15 +206,6 @@ const pluginLoader = dynamicImportPluginLoader([
       ),
   },
 ]);
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 0,
-    },
-  },
-});
 
 function DashboardPanels({ panels }: { panels: PanelConfig[] }) {
   const [timeRange, setTimeRange] = React.useState<TimeRangeValue>({ pastDuration: '6h' });
@@ -231,22 +224,20 @@ function DashboardPanels({ panels }: { panels: PanelConfig[] }) {
             TimeSeriesQuery: 'PrometheusTimeSeriesQuery',
           }}
         >
-          <QueryClientProvider client={queryClient}>
-            <TimeRangeProvider
-              timeRange={timeRange}
-              refreshInterval={refreshInterval}
-              setTimeRange={setTimeRange}
-              setRefreshInterval={setRefreshInterval}
-            >
-              <VariableProvider>
-                <DatasourceStoreProvider datasourceApi={datasourceApi}>
-                  {panels.map(({ title, query }) => (
-                    <MetricPanel key={title} title={title} query={query} />
-                  ))}
-                </DatasourceStoreProvider>
-              </VariableProvider>
-            </TimeRangeProvider>
-          </QueryClientProvider>
+          <TimeRangeProvider
+            timeRange={timeRange}
+            refreshInterval={refreshInterval}
+            setTimeRange={setTimeRange}
+            setRefreshInterval={setRefreshInterval}
+          >
+            <VariableProvider>
+              <DatasourceStoreProvider datasourceApi={datasourceApi}>
+                {panels.map(({ title, query }) => (
+                  <MetricPanel key={title} title={title} query={query} />
+                ))}
+              </DatasourceStoreProvider>
+            </VariableProvider>
+          </TimeRangeProvider>
         </PluginRegistry>
       </SnackbarProvider>
     </ChartsProvider>

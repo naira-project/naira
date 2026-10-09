@@ -1,6 +1,8 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json ./
+# Perses packages provide peer dependencies that don't include React 19. 
+# So, --legacy-peer-deps flag is added for preventing npm ci throwing a ERESOLVE error.
 RUN npm ci --legacy-peer-deps
 COPY . .
 RUN npm run build
