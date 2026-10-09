@@ -13,7 +13,7 @@
 # How often YACE queries CloudWatch (seconds). Prometheus scrapes the cached
 # result in between, so this — not the ServiceMonitor interval — drives cost.
 extraArgs:
-  scraping-interval: 300
+  scraping-interval: 60
 
 resources:
   requests:
@@ -48,8 +48,8 @@ config: |-
       regions:
         - us-east-1
         - eu-central-1
-      period: 300
-      length: 600
+      period: 60
+      length: 300
       # Report 0 instead of dropping the series when a model had no traffic in
       # the last period, so per-endpoint charts show idle time rather than gaps.
       nilToZero: true

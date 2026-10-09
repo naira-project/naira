@@ -12,6 +12,14 @@ server {
         proxy_pass $catalog_upstream;
     }
 
+    location /prometheus/ {
+        # `set` must come before `rewrite ... break` — break halts the whole
+        # rewrite-phase directive sequence, so a `set` placed after it never runs.
+        set $prometheus_upstream http://prometheus-operated.monitoring.svc.cluster.local:9090;
+        rewrite ^/prometheus/(.*)$ /$1 break;
+        proxy_pass $prometheus_upstream;
+    }
+
     location /assets/content-configuration.json {
         add_header Access-Control-Allow-Origin *;
         add_header Access-Control-Allow-Methods "GET, OPTIONS";

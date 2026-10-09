@@ -1,0 +1,26 @@
+import type { PanelConfig } from '../types';
+
+// deploymentId is the deployment's model_id label. It disambiguates deployments
+// that share the same requested_model (e.g. the two idp-claude-sonnet regional
+// entries in litellm.yaml).
+export function litellmPanels(deploymentId?: string): PanelConfig[] {
+  const filter = deploymentId ? `, model_id="${deploymentId}"` : '';
+  return [
+    {
+      title: 'Input Token Rate',
+      query: `sum by (requested_model, model_id) (rate(litellm_input_tokens_metric_total{job="litellm", model!~"MCP:.*"${filter}}[1m]))`,
+    },
+    {
+      title: 'Failure Rate per Deployment',
+      query: `sum by (requested_model, model_id) (rate(litellm_deployment_failure_responses_total{job="litellm"${filter}}[1m]))`,
+    },
+    {
+      title: 'P95 Latency',
+      query: `histogram_quantile(0.95, sum by (le, requested_model, model_id) (rate(litellm_request_total_latency_metric_bucket{job="litellm"${filter}}[1m])))`,
+    },
+    {
+      title: 'Request rate per Deployment',
+      query: `sum by (requested_model, model_id) (rate(litellm_deployment_total_requests_total{job="litellm"${filter}}[1m]))`,
+    },
+  ];
+}

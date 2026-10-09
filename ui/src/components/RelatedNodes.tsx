@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { type CatalogGraphResponse, useCatalogGraph } from '../hooks/useCatalogGraph';
 import { encodeCatalogPath, type NodeResource } from '../lib/catalogApi';
-import { displayName } from '../lib/kindUtils';
 
 /**
  * Describes one set of neighbours reached from a node via a single relation
@@ -50,6 +49,21 @@ interface RelatedNodesProps {
 }
 
 /**
+ * Neighbours of `node` reached via one relation kind, from the cached depth-1
+ * graph slice. Lets other components ask "does this node have any?" without
+ * rendering the list.
+ */
+export function useRelatedNodes(node: NodeResource, config: RelatedNodesConfig) {
+  const { graph, loading, error } = useCatalogGraph({ name: node.name }, 1);
+  const related = useMemo(
+    () => relatedNodesFromGraph(graph, node.name, config),
+    [graph, node.name, config],
+  );
+
+  return { related, loading, error };
+}
+
+/**
  * Neighbours of `node` reached via one relation kind, rendered as clickable cross-link cards (Properties tab).
  *
  * Reads the depth-1 graph slice, which the Graph tab also uses, so this doesn't
@@ -57,11 +71,7 @@ interface RelatedNodesProps {
  */
 export default function RelatedNodes({ node, config }: RelatedNodesProps) {
   const navigate = useNavigate();
-  const { graph, loading, error } = useCatalogGraph({ name: node.name }, 1);
-  const related = useMemo(
-    () => relatedNodesFromGraph(graph, node.name, config),
-    [graph, node.name, config],
-  );
+  const { related, loading, error } = useRelatedNodes(node, config);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading {config.title.toLowerCase()}…</p>;
@@ -155,7 +165,7 @@ function relatedNodesFromGraph(
       name: n.name,
       kind: n.kind,
       path: n.path,
-      displayName: displayName(n.kind, n.path, n.properties),
+      displayName: n.label,
       title: typeof n.properties?.title === 'string' ? n.properties.title : undefined,
       description:
         typeof n.properties?.description === 'string' ? n.properties.description : undefined,

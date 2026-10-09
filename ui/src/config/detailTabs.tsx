@@ -1,7 +1,7 @@
 import { BrainCircuit, Cloud, Wrench } from 'lucide-react';
 import type { RelatedNodesConfig } from '../components/RelatedNodes';
 
-export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
+export const RELATED_NODES_CONFIG_BY_KIND: Record<string, RelatedNodesConfig> = {
   mcp_server: {
     relationKind: 'exposes',
     direction: 'outgoing',
@@ -33,6 +33,6 @@ export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
   },
 };
 
-export function relatedCardForKind(kind: string): RelatedNodesConfig | undefined {
-  return RELATED_CARDS_BY_KIND[kind];
+export function relatedNodesConfigForKind(kind: string): RelatedNodesConfig | undefined {
+  return RELATED_NODES_CONFIG_BY_KIND[kind];
 }
