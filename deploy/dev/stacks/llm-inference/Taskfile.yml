@@ -16,14 +16,19 @@ includes:
   vllm:
     taskfile: ./tasks/vllm.yml
     dir: .
+  # Part of `deploy` when AWS credentials are exported, skipped otherwise.
+  cloudwatch:
+    taskfile: ./tasks/cloudwatch.yml
+    dir: .
 
 tasks:
   deploy:
-    desc: Deploy the LLM Inference stack (postgres + litellm + llamacpp + monitoring)
+    desc: Deploy the LLM Inference stack (postgres + litellm + llamacpp + monitoring + YACE when AWS credentials are set)
     cmds:
       - task: litellm:deploy
       - task: llamacpp:deploy
       - task: monitoring:deploy
+      - task: cloudwatch:deploy-if-configured
 
   undeploy:
     desc: Remove the full LLM Inference stack from kind
@@ -31,6 +36,7 @@ tasks:
       - task: monitoring:undeploy
       - task: llamacpp:undeploy
       - task: litellm:undeploy
+      - task: cloudwatch:undeploy
 
   litellm:deploy:
     desc: Deploy only LiteLLM (postgres + litellm)
