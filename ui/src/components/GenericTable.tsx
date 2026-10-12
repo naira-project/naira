@@ -115,7 +115,7 @@ export default function GenericTable({
             onClick={() => onSelect(info.row.original)}
             title={info.row.original.name}
           >
-            <span className="truncate">{info.getValue() as string}</span>
+            <span className="min-w-0 truncate">{info.getValue() as string}</span>
           </Button>
         ),
       },
