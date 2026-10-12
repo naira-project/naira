@@ -13,6 +13,8 @@ import (
 	"github.com/robfig/cron/v3"
 )
 
+const resyncLookback = 30 * 24 * time.Hour
+
 var (
 	ErrInvalidPlugin = errors.New("invalid plugin name")
 )
@@ -134,7 +136,6 @@ func ResyncAtStartup(
 	opsStore operations.Store,
 	runFunc RunPluginFunc,
 	now time.Time,
-	lookback time.Duration,
 	logger *log.Logger,
 ) {
 	for plugin, config := range configs {
@@ -173,7 +174,7 @@ func ResyncAtStartup(
 				continue
 			}
 
-			lastScheduled, err := LastScheduledTime(config.Schedule, now, lookback)
+			lastScheduled, err := LastScheduledTime(config.Schedule, now, resyncLookback)
 			if err != nil {
 				if logger != nil {
 					logger.Printf("startup resync check for plugin %q: %v", plugin, err)

@@ -20,8 +20,6 @@ import (
 	"github.com/naira-project/naira/catalog/internal/scheduling"
 )
 
-const resyncLookback = 30 * 24 * time.Hour
-
 func main() {
 	logger := log.New(os.Stdout, "catalog ", log.LstdFlags)
 
@@ -52,7 +50,7 @@ func main() {
 
 	interrupted, err := operationStore.MarkInterrupted(ctx)
 	if err != nil {
-		logger.Fatalf("failed to reconcile interrupted operations: %v", err)
+		logger.Printf("failed to mark interrupted operations: %v", err)
 	}
 	if interrupted > 0 {
 		logger.Printf("marked %d interrupted operation(s) after restart", interrupted)
@@ -64,7 +62,7 @@ func main() {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
 
-	scheduling.ResyncAtStartup(ctx, config.Plugins, operationStore, runner.RunPluginAsync, time.Now(), resyncLookback, logger)
+	scheduling.ResyncAtStartup(ctx, config.Plugins, operationStore, runner.RunPluginAsync, time.Now(), logger)
 
 	router, err := httpapi.NewRouter(graphStore, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,

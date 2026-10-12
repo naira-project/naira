@@ -34,7 +34,7 @@ type envConfig struct {
 	KeycloakBaseURL         string        `env:"KEYCLOAK_BASE_URL"`
 	KeycloakRealm           string        `env:"KEYCLOAK_REALM"`
 	KeycloakIssuer          string        `env:"KEYCLOAK_ISSUER"`
-	PostgresDSN             string        `env:"POSTGRES_DSN" default:"postgres://catalog:catalog@localhost:5432/catalog?sslmode=disable"`
+	PostgresDSN             string        `env:"POSTGRES_DSN"`
 }
 
 type pluginConfig struct {
