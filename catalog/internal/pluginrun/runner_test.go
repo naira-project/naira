@@ -42,7 +42,7 @@ func (p blockingStubPlugin) Collect(ctx context.Context) (catalog.CollectRespons
 
 // waitForState polls the mock store until op reaches the given state or the
 // timeout elapses.
-func waitForState(t *testing.T, store *pluginruntest.MockSnapshotStore, name string, state operations.State) operations.Operation {
+func waitForState(t *testing.T, store *pluginruntest.MemorySnapshotStore, name string, state operations.State) operations.Operation {
 	t.Helper()
 
 	deadline := time.Now().Add(2 * time.Second)
@@ -63,7 +63,7 @@ func waitForState(t *testing.T, store *pluginruntest.MockSnapshotStore, name str
 }
 
 func TestRunPluginAsyncCreatesPendingOperation(t *testing.T) {
-	store := pluginruntest.NewMockSnapshotStore()
+	store := pluginruntest.NewMemorySnapshotStoreWithSuccessfulCommit()
 	block := make(chan struct{})
 	runner := NewRunner(t.Context(), store, store, map[string]Plugin{
 		"mlflow": blockingStubPlugin{block: block},
@@ -80,7 +80,7 @@ func TestRunPluginAsyncCreatesPendingOperation(t *testing.T) {
 }
 
 func TestRunPluginAsyncSucceeds(t *testing.T) {
-	store := pluginruntest.NewMockSnapshotStore()
+	store := pluginruntest.NewMemorySnapshotStoreWithSuccessfulCommit()
 	runner := NewRunner(t.Context(), store, store, map[string]Plugin{
 		"mlflow": stubPlugin{response: catalog.CollectResponse{
 			Nodes: []catalog.NodeClaim{{
@@ -101,7 +101,7 @@ func TestRunPluginAsyncSucceeds(t *testing.T) {
 }
 
 func TestRunPluginAsyncFails(t *testing.T) {
-	store := pluginruntest.NewMockSnapshotStore()
+	store := pluginruntest.NewMemorySnapshotStore()
 	runner := NewRunner(t.Context(), store, store, map[string]Plugin{
 		"mlflow": stubPlugin{err: errors.New("connection refused")},
 	}, 5*time.Minute, nil)
@@ -116,7 +116,7 @@ func TestRunPluginAsyncFails(t *testing.T) {
 }
 
 func TestRunPluginAsyncRejectsUnknownPlugin(t *testing.T) {
-	store := pluginruntest.NewMockSnapshotStore()
+	store := pluginruntest.NewMemorySnapshotStore()
 	runner := NewRunner(t.Context(), store, store, nil, 5*time.Minute, nil)
 
 	_, err := runner.RunPluginAsync(t.Context(), "missing")
@@ -125,7 +125,7 @@ func TestRunPluginAsyncRejectsUnknownPlugin(t *testing.T) {
 }
 
 func TestRunPluginAsyncRejectsParallelRun(t *testing.T) {
-	store := pluginruntest.NewMockSnapshotStore()
+	store := pluginruntest.NewMemorySnapshotStoreWithSuccessfulCommit()
 	block := make(chan struct{})
 	runner := NewRunner(t.Context(), store, store, map[string]Plugin{
 		"mlflow": blockingStubPlugin{block: block},
@@ -145,7 +145,7 @@ func TestRunPluginAsyncRejectsParallelRun(t *testing.T) {
 }
 
 func TestRunAllPluginsAsyncReturnsOperations(t *testing.T) {
-	store := pluginruntest.NewMockSnapshotStore()
+	store := pluginruntest.NewMemorySnapshotStoreWithSuccessfulCommit()
 	runner := NewRunner(t.Context(), store, store, map[string]Plugin{
 		"mlflow":  stubPlugin{},
 		"litellm": stubPlugin{},
@@ -159,7 +159,7 @@ func TestRunAllPluginsAsyncReturnsOperations(t *testing.T) {
 }
 
 func TestGetOperationNotFound(t *testing.T) {
-	store := pluginruntest.NewMockSnapshotStore()
+	store := pluginruntest.NewMemorySnapshotStore()
 	runner := NewRunner(t.Context(), store, store, nil, 5*time.Minute, nil)
 
 	_, err := runner.GetOperation(t.Context(), "operations/missing")

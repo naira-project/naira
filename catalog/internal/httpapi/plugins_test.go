@@ -27,7 +27,7 @@ func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) htt
 		plugins[name] = stubPlugin{}
 	}
 
-	snapshotStore := pluginruntest.NewMockSnapshotStore()
+	snapshotStore := pluginruntest.NewMemorySnapshotStore()
 	runner := pluginrun.NewRunner(
 		context.Background(),
 		snapshotStore,
@@ -37,7 +37,7 @@ func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) htt
 		log.New(io.Discard, "", 0),
 	)
 	router, err := NewRouter(
-		catalog.NewService(&catalogtest.MockStore{}),
+		catalog.NewService(&catalogtest.StubStore{}),
 		runner,
 		configs,
 		log.New(io.Discard, "", 0),

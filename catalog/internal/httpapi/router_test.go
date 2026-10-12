@@ -73,14 +73,14 @@ func (p blockingStubPlugin) Collect(ctx context.Context) (catalog.CollectRespons
 	return p.response, p.err
 }
 
-func newTestRouter(t *testing.T, store *catalogtest.MockStore, snapshotStore *pluginruntest.MockSnapshotStore, plugins map[string]pluginrun.Plugin) (http.Handler, *pluginrun.Runner) {
+func newTestRouter(t *testing.T, store *catalogtest.StubStore, snapshotStore *pluginruntest.MemorySnapshotStore, plugins map[string]pluginrun.Plugin) (http.Handler, *pluginrun.Runner) {
 	t.Helper()
 
 	if store == nil {
-		store = &catalogtest.MockStore{}
+		store = &catalogtest.StubStore{}
 	}
 	if snapshotStore == nil {
-		snapshotStore = pluginruntest.NewMockSnapshotStore()
+		snapshotStore = pluginruntest.NewMemorySnapshotStore()
 	}
 
 	catalogService := catalog.NewService(store)
@@ -137,7 +137,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 		},
 	}
 
-	store := &catalogtest.MockStore{
+	store := &catalogtest.StubStore{
 		ListNodesFunc:     func(context.Context) ([]catalog.Node, error) { return nodes, nil },
 		ListRelationsFunc: func(context.Context) ([]catalog.Relation, error) { return relations, nil },
 		GetNodeFunc: func(_ context.Context, id catalog.NodeID) (catalog.Node, error) {
@@ -271,7 +271,7 @@ func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 		},
 	}
 
-	store := &catalogtest.MockStore{
+	store := &catalogtest.StubStore{
 		GetNodeFunc: func(_ context.Context, id catalog.NodeID) (catalog.Node, error) {
 			if id == node.ID {
 				return node, nil

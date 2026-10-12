@@ -75,8 +75,8 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			snapshotStore := pluginruntest.NewMockSnapshotStore()
-			router, _ := newTestRouter(t, &catalogtest.MockStore{}, snapshotStore, map[string]pluginrun.Plugin{
+			snapshotStore := pluginruntest.NewMemorySnapshotStore()
+			router, _ := newTestRouter(t, &catalogtest.StubStore{}, snapshotStore, map[string]pluginrun.Plugin{
 				"mlflow": tt.pluginImpl,
 			})
 
@@ -123,9 +123,9 @@ func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
 }
 
 func TestRunPluginAsyncEndpointConflict(t *testing.T) {
-	snapshotStore := pluginruntest.NewMockSnapshotStore()
+	snapshotStore := pluginruntest.NewMemorySnapshotStore()
 	block := make(chan struct{})
-	router, runner := newTestRouter(t, &catalogtest.MockStore{}, snapshotStore, map[string]pluginrun.Plugin{
+	router, runner := newTestRouter(t, &catalogtest.StubStore{}, snapshotStore, map[string]pluginrun.Plugin{
 		"mlflow": blockingStubPlugin{block: block},
 	})
 
@@ -147,8 +147,8 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 }
 
 func TestGetOperationsEndpoint(t *testing.T) {
-	snapshotStore := pluginruntest.NewMockSnapshotStore()
-	router, _ := newTestRouter(t, &catalogtest.MockStore{}, snapshotStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
+	snapshotStore := pluginruntest.NewMemorySnapshotStore()
+	router, _ := newTestRouter(t, &catalogtest.StubStore{}, snapshotStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
 	// Trigger "seed" plugin flow
 	runRec := doRequest(t, router, http.MethodPost, "/v1/plugins:run")
@@ -195,7 +195,7 @@ func doRequest(t *testing.T, router http.Handler, method, path string) *httptest
 }
 
 // waitForTerminalState polls until the operation reaches SUCCEEDED or FAILED.
-func waitForTerminalState(t *testing.T, store *pluginruntest.MockSnapshotStore, name string) operations.Operation {
+func waitForTerminalState(t *testing.T, store *pluginruntest.MemorySnapshotStore, name string) operations.Operation {
 	t.Helper()
 	return waitForState(t, store, name, func(op operations.Operation) bool {
 		return op.State == operations.StateSucceeded || op.State == operations.StateFailed
@@ -203,7 +203,7 @@ func waitForTerminalState(t *testing.T, store *pluginruntest.MockSnapshotStore, 
 }
 
 // waitForState polls until condition is met or times out.
-func waitForState(t *testing.T, store *pluginruntest.MockSnapshotStore, name string, condition func(operations.Operation) bool) operations.Operation {
+func waitForState(t *testing.T, store *pluginruntest.MemorySnapshotStore, name string, condition func(operations.Operation) bool) operations.Operation {
 	t.Helper()
 
 	deadline := time.Now().Add(3 * time.Second)
