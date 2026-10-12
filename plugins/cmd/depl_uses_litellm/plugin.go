@@ -39,7 +39,6 @@ package main
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -49,6 +48,7 @@ import (
 
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
 	"github.com/naira-project/naira/plugins/internal/util"
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -309,35 +309,24 @@ func referencedSecretsNames(obj map[string]any) map[string]struct{} {
 // A 401/403 response means the key is not valid for that host and empty results are returned.
 func fetchModels(ctx context.Context, client *http.Client, baseURL, apiKey string) ([]string, error) {
 	addr := baseURL + "/v1/models"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, addr, nil)
-	if err != nil {
-		return nil, fmt.Errorf("preparing %q request: %w", addr, err)
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing %q request: %w", addr, err)
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		break // continue to read the body
-	case http.StatusUnauthorized, http.StatusForbidden:
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("%q: unexpected HTTP status %d", addr, resp.StatusCode)
-	}
 
 	var payload struct {
 		Data []struct {
 			ID string `json:"id"`
 		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("parsing %q response: %w", addr, err)
+	err := httpjson.Get(ctx, client, addr, &payload,
+		httpjson.WithAuthorizationBearer(apiKey),
+		httpjson.WithAcceptStatus(func(code int) bool { return code == http.StatusOK }),
+	)
+	if err != nil {
+		if httpjson.IsStatusAcceptError(err,
+			http.StatusUnauthorized, http.StatusForbidden) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%q: %w", addr, err)
 	}
+
 	models := make([]string, 0, len(payload.Data))
 	for _, m := range payload.Data {
 		models = append(models, m.ID)
