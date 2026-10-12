@@ -33,8 +33,6 @@ var (
 	ErrPluginAlreadyRunning = errors.New("plugin already has a running operation")
 )
 
-// SnapshotCommitter atomically persists a plugin snapshot and marks its
-// operation as succeeded.
 type SnapshotCommitter interface {
 	CompleteSnapshotOperation(
 		ctx context.Context,

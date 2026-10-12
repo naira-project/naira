@@ -5,15 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/robfig/cron/v3"
 )
-
-const resyncLookback = 30 * 24 * time.Hour
 
 var (
 	ErrInvalidPlugin = errors.New("invalid plugin name")
@@ -40,6 +40,10 @@ func NewScheduler(
 	runFunc RunPluginFunc,
 	logger *log.Logger,
 ) (*Scheduler, error) {
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
 	sch := &Scheduler{
 		cron:     cron.New(),
 		ctx:      ctx,
@@ -68,9 +72,7 @@ func (s *Scheduler) registerSchedules() error {
 
 		_, err := s.cron.AddFunc(expr, func() {
 			if _, err := s.runFunc(s.ctx, plugin); err != nil {
-				if s.logger != nil {
-					s.logger.Printf("scheduled run for plugin %q was not started: %v", plugin, err)
-				}
+				s.logger.Printf("scheduled run for plugin %q was not started: %v", plugin, err)
 			}
 		})
 		if err != nil {
@@ -96,28 +98,6 @@ func (s *Scheduler) Stop(ctx context.Context) error {
 	}
 }
 
-// LastScheduledTime returns the most recent time, at or before now, at which
-// expr would have fired, searching back at most lookback. It returns the
-// zero time if no activation is found within that window.
-func LastScheduledTime(expr string, now time.Time, lookback time.Duration) (time.Time, error) {
-	schedule, err := cron.ParseStandard(expr)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("parsing schedule %q: %w", expr, err)
-	}
-
-	cursor := now.Add(-lookback)
-	var last time.Time
-	for {
-		next := schedule.Next(cursor)
-		if next.IsZero() || next.After(now) {
-			break
-		}
-		last = next
-		cursor = next
-	}
-	return last, nil
-}
-
 // lastOperation returns the most recently created operation recorded for
 // plugin, or found=false if it has never run
 func lastOperation(ctx context.Context, store operations.Store, plugin string) (op operations.Operation, found bool, err error) {
@@ -131,27 +111,48 @@ func lastOperation(ctx context.Context, store operations.Store, plugin string) (
 	return ops[0], true, nil
 }
 
-func successCompletedAt(op operations.Operation) time.Time {
+func operationCompletedAt(op operations.Operation) time.Time {
 	if op.EndTime != nil {
 		return *op.EndTime
 	}
 	return op.CreatedAt
 }
 
-// resyncAtStartup triggers an immediate run, via runFunc, for a plugin based
-// solely on the state of its most recent operation. The rules:
-//
-//  1. No operation recorded at all -> bootstrap.
-//  2. Last operation is StateInterrupted -> trigger a run.
-//  3. Last operation is StateFailed -> do nothing.
-//  4. Last operation is StateSucceeded:
-//     - ScheduleManual -> do nothing;
-//     - otherwise -> trigger a run only if that success predates the most
-//     recent time the plugin's schedule should have fired, to catch up
-//     on ticks missed while the process was down.
-//
-// Meant to run once at startup before the scheduler and HTTP server accept
-// plugin runs
+// needsResync reports why a plugin should run at startup, or an empty reason
+// when its current operation state and schedule do not require another run.
+func needsResync(last *operations.Operation, scheduleExpr string, now time.Time) (string, error) {
+	if last == nil {
+		return "plugin has never run; triggering initial run", nil
+	}
+
+	switch last.State {
+	case operations.StateInterrupted:
+		return "last run was interrupted by a restart; triggering run", nil
+	case operations.StatePending, operations.StateRunning:
+		return "", nil
+	case operations.StateSucceeded, operations.StateFailed:
+		if scheduleExpr == catalog.ScheduleManual {
+			return "", nil
+		}
+
+		schedule, err := cron.ParseStandard(scheduleExpr)
+		if err != nil {
+			return "", fmt.Errorf("parsing schedule %q: %w", scheduleExpr, err)
+		}
+		completedAt := operationCompletedAt(*last)
+		next := schedule.Next(completedAt)
+		if next.IsZero() || next.After(now) {
+			return "", nil
+		}
+		return fmt.Sprintf("last attempt completed at %s, before scheduled tick at %s; triggering resync", completedAt, next), nil
+	default:
+		return "", nil
+	}
+}
+
+// resyncAtStartup uses persisted operation state and configured schedules to
+// start bootstrap, interrupted, or missed scheduled runs. It runs once at
+// startup before the scheduler and HTTP server accept plugin runs.
 func resyncAtStartup(
 	ctx context.Context,
 	configs catalog.PluginConfigsByName,
@@ -160,73 +161,44 @@ func resyncAtStartup(
 	now time.Time,
 	logger *log.Logger,
 ) {
-	for plugin, config := range configs {
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	plugins := make([]string, 0, len(configs))
+	for plugin := range configs {
+		plugins = append(plugins, plugin)
+	}
+	sort.Strings(plugins)
+
+	for _, plugin := range plugins {
+		config := configs[plugin]
 		last, found, err := lastOperation(ctx, opsStore, plugin)
 		if err != nil {
-			if logger != nil {
-				logger.Printf("startup resync check for plugin %q: listing operations: %v", plugin, err)
-			}
+			logger.Printf("startup resync check for plugin %q: listing operations: %v", plugin, err)
 			continue
 		}
 
-		if !found {
-			if logger != nil {
-				logger.Printf("plugin %q has never run; triggering initial run", plugin)
-			}
-			triggerRun(ctx, runFunc, plugin, logger)
+		var latest *operations.Operation
+		if found {
+			latest = &last
+		}
+		reason, err := needsResync(latest, config.Schedule, now)
+		if err != nil {
+			logger.Printf("startup resync check for plugin %q: %v", plugin, err)
+			continue
+		}
+		if reason == "" {
 			continue
 		}
 
-		switch last.State {
-		case operations.StateInterrupted:
-			if logger != nil {
-				logger.Printf("plugin %q's last run was interrupted by a restart; triggering run", plugin)
-			}
-			triggerRun(ctx, runFunc, plugin, logger)
-
-		case operations.StateFailed:
-			// TODO: think if simpilify this, and run failed always. But first write tests for that.
-			// what if failed was temporary, and next run would succeed?
-			//
-			// Ran to completion and genuinely failed - not retried
-			// automatically.
-
-		case operations.StateSucceeded:
-			if config.Schedule == catalog.ScheduleManual {
-				continue
-			}
-
-			lastScheduled, err := LastScheduledTime(config.Schedule, now, resyncLookback)
-			if err != nil {
-				if logger != nil {
-					logger.Printf("startup resync check for plugin %q: %v", plugin, err)
-				}
-				continue
-			}
-
-			lastSuccess := successCompletedAt(last)
-			if lastScheduled.IsZero() || !lastSuccess.Before(lastScheduled) {
-				continue
-			}
-
-			if logger != nil {
-				logger.Printf("plugin %q last succeeded at %s, before scheduled tick at %s; triggering resync", plugin, lastSuccess, lastScheduled)
-			}
-			triggerRun(ctx, runFunc, plugin, logger)
-
-		default:
-			// StatePending/StateRunning shouldn't be possible here
-			if logger != nil {
-				logger.Printf("plugin %q's last operation %q is in unexpected state %q at startup; leaving it alone", plugin, last.Name, last.State)
-			}
-		}
+		logger.Printf("plugin %q: %s", plugin, reason)
+		triggerRun(ctx, runFunc, plugin, logger)
 	}
 }
 
 func triggerRun(ctx context.Context, runFunc RunPluginFunc, plugin string, logger *log.Logger) {
 	if _, err := runFunc(ctx, plugin); err != nil {
-		if logger != nil {
-			logger.Printf("startup resync for plugin %q was not started: %v", plugin, err)
-		}
+		logger.Printf("startup resync for plugin %q was not started: %v", plugin, err)
 	}
 }

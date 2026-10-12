@@ -14,7 +14,6 @@ import (
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
 
-// catalogReader provides the graph queries required by the HTTP API.
 type catalogReader interface {
 	GetNode(ctx context.Context, id catalog.NodeID) (catalog.Node, error)
 	ListNodes(ctx context.Context) ([]catalog.Node, error)
