@@ -99,6 +99,7 @@ import (
 const (
 	propertyKeyProviderName      = "provider_name"
 	propertyKeyRegionName        = "region_name"
+	propertyKeyModelID           = "model_id"
 	propertyKeyModelName         = "model_name"
 	propertyKeyModelLifecycle    = "model_lifecycle"
 	propertyKeyInputModalities   = "input_modalities"
@@ -292,8 +293,11 @@ func (u modelUsage) status() string {
 }
 
 func (m foundationModel) properties(regionName string, usage modelUsage) pluginapi.PropertyMap {
+	// model_id is the CloudWatch ModelId dimension, which the UI uses to
+	// select this endpoint's series from the YACE-exported Bedrock metrics.
 	properties := pluginapi.PropertyMap{
 		propertyKeyRegionName: regionName,
+		propertyKeyModelID:    strings.TrimSpace(m.ModelID),
 	}
 	for key, value := range m.Props {
 		properties[key] = value

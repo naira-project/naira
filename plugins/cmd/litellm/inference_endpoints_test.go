@@ -107,6 +107,7 @@ func TestListInferenceEndpointsEmitsNodesAndRelations(t *testing.T) {
 				"api_base":                       "https://api.anthropic.com",
 				"region_name":                    "us-east-1",
 				"model_name":                     "idp-claude-sonnet",
+				"upstream_model":                 "anthropic/claude-3-5-sonnet-latest",
 				"owned_by":                       "team-a",
 				"lifecycle_status":               "active",
 				"mode":                           "chat",

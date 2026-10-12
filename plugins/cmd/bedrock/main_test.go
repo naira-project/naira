@@ -132,6 +132,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"region_name":         "us-east-1",
+							"model_id":            "amazon.nova-micro-v1:0",
 							"model_name":          "Nova Micro",
 							"model_lifecycle":     "active",
 							"input_modalities":    "text",
@@ -234,6 +235,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"region_name":         "us-east-1",
+							"model_id":            "amazon.titan-text-express-v1",
 							"input_tokens_total":  "3",
 							"output_tokens_total": "5",
 							"invocations_total":   "1",
@@ -283,6 +285,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"region_name":         "us-east-1",
+							"model_id":            "amazon.titan-text-express-v1",
 							"input_tokens_total":  "3",
 							"output_tokens_total": "5",
 							"invocations_total":   "1",
@@ -296,6 +299,7 @@ func TestCollect(t *testing.T) {
 						},
 						Properties: pluginapi.PropertyMap{
 							"region_name":         "eu-central-1",
+							"model_id":            "amazon.titan-text-express-v1",
 							"input_tokens_total":  "3",
 							"output_tokens_total": "5",
 							"invocations_total":   "1",
