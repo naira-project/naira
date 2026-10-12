@@ -75,7 +75,7 @@ func TestRunPluginFlowJSONContract(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			snapshotStore := pluginruntest.NewMemorySnapshotStore()
+			snapshotStore := pluginruntest.NewMemorySnapshotStoreWithSuccessfulCommit()
 			router, _ := newTestRouter(t, &catalogtest.StubStore{}, snapshotStore, map[string]pluginrun.Plugin{
 				"mlflow": tt.pluginImpl,
 			})
@@ -123,7 +123,7 @@ func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
 }
 
 func TestRunPluginAsyncEndpointConflict(t *testing.T) {
-	snapshotStore := pluginruntest.NewMemorySnapshotStore()
+	snapshotStore := pluginruntest.NewMemorySnapshotStoreWithSuccessfulCommit()
 	block := make(chan struct{})
 	router, runner := newTestRouter(t, &catalogtest.StubStore{}, snapshotStore, map[string]pluginrun.Plugin{
 		"mlflow": blockingStubPlugin{block: block},
@@ -147,7 +147,7 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 }
 
 func TestGetOperationsEndpoint(t *testing.T) {
-	snapshotStore := pluginruntest.NewMemorySnapshotStore()
+	snapshotStore := pluginruntest.NewMemorySnapshotStoreWithSuccessfulCommit()
 	router, _ := newTestRouter(t, &catalogtest.StubStore{}, snapshotStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
 
 	// Trigger "seed" plugin flow

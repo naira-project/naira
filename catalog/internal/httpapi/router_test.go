@@ -83,13 +83,12 @@ func newTestRouter(t *testing.T, store *catalogtest.StubStore, snapshotStore *pl
 		snapshotStore = pluginruntest.NewMemorySnapshotStore()
 	}
 
-	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), snapshotStore, snapshotStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
 	configs := make(catalog.PluginConfigsByName, len(plugins))
 	for name := range plugins {
 		configs[name] = catalog.PluginConfig{}
 	}
-	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	router, err := NewRouter(store, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
 	require.NoError(t, err)
 	return router, runner
 }

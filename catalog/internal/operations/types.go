@@ -1,5 +1,5 @@
-// Package operations implements a small, domain-agnostic tracker for
-// long-running asynchronous work (AIP-151).
+// Package operations defines operation models and the persistence contract
+// for tracking asynchronous work.
 package operations
 
 import (

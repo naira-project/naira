@@ -1,7 +1,7 @@
+// Package catalog defines catalog graph models and snapshot validation.
 package catalog
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,12 +13,6 @@ var (
 	ErrInvalidIngestion = errors.New("invalid ingestion payload")
 	ErrNodeNotFound     = errors.New("node not found")
 )
-
-type Store interface {
-	ListNodes(ctx context.Context) ([]Node, error)
-	GetNode(ctx context.Context, id NodeID) (Node, error)
-	ListRelations(ctx context.Context) ([]Relation, error)
-}
 
 type PluginClaim struct {
 	SnapshotID uuid.UUID

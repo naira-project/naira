@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,10 +14,17 @@ import (
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
 
+// catalogReader provides the graph queries required by the HTTP API.
+type catalogReader interface {
+	GetNode(ctx context.Context, id catalog.NodeID) (catalog.Node, error)
+	ListNodes(ctx context.Context) ([]catalog.Node, error)
+	ListRelations(ctx context.Context) ([]catalog.Relation, error)
+}
+
 // NewRouter wires up the catalog HTTP API.
-// catalogService serves read-only graph queries (nodes/relations);
+// catalogReader serves read-only graph queries (nodes/relations);
 // runner drives and reports on asynchronous plugin runs (plugins/operations).
-func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugins catalog.PluginConfigsByName, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
+func NewRouter(catalogReader catalogReader, runner *pluginrun.Runner, plugins catalog.PluginConfigsByName, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
 	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
 	if err != nil {
 		return nil, fmt.Errorf("creating auth middleware: %w", err)
@@ -44,10 +52,10 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugin
 		r.Get("/operations", newListOperationsHandler(runner, logger))
 		r.Get("/operations/{operationId}", newGetOperationHandler(runner))
 
-		r.Get("/nodes", newListNodesHandler(catalogService, logger))
-		r.Get("/nodes/{kind}/*", newGetNodeHandler(catalogService))
+		r.Get("/nodes", newListNodesHandler(catalogReader, logger))
+		r.Get("/nodes/{kind}/*", newGetNodeHandler(catalogReader))
 
-		r.Get("/relations", newListRelationsHandler(catalogService, logger))
+		r.Get("/relations", newListRelationsHandler(catalogReader, logger))
 	})
 
 	return router, nil

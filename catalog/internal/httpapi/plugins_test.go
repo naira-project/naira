@@ -37,7 +37,7 @@ func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) htt
 		log.New(io.Discard, "", 0),
 	)
 	router, err := NewRouter(
-		catalog.NewService(&catalogtest.StubStore{}),
+		&catalogtest.StubStore{},
 		runner,
 		configs,
 		log.New(io.Discard, "", 0),

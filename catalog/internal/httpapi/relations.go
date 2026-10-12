@@ -69,9 +69,9 @@ func relationName(kind string, from, to pluginapi.NodeID) string {
 // - pageToken
 // - filter: only field="value" equality filters
 // Supported relation filter fields: name, kind, fromNode, toNode.
-func newListRelationsHandler(service *catalog.Service, logger *log.Logger) http.HandlerFunc {
+func newListRelationsHandler(reader catalogReader, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(relationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-		catalogRelations, err := service.ListRelations(r.Context())
+		catalogRelations, err := reader.ListRelations(r.Context())
 		if err != nil {
 			return fmt.Errorf("listing relations: %w", err)
 		}

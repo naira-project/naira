@@ -13,7 +13,6 @@ import (
 
 	"github.com/Nerzal/gocloak/v13"
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
-	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
 	"github.com/naira-project/naira/catalog/internal/pgstore"
 	"github.com/naira-project/naira/catalog/internal/pluginmanager"
@@ -59,7 +58,6 @@ func main() {
 		logger.Printf("marked %d interrupted operation(s) after restart", interrupted)
 	}
 
-	catalogService := catalog.NewService(graphStore)
 	runner := pluginrun.NewRunner(ctx, operationStore, snapshotCommitter, registeredPlugins, config.PluginTimeout, logger)
 	scheduler, err := scheduling.NewConfiguredScheduler(ctx, config.Plugins, runner.RunPluginAsync, logger)
 	if err != nil {
@@ -68,7 +66,7 @@ func main() {
 
 	scheduling.ResyncAtStartup(ctx, config.Plugins, operationStore, runner.RunPluginAsync, time.Now(), resyncLookback, logger)
 
-	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
+	router, err := httpapi.NewRouter(graphStore, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 		Issuer: config.KeycloakIssuer,
