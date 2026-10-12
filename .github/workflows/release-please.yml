@@ -171,12 +171,7 @@ jobs:
             image-name: "naira-plugin-depl-uses-thalamus"
             dockerfile: "plugins/cmd/depl_uses_thalamus/Dockerfile"
             context: "."
-    # Each matrix entry calls a nested reusable workflow that chains its own
-    # build -> SBOM jobs, rather than matrixing build and SBOM separately:
-    # a matrix job's outputs only expose one arbitrary instance's values to
-    # dependents, which would risk pairing one plugin's SBOM with another
-    # plugin's digest.
-    uses: ./.github/workflows/reusable-publish-and-sbom.yml
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-publish-and-sbom.yml@816c32a2ce221a530847cbb054cfa6775f5d4ef1 # PR 41
     with:
       image-name: ${{ matrix.image-name }}
       dockerfile: ${{ matrix.dockerfile }}
