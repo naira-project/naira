@@ -22,26 +22,42 @@ var (
 type RunPluginFunc func(ctx context.Context, plugin string) (operations.Operation, error)
 
 type Scheduler struct {
-	cron *cron.Cron
+	cron     *cron.Cron
+	ctx      context.Context
+	configs  catalog.PluginConfigsByName
+	opsStore operations.Store
+	runFunc  RunPluginFunc
+	logger   *log.Logger
 }
 
-// NewConfiguredScheduler initializes configured plugin schedules and starts the scheduler.
-// The caller must call Scheduler.Stop when the scheduler is no longer needed.
-func NewConfiguredScheduler(ctx context.Context, configs catalog.PluginConfigsByName, runFunc RunPluginFunc, logger *log.Logger) (*Scheduler, error) {
+// NewScheduler registers configured plugin schedules without starting them.
+// Call Start to resync missed runs and begin firing schedules, and Stop when
+// the scheduler is no longer needed.
+func NewScheduler(
+	ctx context.Context,
+	configs catalog.PluginConfigsByName,
+	opsStore operations.Store,
+	runFunc RunPluginFunc,
+	logger *log.Logger,
+) (*Scheduler, error) {
 	sch := &Scheduler{
-		cron: cron.New(),
+		cron:     cron.New(),
+		ctx:      ctx,
+		configs:  configs,
+		opsStore: opsStore,
+		runFunc:  runFunc,
+		logger:   logger,
 	}
 
-	if err := sch.registerSchedules(ctx, configs, runFunc, logger); err != nil {
+	if err := sch.registerSchedules(); err != nil {
 		return nil, fmt.Errorf("registering schedules: %w", err)
 	}
 
-	sch.cron.Start()
 	return sch, nil
 }
 
-func (s *Scheduler) registerSchedules(ctx context.Context, configs catalog.PluginConfigsByName, runFunc RunPluginFunc, logger *log.Logger) error {
-	for plugin, config := range configs {
+func (s *Scheduler) registerSchedules() error {
+	for plugin, config := range s.configs {
 		expr := config.Schedule
 		if plugin == "" {
 			return ErrInvalidPlugin
@@ -51,9 +67,9 @@ func (s *Scheduler) registerSchedules(ctx context.Context, configs catalog.Plugi
 		}
 
 		_, err := s.cron.AddFunc(expr, func() {
-			if _, err := runFunc(ctx, plugin); err != nil {
-				if logger != nil {
-					logger.Printf("scheduled run for plugin %q was not started: %v", plugin, err)
+			if _, err := s.runFunc(s.ctx, plugin); err != nil {
+				if s.logger != nil {
+					s.logger.Printf("scheduled run for plugin %q was not started: %v", plugin, err)
 				}
 			}
 		})
@@ -62,6 +78,12 @@ func (s *Scheduler) registerSchedules(ctx context.Context, configs catalog.Plugi
 		}
 	}
 	return nil
+}
+
+// Start resyncs plugin runs then begins firing configured schedules.
+func (s *Scheduler) Start() {
+	resyncAtStartup(s.ctx, s.configs, s.opsStore, s.runFunc, time.Now(), s.logger)
+	s.cron.Start()
 }
 
 func (s *Scheduler) Stop(ctx context.Context) error {
@@ -116,7 +138,7 @@ func successCompletedAt(op operations.Operation) time.Time {
 	return op.CreatedAt
 }
 
-// ResyncAtStartup triggers an immediate run, via runFunc, for a plugin based
+// resyncAtStartup triggers an immediate run, via runFunc, for a plugin based
 // solely on the state of its most recent operation. The rules:
 //
 //  1. No operation recorded at all -> bootstrap.
@@ -128,9 +150,9 @@ func successCompletedAt(op operations.Operation) time.Time {
 //     recent time the plugin's schedule should have fired, to catch up
 //     on ticks missed while the process was down.
 //
-// Meant to run once at startup, after ResyncAtStartup and before the
-// running plugins by http server and scheduler
-func ResyncAtStartup(
+// Meant to run once at startup before the scheduler and HTTP server accept
+// plugin runs
+func resyncAtStartup(
 	ctx context.Context,
 	configs catalog.PluginConfigsByName,
 	opsStore operations.Store,

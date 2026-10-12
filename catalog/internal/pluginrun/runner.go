@@ -165,6 +165,19 @@ func (r *Runner) ListOperations(ctx context.Context, filter operations.Filter) (
 	return result, nil
 }
 
+// MarkInterrupted must run before any new run is accepted, otherwise
+// hasActiveOperation would reject runs because of stale operations.
+func (r *Runner) MarkInterrupted(ctx context.Context) {
+	interrupted, err := r.operations.MarkInterrupted(ctx)
+	if err != nil {
+		r.logf("failed to mark interrupted operations: %v", err)
+		return
+	}
+	if interrupted > 0 {
+		r.logf("marked %d interrupted operation(s) after restart", interrupted)
+	}
+}
+
 // Wait blocks until all in-flight plugin runs have finished.
 func (r *Runner) Wait() {
 	r.wg.Wait()

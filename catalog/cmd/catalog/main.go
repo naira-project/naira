@@ -48,21 +48,11 @@ func main() {
 	operationStore := pgstore.NewOperationStore(pgPool)
 	snapshotCommitter := pgstore.NewSnapshotCommitter(pgPool)
 
-	interrupted, err := operationStore.MarkInterrupted(ctx)
-	if err != nil {
-		logger.Printf("failed to mark interrupted operations: %v", err)
-	}
-	if interrupted > 0 {
-		logger.Printf("marked %d interrupted operation(s) after restart", interrupted)
-	}
-
 	runner := pluginrun.NewRunner(ctx, operationStore, snapshotCommitter, registeredPlugins, config.PluginTimeout, logger)
-	scheduler, err := scheduling.NewConfiguredScheduler(ctx, config.Plugins, runner.RunPluginAsync, logger)
+	scheduler, err := scheduling.NewScheduler(ctx, config.Plugins, operationStore, runner.RunPluginAsync, logger)
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
-
-	scheduling.ResyncAtStartup(ctx, config.Plugins, operationStore, runner.RunPluginAsync, time.Now(), logger)
 
 	router, err := httpapi.NewRouter(graphStore, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
@@ -78,6 +68,9 @@ func main() {
 		ReadHeaderTimeout: config.ReadHeadersTimeout,
 	}
 
+	// Mark stale operations before running scheduler and http server
+	runner.MarkInterrupted(ctx)
+	scheduler.Start()
 	go func() {
 		logger.Printf("starting catalog on :%d", config.Port)
 		for name, plugin := range config.Plugins {
