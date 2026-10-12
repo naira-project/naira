@@ -19,7 +19,7 @@ includes:
 
 tasks:
   deploy:
-    desc: Deploy the LLM Inference stack (postgres + litellm + llamacpp + monitoring + YACE when AWS credentials are set)
+    desc: Deploy the LLM Inference stack (postgres + litellm + llamacpp + monitoring)
     cmds:
       - task: litellm:deploy
       - task: llamacpp:deploy
