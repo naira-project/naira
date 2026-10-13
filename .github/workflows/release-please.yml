@@ -171,7 +171,7 @@ jobs:
             image-name: "naira-plugin-depl-uses-thalamus"
             dockerfile: "plugins/cmd/depl_uses_thalamus/Dockerfile"
             context: "."
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-publish-and-sbom.yml@816c32a2ce221a530847cbb054cfa6775f5d4ef1 # PR 41
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-publish-and-sbom.yml@7112a4077f0d0facfc3290a1e5c6eedfd1e2fd95 # main
     with:
       image-name: ${{ matrix.image-name }}
       dockerfile: ${{ matrix.dockerfile }}
