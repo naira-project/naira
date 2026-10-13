@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.33.3
 	github.com/aws/aws-sdk-go-v2/service/bedrock v1.71.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.71.0
+	github.com/cobaltcore-dev/thalamus v0.0.0-20260709123737-132c032777dc
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0

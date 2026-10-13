@@ -4,10 +4,11 @@ package openaicompat
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
 )
 
 // Datum contains the well-known fields of a model object returned by GET
@@ -51,27 +52,10 @@ type SimpleModelsResponse = DataResponse[Datum]
 func GetModels(ctx context.Context, client *http.Client, baseURL, bearerToken string, out any) error {
 	addr := strings.TrimRight(baseURL, "/") + "/v1/models"
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, addr, nil)
-	if err != nil {
-		return fmt.Errorf("building /v1/models request: %w", err)
-	}
-
-	if strings.TrimSpace(bearerToken) != "" {
-		req.Header.Set("Authorization", "Bearer "+bearerToken)
-	}
-
-	resp, err := client.Do(req)
+	err := httpjson.Get(ctx, client, addr, out,
+		httpjson.WithAuthorizationBearer(bearerToken))
 	if err != nil {
 		return fmt.Errorf("calling /v1/models: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("/v1/models returned %s", resp.Status)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("decoding /v1/models response: %w", err)
 	}
 
 	return nil

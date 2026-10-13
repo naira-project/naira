@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -120,78 +120,40 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) fetchRegisteredModels(ctx context.Context) ([]registeredModel, error) {
-	endpoint, err := url.Parse(p.config.BaseURL + "/api/2.0/mlflow/registered-models/search")
+	url, err := httpjson.BuildURL(p.config.BaseURL+"/api/2.0/mlflow/registered-models/search", url.Values{
+		"max_results": {"1000"},
+		"order_by":    {"name ASC"},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("building MLflow registered models URL: %w", err)
 	}
 
-	query := endpoint.Query()
-	query.Set("max_results", "1000")
-	query.Set("order_by", "name ASC")
-	endpoint.RawQuery = query.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("building MLflow registered models request: %w", err)
-	}
-	p.addAuthorization(req)
-
-	resp, err := p.httpClient.Do(req)
+	var payload registeredModelsResponse
+	err = httpjson.Get(ctx, p.httpClient, url.String(), &payload,
+		httpjson.WithAuthorizationBearer(p.config.BearerToken))
 	if err != nil {
 		return nil, fmt.Errorf("calling MLflow registered models endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("mlflow registered models returned %s", resp.Status)
-	}
-
-	var payload registeredModelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decoding MLflow registered models response: %w", err)
 	}
 
 	return payload.RegisteredModels, nil
 }
 
 func (p *Plugin) fetchRun(ctx context.Context, runID string) (run, error) {
-	endpoint, err := url.Parse(p.config.BaseURL + "/api/2.0/mlflow/runs/get")
+	url, err := httpjson.BuildURL(p.config.BaseURL+"/api/2.0/mlflow/runs/get", url.Values{
+		"run_id": {runID},
+	})
 	if err != nil {
 		return run{}, fmt.Errorf("building MLflow run URL for %q: %w", runID, err)
 	}
 
-	query := endpoint.Query()
-	query.Set("run_id", runID)
-	endpoint.RawQuery = query.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-	if err != nil {
-		return run{}, fmt.Errorf("building MLflow run request for %q: %w", runID, err)
-	}
-	p.addAuthorization(req)
-
-	resp, err := p.httpClient.Do(req)
+	var payload getRunResponse
+	err = httpjson.Get(ctx, p.httpClient, url.String(), &payload,
+		httpjson.WithAuthorizationBearer(p.config.BearerToken))
 	if err != nil {
 		return run{}, fmt.Errorf("calling MLflow run endpoint for %q: %w", runID, err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return run{}, fmt.Errorf("mlflow run %s returned %s", runID, resp.Status)
-	}
-
-	var payload getRunResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return run{}, fmt.Errorf("decoding MLflow run response for %q: %w", runID, err)
-	}
 
 	return payload.Run, nil
-}
-
-func (p *Plugin) addAuthorization(req *http.Request) {
-	if strings.TrimSpace(p.config.BearerToken) != "" {
-		req.Header.Set("Authorization", "Bearer "+p.config.BearerToken)
-	}
 }
 
 type registeredModelsResponse struct {

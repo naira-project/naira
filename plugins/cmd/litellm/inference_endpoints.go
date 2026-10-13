@@ -2,15 +2,14 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
@@ -195,27 +194,8 @@ func (m litellmParams) provider() string {
 // response body into out. Callers wrap the returned error with the endpoint
 // they called.
 func (p *Plugin) getLiteLLMJSON(ctx context.Context, urlStr string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
-	if err != nil {
-		return fmt.Errorf("building request: %w", err)
-	}
-	p.addAuthorization(req)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("unexpected status %s", resp.Status)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("decoding response body: %w", err)
-	}
-
-	return nil
+	return httpjson.Get(ctx, p.httpClient, urlStr, out,
+		httpjson.WithAuthorizationBearer(p.config.APIKey))
 }
 
 func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[modelAndAPIBase]string) ([]inferenceEndpoint, error) {
@@ -306,14 +286,13 @@ func (p *Plugin) fetchModelInvocations(ctx context.Context) (map[string]int64, e
 	endDate := time.Now().UTC()
 	startDate := endDate.Add(-lookback)
 
-	requestURL, err := url.Parse(p.config.BaseURL + "/user/daily/activity")
+	url, err := httpjson.BuildURL(p.config.BaseURL+"/user/daily/activity", url.Values{
+		"start_date": {startDate.Format("2006-01-02")},
+		"end_date":   {endDate.Format("2006-01-02")},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("building LiteLLM daily activity request: %w", err)
 	}
-	query := requestURL.Query()
-	query.Set("start_date", startDate.Format("2006-01-02"))
-	query.Set("end_date", endDate.Format("2006-01-02"))
-	requestURL.RawQuery = query.Encode()
 
 	var payload struct {
 		Results []struct {
@@ -326,7 +305,7 @@ func (p *Plugin) fetchModelInvocations(ctx context.Context) (map[string]int64, e
 			} `json:"breakdown"`
 		} `json:"results"`
 	}
-	if err := p.getLiteLLMJSON(ctx, requestURL.String(), &payload); err != nil {
+	if err := p.getLiteLLMJSON(ctx, url.String(), &payload); err != nil {
 		return nil, fmt.Errorf("fetching LiteLLM /user/daily/activity: %w", err)
 	}
 
