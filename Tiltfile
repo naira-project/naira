@@ -55,7 +55,10 @@ local_resource(
 helm_resource(
     'test-dependencies', DEPS_CHART,
     namespace=DEPS_NAMESPACE,
-    flags=['--create-namespace', '--values=' + DEPS_CHART + '/values-dev.yaml'],
+    # The local image has no registry, so Tilt leaves the key unset and the
+    # chart would prefix its ghcr default; clear it so kind uses the loaded image.
+    flags=['--create-namespace', '--values=' + DEPS_CHART + '/values-dev.yaml',
+           '--set=mcpMock.image.registry='],
     deps=[DEPS_CHART + '/values.yaml', DEPS_CHART + '/values-dev.yaml', DEPS_CHART + '/templates'],
     image_deps=['mcp-mock'],
     image_keys=[('mcpMock.image.registry', 'mcpMock.image.repository', 'mcpMock.image.tag')],
@@ -73,10 +76,13 @@ DEPS_FORWARDS = {
     'litellm': '4000:4000',
     'mlflow': '5000:5000',
 }
+# The release is ready before its pods are, and port-forward exits while a pod
+# is pending or after it restarts, so retry instead of leaving the resource failed.
 for svc, ports in DEPS_FORWARDS.items():
     local_resource(
         svc + '-port-forward',
-        serve_cmd='kubectl -n %s port-forward svc/%s %s' % (DEPS_NAMESPACE, svc, ports),
+        serve_cmd='while true; do kubectl -n %s port-forward svc/%s %s; sleep 2; done'
+                  % (DEPS_NAMESPACE, svc, ports),
         resource_deps=['test-dependencies'],
         labels=['test-dependencies'],
     )
