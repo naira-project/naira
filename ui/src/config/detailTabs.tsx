@@ -1,5 +1,8 @@
 import { BrainCircuit, Cloud, Wrench } from 'lucide-react';
+import type { ComponentType } from 'react';
+import LangfuseMetrics from '../components/LangfuseMetrics';
 import type { RelatedNodesConfig } from '../components/RelatedNodes';
+import type { NodeResource } from '../lib/catalogApi';
 
 export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
   mcp_server: {
@@ -35,4 +38,20 @@ export const RELATED_CARDS_BY_KIND: Record<string, RelatedNodesConfig> = {
 
 export function relatedCardForKind(kind: string): RelatedNodesConfig | undefined {
   return RELATED_CARDS_BY_KIND[kind];
+}
+
+/** Kinds that can carry LLM observability; the panel is silent without a bound Langfuse project. */
+const LANGFUSE_OBSERVABLE_KINDS = ['deployment', 'application'];
+
+/**
+ * Extra panels appended to a kind's Properties tab. A related-nodes card suits
+ * neighbours worth linking to; Langfuse metrics need rendering, not a link.
+ */
+export const PROPERTY_PANELS_BY_KIND: Record<string, ComponentType<{ node: NodeResource }>> =
+  Object.fromEntries(LANGFUSE_OBSERVABLE_KINDS.map((kind) => [kind, LangfuseMetrics]));
+
+export function propertyPanelForKind(
+  kind: string,
+): ComponentType<{ node: NodeResource }> | undefined {
+  return PROPERTY_PANELS_BY_KIND[kind];
 }

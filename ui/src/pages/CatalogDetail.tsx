@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router';
 import PropertiesPanel from '../components/PropertiesPanel';
 import RelatedNodes from '../components/RelatedNodes';
 import { Button } from '../components/ui/button';
-import { relatedCardForKind } from '../config/detailTabs';
+import { propertyPanelForKind, relatedCardForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
@@ -30,6 +30,7 @@ export default function CatalogDetail() {
   const backPath = findViewpointForKind(decodedKind)?.path;
 
   const relatedConfig = relatedCardForKind(decodedKind);
+  const PropertyPanel = propertyPanelForKind(decodedKind);
   const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 
@@ -111,6 +112,8 @@ export default function CatalogDetail() {
                 {currentTab === PROPERTIES_TAB && (
                   <div className="flex flex-col gap-6">
                     <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+
+                    {PropertyPanel && <PropertyPanel node={node} />}
 
                     {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
                   </div>

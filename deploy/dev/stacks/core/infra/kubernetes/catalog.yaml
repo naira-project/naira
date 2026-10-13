@@ -438,7 +438,7 @@ data:
       bedrock:
         address: localhost:50061
       langfuse:
-        address: localhost:50060
+        address: localhost:50062
         schedule: "*/15 * * * *"
 
 ---
@@ -696,7 +696,7 @@ spec:
           env:
             # Must match the langfuse entry in catalog-plugin-config above.
             - name: PORT
-              value: "50060"
+              value: "50062"
             - name: LANGFUSE_CONFIG_PATH
               value: /etc/naira/langfuse/config.yaml
           # A directory mount (no subPath) so Secret updates reach the pod.

@@ -19,36 +19,36 @@ interface LangfuseMetricsProps {
 }
 
 /**
- * The detail page's Langfuse tab. Owns its own data so the page stays
- * kind-agnostic, and reads the same depth-1 graph slice as the Graph tab so
- * both share one cached request.
+ * LLM observability for a node, appended to its Properties tab. Reads the same
+ * depth-1 graph slice as the Graph tab, so both share one cached request.
+ *
+ * Renders nothing unless there is something to show: it appears on every
+ * deployment, and most have no Langfuse project.
  */
 export default function LangfuseMetrics({ node }: LangfuseMetricsProps) {
   const { graph, loading, error } = useCatalogGraph({ name: node.name }, 1);
   const scopes = useMemo(() => langfuseMetricsFromGraph(graph, node.name), [graph, node.name]);
 
-  if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading metrics…</p>;
-  }
-
+  // Before the silent return: a failed request leaves no scopes either.
   if (error) {
     return <p className="text-sm text-red-500">{error}</p>;
   }
 
-  if (scopes.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No Langfuse project is linked to this application. Bind it in the langfuse plugin's
-        configuration, then run the plugin to pull in its cost, latency and feedback metrics.
-      </p>
-    );
+  // Silent while loading too, so nothing flashes on a node with no metrics.
+  if (loading || scopes.length === 0) {
+    return null;
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {scopes.map((scope) => (
-        <ScopeCard key={scope.name} scope={scope} />
-      ))}
+    <div className="flex flex-col gap-2">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        LLM Observability
+      </h3>
+      <div className="flex flex-col gap-4">
+        {scopes.map((scope) => (
+          <ScopeCard key={scope.name} scope={scope} />
+        ))}
+      </div>
     </div>
   );
 }
