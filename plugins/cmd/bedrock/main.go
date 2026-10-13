@@ -293,8 +293,9 @@ func (u modelUsage) status() string {
 }
 
 func (m foundationModel) properties(regionName string, usage modelUsage) pluginapi.PropertyMap {
-	// model_id is the CloudWatch ModelId dimension, which the UI uses to
-	// select this endpoint's series from the YACE-exported Bedrock metrics.
+	// model_id is the CloudWatch ModelId dimension, which can be used to
+	// select the metric series of this model (e.g. its invocation count or
+	// latency) from the YACE-exported Bedrock metrics.
 	properties := pluginapi.PropertyMap{
 		propertyKeyRegionName: regionName,
 		propertyKeyModelID:    strings.TrimSpace(m.ModelID),
