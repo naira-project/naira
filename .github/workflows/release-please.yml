@@ -176,7 +176,6 @@ jobs:
       image-name: ${{ matrix.image-name }}
       dockerfile: ${{ matrix.dockerfile }}
       context: ${{ matrix.context }}
-      platforms: "linux/amd64,linux/arm64"
       release-tag: ${{ needs.release-please.outputs.target_tag }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}

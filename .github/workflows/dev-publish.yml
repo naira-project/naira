@@ -94,12 +94,11 @@ jobs:
       id-token: write
       attestations: write
       artifact-metadata: write
-    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@de9bdb0d30bec81f6730a82d28f7b7acf481609f
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@47828e26feb1a916603512312148622613d5bd26
     with:
       image-name: ${{ matrix.image-name }}
       dockerfile: ${{ matrix.dockerfile }}
       context: ${{ matrix.context }}
-      platforms: "linux/amd64,linux/arm64"
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
