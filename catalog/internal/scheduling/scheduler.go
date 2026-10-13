@@ -151,7 +151,7 @@ func needsResync(last *operations.Operation, scheduleExpr string, now time.Time)
 }
 
 // resyncAtStartup uses persisted operation state and configured schedules to
-// start bootstrap, interrupted, or missed scheduled runs. It runs once at
+// start bootstrap, interrupted, or missed scheduled runs. It should run once at
 // startup before the scheduler and HTTP server accept plugin runs.
 func resyncAtStartup(
 	ctx context.Context,
