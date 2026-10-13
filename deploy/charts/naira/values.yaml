@@ -226,9 +226,10 @@ ui:
   image: {repository: naira-ui, tag: ""}
   port: 80
   # Empty -> http://catalog.<release namespace>.svc.cluster.local:<catalog.port>
-  # TODO: the UI image does not read this yet; ui/nginx.conf.template still
-  # proxies to catalog.idp-system. Until then, install into namespace idp-system.
   catalogUpstream: ""
+  # Prometheus the UI proxies /prometheus/ to for the metric dashboards.
+  # Empty -> the image default, http://prometheus-operated.monitoring.svc.cluster.local:9090
+  prometheusUpstream: ""
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 200m, memory: 128Mi}
