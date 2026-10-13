@@ -220,6 +220,74 @@ catalog:
             resources: ["deployments"]
             verbs: ["get", "list"]
 
+    openai-api-models:
+      enabled: true
+      image: {repository: naira-plugin-openai-api-models, tag: ""}
+      port: 50060
+      schedule: "0 0 * * *"
+      # Note: using the same pathPrefix and BASE_URL as with the litellm plugin
+      # showcases how data from different plugins accessing the same API can be
+      # merged into a single node in the catalog.
+      pathPrefix: litellm
+      env:
+        OPENAI_API_MODELS_BASE_URL: http://litellm.naira-deps.svc.cluster.local:4000
+        OPENAI_API_MODELS_API_KEY: {secretKeyRef: {key: LITELLM_API_KEY}}
+
+    bedrock:
+      # Off by default: AWS_ACCESS_KEY_ID etc. are required. Add them to the
+      # catalog Secret under proper keys before enabling.
+      enabled: false
+      image: {repository: naira-plugin-bedrock, tag: ""}
+      port: 50061
+      schedule: "0 0 * * *"
+      pathPrefix: bedrock
+      env:
+        REGIONS: "us-east-1 eu-central-1"
+        AWS_ACCESS_KEY_ID: {secretKeyRef: {key: AWS_ACCESS_KEY_ID}}
+        AWS_SECRET_ACCESS_KEY: {secretKeyRef: {key: AWS_SECRET_ACCESS_KEY}}
+        METRICS_LOOKBACK: "24h"
+
+    thalamus:
+      # Off by default: THALAMUS_BASE_URL and THALAMUS_BEARER_TOKEN are
+      # required. Add them to the catalog Secret under proper keys before
+      # enabling.
+      enabled: false
+      image: {repository: naira-plugin-thalamus, tag: ""}
+      port: 50062
+      schedule: "0 0 * * *"
+      pathPrefix: thalamus
+      env:
+        THALAMUS_BASE_URL: {secretKeyRef: {key: THALAMUS_BASE_URL}}
+        THALAMUS_BEARER_TOKEN: {secretKeyRef: {key: THALAMUS_BEARER_TOKEN}}
+        HTTP_TIMEOUT: "5s"
+      rbac:
+        rules:
+          - apiGroups: ["thalamus.cloud"]
+            resources: ["models"]
+            verbs: ["get", "list"]
+
+    depl-uses-thalamus:
+      # Off by default: THALAMUS_BASE_URL and THALAMUS_BEARER_TOKEN are
+      # required. Add them to the catalog Secret under proper keys before
+      # enabling.
+      enabled: false
+      image: {repository: naira-plugin-thalamus, tag: ""}
+      port: 50063
+      schedule: "0 0 * * *"
+      pathPrefix: thalamus
+      env:
+        THALAMUS_BASE_URL: {secretKeyRef: {key: THALAMUS_BASE_URL}}
+        THALAMUS_BEARER_TOKEN: {secretKeyRef: {key: THALAMUS_BEARER_TOKEN}}
+        HTTP_TIMEOUT: "5s"
+      rbac:
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces"]
+            verbs: ["get", "list"]
+          - apiGroups: ["apps"]
+            resources: ["deployments"]
+            verbs: ["get", "list"]
+
 ui:
   enabled: true
   replicas: 1
