@@ -1,6 +1,6 @@
 import type { PanelConfig } from '../types';
 
-// deploymentId is the deployment's model_id label. It disambiguates deployments
+// deploymentId is the inference endpoint's model_id label. It disambiguates inference endpoints
 // that share the same requested_model (e.g. the two idp-claude-sonnet regional
 // entries in litellm.yaml).
 export function litellmPanels(deploymentId?: string): PanelConfig[] {
