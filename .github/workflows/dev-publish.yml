@@ -132,6 +132,22 @@ jobs:
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
 
+  container-publish-plugin-argocd:
+    name: Publish · Plugin ArgoCD
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: naira-project/naira-github-workflows/.github/workflows/reusable-container-build.yml@47828e26feb1a916603512312148622613d5bd26
+    with:
+      image-name: "naira-plugin-argocd"
+      dockerfile: "plugins/cmd/argocd/Dockerfile"
+      context: "."
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   container-publish-plugin-depl-uses-litellm:
     name: Publish · Plugin Depl Uses LiteLLM
     permissions:
@@ -255,6 +271,7 @@ jobs:
       - container-publish-plugin-litellm
       - container-publish-plugin-depl-calls-svc
       - container-publish-plugin-fluxcd
+      - container-publish-plugin-argocd
       - container-publish-plugin-depl-uses-litellm
       - container-publish-plugin-openmetadata
       - container-publish-plugin-mcp-servers
@@ -277,6 +294,7 @@ jobs:
             "${{ needs.container-publish-plugin-litellm.result }}"
             "${{ needs.container-publish-plugin-depl-calls-svc.result }}"
             "${{ needs.container-publish-plugin-fluxcd.result }}"
+            "${{ needs.container-publish-plugin-argocd.result }}"
             "${{ needs.container-publish-plugin-depl-uses-litellm.result }}"
             "${{ needs.container-publish-plugin-openmetadata.result }}"
             "${{ needs.container-publish-plugin-mcp-servers.result }}"

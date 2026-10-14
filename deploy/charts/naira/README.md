@@ -68,6 +68,7 @@ in a value fails the render.
 | depl-calls-svc | 50053 | yes | RBAC: namespaces, services, deployments |
 | depl-uses-litellm | 50054 | no | RBAC: namespaces, secrets (cluster-wide), deployments |
 | fluxcd | 50055 | yes | RBAC: deployments, kustomizations, helmreleases, gitrepositories |
+| argocd | 50060 | yes | RBAC: applications |
 | openmetadata | 50056 | yes | Secret key `OPENMETADATA_ADMIN_PASSWORD` |
 | tech-radar | 50057 | no | Config file (`config.data` or `config.existingConfigMap`) |
 | mcp-servers | 50058 | yes | — |

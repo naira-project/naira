@@ -336,6 +336,28 @@ rules:
     verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: plugin-argocd
+rules:
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: plugin-argocd
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: plugin-argocd
+subjects:
+  - kind: ServiceAccount
+    name: catalog
+    namespace: idp-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: plugin-depl-calls-svc
@@ -418,6 +440,9 @@ data:
         address: localhost:50058
       github:
         address: localhost:50059
+      argocd:
+        address: localhost:50060
+        schedule: "*/1 * * * *"
       openai-api-models-litellm:
         address: localhost:50060
       bedrock:
@@ -522,6 +547,20 @@ spec:
           env:
             - name: PORT
               value: "50055"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: plugin-argocd
+          image: argocd:local
+          restartPolicy: Always
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PORT
+              value: "50060"
           resources:
             requests:
               cpu: 50m

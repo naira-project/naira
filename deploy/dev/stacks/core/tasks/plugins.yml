@@ -19,6 +19,9 @@ vars:
     - name: fluxcd
       dir: '{{.PLUGINS_BASE}}/fluxcd'
       image: fluxcd:local
+    - name: argocd
+      dir: '{{.PLUGINS_BASE}}/argocd'
+      image: argocd:local
     - name: openmetadata
       dir: '{{.PLUGINS_BASE}}/openmetadata'
       image: openmetadata:local
