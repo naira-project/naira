@@ -23,12 +23,12 @@ const testClusterID = "c1"
 func TestCollect(t *testing.T) {
 	tests := []struct {
 		name string
-		app  string
+		apps []string
 		want pluginapi.CollectResponse
 	}{
 		{
 			name: "managed resources become nodes, describes and deployed_from relations",
-			app: `{
+			apps: []string{`{
 				"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
 				"metadata": {"name": "demo", "namespace": "argocd"},
 				"spec": {
@@ -47,7 +47,7 @@ func TestCollect(t *testing.T) {
 						{"group": "argoproj.io", "kind": "Application", "name": "child", "namespace": "argocd"}
 					]
 				}
-			}`,
+			}`},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "c1/argocd/child")},
@@ -90,29 +90,86 @@ func TestCollect(t *testing.T) {
 		},
 		{
 			name: "Application targeting another cluster is skipped",
-			app: `{
+			apps: []string{`{
 				"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
 				"metadata": {"name": "remote", "namespace": "argocd"},
 				"spec": {"destination": {"server": "https://other.example.com"}},
 				"status": {"resources": [{"group": "apps", "kind": "Deployment", "name": "web", "namespace": "default"}]}
-			}`,
+			}`},
 			want: pluginapi.CollectResponse{},
 		},
+		{
+			name: "child Applications keep their properties regardless of processing order",
+			apps: []string{
+				`{
+					"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
+					"metadata": {"name": "a-parent", "namespace": "argocd"},
+					"spec": {"destination": {"server": "https://kubernetes.default.svc"}},
+					"status": {"resources": [
+						{"group": "argoproj.io", "kind": "Application", "name": "z-child", "namespace": "argocd"},
+						{"group": "argoproj.io", "kind": "Application", "name": "remote", "namespace": "argocd"}
+					]}
+				}`,
+				`{
+					"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
+					"metadata": {"name": "z-child", "namespace": "argocd"},
+					"spec": {"project": "p", "destination": {"server": "https://kubernetes.default.svc"}},
+					"status": {"sync": {"status": "Synced"}, "health": {"status": "Healthy"}}
+				}`,
+				`{
+					"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
+					"metadata": {"name": "remote", "namespace": "argocd"},
+					"spec": {"project": "p", "destination": {"server": "https://other.example.com"}},
+					"status": {"sync": {"status": "Synced"}}
+				}`,
+			},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("Application.argocd", "c1/argocd/a-parent"), Properties: props{
+						"project":               "",
+						"sync_status":           "",
+						"health_status":         "",
+						"destination_namespace": ""}},
+					{ID: nodeID("Application.argocd", "c1/argocd/remote")},
+					{ID: nodeID("Application.argocd", "c1/argocd/z-child"), Properties: props{
+						"project":               "p",
+						"sync_status":           "Synced",
+						"health_status":         "Healthy",
+						"destination_namespace": ""}},
+				},
+				Relations: []pluginapi.RelationClaim{
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/a-parent"),
+						To:   nodeID("Application.argocd", "c1/argocd/remote"),
+					},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/a-parent"),
+						To:   nodeID("Application.argocd", "c1/argocd/z-child"),
+					},
+				},
+			},
+		},
 	}
+	kubeSystem := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: testClusterID}}
+	argocd := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd", UID: "argocd-uid"}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var obj map[string]any
-			require.NoError(t, json.Unmarshal([]byte(tt.app), &obj))
+			objs := []runtime.Object{kubeSystem, argocd}
+			for _, app := range tt.apps {
+				var obj map[string]any
+				require.NoError(t, json.Unmarshal([]byte(app), &obj))
+				objs = append(objs, &unstructured.Unstructured{Object: obj})
+			}
 
 			gvr := schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "applications"}
 			s := runtime.NewScheme()
 			_ = corev1.AddToScheme(s)
 			s.AddKnownTypeWithName(gvr.GroupVersion().WithKind("ApplicationList"), &unstructured.UnstructuredList{})
-			kubeSystem := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: testClusterID}}
-			argocd := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd", UID: "argocd-uid"}}
 			dyn := fake.NewSimpleDynamicClientWithCustomListKinds(s,
-				map[schema.GroupVersionResource]string{gvr: "ApplicationList"},
-				kubeSystem, argocd, &unstructured.Unstructured{Object: obj})
+				map[schema.GroupVersionResource]string{
+					gvr: "ApplicationList",
+				},
+				objs...)
 			disc := &discfake.FakeDiscovery{Fake: &dyn.Fake}
 			disc.Resources = []*metav1.APIResourceList{{
 				GroupVersion: gvr.GroupVersion().String(),
