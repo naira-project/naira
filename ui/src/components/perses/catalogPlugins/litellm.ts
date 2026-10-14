@@ -1,10 +1,11 @@
+import { escapeLabelValue } from '../promql';
 import type { PanelConfig } from '../types';
 
 // deploymentId is the inference endpoint's model_id label. It disambiguates inference endpoints
 // that share the same requested_model (e.g. the two idp-claude-sonnet regional
 // entries in litellm.yaml).
 export function litellmPanels(deploymentId?: string): PanelConfig[] {
-  const filter = deploymentId ? `, model_id="${deploymentId}"` : '';
+  const filter = deploymentId ? `, model_id="${escapeLabelValue(deploymentId)}"` : '';
   return [
     {
       title: 'Input Token Rate',

@@ -1,11 +1,12 @@
+import { escapeLabelValue } from '../promql';
 import type { PanelConfig } from '../types';
 
 // YACE exports each CloudWatch datapoint as a gauge holding the statistic over
 // its 1m period, so these are plotted as-is rather than rate()d.
 // A model node has no region, so without one every region is drawn as its own line.
 export function bedrockPanels(modelId: string, region?: string): PanelConfig[] {
-  const regionFilter = region ? `, region="${region}"` : '';
-  const selector = `{dimension_ModelId="${modelId}"${regionFilter}}`;
+  const regionFilter = region ? `, region="${escapeLabelValue(region)}"` : '';
+  const selector = `{dimension_ModelId="${escapeLabelValue(modelId)}"${regionFilter}}`;
   return [
     {
       title: 'Invocations (per 1m)',
