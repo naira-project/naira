@@ -50,61 +50,41 @@ func TestCollect(t *testing.T) {
 			}`,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/child"}},
-					{
-						ID: pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/demo"},
-						Properties: pluginapi.PropertyMap{
-							"project":               "default",
-							"sync_status":           "Synced",
-							"health_status":         "Healthy",
-							"destination_namespace": "default",
-						},
-					},
-					{ID: pluginapi.NodeID{Kind: "deployment", Path: "c1/default/web"}},
-					{
-						ID:         pluginapi.NodeID{Kind: "git_repository", Path: "github.com/acme/config"},
-						Properties: pluginapi.PropertyMap{"url": "https://github.com/acme/config.git"},
-					},
-					{ID: pluginapi.NodeID{Kind: "k8s_resource", Path: "c1/core/ConfigMap/default/cfg"}},
-					{ID: pluginapi.NodeID{Kind: "k8s_resource", Path: "c1/core/PersistentVolume/pv"}},
-					{ID: pluginapi.NodeID{Kind: "service", Path: "c1/default/web"}},
+					{ID: nodeID("Application.argocd", "c1/argocd/child")},
+					{ID: nodeID("Application.argocd", "c1/argocd/demo"), Properties: props{
+						"project":               "default",
+						"sync_status":           "Synced",
+						"health_status":         "Healthy",
+						"destination_namespace": "default"}},
+					{ID: nodeID("deployment", "c1/default/web")},
+					{ID: nodeID("git_repository", "github.com/acme/config"), Properties: props{
+						"url": "https://github.com/acme/config.git"}},
+					{ID: nodeID("k8s_resource", "c1/core/ConfigMap/default/cfg")},
+					{ID: nodeID("k8s_resource", "c1/core/PersistentVolume/pv")},
+					{ID: nodeID("service", "c1/default/web")},
 				},
 				Relations: []pluginapi.RelationClaim{
-					{
-						Kind: "deployed_from",
-						From: pluginapi.NodeID{Kind: "deployment", Path: "c1/default/web"},
-						To:   pluginapi.NodeID{Kind: "git_repository", Path: "github.com/acme/config"},
-					},
-					{
-						Kind: "describes",
-						From: pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/demo"},
-						To:   pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/child"},
-					},
-					{
-						Kind: "describes",
-						From: pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/demo"},
-						To:   pluginapi.NodeID{Kind: "deployment", Path: "c1/default/web"},
-					},
-					{
-						Kind: "describes",
-						From: pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/demo"},
-						To:   pluginapi.NodeID{Kind: "k8s_resource", Path: "c1/core/ConfigMap/default/cfg"},
-					},
-					{
-						Kind: "describes",
-						From: pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/demo"},
-						To:   pluginapi.NodeID{Kind: "k8s_resource", Path: "c1/core/PersistentVolume/pv"},
-					},
-					{
-						Kind: "describes",
-						From: pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/demo"},
-						To:   pluginapi.NodeID{Kind: "service", Path: "c1/default/web"},
-					},
-					{
-						Kind: "sourced_from",
-						From: pluginapi.NodeID{Kind: "Application.argocd", Path: "c1/argocd/demo"},
-						To:   pluginapi.NodeID{Kind: "git_repository", Path: "github.com/acme/config"},
-					},
+					{Kind: "deployed_from",
+						From: nodeID("deployment", "c1/default/web"),
+						To:   nodeID("git_repository", "github.com/acme/config")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/demo"),
+						To:   nodeID("Application.argocd", "c1/argocd/child")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/demo"),
+						To:   nodeID("deployment", "c1/default/web")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/demo"),
+						To:   nodeID("k8s_resource", "c1/core/ConfigMap/default/cfg")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/demo"),
+						To:   nodeID("k8s_resource", "c1/core/PersistentVolume/pv")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/demo"),
+						To:   nodeID("service", "c1/default/web")},
+					{Kind: "sourced_from",
+						From: nodeID("Application.argocd", "c1/argocd/demo"),
+						To:   nodeID("git_repository", "github.com/acme/config")},
 				},
 			},
 		},
@@ -136,7 +116,11 @@ func TestCollect(t *testing.T) {
 			disc := &discfake.FakeDiscovery{Fake: &dyn.Fake}
 			disc.Resources = []*metav1.APIResourceList{{
 				GroupVersion: gvr.GroupVersion().String(),
-				APIResources: []metav1.APIResource{{Name: "applications", Kind: "Application", Verbs: []string{"list"}}},
+				APIResources: []metav1.APIResource{{
+					Name:  "applications",
+					Kind:  "Application",
+					Verbs: []string{"list"},
+				}},
 			}}
 
 			got, err := New(config{}).collect(t.Context(), disc, dyn)
@@ -153,3 +137,9 @@ func TestCollect(t *testing.T) {
 		})
 	}
 }
+
+func nodeID(kind, path string) pluginapi.NodeID {
+	return pluginapi.NodeID{Kind: kind, Path: path}
+}
+
+type props = pluginapi.PropertyMap
