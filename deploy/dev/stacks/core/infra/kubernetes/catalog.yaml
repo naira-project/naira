@@ -1,9 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: idp-system
----
-apiVersion: v1
 kind: Secret
 metadata:
   name: catalog-secrets

@@ -53,6 +53,7 @@ tasks:
       - task: llm-inference:undeploy
       - task: mlops:undeploy
       - task: core:undeploy
+      - task: core:postgres:undeploy
 
   # Cluster management
   cluster:delete:

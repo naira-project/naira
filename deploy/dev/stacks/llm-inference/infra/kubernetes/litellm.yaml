@@ -15,7 +15,7 @@ stringData:
   ANTHROPIC_API_KEY: change-me
   GEMINI_API_KEY: change-me
   OPENROUTER_API_KEY: change-me
-  DATABASE_URL: postgresql://litellm:litellm-local-password@postgres.litellm-db.svc.cluster.local:5432/litellm
+  DATABASE_URL: postgresql://litellm:litellm-local-password@postgres.idp-system.svc.cluster.local:5432/litellm
 ---
 apiVersion: v1
 kind: ConfigMap
