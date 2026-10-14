@@ -68,6 +68,42 @@
   "overrides": {
     "@tailwindcss/typography": {
       "postcss-selector-parser": "7.1.6"
+    },
+    "@perses-dev/components": {
+      "react": "$react",
+      "react-dom": "$react-dom",
+      "@tanstack/react-query": "$@tanstack/react-query",
+      "@perses-dev/spec": "$@perses-dev/spec"
+    },
+    "@perses-dev/dashboards": {
+      "react": "$react",
+      "react-dom": "$react-dom",
+      "@tanstack/react-query": "$@tanstack/react-query",
+      "@perses-dev/spec": "$@perses-dev/spec"
+    },
+    "@perses-dev/explore": {
+      "react": "$react",
+      "react-dom": "$react-dom",
+      "@tanstack/react-query": "$@tanstack/react-query",
+      "@perses-dev/spec": "$@perses-dev/spec"
+    },
+    "@perses-dev/plugin-system": {
+      "react": "$react",
+      "react-dom": "$react-dom",
+      "@tanstack/react-query": "$@tanstack/react-query",
+      "@perses-dev/spec": "$@perses-dev/spec"
+    },
+    "@perses-dev/prometheus-plugin": {
+      "react": "$react",
+      "react-dom": "$react-dom",
+      "@tanstack/react-query": "$@tanstack/react-query",
+      "@perses-dev/spec": "$@perses-dev/spec"
+    },
+    "@perses-dev/timeseries-chart-plugin": {
+      "react": "$react",
+      "react-dom": "$react-dom",
+      "@tanstack/react-query": "$@tanstack/react-query",
+      "@perses-dev/spec": "$@perses-dev/spec"
     }
   }
 }
