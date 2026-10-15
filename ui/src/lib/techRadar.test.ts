@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NodeResource } from './catalogApi';
-import { parseRadarModel } from './techRadar';
+import { matchCatalogRefs, parseRadarModel } from './techRadar';
 
 function radarNode(props: Record<string, string>): NodeResource {
   return {
@@ -142,5 +142,61 @@ describe('parseRadarModel', () => {
 
     expect(model?.entries).toEqual([]);
     expect(model?.orphans.map((e) => e.name)).toEqual(['Ghost']);
+  });
+
+  it('parses catalog refs and falls back to none when absent or malformed', () => {
+    const entryProps = {
+      quadrant: 'models',
+      ring: 'adopt',
+      moved: 'none',
+      owner: 'team',
+      rationale: 'r',
+    };
+    const model = parseRadarModel(radarNode(validRadarProps), [
+      entryNode('naira/linked', {
+        ...entryProps,
+        title: 'Linked',
+        index: '0',
+        catalog_refs: '["claude-sonnet","Claude-Opus"]',
+      }),
+      entryNode('naira/unlinked', { ...entryProps, title: 'Unlinked', index: '1' }),
+      entryNode('naira/broken', {
+        ...entryProps,
+        title: 'Broken',
+        index: '2',
+        catalog_refs: '{"not":"a list"}',
+      }),
+    ]);
+
+    expect(model?.entries.map((e) => e.catalogRefs)).toEqual([
+      ['claude-sonnet', 'Claude-Opus'],
+      [],
+      [],
+    ]);
+  });
+});
+
+describe('matchCatalogRefs', () => {
+  function node(kind: string, path: string): NodeResource {
+    return { name: `nodes/${kind}/${path}`, kind, path, pluginClaims: [] };
+  }
+
+  const nodes = [
+    node('model', 'litellm/claude-sonnet-4'),
+    node('model', 'bedrock/anthropic.claude-sonnet-4-20250514-v1:0'),
+    node('model', 'mlflow/fraud-detector'),
+    node('model', 'bedrock/anthropic.Claude-Opus-4-1-v1:0'),
+  ];
+
+  it('matches every provider path containing a ref, ignoring case, sorted by path', () => {
+    expect(matchCatalogRefs(['claude-sonnet', 'claude-opus'], nodes).map((n) => n.path)).toEqual([
+      'bedrock/anthropic.Claude-Opus-4-1-v1:0',
+      'bedrock/anthropic.claude-sonnet-4-20250514-v1:0',
+      'litellm/claude-sonnet-4',
+    ]);
+  });
+
+  it('matches nothing without refs', () => {
+    expect(matchCatalogRefs([], nodes)).toEqual([]);
   });
 });

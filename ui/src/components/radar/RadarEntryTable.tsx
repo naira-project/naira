@@ -18,13 +18,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import type { RadarCatalogNodes } from '@/hooks/useRadarCatalogNodes';
 import type { RadarEntry, RadarRing } from '@/lib/techRadar';
 import { ringColor } from '@/lib/techRadar';
+import CatalogMatches from './CatalogMatches';
 import MovementIndicator from './MovementIndicator';
 
 interface RadarEntryTableProps {
   entries: RadarEntry[];
   rings: RadarRing[];
+  catalog: RadarCatalogNodes;
 }
 
 const features = tableFeatures({
@@ -35,9 +38,9 @@ const features = tableFeatures({
 
 /**
  * Tabular quadrant detail: one row per radar entry with ring, movement,
- * owner, and the recorded rationale.
+ * owner, matching catalog nodes, and the recorded rationale.
  */
-export default function RadarEntryTable({ entries, rings }: RadarEntryTableProps) {
+export default function RadarEntryTable({ entries, rings, catalog }: RadarEntryTableProps) {
   const labelText =
     'truncate text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground';
 
@@ -98,6 +101,13 @@ export default function RadarEntryTable({ entries, rings }: RadarEntryTableProps
         ),
       },
       {
+        id: 'catalog',
+        header: 'In catalog',
+        enableSorting: false,
+        accessorFn: (entry) => entry.catalogRefs.join(', '),
+        cell: (info) => <CatalogMatches refs={info.row.original.catalogRefs} catalog={catalog} />,
+      },
+      {
         id: 'rationale',
         header: 'Rationale',
         enableSorting: false,
@@ -109,7 +119,7 @@ export default function RadarEntryTable({ entries, rings }: RadarEntryTableProps
         ),
       },
     ],
-    [ringIndexById, ringNameById],
+    [ringIndexById, ringNameById, catalog],
   );
 
   const [sorting, setSorting] = useState<SortingState>([]);
