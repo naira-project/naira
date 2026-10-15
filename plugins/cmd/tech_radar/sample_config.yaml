@@ -26,6 +26,13 @@
 #     moved          optional; one of in, out, none; defaults to none.
 #     owner          required.
 #     rationale      required.
+#     catalog_refs   optional; strings linking the entry to catalog nodes.
+#                    Each item is matched case-insensitively as a substring
+#                    of model and inference endpoint node paths, so one ref
+#                    finds the model under every provider that serves it.
+#                    Items must be non-empty, without leading or trailing
+#                    whitespace, at most 200 characters, and unique within
+#                    the entry.
 #
 # General rules:
 #   - Every id must match ^[a-z0-9][a-z0-9_-]*$, be at most 100 characters,
@@ -71,6 +78,8 @@ entries:
     moved: in                # in | out | none; defaults to none
     owner: ml-platform
     rationale: Default general-purpose model.
+    catalog_refs:            # optional; matched against catalog node paths
+      - claude-sonnet
   - id: naive-rag            # "moved" omitted here; defaults to none
     name: Naive RAG
     quadrant: knowledge

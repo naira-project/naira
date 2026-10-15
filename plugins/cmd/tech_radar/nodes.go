@@ -9,6 +9,7 @@ import (
 )
 
 const (
+	propertyKeyCatalogRefs   = "catalog_refs"
 	propertyKeyEdition       = "edition"
 	propertyKeyEntryCount    = "entry_count"
 	propertyKeyIndex         = "index"
@@ -82,18 +83,28 @@ func (p *Plugin) buildResponse(cfg *radarConfig) pluginapi.CollectResponse {
 	})
 
 	for i, e := range cfg.Entries {
+		properties := pluginapi.PropertyMap{
+			propertyKeyTitle:     p.clip(fmt.Sprintf("entry %q: name", e.ID), e.Name, maxLabelLength),
+			propertyKeyQuadrant:  e.Quadrant,
+			propertyKeyRing:      e.Ring,
+			propertyKeyMoved:     e.Moved,
+			propertyKeyOwner:     p.clip(fmt.Sprintf("entry %q: owner", e.ID), e.Owner, maxLabelLength),
+			propertyKeyRationale: p.clip(fmt.Sprintf("entry %q: rationale", e.ID), e.Rationale, maxTextLength),
+			propertyKeyIndex:     strconv.Itoa(i),
+			propertyKeyRadar:     cfg.Radar.ID,
+		}
+		if len(e.CatalogRefs) > 0 {
+			// Marshalling a string slice cannot fail; the error is ignored.
+			catalogRefsJSON, _ := json.Marshal(e.CatalogRefs)
+			properties[propertyKeyCatalogRefs] = string(catalogRefsJSON)
+		}
+
 		nodes = append(nodes, pluginapi.NodeClaim{
-			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindTechRadarEntry, Path: cfg.Radar.ID + "/" + e.ID},
-			Properties: pluginapi.PropertyMap{
-				propertyKeyTitle:     p.clip(fmt.Sprintf("entry %q: name", e.ID), e.Name, maxLabelLength),
-				propertyKeyQuadrant:  e.Quadrant,
-				propertyKeyRing:      e.Ring,
-				propertyKeyMoved:     e.Moved,
-				propertyKeyOwner:     p.clip(fmt.Sprintf("entry %q: owner", e.ID), e.Owner, maxLabelLength),
-				propertyKeyRationale: p.clip(fmt.Sprintf("entry %q: rationale", e.ID), e.Rationale, maxTextLength),
-				propertyKeyIndex:     strconv.Itoa(i),
-				propertyKeyRadar:     cfg.Radar.ID,
+			ID: pluginapi.NodeID{
+				Kind: pluginapi.NodeKindTechRadarEntry,
+				Path: cfg.Radar.ID + "/" + e.ID,
 			},
+			Properties: properties,
 		})
 	}
 
