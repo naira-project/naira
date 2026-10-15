@@ -27,6 +27,11 @@ var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 // clipping would corrupt references — so oversized ids fail validation.
 const maxIDLength = 100
 
+// maxCatalogRefLength bounds catalog_refs items. Like ids, they are matched
+// rather than displayed, so oversized values fail validation instead of being
+// clipped into a different match.
+const maxCatalogRefLength = 200
+
 type radarConfig struct {
 	SchemaVersion int        `yaml:"schema_version"`
 	Radar         radarMeta  `yaml:"radar"`
@@ -62,13 +67,14 @@ type ring struct {
 }
 
 type entry struct {
-	ID        string `yaml:"id"`
-	Name      string `yaml:"name"`
-	Quadrant  string `yaml:"quadrant"`
-	Ring      string `yaml:"ring"`
-	Moved     string `yaml:"moved"`
-	Owner     string `yaml:"owner"`
-	Rationale string `yaml:"rationale"`
+	ID          string   `yaml:"id"`
+	Name        string   `yaml:"name"`
+	Quadrant    string   `yaml:"quadrant"`
+	Ring        string   `yaml:"ring"`
+	Moved       string   `yaml:"moved"`
+	Owner       string   `yaml:"owner"`
+	Rationale   string   `yaml:"rationale"`
+	CatalogRefs []string `yaml:"catalog_refs"`
 
 	line int
 }
@@ -323,6 +329,21 @@ func (c *radarConfig) validate() error {
 		}
 		if e.Moved != movedIn && e.Moved != movedOut && e.Moved != movedNone {
 			report(e.line, "entries[%d] (id %q): field \"moved\" must be one of in, out, none; got %q", i, e.ID, e.Moved)
+		}
+
+		refs := make(map[string]bool, len(e.CatalogRefs))
+		for j, ref := range e.CatalogRefs {
+			switch {
+			case ref == "":
+				report(e.line, "entries[%d] (id %q): catalog_refs[%d] must not be empty", i, e.ID, j)
+			case ref != strings.TrimSpace(ref):
+				report(e.line, "entries[%d] (id %q): catalog_refs[%d] %q must not have leading or trailing whitespace", i, e.ID, j, ref)
+			case len(ref) > maxCatalogRefLength:
+				report(e.line, "entries[%d] (id %q): catalog_refs[%d] must be at most %d characters, got %d", i, e.ID, j, maxCatalogRefLength, len(ref))
+			case refs[ref]:
+				report(e.line, "entries[%d] (id %q): duplicate catalog_refs item %q", i, e.ID, ref)
+			}
+			refs[ref] = true
 		}
 	}
 

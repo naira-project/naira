@@ -35,6 +35,8 @@ func TestParseRadarConfigValid(t *testing.T) {
 	require.Len(t, cfg.Entries, 2)
 	assert.Equal(t, "in", cfg.Entries[0].Moved)
 	assert.Equal(t, "none", cfg.Entries[1].Moved, "omitted moved defaults to none")
+	assert.Equal(t, []string{"claude-sonnet"}, cfg.Entries[0].CatalogRefs)
+	assert.Nil(t, cfg.Entries[1].CatalogRefs, "catalog_refs is optional")
 }
 
 func TestParseRadarConfigDefaultsRadarID(t *testing.T) {
@@ -249,6 +251,33 @@ rings:
   - {id: adopt, name: Adopt}
 `,
 			wantErrs: []string{"entries: field is required (use [] for a radar without entries)"},
+		},
+		{
+			name: "invalid catalog refs",
+			config: `schema_version: 1
+radar: {title: Radar, edition: v1, owner: team}
+quadrants:
+  - {id: a, name: A}
+  - {id: b, name: B}
+  - {id: c, name: C}
+  - {id: d, name: D}
+rings:
+  - {id: adopt, name: Adopt}
+entries:
+  - id: e1
+    name: E1
+    quadrant: a
+    ring: adopt
+    owner: o
+    rationale: r
+    catalog_refs: ["", " claude", claude, claude, ` + strings.Repeat("x", 201) + `]
+`,
+			wantErrs: []string{
+				`line 11: entries[0] (id "e1"): catalog_refs[0] must not be empty`,
+				`entries[0] (id "e1"): catalog_refs[1] " claude" must not have leading or trailing whitespace`,
+				`entries[0] (id "e1"): duplicate catalog_refs item "claude"`,
+				`entries[0] (id "e1"): catalog_refs[4] must be at most 200 characters, got 201`,
+			},
 		},
 	}
 
