@@ -109,12 +109,14 @@ export default function GenericTable({
         header: 'Name',
         accessorFn: (node) => displayName(node.kind, node.path, nodeProps(node)),
         cell: (info) => (
-          <span
-            className="truncate text-sm font-medium text-foreground"
+          <Button
+            variant="link"
+            className="h-auto max-w-full justify-start p-0 text-sm font-medium text-foreground"
+            onClick={() => onSelect(info.row.original)}
             title={info.row.original.name}
           >
-            {info.getValue() as string}
-          </span>
+            <span className="min-w-0 truncate">{info.getValue() as string}</span>
+          </Button>
         ),
       },
       showPluginColumn

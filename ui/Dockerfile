@@ -11,6 +11,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY docker-entrypoint.sh /custom-entrypoint.sh
 RUN chmod +x /custom-entrypoint.sh
+# Upstreams the nginx config proxies to; override per deployment.
+ENV CATALOG_UPSTREAM=http://catalog.idp-system.svc.cluster.local:8090
+ENV PROMETHEUS_UPSTREAM=http://prometheus-operated.monitoring.svc.cluster.local:9090
 EXPOSE 80
 ENTRYPOINT ["/custom-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

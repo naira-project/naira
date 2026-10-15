@@ -2,16 +2,16 @@ import { ArrowLeft, ScrollText } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import PropertiesPanel from '../components/PropertiesPanel';
+import { PersesDashboard } from '../components/perses/PersesDashboard';
 import RelatedNodes from '../components/RelatedNodes';
 import { Button } from '../components/ui/button';
-import { relatedCardForKind } from '../config/detailTabs';
+import { relatedNodesConfigForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
 import { endpointLogsUrl } from '../lib/endpointLogs';
 import { cn } from '../lib/utils';
 import CatalogGraph from './CatalogGraph';
-import { PersesDashboard } from '@/components/PersesDashboard';
 
 const GRAPH_TAB = 'Graph';
 const PROPERTIES_TAB = 'Properties';
@@ -31,7 +31,7 @@ export default function CatalogDetail() {
   const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
   const backPath = findViewpointForKind(decodedKind)?.path;
 
-  const relatedConfig = relatedCardForKind(decodedKind);
+  const relatedConfig = relatedNodesConfigForKind(decodedKind);
   const logsUrl = node ? endpointLogsUrl(node) : undefined;
   const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
@@ -125,7 +125,6 @@ export default function CatalogDetail() {
                     <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
 
                     {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
-                    
                     <PersesDashboard node={node} />
                   </div>
                 )}

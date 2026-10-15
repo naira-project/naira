@@ -43,8 +43,6 @@ development Secrets from values.
   platform:undeploy` or delete the `catalog`/`ui`/`portal` Deployments in
   `idp-system`). `helm install` cannot take over those objects: the Deployment
   selectors differ and are immutable.
-- The UI works only in namespace `idp-system` for now: `ui/nginx.conf.template`
-  still proxies to `catalog.idp-system` regardless of `ui.catalogUpstream`.
 - `keycloak.issuer`, `authUrl`, `baseDomain` and `portal.uiBaseUrl`
   default to `localhost` (kind, port-forward). Anywhere else, set them to the
   addresses the browser uses; the catalog accepts only tokens whose `iss`

@@ -8,18 +8,14 @@ server {
     index index.html;
 
     location /v1/ {
-        set $catalog_upstream http://catalog.idp-system.svc.cluster.local:8090;
+        set $catalog_upstream ${CATALOG_UPSTREAM};
         proxy_pass $catalog_upstream;
     }
 
     location /prometheus/ {
-        # proxy_pass with a variable target does not strip the matched
-        # location prefix (unlike a static proxy_pass URI), so the /prometheus
-        # prefix must be stripped explicitly before forwarding to Prometheus,
-        # whose own API routes live at /api/v1/... with no such prefix.
         # `set` must come before `rewrite ... break` — break halts the whole
         # rewrite-phase directive sequence, so a `set` placed after it never runs.
-        set $prometheus_upstream http://prometheus-operated.monitoring.svc.cluster.local:9090;
+        set $prometheus_upstream ${PROMETHEUS_UPSTREAM};
         rewrite ^/prometheus/(.*)$ /$1 break;
         proxy_pass $prometheus_upstream;
     }
