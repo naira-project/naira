@@ -43,12 +43,6 @@ const (
 	argoApplication = "Application"
 )
 
-// ArgoCD's names for the cluster the Application lives in.
-const (
-	inClusterServer = "https://kubernetes.default.svc"
-	inClusterName   = "in-cluster"
-)
-
 type config struct {
 	Kubeconfig string `env:"KUBECONFIG"`
 }
@@ -105,31 +99,31 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		nodes = append(nodes, claim)
 	}
 
-	// Application nodes are added first, so that child Applications
-	// listed as managed resources are claimed with their properties.
-	var managed []unstructured.Unstructured
+	var inClusterApps []unstructured.Unstructured
 	for _, app := range apps {
 		if !isInCluster(app) {
 			log.Printf("argocd: skipping Application %s/%s: destination is not the local cluster", app.GetNamespace(), app.GetName())
 			continue
 		}
-		managed = append(managed, app)
-		project, _, _ := unstructured.NestedString(app.Object, "spec", "project")
-		syncStatus, _, _ := unstructured.NestedString(app.Object, "status", "sync", "status")
-		health, _, _ := unstructured.NestedString(app.Object, "status", "health", "status")
-		destNs, _, _ := unstructured.NestedString(app.Object, "spec", "destination", "namespace")
+		inClusterApps = append(inClusterApps, app)
+		var (
+			project      = nestedStringOrEmpty(app, "spec", "project")
+			syncStatus   = nestedStringOrEmpty(app, "status", "sync", "status")
+			healthStatus = nestedStringOrEmpty(app, "status", "health", "status")
+			destNs       = nestedStringOrEmpty(app, "spec", "destination", "namespace")
+		)
 		addNode(pluginapi.NodeClaim{
 			ID: applicationID(clusterID, app.GetNamespace(), app.GetName()),
 			Properties: pluginapi.PropertyMap{
 				"project":               project,
 				"sync_status":           syncStatus,
-				"health_status":         health,
+				"health_status":         healthStatus,
 				"destination_namespace": destNs,
 			},
 		})
 	}
 
-	for _, app := range managed {
+	for _, app := range inClusterApps {
 		appID := applicationID(clusterID, app.GetNamespace(), app.GetName())
 
 		var repoIDs []pluginapi.NodeID
@@ -162,10 +156,12 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			if !ok {
 				continue
 			}
-			group, _ := res["group"].(string)
-			kind, _ := res["kind"].(string)
-			ns, _ := res["namespace"].(string)
-			name, _ := res["name"].(string)
+			var (
+				group, _ = res["group"].(string)
+				kind, _  = res["kind"].(string)
+				ns, _    = res["namespace"].(string)
+				name, _  = res["name"].(string)
+			)
 			if kind == "" || name == "" {
 				continue
 			}
@@ -234,24 +230,44 @@ func resourceID(clusterID, group, kind, ns, name string) pluginapi.NodeID {
 
 // isInCluster returns true if the Application deploys to the cluster it lives in.
 func isInCluster(app unstructured.Unstructured) bool {
-	server, _, _ := unstructured.NestedString(app.Object, "spec", "destination", "server")
-	name, _, _ := unstructured.NestedString(app.Object, "spec", "destination", "name")
+	var (
+		server = nestedStringOrEmpty(app, "spec", "destination", "server")
+		name   = nestedStringOrEmpty(app, "spec", "destination", "name")
+	)
+	// ArgoCD's names for the cluster the Application lives in.
+	const (
+		inClusterServer = "https://kubernetes.default.svc"
+		inClusterName   = "in-cluster"
+	)
 	return server == inClusterServer || name == inClusterName
 }
 
 // sourceURLs returns repoURLs of all sources of the Application.
 func sourceURLs(app unstructured.Unstructured) []string {
-	var urls []string
-	if url, _, _ := unstructured.NestedString(app.Object, "spec", "source", "repoURL"); url != "" {
-		urls = append(urls, url)
-	}
 	sources, _, _ := unstructured.NestedSlice(app.Object, "spec", "sources")
-	for _, s := range sources {
-		if m, ok := s.(map[string]any); ok {
-			if url, _ := m["repoURL"].(string); url != "" {
-				urls = append(urls, url)
-			}
+
+	// According to the ArgoCD documentation as of Oct 2026, "When you
+	// specify the sources field, Argo CD will ignore the source (singular) field."
+	// (https://argo-cd.readthedocs.io/en/stable/user-guide/multiple_sources/)
+	if len(sources) == 0 {
+		url := nestedStringOrEmpty(app, "spec", "source", "repoURL")
+		if url == "" {
+			return nil
 		}
+		return []string{url}
+	}
+
+	var urls []string
+	for _, s := range sources {
+		m, _ := s.(map[string]any)
+		if m == nil {
+			continue
+		}
+		url, _ := m["repoURL"].(string)
+		if url == "" {
+			continue
+		}
+		urls = append(urls, url)
 	}
 	return urls
 }
@@ -270,4 +286,9 @@ func (p *Plugin) connect() (discovery.DiscoveryInterface, dynamic.Interface, err
 		return nil, nil, fmt.Errorf("creating k8s dynamic client: %w", err)
 	}
 	return disc, dyn, nil
+}
+
+func nestedStringOrEmpty(u unstructured.Unstructured, fields ...string) string {
+	s, _, _ := unstructured.NestedString(u.Object, fields...)
+	return s
 }
