@@ -34,6 +34,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"slices"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/discovery"
@@ -118,6 +120,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			syncStatus   = nestedStringOrEmpty(app, "status", "sync", "status")
 			healthStatus = nestedStringOrEmpty(app, "status", "health", "status")
 			destNs       = nestedStringOrEmpty(app, "spec", "destination", "namespace")
+			srcType      = sourceType(app)
 		)
 		addNode(pluginapi.NodeClaim{
 			ID: applicationID(clusterID, app.GetNamespace(), app.GetName()),
@@ -126,6 +129,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				"sync_status":           syncStatus,
 				"health_status":         healthStatus,
 				"destination_namespace": destNs,
+				"source_type":           srcType,
 			},
 		})
 	}
@@ -142,6 +146,9 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			repoID := pluginapi.NodeID{
 				Kind: pluginapi.NodeKindGitRepository,
 				Path: repoPath,
+			}
+			if slices.Contains(repoIDs, repoID) {
+				continue // multiple sources can point to the same repository
 			}
 			addNode(pluginapi.NodeClaim{
 				ID: repoID,
@@ -277,6 +284,15 @@ func sourceURLs(app unstructured.Unstructured) []string {
 		urls = append(urls, url)
 	}
 	return urls
+}
+
+// sourceType returns the tool(s) ArgoCD detected for the Application's source(s).
+func sourceType(app unstructured.Unstructured) string {
+	types, _, _ := unstructured.NestedStringSlice(app.Object, "status", "sourceTypes")
+	if len(types) == 0 {
+		return nestedStringOrEmpty(app, "status", "sourceType")
+	}
+	return strings.Join(types, ",")
 }
 
 func (p *Plugin) connect() (discovery.DiscoveryInterface, dynamic.Interface, error) {

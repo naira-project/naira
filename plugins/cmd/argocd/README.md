@@ -6,9 +6,22 @@ Managed Deployments and Services are emitted as deployment and service Nodes. Ch
 
 An Application "describes" each resource it manages. If its source is a GitHub repository, the Application is "sourced\_from" a git\_repository Node, and managed Deployments are "deployed\_from" it.
 
+## Known Limitations
+
 Only Applications deploying to the cluster they live in are supported; Applications targeting other clusters are skipped.
 
-TODO: add support for ApplicationSets and AppProjects. TODO: git repository Nodes could support other Git hosts then GitHub.
+Currently, we only recognize Application sources ("repoURL") that match GitHub repository URLs. Unfortunately, ArgoCD uses ad-hoc heuristics to detect the source type based on the URL, and they're not trivial to reproduce.
+
+TODO:
+
+  - add support for ApplicationSets and AppProjects.
+  - git repository Nodes could support other Git hosts than GitHub.
+  - allow configuring custom regexps to recognize Git sources ("repoURL") other than GitHub, and Helm chart sources, to emit Nodes for them.
+  - recognize oci:// "repoURL" sources and emit Nodes for them.
+
+## Sub Packages
+
+* [testgen](./testgen): Command testgen scrapes real ArgoCD Application objects, to be used as test data of the argocd plugin.
 
 ---
 Readme created from Go doc with [goreadme](https://github.com/posener/goreadme)

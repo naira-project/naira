@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -18,136 +20,162 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
+//go:generate go run ./testgen -out testdata
+
 const testClusterID = "c1"
 
+// TestCollect runs the plugin on real Application objects scraped from ArgoCD
+// by the ./testgen command, see testdata/.
 func TestCollect(t *testing.T) {
 	tests := []struct {
-		name string
-		apps []string
-		want pluginapi.CollectResponse
+		name     string
+		testdata []string // names of testdata/*.json files to load
+		want     pluginapi.CollectResponse
 	}{
 		{
-			name: "managed resources become nodes, describes and deployed_from relations",
-			apps: []string{`{
-				"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
-				"metadata": {"name": "demo", "namespace": "argocd"},
-				"spec": {
-					"project": "default",
-					"destination": {"server": "https://kubernetes.default.svc", "namespace": "default"},
-					"source": {"repoURL": "https://github.com/acme/config.git"}
-				},
-				"status": {
-					"sync": {"status": "Synced"},
-					"health": {"status": "Healthy"},
-					"resources": [
-						{"group": "apps", "kind": "Deployment", "name": "web", "namespace": "default"},
-						{"kind": "Service", "name": "web", "namespace": "default"},
-						{"kind": "ConfigMap", "name": "cfg", "namespace": "default"},
-						{"kind": "PersistentVolume", "name": "pv"},
-						{"group": "argoproj.io", "kind": "Application", "name": "child", "namespace": "argocd"}
-					]
-				}
-			}`},
+			name:     "Helm chart from a Git path",
+			testdata: []string{"helm-guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "c1/argocd/child")},
-					{ID: nodeID("Application.argocd", "c1/argocd/demo"), Properties: props{
+					{ID: nodeID("Application.argocd", "c1/argocd/helm-guestbook"), Properties: props{
 						"project":               "default",
 						"sync_status":           "Synced",
-						"health_status":         "Healthy",
-						"destination_namespace": "default"}},
-					{ID: nodeID("deployment", "c1/default/web")},
-					{ID: nodeID("git_repository", "github.com/acme/config"), Properties: props{
-						"url": "https://github.com/acme/config.git"}},
-					{ID: nodeID("k8s_resource", "c1/core/ConfigMap/default/cfg")},
-					{ID: nodeID("k8s_resource", "c1/core/PersistentVolume/pv")},
-					{ID: nodeID("service", "c1/default/web")},
+						"health_status":         "Progressing",
+						"destination_namespace": "helm-guestbook",
+						"source_type":           "Helm"}},
+					{ID: nodeID("deployment", "c1/helm-guestbook/helm-guestbook")},
+					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
+						"url": "https://github.com/argoproj/argocd-example-apps"}},
+					{ID: nodeID("service", "c1/helm-guestbook/helm-guestbook")},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
-						From: nodeID("deployment", "c1/default/web"),
-						To:   nodeID("git_repository", "github.com/acme/config")},
+						From: nodeID("deployment", "c1/helm-guestbook/helm-guestbook"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/demo"),
-						To:   nodeID("Application.argocd", "c1/argocd/child")},
+						From: nodeID("Application.argocd", "c1/argocd/helm-guestbook"),
+						To:   nodeID("deployment", "c1/helm-guestbook/helm-guestbook")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/demo"),
-						To:   nodeID("deployment", "c1/default/web")},
-					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/demo"),
-						To:   nodeID("k8s_resource", "c1/core/ConfigMap/default/cfg")},
-					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/demo"),
-						To:   nodeID("k8s_resource", "c1/core/PersistentVolume/pv")},
-					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/demo"),
-						To:   nodeID("service", "c1/default/web")},
+						From: nodeID("Application.argocd", "c1/argocd/helm-guestbook"),
+						To:   nodeID("service", "c1/helm-guestbook/helm-guestbook")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "c1/argocd/demo"),
-						To:   nodeID("git_repository", "github.com/acme/config")},
+						From: nodeID("Application.argocd", "c1/argocd/helm-guestbook"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 				},
 			},
 		},
 		{
-			name: "Application targeting another cluster is skipped",
-			apps: []string{`{
-				"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
-				"metadata": {"name": "remote", "namespace": "argocd"},
-				"spec": {"destination": {"server": "https://other.example.com"}},
-				"status": {"resources": [{"group": "apps", "kind": "Deployment", "name": "web", "namespace": "default"}]}
-			}`},
-			want: pluginapi.CollectResponse{},
-		},
-		{
-			name: "child Applications keep their properties regardless of processing order",
-			apps: []string{
-				`{
-					"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
-					"metadata": {"name": "a-parent", "namespace": "argocd"},
-					"spec": {"destination": {"server": "https://kubernetes.default.svc"}},
-					"status": {"resources": [
-						{"group": "argoproj.io", "kind": "Application", "name": "z-child", "namespace": "argocd"},
-						{"group": "argoproj.io", "kind": "Application", "name": "remote", "namespace": "argocd"}
-					]}
-				}`,
-				`{
-					"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
-					"metadata": {"name": "z-child", "namespace": "argocd"},
-					"spec": {"project": "p", "destination": {"server": "https://kubernetes.default.svc"}},
-					"status": {"sync": {"status": "Synced"}, "health": {"status": "Healthy"}}
-				}`,
-				`{
-					"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
-					"metadata": {"name": "remote", "namespace": "argocd"},
-					"spec": {"project": "p", "destination": {"server": "https://other.example.com"}},
-					"status": {"sync": {"status": "Synced"}}
-				}`,
-			},
+			name:     "Kustomize from a Git path",
+			testdata: []string{"kustomize-guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "c1/argocd/a-parent"), Properties: props{
-						"project":               "",
-						"sync_status":           "",
-						"health_status":         "",
-						"destination_namespace": ""}},
-					{ID: nodeID("Application.argocd", "c1/argocd/remote")},
-					{ID: nodeID("Application.argocd", "c1/argocd/z-child"), Properties: props{
-						"project":               "p",
+					{ID: nodeID("Application.argocd", "c1/argocd/kustomize-guestbook"), Properties: props{
+						"project":               "default",
 						"sync_status":           "Synced",
-						"health_status":         "Healthy",
-						"destination_namespace": ""}},
+						"health_status":         "Progressing",
+						"destination_namespace": "kustomize-guestbook",
+						"source_type":           "Kustomize"}},
+					{ID: nodeID("deployment", "c1/kustomize-guestbook/kustomize-guestbook-ui")},
+					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
+						"url": "https://github.com/argoproj/argocd-example-apps"}},
+					{ID: nodeID("service", "c1/kustomize-guestbook/kustomize-guestbook-ui")},
 				},
 				Relations: []pluginapi.RelationClaim{
+					{Kind: "deployed_from",
+						From: nodeID("deployment", "c1/kustomize-guestbook/kustomize-guestbook-ui"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/a-parent"),
-						To:   nodeID("Application.argocd", "c1/argocd/remote"),
-					},
+						From: nodeID("Application.argocd", "c1/argocd/kustomize-guestbook"),
+						To:   nodeID("deployment", "c1/kustomize-guestbook/kustomize-guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/a-parent"),
-						To:   nodeID("Application.argocd", "c1/argocd/z-child"),
-					},
+						From: nodeID("Application.argocd", "c1/argocd/kustomize-guestbook"),
+						To:   nodeID("service", "c1/kustomize-guestbook/kustomize-guestbook-ui")},
+					{Kind: "sourced_from",
+						From: nodeID("Application.argocd", "c1/argocd/kustomize-guestbook"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 				},
 			},
+		},
+		{
+			name:     "multiple sources from the same repository are emitted once",
+			testdata: []string{"multi-source"},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("Application.argocd", "c1/argocd/multi-source"), Properties: props{
+						"project":               "default",
+						"sync_status":           "Synced",
+						"health_status":         "Progressing",
+						"destination_namespace": "multi-source",
+						"source_type":           "Helm,"}},
+					{ID: nodeID("deployment", "c1/multi-source/multi-source-helm-guestbook")},
+					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
+						"url": "https://github.com/argoproj/argocd-example-apps"}},
+					{ID: nodeID("service", "c1/multi-source/multi-source-helm-guestbook")},
+				},
+				Relations: []pluginapi.RelationClaim{
+					{Kind: "deployed_from",
+						From: nodeID("deployment", "c1/multi-source/multi-source-helm-guestbook"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/multi-source"),
+						To:   nodeID("deployment", "c1/multi-source/multi-source-helm-guestbook")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/multi-source"),
+						To:   nodeID("service", "c1/multi-source/multi-source-helm-guestbook")},
+					{Kind: "sourced_from",
+						From: nodeID("Application.argocd", "c1/argocd/multi-source"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+				},
+			},
+		},
+		{
+			name:     "app-of-apps: child Application keeps its properties",
+			testdata: []string{"apps-parent", "example.guestbook"},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("Application.argocd", "c1/argocd/apps-parent"), Properties: props{
+						"project":               "default",
+						"sync_status":           "Synced",
+						"health_status":         "Healthy",
+						"destination_namespace": "argocd",
+						"source_type":           "Helm"}},
+					{ID: nodeID("Application.argocd", "c1/argocd/example.guestbook"), Properties: props{
+						"project":               "default",
+						"sync_status":           "Synced",
+						"health_status":         "Progressing",
+						"destination_namespace": "guestbook",
+						"source_type":           "Directory"}},
+					{ID: nodeID("deployment", "c1/guestbook/guestbook-ui")},
+					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
+						"url": "https://github.com/argoproj/argocd-example-apps"}},
+					{ID: nodeID("service", "c1/guestbook/guestbook-ui")},
+				},
+				Relations: []pluginapi.RelationClaim{
+					{Kind: "deployed_from",
+						From: nodeID("deployment", "c1/guestbook/guestbook-ui"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/apps-parent"),
+						To:   nodeID("Application.argocd", "c1/argocd/example.guestbook")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/example.guestbook"),
+						To:   nodeID("deployment", "c1/guestbook/guestbook-ui")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "c1/argocd/example.guestbook"),
+						To:   nodeID("service", "c1/guestbook/guestbook-ui")},
+					{Kind: "sourced_from",
+						From: nodeID("Application.argocd", "c1/argocd/apps-parent"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+					{Kind: "sourced_from",
+						From: nodeID("Application.argocd", "c1/argocd/example.guestbook"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+				},
+			},
+		},
+		{
+			name:     "Application targeting another cluster is skipped",
+			testdata: []string{"remote-cluster"},
+			want:     pluginapi.CollectResponse{},
 		},
 	}
 	kubeSystem := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: testClusterID}}
@@ -155,9 +183,11 @@ func TestCollect(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			objs := []runtime.Object{kubeSystem, argocd}
-			for _, app := range tt.apps {
+			for _, name := range tt.testdata {
+				data, err := os.ReadFile(filepath.Join("testdata", name+".json"))
+				require.NoError(t, err)
 				var obj map[string]any
-				require.NoError(t, json.Unmarshal([]byte(app), &obj))
+				require.NoError(t, json.Unmarshal(data, &obj))
 				objs = append(objs, &unstructured.Unstructured{Object: obj})
 			}
 
