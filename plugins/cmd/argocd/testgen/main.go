@@ -49,22 +49,12 @@ const (
 
 	runTimeout   = 20 * time.Minute
 	pollInterval = 5 * time.Second
-
-	// Name of the Application that is not expected to ever sync.
-	remoteApp = "remote-cluster"
 )
 
 var gvrApplications = schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "applications"}
 
 // Manifests applied on top of the ArgoCD installation.
-var extraManifests = []string{
-	`
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: argocd
-`,
-	`
+const extraManifests = `
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -76,11 +66,10 @@ spec:
   - {server: "*", namespace: "*"}
   clusterResourceWhitelist:
   - {group: "*", kind: "*"}
-`,
+---
 
-	// The "apps-parent" Application deploys a Helm chart creating the
-	// "example.guestbook" child Application (app-of-apps).
-	`
+# The "apps-parent" Application deploys a Helm chart creating the
+# "example.guestbook" child Application (app-of-apps).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -107,8 +96,8 @@ spec:
             namespace: guestbook
   syncPolicy:
     automated: {prune: true, selfHeal: true}
-`,
-	`
+---
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -126,8 +115,8 @@ spec:
   syncPolicy:
     automated: {prune: true, selfHeal: true}
     syncOptions: [CreateNamespace=true]
-`,
-	`
+---
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -145,8 +134,8 @@ spec:
   syncPolicy:
     automated: {prune: true, selfHeal: true}
     syncOptions: [CreateNamespace=true]
-`,
-	`
+---
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -170,8 +159,8 @@ spec:
   syncPolicy:
     automated: {prune: true, selfHeal: true}
     syncOptions: [CreateNamespace=true]
-`,
-	`
+---
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -186,17 +175,21 @@ spec:
     repoURL: https://github.com/argoproj/argocd-example-apps
     targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
     path: guestbook
-`,
-}
+`
 
-// Names of Applications to wait for and scrape.
-var wantApps = []string{
-	"apps-parent",
-	"example.guestbook",
-	"helm-guestbook",
-	"kustomize-guestbook",
-	"multi-source",
-	remoteApp,
+// Applications to wait for and scrape.
+var wantApps = []struct {
+	name string
+	// invalid is true for an Application with an invalid spec, which ArgoCD
+	// only reports error conditions for, and never syncs.
+	invalid bool
+}{
+	{name: "apps-parent"},
+	{name: "example.guestbook"},
+	{name: "helm-guestbook"},
+	{name: "kustomize-guestbook"},
+	{name: "multi-source"},
+	{name: "remote-cluster", invalid: true},
 }
 
 func main() {
@@ -268,42 +261,58 @@ func run(ctx context.Context, outDir string) error {
 	return nil
 }
 
-// loadManifests returns the extra manifests, followed by the ArgoCD "core"
-// installation manifests. The latter lack the namespace, thus it is set later.
+// loadManifests returns the manifests to apply, in order:
+// - the ArgoCD Namespace,
+// - the ArgoCD "core" installation manifests,
+// - then the [extraManifests].
+// The extra ones come last, because they need the ArgoCD CRDs.
 func loadManifests(ctx context.Context) ([]*unstructured.Unstructured, error) {
-	var objs []*unstructured.Unstructured
-	for _, m := range extraManifests {
-		docs, err := decodeAll([]byte(m))
-		if err != nil {
-			return nil, fmt.Errorf("decoding extra manifest: %w", err)
-		}
-		objs = append(objs, docs...)
+	extra, err := decodeAll([]byte(extraManifests))
+	if err != nil {
+		return nil, fmt.Errorf("decoding extra manifests: %w", err)
 	}
 
 	url := "https://raw.githubusercontent.com/argoproj/argo-cd/" + argoVersion + "/manifests/core-install.yaml"
+	body, err := httpGet(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("downloading ArgoCD manifests: %w", err)
+	}
+	core, err := decodeAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("decoding %s: %w", url, err)
+	}
+
+	objs := []*unstructured.Unstructured{
+		{Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]any{
+				"name": argoNamespace,
+			},
+		}},
+	}
+	return append(append(objs, core...), extra...), nil
+}
+
+// httpGet returns the body of a successful GET response from url.
+func httpGet(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating request for %s: %w", url, err)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("downloading %s: %w", url, err)
+		return nil, fmt.Errorf("requesting %s: %w", url, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("downloading %s: unexpected status %s", url, resp.Status)
+		return nil, fmt.Errorf("requesting %s: unexpected status %s", url, resp.Status)
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", url, err)
 	}
-	docs, err := decodeAll(body)
-	if err != nil {
-		return nil, fmt.Errorf("decoding %s: %w", url, err)
-	}
-	// Extra manifests go last when applied, because they need CRDs. They were
-	// added first above only to keep the Namespace before everything else.
-	return append(objs[:1:1], append(docs, objs[1:]...)...), nil
+	return body, nil
 }
 
 func decodeAll(data []byte) ([]*unstructured.Unstructured, error) {
@@ -332,7 +341,7 @@ func applyAll(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynami
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(cachedDisc)
 
 	pending := objs
-	for ctx.Err() == nil && len(pending) > 0 {
+	for {
 		var retry []*unstructured.Unstructured
 		var lastErr error
 		for _, obj := range pending {
@@ -346,20 +355,20 @@ func applyAll(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynami
 				return fmt.Errorf("applying %s %q: %w", obj.GetKind(), obj.GetName(), err)
 			}
 		}
+
 		pending = retry
-		if len(pending) > 0 {
-			log.Printf("%d objects waiting for their CRDs: %v", len(pending), lastErr)
-			mapper.Reset()
-			select {
-			case <-ctx.Done():
-			case <-time.After(2 * time.Second):
-			}
+		if len(pending) == 0 {
+			return nil
+		}
+
+		log.Printf("%d objects waiting for their CRDs: %v", len(pending), lastErr)
+		mapper.Reset()
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%d objects not applied: %w", len(pending), context.Cause(ctx))
+		case <-time.After(2 * time.Second):
 		}
 	}
-	if len(pending) > 0 {
-		return fmt.Errorf("%d objects not applied: %w", len(pending), context.Cause(ctx))
-	}
-	return nil
 }
 
 func apply(ctx context.Context, mapper meta.RESTMapper, dyn dynamic.Interface, obj *unstructured.Unstructured) error {
@@ -399,10 +408,10 @@ func waitForApplications(ctx context.Context, dyn dynamic.Interface) ([]unstruct
 		}
 		var apps []unstructured.Unstructured
 		var notReady []string
-		for _, name := range wantApps {
-			i := slices.IndexFunc(list.Items, func(u unstructured.Unstructured) bool { return u.GetName() == name })
-			if i < 0 || !reconciled(list.Items[i]) {
-				notReady = append(notReady, name)
+		for _, want := range wantApps {
+			i := slices.IndexFunc(list.Items, func(u unstructured.Unstructured) bool { return u.GetName() == want.name })
+			if i < 0 || !reconciled(list.Items[i], want.invalid) {
+				notReady = append(notReady, want.name)
 				continue
 			}
 			apps = append(apps, list.Items[i])
@@ -421,25 +430,25 @@ func waitForApplications(ctx context.Context, dyn dynamic.Interface) ([]unstruct
 }
 
 // reconciled returns true if ArgoCD finished the first reconciliation of app.
-// The remoteApp has an invalid destination, so it only gets error conditions.
-func reconciled(app unstructured.Unstructured) bool {
-	conditions, _, _ := unstructured.NestedSlice(app.Object, "status", "conditions")
-	if app.GetName() == remoteApp {
+// An invalid Application is considered reconciled once it has error conditions.
+func reconciled(app unstructured.Unstructured, invalid bool) bool {
+	if invalid {
+		conditions, _, _ := unstructured.NestedSlice(app.Object, "status", "conditions")
 		return len(conditions) > 0
 	}
 	var (
-		syncStatus, _, _  = unstructured.NestedString(app.Object, "status", "sync", "status")
-		health, _, _      = unstructured.NestedString(app.Object, "status", "health", "status")
-		resources, _, _   = unstructured.NestedSlice(app.Object, "status", "resources")
-		sourceType, _, _  = unstructured.NestedString(app.Object, "status", "sourceType")
-		sourceTypes, _, _ = unstructured.NestedStringSlice(app.Object, "status", "sourceTypes")
+		syncStatus, _, _   = unstructured.NestedString(app.Object, "status", "sync", "status")
+		healthStatus, _, _ = unstructured.NestedString(app.Object, "status", "health", "status")
+		resources, _, _    = unstructured.NestedSlice(app.Object, "status", "resources")
+		sourceType, _, _   = unstructured.NestedString(app.Object, "status", "sourceType")
+		sourceTypes, _, _  = unstructured.NestedStringSlice(app.Object, "status", "sourceTypes")
 	)
-	return syncStatus == "Synced" && health != "" && len(resources) > 0 &&
+	return syncStatus == "Synced" && healthStatus != "" && len(resources) > 0 &&
 		(sourceType != "" || len(sourceTypes) > 0)
 }
 
-// writeApplications writes apps as "*.json" files, replacing
-// any such files already present in dir.
+// writeApplications writes apps as "*.json" files, replacing any such files
+// already present in dir.
 func writeApplications(dir string, apps []unstructured.Unstructured) error {
 	err := os.MkdirAll(dir, 0o755)
 	if err != nil {
@@ -450,6 +459,7 @@ func writeApplications(dir string, apps []unstructured.Unstructured) error {
 		return fmt.Errorf("listing stale files in %s: %w", dir, err)
 	}
 	for _, f := range stale {
+		log.Printf("removing stale file: %s", f)
 		err = os.Remove(f)
 		if err != nil {
 			return fmt.Errorf("removing %s: %w", f, err)
@@ -472,7 +482,7 @@ func writeApplications(dir string, apps []unstructured.Unstructured) error {
 	return nil
 }
 
-// fixedTimestamp replaces all timestamps in the written files.
+// fixedTimestamp for replacing all timestamps in the written files.
 const fixedTimestamp = "2000-01-01T00:00:00Z"
 
 var timestampRe = regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`)
@@ -487,13 +497,18 @@ var timestampRe = regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`)
 func normalize(app *unstructured.Unstructured) {
 	unstructured.RemoveNestedField(app.Object, "metadata", "managedFields")
 	unstructured.RemoveNestedField(app.Object, "status", "operationState")
-	sum := sha1.Sum([]byte(app.GetNamespace() + "/" + app.GetName()))
-	app.SetUID(types.UID(fmt.Sprintf("%x-%x-%x-%x-%x", sum[0:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16])))
+	app.SetUID(uidFromHashed(app.GetNamespace() + "/" + app.GetName()))
 	app.SetResourceVersion("1")
 	app.SetGeneration(1)
 	app.SetCreationTimestamp(metav1.Time{})
 	_ = unstructured.SetNestedField(app.Object, fixedTimestamp, "metadata", "creationTimestamp")
 	replaceTimestamps(app.Object)
+}
+
+// uidFromHashed returns a deterministic UID-formatted hash of s.
+func uidFromHashed(s string) types.UID {
+	sum := sha1.Sum([]byte(s))
+	return types.UID(fmt.Sprintf("%x-%x-%x-%x-%x", sum[0:4], sum[4:6], sum[6:8], sum[8:10], sum[10:16]))
 }
 
 func replaceTimestamps(v any) {
