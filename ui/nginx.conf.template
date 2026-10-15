@@ -8,8 +8,16 @@ server {
     index index.html;
 
     location /v1/ {
-        set $catalog_upstream http://catalog.idp-system.svc.cluster.local:8090;
+        set $catalog_upstream ${CATALOG_UPSTREAM};
         proxy_pass $catalog_upstream;
+    }
+
+    location /prometheus/ {
+        # `set` must come before `rewrite ... break` — break halts the whole
+        # rewrite-phase directive sequence, so a `set` placed after it never runs.
+        set $prometheus_upstream ${PROMETHEUS_UPSTREAM};
+        rewrite ^/prometheus/(.*)$ /$1 break;
+        proxy_pass $prometheus_upstream;
     }
 
     location /assets/content-configuration.json {
