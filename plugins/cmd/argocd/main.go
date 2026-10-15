@@ -16,9 +16,16 @@
 // Only Applications deploying to the cluster they live in are supported;
 // Applications targeting other clusters are skipped.
 //
+// Currently, we only recognize Application sources ("repoURL") that match
+// GitHub repository URLs. Unfortunately, ArgoCD uses ad-hoc heuristics to
+// detect the source type based on the URL, and they're not trivial to reproduce.
+//
 // TODO:
-// - add support for ApplicationSets and AppProjects.
-// - git repository Nodes could support other Git hosts than GitHub.
+//   - add support for ApplicationSets and AppProjects.
+//   - git repository Nodes could support other Git hosts than GitHub.
+//   - allow configuring custom regexps to recognize Git sources ("repoURL")
+//     other than GitHub, and Helm chart sources, to emit Nodes for them.
+//   - recognize oci:// "repoURL" sources and emit Nodes for them.
 //
 //go:generate bash -c "goreadme -use-stdlib-markdown -title 'argocd plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
