@@ -21,8 +21,13 @@ var migrationsFS embed.FS
 // Connect applies all pending schema migrations and then opens the
 // connection pool used by the store.
 //
+// dsn is a PostgreSQL connection string accepted by pgx. It can use URL
+// format, such as "postgres://user:password@localhost:5432/database", or
+// keyword/value format, such as "host=localhost user=user password=password dbname=database".
+// See [pgxpool.ParseConfig] for details on supported options.
+//
 // Migrations are embedded in the binary. They run under a Postgres
-// advisory lock (goose session locker)
+// advisory lock, see goose.WithSessionLocker below
 func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	if err := migrate(ctx, dsn); err != nil {
 		return nil, fmt.Errorf("migrating database: %w", err)

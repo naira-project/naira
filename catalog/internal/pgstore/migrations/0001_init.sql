@@ -1,5 +1,13 @@
 -- +goose Up
 
+CREATE TYPE operation_state AS ENUM (
+    'PENDING',
+    'RUNNING',
+    'SUCCEEDED',
+    'FAILED',
+    'INTERRUPTED'
+);
+
 CREATE TABLE nodes (
     kind TEXT NOT NULL,
     path TEXT NOT NULL,
@@ -42,7 +50,7 @@ CREATE TABLE relation_plugin_claims (
 CREATE TABLE operations (
     name               TEXT PRIMARY KEY,
     plugin             TEXT NOT NULL,
-    state              TEXT NOT NULL,
+    state              operation_state NOT NULL,
     start_time         TIMESTAMPTZ,
     end_time           TIMESTAMPTZ,
     error_message      TEXT,
