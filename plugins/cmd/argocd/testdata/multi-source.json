@@ -1,0 +1,148 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "multi-source",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "7dfec4b3-3105-4b2a-b0b8-dcd8ab5b8233"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "multi-source",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "sources": [
+      {
+        "helm": {
+          "valueFiles": [
+            "$values/helm-guestbook/values-production.yaml"
+          ]
+        },
+        "path": "helm-guestbook",
+        "repoURL": "https://github.com/argoproj/argocd-example-apps",
+        "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+      },
+      {
+        "ref": "values",
+        "repoURL": "https://github.com/argoproj/argocd-example-apps",
+        "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+      }
+    ],
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      },
+      "syncOptions": [
+        "CreateNamespace=true"
+      ]
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Progressing"
+    },
+    "history": [
+      {
+        "deployStartedAt": "2000-01-01T00:00:00Z",
+        "deployedAt": "2000-01-01T00:00:00Z",
+        "id": 0,
+        "initiatedBy": {
+          "automated": true
+        },
+        "revisions": [
+          "8088f4c0d970abb09e250248cc97e35623447cb5",
+          "8088f4c0d970abb09e250248cc97e35623447cb5"
+        ],
+        "source": {
+          "repoURL": ""
+        },
+        "sources": [
+          {
+            "helm": {
+              "valueFiles": [
+                "$values/helm-guestbook/values-production.yaml"
+              ]
+            },
+            "path": "helm-guestbook",
+            "repoURL": "https://github.com/argoproj/argocd-example-apps",
+            "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+          },
+          {
+            "ref": "values",
+            "repoURL": "https://github.com/argoproj/argocd-example-apps",
+            "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+          }
+        ]
+      }
+    ],
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "kind": "Service",
+        "name": "multi-source-helm-guestbook",
+        "namespace": "multi-source",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "multi-source-helm-guestbook",
+        "namespace": "multi-source",
+        "status": "Synced",
+        "version": "v1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceTypes": [
+      "Helm",
+      ""
+    ],
+    "summary": {
+      "images": [
+        "gcr.io/google-samples/gb-frontend:v5"
+      ]
+    },
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "multi-source",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "repoURL": ""
+        },
+        "sources": [
+          {
+            "helm": {
+              "valueFiles": [
+                "$values/helm-guestbook/values-production.yaml"
+              ]
+            },
+            "path": "helm-guestbook",
+            "repoURL": "https://github.com/argoproj/argocd-example-apps",
+            "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+          },
+          {
+            "ref": "values",
+            "repoURL": "https://github.com/argoproj/argocd-example-apps",
+            "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+          }
+        ]
+      },
+      "revisions": [
+        "8088f4c0d970abb09e250248cc97e35623447cb5",
+        "8088f4c0d970abb09e250248cc97e35623447cb5"
+      ],
+      "status": "Synced"
+    }
+  }
+}

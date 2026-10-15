@@ -91,7 +91,7 @@ CHECKSUM='select(.kind == "Deployment" and .metadata.name == "catalog")
           | .spec.template.metadata.annotations["checksum/plugin-config"]'
 
 check "default sidecars (tech-radar off), sorted" \
-  "plugin-depl-calls-svc,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata" \
+  "plugin-argocd,plugin-depl-calls-svc,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata" \
   "$(render | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
 check "sidecars are native sidecars" \
   "Always" \
@@ -150,10 +150,10 @@ check "checksum changes with plugins" "different" "$checksum_changed"
 
 # ── RBAC ─────────────────────────────────────────────────────────────────────
 check "ClusterRoles are release-prefixed" \
-  "t-catalog,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
+  "t-catalog,t-plugin-argocd,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
   "$(render | yq ea '[select(.kind == "ClusterRole") | .metadata.name] | sort | join(",")')"
 check "bindings match roles" \
-  "t-catalog,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
+  "t-catalog,t-plugin-argocd,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
   "$(render | yq ea '[select(.kind == "ClusterRoleBinding") | .roleRef.name] | sort | join(",")')"
 check "binding subject is the catalog SA in the release namespace" \
   "catalog/naira" \
@@ -203,8 +203,8 @@ check "existingConfigMap: no generated ConfigMap" \
 check "existingConfigMap: volume points at it" \
   "my-radar" \
   "$(render "${TECH_RADAR_EXISTING[@]}" | yq "$TECH_RADAR_VOLUME | .configMap.name")"
-check "default plus tech-radar and depl-uses-litellm: 8 sidecars" \
-  "8" \
+check "default plus tech-radar and depl-uses-litellm: 9 sidecars" \
+  "9" \
   "$(render "${TECH_RADAR[@]}" --set catalog.plugins.depl-uses-litellm.enabled=true \
     | yq "$CATALOG | .initContainers | length")"
 check "tech-radar registered in plugins.yaml" \
@@ -315,7 +315,7 @@ check "dev: local image names" \
   "naira-catalog:${APP_VERSION}" \
   "$(render_raw "${DEV[@]}" | yq "$CATALOG | .containers[0].image")"
 check "dev: sidecars (openmetadata off, tech-radar on)" \
-  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-tech-radar" \
+  "plugin-argocd,plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-tech-radar" \
   "$(render_raw "${DEV[@]}" | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
 check "dev: catalog Secret matches test-dependencies master key" \
   "sk-local-litellm" \

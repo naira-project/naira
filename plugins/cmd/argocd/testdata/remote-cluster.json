@@ -1,0 +1,40 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "remote-cluster",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "1c4677e5-d753-e5cf-dbf5-e62d45759eb9"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "default",
+      "server": "https://other.example.com"
+    },
+    "project": "default",
+    "source": {
+      "path": "guestbook",
+      "repoURL": "https://github.com/argoproj/argocd-example-apps",
+      "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+    }
+  },
+  "status": {
+    "conditions": [
+      {
+        "lastTransitionTime": "2000-01-01T00:00:00Z",
+        "message": "error getting cluster by server \"https://other.example.com\": rpc error: code = NotFound desc = cluster \"https://other.example.com\" not found",
+        "type": "InvalidSpecError"
+      }
+    ],
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Unknown"
+    },
+    "sync": {
+      "status": "Unknown"
+    }
+  }
+}
