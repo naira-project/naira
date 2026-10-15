@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ import (
 
 //go:generate go run ./testdata/gen
 
-const testClusterID = "c1"
+const mockClusterID = "mock-cluster"
 
 // TestCollect runs the plugin on real Application objects scraped from ArgoCD
 // by the ./testdata/gen command, see testdata/.
@@ -37,29 +38,29 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"helm-guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "c1/argocd/helm-guestbook"), Properties: props{
+					{ID: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"), Properties: props{
 						"project":               "default",
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "helm-guestbook",
 						"source_type":           "Helm"}},
-					{ID: nodeID("deployment", "c1/helm-guestbook/helm-guestbook")},
+					{ID: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
-					{ID: nodeID("service", "c1/helm-guestbook/helm-guestbook")},
+					{ID: nodeID("service", "mock-cluster/helm-guestbook/helm-guestbook")},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
-						From: nodeID("deployment", "c1/helm-guestbook/helm-guestbook"),
+						From: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/helm-guestbook"),
-						To:   nodeID("deployment", "c1/helm-guestbook/helm-guestbook")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
+						To:   nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/helm-guestbook"),
-						To:   nodeID("service", "c1/helm-guestbook/helm-guestbook")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
+						To:   nodeID("service", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "c1/argocd/helm-guestbook"),
+						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 				},
 			},
@@ -69,29 +70,29 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"kustomize-guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "c1/argocd/kustomize-guestbook"), Properties: props{
+					{ID: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"), Properties: props{
 						"project":               "default",
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "kustomize-guestbook",
 						"source_type":           "Kustomize"}},
-					{ID: nodeID("deployment", "c1/kustomize-guestbook/kustomize-guestbook-ui")},
+					{ID: nodeID("deployment", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
-					{ID: nodeID("service", "c1/kustomize-guestbook/kustomize-guestbook-ui")},
+					{ID: nodeID("service", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
-						From: nodeID("deployment", "c1/kustomize-guestbook/kustomize-guestbook-ui"),
+						From: nodeID("deployment", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/kustomize-guestbook"),
-						To:   nodeID("deployment", "c1/kustomize-guestbook/kustomize-guestbook-ui")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"),
+						To:   nodeID("deployment", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/kustomize-guestbook"),
-						To:   nodeID("service", "c1/kustomize-guestbook/kustomize-guestbook-ui")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"),
+						To:   nodeID("service", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "c1/argocd/kustomize-guestbook"),
+						From: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 				},
 			},
@@ -101,29 +102,29 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"multi-source"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "c1/argocd/multi-source"), Properties: props{
+					{ID: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"), Properties: props{
 						"project":               "default",
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "multi-source",
 						"source_type":           "Helm,"}},
-					{ID: nodeID("deployment", "c1/multi-source/multi-source-helm-guestbook")},
+					{ID: nodeID("deployment", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
-					{ID: nodeID("service", "c1/multi-source/multi-source-helm-guestbook")},
+					{ID: nodeID("service", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
-						From: nodeID("deployment", "c1/multi-source/multi-source-helm-guestbook"),
+						From: nodeID("deployment", "mock-cluster/multi-source/multi-source-helm-guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/multi-source"),
-						To:   nodeID("deployment", "c1/multi-source/multi-source-helm-guestbook")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"),
+						To:   nodeID("deployment", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/multi-source"),
-						To:   nodeID("service", "c1/multi-source/multi-source-helm-guestbook")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"),
+						To:   nodeID("service", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "c1/argocd/multi-source"),
+						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 				},
 			},
@@ -133,41 +134,41 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"apps-parent", "example.guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "c1/argocd/apps-parent"), Properties: props{
+					{ID: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"), Properties: props{
 						"project":               "default",
 						"sync_status":           "Synced",
 						"health_status":         "Healthy",
 						"destination_namespace": "argocd",
 						"source_type":           "Helm"}},
-					{ID: nodeID("Application.argocd", "c1/argocd/example.guestbook"), Properties: props{
+					{ID: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"), Properties: props{
 						"project":               "default",
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "guestbook",
 						"source_type":           "Directory"}},
-					{ID: nodeID("deployment", "c1/guestbook/guestbook-ui")},
+					{ID: nodeID("deployment", "mock-cluster/guestbook/guestbook-ui")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
-					{ID: nodeID("service", "c1/guestbook/guestbook-ui")},
+					{ID: nodeID("service", "mock-cluster/guestbook/guestbook-ui")},
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
-						From: nodeID("deployment", "c1/guestbook/guestbook-ui"),
+						From: nodeID("deployment", "mock-cluster/guestbook/guestbook-ui"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/apps-parent"),
-						To:   nodeID("Application.argocd", "c1/argocd/example.guestbook")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"),
+						To:   nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/example.guestbook"),
-						To:   nodeID("deployment", "c1/guestbook/guestbook-ui")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"),
+						To:   nodeID("deployment", "mock-cluster/guestbook/guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "c1/argocd/example.guestbook"),
-						To:   nodeID("service", "c1/guestbook/guestbook-ui")},
+						From: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"),
+						To:   nodeID("service", "mock-cluster/guestbook/guestbook-ui")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "c1/argocd/apps-parent"),
+						From: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "c1/argocd/example.guestbook"),
+						From: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
 				},
 			},
@@ -178,17 +179,19 @@ func TestCollect(t *testing.T) {
 			want:     pluginapi.CollectResponse{},
 		},
 	}
-	kubeSystem := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: testClusterID}}
-	argocd := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd", UID: "argocd-uid"}}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			objs := []runtime.Object{kubeSystem, argocd}
+			objs := []runtime.Object{
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: mockClusterID}},
+				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd", UID: "argocd-uid"}},
+			}
 			for _, name := range tt.testdata {
 				data, err := os.ReadFile(filepath.Join("testdata", name+".json"))
 				require.NoError(t, err)
-				var obj map[string]any
-				require.NoError(t, json.Unmarshal(data, &obj))
-				objs = append(objs, &unstructured.Unstructured{Object: obj})
+				var u unstructured.Unstructured
+				require.NoError(t, json.Unmarshal(data, &u.Object))
+				objs = append(objs, &u)
 			}
 
 			gvr := schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "applications"}
@@ -214,15 +217,20 @@ func TestCollect(t *testing.T) {
 			require.NoError(t, err)
 			sort.Slice(got.Nodes, func(i, j int) bool {
 				a, b := got.Nodes[i].ID, got.Nodes[j].ID
-				return a.Kind+"|"+a.Path < b.Kind+"|"+b.Path
+				return join(a.Kind, a.Path) < join(b.Kind, b.Path)
 			})
 			sort.Slice(got.Relations, func(i, j int) bool {
 				a, b := got.Relations[i], got.Relations[j]
-				return a.Kind+a.From.Path+a.To.Kind+a.To.Path < b.Kind+b.From.Path+b.To.Kind+b.To.Path
+				return join(a.Kind, a.From.Kind, a.From.Path, a.To.Kind, a.To.Path) <
+					join(b.Kind, b.From.Kind, b.From.Path, b.To.Kind, b.To.Path)
 			})
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func join(parts ...string) string {
+	return strings.Join(parts, "\x00")
 }
 
 func nodeID(kind, path string) pluginapi.NodeID {
