@@ -20,12 +20,12 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
-//go:generate go run ./testgen -out testdata
+//go:generate go run ./testdata/gen
 
 const testClusterID = "c1"
 
 // TestCollect runs the plugin on real Application objects scraped from ArgoCD
-// by the ./testgen command, see testdata/.
+// by the ./testdata/gen command, see testdata/.
 func TestCollect(t *testing.T) {
 	tests := []struct {
 		name     string

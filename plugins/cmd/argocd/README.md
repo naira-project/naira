@@ -19,9 +19,5 @@ TODO:
   - allow configuring custom regexps to recognize Git sources ("repoURL") other than GitHub, and Helm chart sources, to emit Nodes for them.
   - recognize oci:// "repoURL" sources and emit Nodes for them.
 
-## Sub Packages
-
-* [testgen](./testgen): Command testgen scrapes real ArgoCD Application objects, to be used as test data of the argocd plugin.
-
 ---
 Readme created from Go doc with [goreadme](https://github.com/posener/goreadme)

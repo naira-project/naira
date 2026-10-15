@@ -1,13 +1,24 @@
-// Command testgen scrapes real ArgoCD Application objects, to be used as test data
-// of the argocd plugin.
+// Command gen scrapes real ArgoCD Application objects from an ad-hoc k3s
+// cluster, saving them to JSON files for use as test data of the argocd
+// plugin.
 //
 // It starts k3s in a container (via testcontainers), installs ArgoCD in it,
-// creates a few Applications deploying from a pinned revision of
-// https://github.com/argoproj/argocd-example-apps, waits for ArgoCD to
-// reconcile them, and writes each Application as JSON into the output directory,
-// with nondeterministic metadata replaced by fixed values, so that reruns produce
-// identical files.
-// It needs Docker and Internet access, and takes several minutes.
+// applies the manifests from the input file, waits for ArgoCD to reconcile
+// WANT_OK and WANT_FAIL Applications (see below), and writes each WANT_*
+// Application as JSON into the output directory. Nondeterministic metadata is
+// replaced by fixed values, so that reruns produce identical files.
+//
+// The input file must start with two special comments, naming the Applications
+// to wait for and scrape (comma-separated):
+//
+//	#WANT_OK: app1, app2
+//	#WANT_FAIL: app3
+//
+// WANT_OK Applications are expected to sync. WANT_FAIL ones are expected to
+// have an invalid spec, so ArgoCD only reports error conditions for them, and
+// never syncs them.
+//
+// The command needs Docker and Internet access, and takes several minutes.
 package main
 
 import (
@@ -15,6 +26,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -25,6 +37,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -53,146 +66,8 @@ const (
 
 var gvrApplications = schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "applications"}
 
-// Manifests applied on top of the ArgoCD installation.
-const extraManifests = `
-apiVersion: argoproj.io/v1alpha1
-kind: AppProject
-metadata:
-  name: default
-  namespace: argocd
-spec:
-  sourceRepos: ["*"]
-  destinations:
-  - {server: "*", namespace: "*"}
-  clusterResourceWhitelist:
-  - {group: "*", kind: "*"}
----
-
-# The "apps-parent" Application deploys a Helm chart creating the
-# "example.guestbook" child Application (app-of-apps).
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: apps-parent
-  namespace: argocd
-spec:
-  project: default
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: argocd
-  source:
-    repoURL: https://github.com/argoproj/argocd-example-apps
-    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-    path: apps
-    helm:
-      valuesObject:
-        config:
-          spec:
-            source:
-              targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-        applications:
-        - name: guestbook
-          destination:
-            namespace: guestbook
-  syncPolicy:
-    automated: {prune: true, selfHeal: true}
----
-
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: helm-guestbook
-  namespace: argocd
-spec:
-  project: default
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: helm-guestbook
-  source:
-    repoURL: https://github.com/argoproj/argocd-example-apps
-    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-    path: helm-guestbook
-  syncPolicy:
-    automated: {prune: true, selfHeal: true}
-    syncOptions: [CreateNamespace=true]
----
-
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: kustomize-guestbook
-  namespace: argocd
-spec:
-  project: default
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: kustomize-guestbook
-  source:
-    repoURL: https://github.com/argoproj/argocd-example-apps
-    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-    path: kustomize-guestbook
-  syncPolicy:
-    automated: {prune: true, selfHeal: true}
-    syncOptions: [CreateNamespace=true]
----
-
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: multi-source
-  namespace: argocd
-spec:
-  project: default
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: multi-source
-  sources:
-  - repoURL: https://github.com/argoproj/argocd-example-apps
-    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-    path: helm-guestbook
-    helm:
-      valueFiles:
-      - $values/helm-guestbook/values-production.yaml
-  - repoURL: https://github.com/argoproj/argocd-example-apps
-    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-    ref: values
-  syncPolicy:
-    automated: {prune: true, selfHeal: true}
-    syncOptions: [CreateNamespace=true]
----
-
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: remote-cluster
-  namespace: argocd
-spec:
-  project: default
-  destination:
-    server: https://other.example.com
-    namespace: default
-  source:
-    repoURL: https://github.com/argoproj/argocd-example-apps
-    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-    path: guestbook
-`
-
-// Applications to wait for and scrape.
-var wantApps = []struct {
-	name string
-	// invalid is true for an Application with an invalid spec, which ArgoCD
-	// only reports error conditions for, and never syncs.
-	invalid bool
-}{
-	{name: "apps-parent"},
-	{name: "example.guestbook"},
-	{name: "helm-guestbook"},
-	{name: "kustomize-guestbook"},
-	{name: "multi-source"},
-	{name: "remote-cluster", invalid: true},
-}
-
 func main() {
+	in := flag.String("in", "testdata/gen/input.yaml", "manifests to apply on top of the ArgoCD installation")
 	out := flag.String("out", "testdata", "directory to write Application JSON files into")
 	flag.Parse()
 
@@ -201,13 +76,18 @@ func main() {
 	ctx, cancel := context.WithTimeout(ctx, runTimeout)
 	defer cancel()
 
-	err := run(ctx, *out)
+	err := run(ctx, *in, *out)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(ctx context.Context, outDir string) error {
+func run(ctx context.Context, inFile, outDir string) error {
+	input, err := parseInput(inFile)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %w", inFile, err)
+	}
+
 	log.Printf("starting k3s %s", k3sImage)
 	k3sContainer, err := k3s.Run(ctx, k3sImage,
 		testcontainers.WithCmdArgs(
@@ -239,17 +119,27 @@ func run(ctx context.Context, outDir string) error {
 	}
 
 	log.Printf("installing ArgoCD %s", argoVersion)
-	objs, err := loadManifests(ctx)
+	argoManifests, err := downloadArgoManifests(ctx)
 	if err != nil {
 		return fmt.Errorf("loading manifests: %w", err)
 	}
-	err = applyAll(ctx, disc, dyn, objs)
+	err = applyAll(ctx, disc, dyn, slices.Concat(
+		[]*unstructured.Unstructured{{Object: map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Namespace",
+			"metadata": map[string]any{
+				"name": argoNamespace,
+			},
+		}}},
+		argoManifests,
+		input.manifests,
+	))
 	if err != nil {
 		return fmt.Errorf("applying manifests: %w", err)
 	}
 
 	log.Printf("waiting for ArgoCD to reconcile Applications")
-	apps, err := waitForApplications(ctx, dyn)
+	apps, err := waitForApplications(ctx, dyn, input.wantApps)
 	if err != nil {
 		return fmt.Errorf("waiting for Applications: %w", err)
 	}
@@ -261,17 +151,74 @@ func run(ctx context.Context, outDir string) error {
 	return nil
 }
 
-// loadManifests returns the manifests to apply, in order:
-// - the ArgoCD Namespace,
-// - the ArgoCD "core" installation manifests,
-// - then the [extraManifests].
-// The extra ones come last, because they need the ArgoCD CRDs.
-func loadManifests(ctx context.Context) ([]*unstructured.Unstructured, error) {
-	extra, err := decodeAll([]byte(extraManifests))
+// wantApp is an Application to wait for and scrape.
+type wantApp struct {
+	name string
+	// invalid is true for an Application with an invalid spec, which ArgoCD
+	// only reports error conditions for, and never syncs.
+	invalid bool
+}
+
+// input is the parsed content of the input file.
+type input struct {
+	manifests []*unstructured.Unstructured
+	wantApps  []wantApp
+}
+
+// parseInput reads the input file: the "#WANT_OK:" and "#WANT_FAIL:" header
+// comments, and the manifests. Wanted Applications need not be defined in the
+// manifests, because they can be created by other Applications (app-of-apps).
+func parseInput(path string) (input, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("decoding extra manifests: %w", err)
+		return input{}, fmt.Errorf("reading file: %w", err)
 	}
 
+	const (
+		wantOKPrefix   = "#WANT_OK:"
+		wantFailPrefix = "#WANT_FAIL:"
+	)
+	var in input
+	var haveOK, haveFail bool
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, wantOKPrefix):
+			haveOK = true
+			in.wantApps = append(in.wantApps, parseWantApps(strings.TrimPrefix(line, wantOKPrefix), false)...)
+		case strings.HasPrefix(line, wantFailPrefix):
+			haveFail = true
+			in.wantApps = append(in.wantApps, parseWantApps(strings.TrimPrefix(line, wantFailPrefix), true)...)
+		}
+		if line != "" && !strings.HasPrefix(line, "#") {
+			break // the header ends at the first non-comment line
+		}
+	}
+	if !haveOK || !haveFail {
+		return input{}, errors.New(`file must start with "#WANT_OK:" and "#WANT_FAIL:" comments`)
+	}
+
+	in.manifests, err = decodeAll(data)
+	if err != nil {
+		return input{}, fmt.Errorf("decoding manifests: %w", err)
+	}
+	return in, nil
+}
+
+// parseWantApps splits a comma-separated list of Application names.
+func parseWantApps(list string, invalid bool) []wantApp {
+	var apps []wantApp
+	for _, name := range strings.Split(list, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			apps = append(apps, wantApp{name: name, invalid: invalid})
+		}
+	}
+	return apps
+}
+
+// downloadArgoManifests downloads ArgoCD "core" installation manifests.
+func downloadArgoManifests(ctx context.Context) ([]*unstructured.Unstructured, error) {
 	url := "https://raw.githubusercontent.com/argoproj/argo-cd/" + argoVersion + "/manifests/core-install.yaml"
 	body, err := httpGet(ctx, url)
 	if err != nil {
@@ -281,17 +228,7 @@ func loadManifests(ctx context.Context) ([]*unstructured.Unstructured, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decoding %s: %w", url, err)
 	}
-
-	objs := []*unstructured.Unstructured{
-		{Object: map[string]any{
-			"apiVersion": "v1",
-			"kind":       "Namespace",
-			"metadata": map[string]any{
-				"name": argoNamespace,
-			},
-		}},
-	}
-	return append(append(objs, core...), extra...), nil
+	return core, nil
 }
 
 // httpGet returns the body of a successful GET response from url.
@@ -390,7 +327,7 @@ func apply(ctx context.Context, mapper meta.RESTMapper, dyn dynamic.Interface, o
 	}
 	force := true
 	_, err = ri.Patch(ctx, obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
-		FieldManager: "argocd-testgen",
+		FieldManager: "argocd-testdata-gen",
 		Force:        &force,
 	})
 	if err != nil {
@@ -400,7 +337,7 @@ func apply(ctx context.Context, mapper meta.RESTMapper, dyn dynamic.Interface, o
 }
 
 // waitForApplications returns all wantApps once ArgoCD has reconciled them.
-func waitForApplications(ctx context.Context, dyn dynamic.Interface) ([]unstructured.Unstructured, error) {
+func waitForApplications(ctx context.Context, dyn dynamic.Interface, wantApps []wantApp) ([]unstructured.Unstructured, error) {
 	for {
 		list, err := dyn.Resource(gvrApplications).Namespace(argoNamespace).List(ctx, metav1.ListOptions{})
 		if err != nil {
