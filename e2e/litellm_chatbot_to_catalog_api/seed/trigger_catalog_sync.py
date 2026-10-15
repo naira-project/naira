@@ -72,7 +72,7 @@ def main():
 
     failed = {name: op for name, op in operations.items() if "error" in op}
     for name, op in operations.items():
-        if "error" in op:
+        if name in failed:
             outcome = f"FAILED: {op['error']['message']}"
         else:
             outcome = f"SUCCEEDED (nodesUpserted={op['response']['nodesUpserted']})"
