@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.1](https://github.com/naira-project/naira/compare/v0.1.1...v0.1.1) (2026-10-15)
+
+
+### Features
+
+* inference endpoints catalog ([#182](https://github.com/naira-project/naira/issues/182)) ([b668433](https://github.com/naira-project/naira/commit/b668433081ae9dca32fcf37e810da7811cf02048))
+* openai_api_models plugin ([#219](https://github.com/naira-project/naira/issues/219)) ([2c345c1](https://github.com/naira-project/naira/commit/2c345c1cde6f281165efa63e24c982e2c067866a))
+* two thalamus plugins ([#222](https://github.com/naira-project/naira/issues/222)) ([620eaed](https://github.com/naira-project/naira/commit/620eaedd6fbcc3b63521e605dc9779562f9d1fa0))
+* **ui:** add Perses dashboard ([#227](https://github.com/naira-project/naira/issues/227)) ([2966b07](https://github.com/naira-project/naira/commit/2966b076b7c71f6408a26acf982de7f9a4a1d107))
+* **ui:** implement icons for portal navbar ([#254](https://github.com/naira-project/naira/issues/254)) ([ddfac79](https://github.com/naira-project/naira/commit/ddfac792f727f3a73a87ccec5c398b48b44c5869))
+
+
+### Bug Fixes
+
+* fix broken e2e test ([#258](https://github.com/naira-project/naira/issues/258)) ([cadeb29](https://github.com/naira-project/naira/commit/cadeb290e7d51584834eb3d3acc468d367b05281))
+* **ui:** make table items clickable ([#250](https://github.com/naira-project/naira/issues/250)) ([99e4fd0](https://github.com/naira-project/naira/commit/99e4fd0201410ad8a4ebe3a652ba529a7e6bcde9))
+
 ## [0.1.1](https://github.com/naira-project/naira/compare/v0.1.0...v0.1.1) (2026-10-05)
 
 
