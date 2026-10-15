@@ -5,17 +5,21 @@
 # into an isolated namespace on a throwaway kind cluster and runs its
 # assertions against it.
 #
-# `workflow_dispatch`-only for now, deliberately: this is a new, unvalidated
-# ~7-13 minute job. Switch the `on:` block to `pull_request` once a run has
-# been observed succeeding end-to-end.
+# Runs on every PR, but the job targets the `e2e` GitHub environment, which
+# requires manual approval from a reviewer (Settings → Environments → e2e).
+# Until someone approves, the job — and the required "E2E" status check —
+# stays pending, so the PR can't be merged. Every new push needs a fresh
+# approval, since the approver should review the code that is about to run.
+#
+# Deliberately `pull_request` (not `pull_request_target`): PR code runs with
+# a read-only token and no secrets.
+#
+# No `paths:` filter: a required check that is skipped never reports, which
+# would block unrelated PRs forever.
 name: E2E
 
 on:
-  workflow_dispatch:
-    inputs:
-      pr-number:
-        description: "PR number to test against"
-        required: true
+  pull_request:
 
 permissions:
   contents: read
@@ -31,22 +35,10 @@ jobs:
   e2e:
     name: E2E · litellm_chatbot_to_catalog_api
     runs-on: ubuntu-latest
+    environment: e2e
     steps:
-      - name: Determine PR number
-        id: pr
-        env:
-          PR_NUMBER: ${{ inputs.pr-number }}
-        run: |
-          NUMBER="${PR_NUMBER}"
-          if [ -z "${NUMBER}" ]; then
-            echo "::error::pr-number input is required." >&2
-            exit 1
-          fi
-          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/pull/${{ steps.pr.outputs.number }}/merge
           persist-credentials: false
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -64,7 +56,7 @@ jobs:
       # script fails before it would derive an ID itself, the destroy step at
       # the bottom (if: always()) still knows what to tear down.
       - name: Compute environment ID
-        run: echo "ENV_ID=pr-${{ steps.pr.outputs.number }}-${{ github.run_id }}" >> "$GITHUB_ENV"
+        run: echo "ENV_ID=pr-${{ github.event.pull_request.number }}-${{ github.run_id }}" >> "$GITHUB_ENV"
 
       - name: Create kind cluster
         run: kind create cluster --config e2e/base/kind-config.yaml
