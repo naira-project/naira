@@ -1,4 +1,4 @@
-#WANT_OK: apps-parent, example.guestbook, helm-guestbook, kustomize-guestbook, multi-source
+#WANT_OK: apps-parent, example.guestbook, helm-guestbook, kustomize-guestbook, multi-source, multi-path
 #WANT_FAIL: remote-cluster
 
 # The following manifests create a few Applications deploying from a pinned
@@ -105,6 +105,28 @@ spec:
   - repoURL: https://github.com/argoproj/argocd-example-apps
     targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
     ref: values
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
+---
+# Two sources from the same repository, with different paths.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: multi-path
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: multi-path
+  sources:
+  - repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: guestbook
+  - repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: kustomize-guestbook
   syncPolicy:
     automated: {prune: true, selfHeal: true}
     syncOptions: [CreateNamespace=true]

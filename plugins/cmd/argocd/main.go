@@ -9,7 +9,12 @@
 //
 // An Application "describes" each resource it manages. If its source is a GitHub
 // repository, the Application is "sourced_from" a git_repository Node, and
-// managed Deployments are "deployed_from" it.
+// managed Deployments are "deployed_from" it. These two Relations have a "paths"
+// property: a JSON list of the paths within the repository that the Application
+// deploys from, e.g. ["apps","charts/web"]. If multiple sources of an Application
+// use the same repository, it lists all their distinct paths. The property is
+// absent when no source has a path (e.g. a source that only provides values files
+// via "ref").
 //
 // # Known Limitations
 //
@@ -32,6 +37,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"slices"
@@ -137,9 +143,13 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	for _, app := range inClusterApps {
 		appID := applicationID(clusterID, app.GetNamespace(), app.GetName())
 
+		// Multiple sources can point to the same repository, at different paths.
+		// A relation is identified by its kind and ends, so there is one per
+		// repository, listing all the paths used.
 		var repoIDs []pluginapi.NodeID
-		for _, url := range sourceURLs(app) {
-			repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(url)
+		pathsByRepo := map[pluginapi.NodeID][]string{}
+		for _, src := range sources(app) {
+			repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(src.repoURL)
 			if repoPath == "" {
 				continue
 			}
@@ -147,21 +157,26 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				Kind: pluginapi.NodeKindGitRepository,
 				Path: repoPath,
 			}
-			if slices.Contains(repoIDs, repoID) {
-				continue // multiple sources can point to the same repository
+			if !slices.Contains(repoIDs, repoID) {
+				addNode(pluginapi.NodeClaim{
+					ID: repoID,
+					Properties: pluginapi.PropertyMap{
+						"url": src.repoURL,
+					},
+				})
+				repoIDs = append(repoIDs, repoID)
 			}
-			addNode(pluginapi.NodeClaim{
-				ID: repoID,
-				Properties: pluginapi.PropertyMap{
-					"url": url,
-				},
-			})
+			if src.path != "" && !slices.Contains(pathsByRepo[repoID], src.path) {
+				pathsByRepo[repoID] = append(pathsByRepo[repoID], src.path)
+			}
+		}
+		for _, repoID := range repoIDs {
 			relations = append(relations, pluginapi.RelationClaim{
-				Kind: pluginapi.RelationKindSourcedFrom,
-				From: appID,
-				To:   repoID,
+				Kind:       pluginapi.RelationKindSourcedFrom,
+				From:       appID,
+				To:         repoID,
+				Properties: pathsProperties(pathsByRepo[repoID]),
 			})
-			repoIDs = append(repoIDs, repoID)
 		}
 
 		resources, _, _ := unstructured.NestedSlice(app.Object, "status", "resources")
@@ -193,9 +208,10 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			if resID.Kind == pluginapi.NodeKindDeployment {
 				for _, repoID := range repoIDs {
 					relations = append(relations, pluginapi.RelationClaim{
-						Kind: pluginapi.RelationKindDeployedFrom,
-						From: resID,
-						To:   repoID,
+						Kind:       pluginapi.RelationKindDeployedFrom,
+						From:       resID,
+						To:         repoID,
+						Properties: pathsProperties(pathsByRepo[repoID]),
 					})
 				}
 			}
@@ -256,34 +272,54 @@ func isInCluster(app unstructured.Unstructured) bool {
 	return server == inClusterServer || name == inClusterName
 }
 
-// sourceURLs returns repoURLs of all sources of the Application.
-func sourceURLs(app unstructured.Unstructured) []string {
-	sources, _, _ := unstructured.NestedSlice(app.Object, "spec", "sources")
+// source is the part of an Application source we use. A source with a Helm
+// chart or a "ref" has no path.
+type source struct {
+	repoURL string
+	path    string
+}
+
+// sources returns the sources of the Application, with non-empty repoURL.
+func sources(app unstructured.Unstructured) []source {
+	specs, _, _ := unstructured.NestedSlice(app.Object, "spec", "sources")
 
 	// According to the ArgoCD documentation as of Oct 2026, "When you
 	// specify the sources field, Argo CD will ignore the source (singular) field."
 	// (https://argo-cd.readthedocs.io/en/stable/user-guide/multiple_sources/)
-	if len(sources) == 0 {
-		url := nestedStringOrEmpty(app, "spec", "source", "repoURL")
-		if url == "" {
+	if len(specs) == 0 {
+		single, _, _ := unstructured.NestedMap(app.Object, "spec", "source")
+		if single == nil {
 			return nil
 		}
-		return []string{url}
+		specs = []any{single}
 	}
 
-	var urls []string
-	for _, s := range sources {
-		m, _ := s.(map[string]any)
-		if m == nil {
-			continue
-		}
+	var sources []source
+	for _, spec := range specs {
+		m, _ := spec.(map[string]any)
 		url, _ := m["repoURL"].(string)
 		if url == "" {
 			continue
 		}
-		urls = append(urls, url)
+		path, _ := m["path"].(string)
+		sources = append(sources, source{repoURL: url, path: path})
 	}
-	return urls
+	return sources
+}
+
+// pathsProperties returns the "paths" property: a JSON list of paths within a
+// repository, or no properties if there are none.
+func pathsProperties(paths []string) pluginapi.PropertyMap {
+	if len(paths) == 0 {
+		return nil
+	}
+	encoded, err := json.Marshal(paths)
+	if err != nil {
+		panic(fmt.Sprintf("marshaling []string to JSON: %v", err)) // cannot happen
+	}
+	return pluginapi.PropertyMap{
+		"paths": string(encoded),
+	}
 }
 
 // sourceType returns the tool(s) ArgoCD detected for the Application's source(s).

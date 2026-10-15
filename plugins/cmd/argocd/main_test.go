@@ -52,7 +52,9 @@ func TestCollect(t *testing.T) {
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
 						From: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["helm-guestbook"]`}},
 					{Kind: "describes",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
 						To:   nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
@@ -61,7 +63,9 @@ func TestCollect(t *testing.T) {
 						To:   nodeID("service", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{Kind: "sourced_from",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["helm-guestbook"]`}},
 				},
 			},
 		},
@@ -84,7 +88,9 @@ func TestCollect(t *testing.T) {
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
 						From: nodeID("deployment", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["kustomize-guestbook"]`}},
 					{Kind: "describes",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"),
 						To:   nodeID("deployment", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
@@ -93,7 +99,9 @@ func TestCollect(t *testing.T) {
 						To:   nodeID("service", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 					{Kind: "sourced_from",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["kustomize-guestbook"]`}},
 				},
 			},
 		},
@@ -116,7 +124,9 @@ func TestCollect(t *testing.T) {
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
 						From: nodeID("deployment", "mock-cluster/multi-source/multi-source-helm-guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["helm-guestbook"]`}},
 					{Kind: "describes",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"),
 						To:   nodeID("deployment", "mock-cluster/multi-source/multi-source-helm-guestbook")},
@@ -125,7 +135,9 @@ func TestCollect(t *testing.T) {
 						To:   nodeID("service", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 					{Kind: "sourced_from",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["helm-guestbook"]`}},
 				},
 			},
 		},
@@ -154,7 +166,9 @@ func TestCollect(t *testing.T) {
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
 						From: nodeID("deployment", "mock-cluster/guestbook/guestbook-ui"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["guestbook"]`}},
 					{Kind: "describes",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"),
 						To:   nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook")},
@@ -166,10 +180,63 @@ func TestCollect(t *testing.T) {
 						To:   nodeID("service", "mock-cluster/guestbook/guestbook-ui")},
 					{Kind: "sourced_from",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["apps"]`}},
 					{Kind: "sourced_from",
 						From: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps")},
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["guestbook"]`}},
+				},
+			},
+		},
+		{
+			name:     "multiple sources from the same repository at different paths list all the paths",
+			testdata: []string{"multi-path"},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"), Properties: props{
+						"project":               "default",
+						"sync_status":           "Synced",
+						"health_status":         "Progressing",
+						"destination_namespace": "multi-path",
+						"source_type":           "Directory,Kustomize"}},
+					{ID: nodeID("deployment", "mock-cluster/multi-path/guestbook-ui")},
+					{ID: nodeID("deployment", "mock-cluster/multi-path/kustomize-guestbook-ui")},
+					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
+						"url": "https://github.com/argoproj/argocd-example-apps"}},
+					{ID: nodeID("service", "mock-cluster/multi-path/guestbook-ui")},
+					{ID: nodeID("service", "mock-cluster/multi-path/kustomize-guestbook-ui")},
+				},
+				Relations: []pluginapi.RelationClaim{
+					{Kind: "deployed_from",
+						From: nodeID("deployment", "mock-cluster/multi-path/guestbook-ui"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["guestbook","kustomize-guestbook"]`}},
+					{Kind: "deployed_from",
+						From: nodeID("deployment", "mock-cluster/multi-path/kustomize-guestbook-ui"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["guestbook","kustomize-guestbook"]`}},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						To:   nodeID("deployment", "mock-cluster/multi-path/guestbook-ui")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						To:   nodeID("deployment", "mock-cluster/multi-path/kustomize-guestbook-ui")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						To:   nodeID("service", "mock-cluster/multi-path/guestbook-ui")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						To:   nodeID("service", "mock-cluster/multi-path/kustomize-guestbook-ui")},
+					{Kind: "sourced_from",
+						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["guestbook","kustomize-guestbook"]`}},
 				},
 			},
 		},
