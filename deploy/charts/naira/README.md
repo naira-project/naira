@@ -18,8 +18,12 @@ helm install naira deploy/charts/naira -n idp-system --create-namespace \
 ```
 
 plus Secrets supplied by the operator: `catalog-secrets` (keys
-`LITELLM_API_KEY`, `OPENMETADATA_ADMIN_PASSWORD`) and `portal-oidc` (key
-`client-secret`).
+`LITELLM_API_KEY`, `OPENMETADATA_ADMIN_PASSWORD`), `portal-oidc` (key
+`client-secret`), `postgres-admin` (key `postgres-password`) and `catalog-db`
+(keys `username`, `password`).
+
+Run `helm dependency build deploy/charts/naira` first in a checkout; the
+PostgreSQL subchart is not vendored.
 
 Released charts are also published to ghcr.io as OCI artifacts, so no checkout
 is needed:
@@ -36,7 +40,8 @@ development Secrets from values.
 
 - One release per namespace: namespaced objects have fixed names (`catalog`,
   `ui`, `portal`, `catalog-plugin-config`, `plugin-<name>-config`,
-  `catalog-secrets`, `portal-oidc`).
+  `catalog-secrets`, `portal-oidc`, `postgres`, `postgres-admin`, `db-init`,
+  `<name>-db`).
   Cluster-scoped RBAC is prefixed with the release name, so several releases
   per cluster are fine as long as their release names differ.
 - Migrating from `deploy/dev/stacks`: uninstall that stack first (`task
@@ -52,6 +57,20 @@ development Secrets from values.
   tag; only `dev-publish.yml` builds them (branch-name tags). A registry
   install at the chart's default tag needs those plugins disabled, a dev tag
   via `image.tag`, or a release that includes them.
+
+## PostgreSQL
+
+The `cloudpirates/postgres` subchart (official `postgres` image) runs one server,
+StatefulSet and Service `postgres`. `postgresql.enabled=false` plus
+`database.host` uses an external server instead.
+
+Each enabled entry in `database.databases` gets a role and a database of the
+same name, owned by that role, with `CONNECT` revoked from `PUBLIC`. The
+`db-init` Job creates them if missing and sets the password from `<name>-db`.
+It is idempotent, runs on existing volumes, and reruns when its spec, script
+or `database` values change; delete the Job to rerun it by hand, e.g. after
+changing a password in an existing Secret. Defaults: `catalog`. `values-dev.yaml`
+adds `litellm`, which LiteLLM from the test-dependencies chart uses.
 
 ## Plugins
 
@@ -104,8 +123,12 @@ templates render in file order, before `validate.yaml` can catch it) reject: `ca
 `plugin-<name>` longer than 63 characters; a plugin
 `config` block with neither `existingConfigMap` nor `data`; a plugin `env`
 entry that is a Secret reference without a `key`; an enabled plugin without
-`image.repository`; and either Secret (catalog or portal) missing a source
-when something reads it.
+`image.repository`; either Secret (catalog or portal) missing a source
+when something reads it; `database.host` set together with the subchart, or
+missing without it; `postgresql.auth.existingSecret` differing from the
+`database.admin` Secret; a database name other than lowercase letters, digits and inner hyphens starting with a letter; and a
+`database.admin` or `database.databases.<name>` Secret without exactly one
+source.
 
 ## Tests
 

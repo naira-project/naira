@@ -87,3 +87,21 @@ portal:
     secret:
       create: true
       value: naira-local-dev-secret
+
+database:
+  admin:
+    secret:
+      create: true
+      password: postgres-local-admin-password
+  databases:
+    catalog:
+      secret:
+        create: true
+        password: catalog-local-password
+    # LiteLLM from test-dependencies uses this server. Equals test-dependencies
+    # values-dev.yaml secrets.litellmDatabase.password.
+    litellm:
+      enabled: true
+      secret:
+        create: true
+        password: litellm-local-password
