@@ -105,3 +105,10 @@ database:
       secret:
         create: true
         password: litellm-local-password
+    # OpenMetadata from test-dependencies (tags.openmetadata). Equals its
+    # values-dev.yaml secrets.openmetadataDatabase.password.
+    openmetadata:
+      enabled: true
+      secret:
+        create: true
+        password: openmetadata-local-password
