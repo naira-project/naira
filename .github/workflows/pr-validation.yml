@@ -195,7 +195,7 @@ jobs:
         with:
           repository: naira-project/test-dependencies
           # Pinned commit of the test-dependencies chart this PR is verified against.
-          ref: 174cd9fc9d7fa6c6eadf71dddd00b55620b83429
+          ref: 8bd9a3e40e3a2890d41fb4d2c1562bd633b20152
           path: test-dependencies
           persist-credentials: false
       - name: Set up Helm
@@ -244,7 +244,6 @@ jobs:
             --namespace naira-deps --create-namespace \
             -f test-dependencies/charts/test-dependencies/values-dev.yaml
           kubectl -n naira-deps wait --for=condition=Available deployment --all --timeout=12m
-          kubectl -n naira-deps wait --for=jsonpath='{.status.readyReplicas}'=1 statefulset --all --timeout=12m
       - name: Wait for naira
         run: |
           kubectl -n idp-system wait --for=condition=complete job --all --timeout=5m
