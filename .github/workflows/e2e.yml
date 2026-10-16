@@ -21,7 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # Per PR: runs for different PRs all dispatch from main and must not cancel each other.
+  group: ${{ github.workflow }}-${{ inputs.pr-number }}
   cancel-in-progress: true
 
 env:
@@ -31,6 +32,8 @@ jobs:
   e2e:
     name: E2E · litellm_chatbot_to_catalog_api
     runs-on: ubuntu-latest
+    # Requires reviewer approval before running PR code.
+    environment: e2e
     steps:
       - name: Determine PR number
         id: pr
