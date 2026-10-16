@@ -38,6 +38,44 @@ if k8s_context() != 'kind-' + CLUSTER_NAME:
     fail('tilt started with kube context %s; switched to kind-%s. Restart tilt.'
          % (k8s_context(), CLUSTER_NAME))
 
+# --- naira chart ------------------------------------------------------------
+# The PostgreSQL subchart is not vendored; fetch it when missing.
+if os.path.exists(CHART + '/Chart.lock'):
+    watch_file(CHART + '/Chart.lock')
+    for d in read_yaml(CHART + '/Chart.lock').get('dependencies', []):
+        if not os.path.exists('%s/charts/%s-%s.tgz' % (CHART, d['name'], d['version'])):
+            local('helm dependency build ' + CHART)
+            break
+
+yaml = helm(
+    CHART,
+    name='naira',
+    namespace=NAMESPACE,
+    values=[CHART + '/values-dev.yaml'],
+)
+namespace_yaml = blob('apiVersion: v1\nkind: Namespace\nmetadata:\n  name: %s\n' % NAMESPACE)
+k8s_yaml([namespace_yaml, yaml])
+
+# PostgreSQL and db-init deploy first: LiteLLM keeps its database there, so
+# test-dependencies waits for them (the rest of naira waits for test-dependencies).
+objs = decode_yaml_stream(yaml)
+has_pg = len([o for o in objs if o['kind'] == 'StatefulSet' and o['metadata']['name'] == 'postgres']) > 0
+db_init_jobs = [o['metadata']['name'] for o in objs if o['kind'] == 'Job' and o['metadata']['name'].startswith('db-init-')]
+
+def pg_object(o):
+    md = o['metadata']
+    if o['kind'] == 'Secret' and (md['name'] == 'postgres-admin' or md['name'].endswith('-db')):
+        return True
+    return o['kind'] == 'ConfigMap' and md['name'] in ('postgres', 'db-init')
+
+if has_pg:
+    k8s_resource('postgres', objects=['%s:namespace' % NAMESPACE] +
+                 ['%s:%s' % (o['metadata']['name'], o['kind'].lower()) for o in objs if pg_object(o)],
+                 labels=['naira'])
+for job in db_init_jobs:
+    k8s_resource(job, new_name='db-init', resource_deps=['postgres'] if has_pg else [], labels=['naira'])
+DEPS_AFTER = ['db-init'] if db_init_jobs else (['postgres'] if has_pg else [])
+
 # --- test-dependencies chart -------------------------------------------------
 # Installed with helm itself rather than helm(): its subcharts rely on hooks
 # (LiteLLM's migration job) and ship CRDs, which `helm template` would flatten.
@@ -62,7 +100,7 @@ helm_resource(
     deps=[DEPS_CHART + '/values.yaml', DEPS_CHART + '/values-dev.yaml', DEPS_CHART + '/templates'],
     image_deps=['mcp-mock'],
     image_keys=[('mcpMock.image.registry', 'mcpMock.image.repository', 'mcpMock.image.tag')],
-    resource_deps=['test-dependencies-subcharts'],
+    resource_deps=['test-dependencies-subcharts'] + DEPS_AFTER,
     labels=['test-dependencies'],
 )
 
@@ -87,14 +125,6 @@ for svc, ports in DEPS_FORWARDS.items():
         labels=['test-dependencies'],
     )
 
-yaml = helm(
-    CHART,
-    name='naira',
-    namespace=NAMESPACE,
-    values=[CHART + '/values-dev.yaml'],
-)
-namespace_yaml = blob('apiVersion: v1\nkind: Namespace\nmetadata:\n  name: %s\n' % NAMESPACE)
-k8s_yaml([namespace_yaml, yaml])
 
 # --- Images ------------------------------------------------------------------
 # values-dev.yaml sets an empty registry, so the chart references plain
@@ -102,7 +132,7 @@ k8s_yaml([namespace_yaml, yaml])
 # only the images the rendered chart uses, so enabling a plugin in values is
 # enough. Tilt loads the images into kind itself.
 images = []
-for o in decode_yaml_stream(yaml):
+for o in objs:
     if o['kind'] != 'Deployment':
         continue
     # Plugins are native sidecars, i.e. initContainers.
@@ -130,9 +160,9 @@ for repo in images:
 # --- Resources ----------------------------------------------------------------
 # Namespace, Secrets, ConfigMaps, ServiceAccount, RBAC and NetworkPolicies go
 # into one resource that the workloads wait for, instead of "uncategorized".
-config_objects = ['%s:namespace' % NAMESPACE]
-for o in decode_yaml_stream(yaml):
-    if o['kind'] in ('Deployment', 'Service'):
+config_objects = [] if has_pg else ['%s:namespace' % NAMESPACE]
+for o in objs:
+    if o['kind'] in ('Deployment', 'StatefulSet', 'Job', 'Service') or (has_pg and pg_object(o)):
         continue
     md = o['metadata']
     sel = '%s:%s' % (md['name'], o['kind'].lower())
