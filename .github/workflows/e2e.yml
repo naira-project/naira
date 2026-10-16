@@ -5,12 +5,12 @@
 # into an isolated namespace on a throwaway kind cluster and runs its
 # assertions against it.
 #
-# `workflow_dispatch`-only for now, deliberately: this is a new, unvalidated
-# ~7-13 minute job. Switch the `on:` block to `pull_request` once a run has
-# been observed succeeding end-to-end.
+# Runs on PRs and on manual dispatch; both wait for approval via the
+# `e2e` environment.
 name: E2E
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       pr-number:
@@ -21,8 +21,8 @@ permissions:
   contents: read
 
 concurrency:
-  # Per PR: runs for different PRs all dispatch from main and must not cancel each other.
-  group: ${{ github.workflow }}-${{ inputs.pr-number }}
+  # Per PR, so runs for different PRs don't cancel each other.
+  group: ${{ github.workflow }}-${{ inputs.pr-number || github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
@@ -38,7 +38,7 @@ jobs:
       - name: Determine PR number
         id: pr
         env:
-          PR_NUMBER: ${{ inputs.pr-number }}
+          PR_NUMBER: ${{ inputs.pr-number || github.event.pull_request.number }}
         run: |
           NUMBER="${PR_NUMBER}"
           if [ -z "${NUMBER}" ]; then
