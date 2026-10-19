@@ -1,6 +1,3 @@
-[alias]
-goreadme = "go:github.com/posener/goreadme/cmd/goreadme"
-
 [tools]
 buf = "1.71"
 go = "1.26"
