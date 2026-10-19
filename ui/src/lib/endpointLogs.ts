@@ -1,10 +1,10 @@
 import { type NodeResource, nodeProps } from './catalogApi';
 
-// Must match grafana.additionalDataSources[].uid in
-// deploy/dev/stacks/llm-inference/infra/helm/prometheus-values.yaml.
+// Must match the Loki entry in grafana.additionalDataSources (uid: loki) in the
+// test-dependencies chart's values.yaml.
 const LOKI_DATASOURCE = { type: 'loki', uid: 'loki' };
 
-// Defaults to the port-forward opened by `task forward:llm-inference`.
+// Defaults to the port-forward of the test-dependencies Grafana service.
 const GRAFANA_URL = (import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3002').replace(
   /\/+$/,
   '',
@@ -14,14 +14,14 @@ const GRAFANA_URL = (import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3002'
 // one source shared by internal and external endpoints.
 const LITELLM_PROXY_SELECTOR = '{namespace="litellm", app="litellm"}';
 
-// In-cluster Service hosts, e.g. llama-qwen25-05b.llamacpp.svc.cluster.local.
+// In-cluster Service hosts, e.g. llama-qwen25-05b.test-dependencies.svc.cluster.local.
 const CLUSTER_SERVICE_HOST = /^([a-z0-9-]+)\.([a-z0-9-]+)\.svc(\.cluster\.local)?$/;
 
 /**
  * LogQL queries selecting an inference endpoint's logs in Loki:
- * - the backend pods, when api_base points at an in-cluster Service (Alloy
- *   labels pods by namespace and `app`, which the dev manifests set to the
- *   Service name), and
+ * - the backend pods, when api_base points at an in-cluster Service (the
+ *   test-dependencies Alloy labels pods by namespace and their `app` label,
+ *   which the chart sets to the Service name), and
  * - the LiteLLM proxy's lines mentioning the upstream model.
  *
  * Endpoints without either, such as those from the Bedrock plugin whose logs
