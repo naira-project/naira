@@ -1,42 +1,34 @@
 -- +goose Up
 
 CREATE TABLE nodes (
+    id   UUID PRIMARY KEY,
     kind TEXT NOT NULL,
     path TEXT NOT NULL,
-    PRIMARY KEY (kind, path)
+    CONSTRAINT nodes_identity_key UNIQUE (kind, path)
 );
 
 CREATE TABLE node_plugin_claims (
-    node_kind   TEXT NOT NULL,
-    node_path   TEXT NOT NULL,
-    plugin_name TEXT NOT NULL,
-    snapshot_id UUID NOT NULL,
+    node_id     UUID  NOT NULL REFERENCES nodes (id),
+    plugin_name TEXT  NOT NULL,
+    snapshot_id UUID  NOT NULL,
     properties  JSONB NOT NULL DEFAULT '{}',
-    PRIMARY KEY (node_kind, node_path, plugin_name),
-    FOREIGN KEY (node_kind, node_path) REFERENCES nodes (kind, path) ON DELETE CASCADE
+    PRIMARY KEY (node_id, plugin_name)
 );
 
 CREATE TABLE relations (
-    kind      TEXT NOT NULL,
-    from_kind TEXT NOT NULL,
-    from_path TEXT NOT NULL,
-    to_kind   TEXT NOT NULL,
-    to_path   TEXT NOT NULL,
-    PRIMARY KEY (kind, from_kind, from_path, to_kind, to_path)
+    id           UUID PRIMARY KEY,
+    kind         TEXT NOT NULL,
+    from_node_id UUID NOT NULL REFERENCES nodes (id),
+    to_node_id   UUID NOT NULL REFERENCES nodes (id),
+    CONSTRAINT relations_identity_key UNIQUE (kind, from_node_id, to_node_id)
 );
 
 CREATE TABLE relation_plugin_claims (
-    relation_kind TEXT NOT NULL,
-    from_kind     TEXT NOT NULL,
-    from_path     TEXT NOT NULL,
-    to_kind       TEXT NOT NULL,
-    to_path       TEXT NOT NULL,
-    plugin_name   TEXT NOT NULL,
-    snapshot_id   UUID NOT NULL,
-    properties    JSONB NOT NULL DEFAULT '{}',
-    PRIMARY KEY (relation_kind, from_kind, from_path, to_kind, to_path, plugin_name),
-    FOREIGN KEY (relation_kind, from_kind, from_path, to_kind, to_path)
-        REFERENCES relations (kind, from_kind, from_path, to_kind, to_path) ON DELETE CASCADE
+    relation_id UUID  NOT NULL REFERENCES relations (id),
+    plugin_name TEXT  NOT NULL,
+    snapshot_id UUID  NOT NULL,
+    properties  JSONB NOT NULL DEFAULT '{}',
+    PRIMARY KEY (relation_id, plugin_name)
 );
 
 CREATE TABLE operations (
