@@ -2,14 +2,14 @@
 
 CREATE TABLE nodes (
     id   UUID PRIMARY KEY,
-    kind TEXT NOT NULL,
-    path TEXT NOT NULL,
+    kind VARCHAR(40) NOT NULL,
+    path VARCHAR(400) NOT NULL,
     CONSTRAINT nodes_identity_key UNIQUE (kind, path)
 );
 
 CREATE TABLE node_plugin_claims (
-    node_id     UUID  NOT NULL REFERENCES nodes (id),
-    plugin_name TEXT  NOT NULL,
+    node_id     UUID         NOT NULL REFERENCES nodes (id),
+    plugin_name VARCHAR(40)  NOT NULL,
     snapshot_id UUID  NOT NULL,
     properties  JSONB NOT NULL DEFAULT '{}',
     PRIMARY KEY (node_id, plugin_name)
@@ -17,15 +17,15 @@ CREATE TABLE node_plugin_claims (
 
 CREATE TABLE relations (
     id           UUID PRIMARY KEY,
-    kind         TEXT NOT NULL,
+    kind         VARCHAR(40) NOT NULL,
     from_node_id UUID NOT NULL REFERENCES nodes (id),
     to_node_id   UUID NOT NULL REFERENCES nodes (id),
     CONSTRAINT relations_identity_key UNIQUE (kind, from_node_id, to_node_id)
 );
 
 CREATE TABLE relation_plugin_claims (
-    relation_id UUID  NOT NULL REFERENCES relations (id),
-    plugin_name TEXT  NOT NULL,
+    relation_id UUID         NOT NULL REFERENCES relations (id),
+    plugin_name VARCHAR(40)  NOT NULL,
     snapshot_id UUID  NOT NULL,
     properties  JSONB NOT NULL DEFAULT '{}',
     PRIMARY KEY (relation_id, plugin_name)
@@ -33,7 +33,7 @@ CREATE TABLE relation_plugin_claims (
 
 CREATE TABLE operations (
     name               TEXT PRIMARY KEY,
-    plugin             TEXT NOT NULL,
+    plugin             VARCHAR(40) NOT NULL,
     state              TEXT NOT NULL,
     start_time         TIMESTAMPTZ,
     end_time           TIMESTAMPTZ,
