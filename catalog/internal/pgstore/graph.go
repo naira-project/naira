@@ -14,8 +14,7 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT n.kind, n.path, c.plugin_name, c.snapshot_id, c.properties
 		FROM nodes n
-		LEFT JOIN node_plugin_claims c
-		  ON c.node_kind = n.kind AND c.node_path = n.path
+		LEFT JOIN node_plugin_claims c ON c.node_id = n.id
 		ORDER BY n.kind, n.path
 	`)
 	if err != nil {
@@ -65,8 +64,7 @@ func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.No
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.plugin_name, c.snapshot_id, c.properties
 		FROM nodes n
-		LEFT JOIN node_plugin_claims c
-		  ON c.node_kind = n.kind AND c.node_path = n.path
+		LEFT JOIN node_plugin_claims c ON c.node_id = n.id
 		WHERE n.kind = $1 AND n.path = $2
 	`, id.Kind, id.Path)
 	if err != nil {
@@ -106,16 +104,13 @@ func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.No
 
 func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT r.kind, r.from_kind, r.from_path, r.to_kind, r.to_path,
+		SELECT r.kind, f.kind, f.path, t.kind, t.path,
 		       c.plugin_name, c.snapshot_id, c.properties
 		FROM relations r
-		LEFT JOIN relation_plugin_claims c
-		  ON c.relation_kind = r.kind
-		 AND c.from_kind = r.from_kind
-		 AND c.from_path = r.from_path
-		 AND c.to_kind = r.to_kind
-		 AND c.to_path = r.to_path
-		ORDER BY r.kind, r.from_kind, r.from_path, r.to_kind, r.to_path
+		JOIN nodes f ON f.id = r.from_node_id
+		JOIN nodes t ON t.id = r.to_node_id
+		LEFT JOIN relation_plugin_claims c ON c.relation_id = r.id
+		ORDER BY r.kind, f.kind, f.path, t.kind, t.path
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("querying relations: %w", err)
