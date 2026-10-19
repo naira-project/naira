@@ -43,7 +43,8 @@ func TestCollect(t *testing.T) {
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "helm-guestbook",
-						"source_type":           "Helm"}},
+						"source_type":           "Helm",
+						"last_synced_at":        "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -79,7 +80,8 @@ func TestCollect(t *testing.T) {
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "kustomize-guestbook",
-						"source_type":           "Kustomize"}},
+						"source_type":           "Kustomize",
+						"last_synced_at":        "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -115,7 +117,8 @@ func TestCollect(t *testing.T) {
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "multi-source",
-						"source_type":           "Helm,"}},
+						"source_type":           "Helm,",
+						"last_synced_at":        "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -151,13 +154,15 @@ func TestCollect(t *testing.T) {
 						"sync_status":           "Synced",
 						"health_status":         "Healthy",
 						"destination_namespace": "argocd",
-						"source_type":           "Helm"}},
+						"source_type":           "Helm",
+						"last_synced_at":        "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"), Properties: props{
 						"project":               "default",
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "guestbook",
-						"source_type":           "Directory"}},
+						"source_type":           "Directory",
+						"last_synced_at":        "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/guestbook/guestbook-ui")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -201,7 +206,8 @@ func TestCollect(t *testing.T) {
 						"sync_status":           "Synced",
 						"health_status":         "Progressing",
 						"destination_namespace": "multi-path",
-						"source_type":           "Directory,Kustomize"}},
+						"source_type":           "Directory,Kustomize",
+						"last_synced_at":        "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/multi-path/guestbook-ui")},
 					{ID: nodeID("deployment", "mock-cluster/multi-path/kustomize-guestbook-ui")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{

@@ -16,6 +16,9 @@
 // absent when no source has a path (e.g. a source that only provides values files
 // via "ref").
 //
+// Application Nodes also have a "last_synced_at" property: the time the last sync
+// operation of the Application finished, in RFC 3339 format.
+//
 // # Known Limitations
 //
 // Only Applications deploying to the cluster they live in are supported;
@@ -127,6 +130,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			healthStatus = nestedStringOrEmpty(app, "status", "health", "status")
 			destNs       = nestedStringOrEmpty(app, "spec", "destination", "namespace")
 			srcType      = sourceType(app)
+			syncedAt     = nestedStringOrEmpty(app, "status", "operationState", "finishedAt")
 		)
 		addNode(pluginapi.NodeClaim{
 			ID: applicationID(clusterID, app.GetNamespace(), app.GetName()),
@@ -136,6 +140,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				"health_status":         healthStatus,
 				"destination_namespace": destNs,
 				"source_type":           srcType,
+				"last_synced_at":        syncedAt,
 			},
 		})
 	}

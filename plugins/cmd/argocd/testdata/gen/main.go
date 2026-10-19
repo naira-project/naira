@@ -429,11 +429,16 @@ var timestampRe = regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`)
 //
 // The metadata is normalized explicitly (UID is derived from the name to stay
 // unique), all remaining timestamps anywhere in the object are replaced.
-// status.operationState is dropped, because it records the last sync operation,
-// which depends on timing (e.g. whether an automated sync was retried).
+// status.operationState is reduced to its finishedAt, because the rest records
+// the last sync operation, which depends on timing (e.g. whether an automated
+// sync was retried).
 func normalize(app *unstructured.Unstructured) {
 	unstructured.RemoveNestedField(app.Object, "metadata", "managedFields")
+	finishedAt, found, _ := unstructured.NestedString(app.Object, "status", "operationState", "finishedAt")
 	unstructured.RemoveNestedField(app.Object, "status", "operationState")
+	if found && finishedAt != "" {
+		_ = unstructured.SetNestedField(app.Object, finishedAt, "status", "operationState", "finishedAt")
+	}
 	app.SetUID(uidFromHashed(app.GetNamespace() + "/" + app.GetName()))
 	app.SetResourceVersion("1")
 	app.SetGeneration(1)
