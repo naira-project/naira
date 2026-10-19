@@ -8,6 +8,17 @@ An Application "describes" each resource it manages. If its source is a GitHub r
 
 Application Nodes also have a "last\_synced\_at" property: the time the last sync operation of the Application finished, in RFC 3339 format.
 
+## Environment Variables
+
+  - KUBECONFIG (optional) - path to the kubeconfig file; if unset, the in-cluster configuration is used.
+  - ARGOCD\_RESOURCE\_TIMES (optional) - if "true", the plugin reads the metadata of each resource managed by an Application, and sets a "last\_synced\_at" property on its Node: the time ArgoCD last applied it, taken from the newest "managedFields" entry of the "argocd-controller" field manager. The property is left out for resources that cannot be read. Defaults to "false", in which case managed resources are not read at all.
+
+## Required RBAC
+
+By default, the plugin only needs "get" and "list" on "applications" in the "argoproj.io" API group, and "list" on namespaces.
+
+With ARGOCD\_RESOURCE\_TIMES enabled, it additionally needs "get" on every kind of resource the Applications manage. As these are arbitrary, that effectively means "get" on all resources, e.g. a ClusterRole with apiGroups \["\*"], resources \["\*"], verbs \["get"]. Narrow it down to the kinds you deploy with ArgoCD if you prefer. Only the metadata is requested, never the contents, so the plugin does not see e.g. the data of Secrets, but note that "get" on Secrets still lets whoever holds the credentials read them. A resource the plugin is not allowed to read is skipped with a warning in the log.
+
 ## Known Limitations
 
 Only Applications deploying to the cluster they live in are supported; Applications targeting other clusters are skipped.

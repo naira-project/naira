@@ -51,6 +51,7 @@ import (
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/metadata"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -144,10 +145,107 @@ func run(ctx context.Context, inFile, outDir string) error {
 		return fmt.Errorf("waiting for Applications: %w", err)
 	}
 
+	log.Printf("reading managed resources")
+	meta, err := metadata.NewForConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("creating metadata client: %w", err)
+	}
+	resources, err := scrapeManagedResources(ctx, disc, meta, apps)
+	if err != nil {
+		return fmt.Errorf("reading managed resources: %w", err)
+	}
+
 	err = writeApplications(outDir, apps)
 	if err != nil {
 		return fmt.Errorf("writing Applications: %w", err)
 	}
+	err = writeJSON(filepath.Join(outDir, resourcesFile), resources)
+	if err != nil {
+		return fmt.Errorf("writing managed resources: %w", err)
+	}
+	return nil
+}
+
+// resourcesFile is the name of the file with managedFields of all managed resources.
+const resourcesFile = "managed-fields.json"
+
+// managedFields lists the managedFields of resources, keyed by
+// "<group>/<kind>/<namespace>/<name>" (group is empty for the core API).
+type managedFields map[string][]metav1.ManagedFieldsEntry
+
+// scrapeManagedResources reads the managedFields of every resource managed by apps.
+// Times are replaced by fixed ones: fixedTimestamp for ArgoCD, and a later one
+// for any other field manager, so that tests can tell whether the plugin picks
+// the ArgoCD entry, or just the newest one.
+func scrapeManagedResources(ctx context.Context, disc discovery.DiscoveryInterface, meta metadata.Interface, apps []unstructured.Unstructured) (managedFields, error) {
+	_, apis, err := disc.ServerGroupsAndResources()
+	if err != nil {
+		return nil, fmt.Errorf("listing resource APIs: %w", err)
+	}
+
+	result := managedFields{}
+	for _, app := range apps {
+		resources, _, _ := unstructured.NestedSlice(app.Object, "status", "resources")
+		for _, r := range resources {
+			res, _ := r.(map[string]any)
+			group, _ := res["group"].(string)
+			kind, _ := res["kind"].(string)
+			ns, _ := res["namespace"].(string)
+			name, _ := res["name"].(string)
+
+			gvr, ok := findResource(apis, group, kind)
+			if !ok {
+				return nil, fmt.Errorf("no API resource for %s/%s", group, kind)
+			}
+			obj, err := meta.Resource(gvr).Namespace(ns).Get(ctx, name, metav1.GetOptions{})
+			if err != nil {
+				return nil, fmt.Errorf("getting %s %s/%s: %w", kind, ns, name, err)
+			}
+			entries := obj.ManagedFields
+			for i := range entries {
+				ts := fixedTimestamp
+				if entries[i].Manager != argoFieldManager {
+					ts = fixedOtherManagerTimestamp
+				}
+				parsed, err := time.Parse(time.RFC3339, ts)
+				if err != nil {
+					return nil, fmt.Errorf("parsing fixed timestamp %q: %w", ts, err)
+				}
+				entries[i].Time = &metav1.Time{Time: parsed}
+				entries[i].FieldsV1 = nil // large, and not used by the plugin
+			}
+			result[strings.Join([]string{group, kind, ns, name}, "/")] = entries
+		}
+	}
+	return result, nil
+}
+
+// findResource returns the API resource of the given group and kind.
+func findResource(apis []*metav1.APIResourceList, group, kind string) (schema.GroupVersionResource, bool) {
+	for _, list := range apis {
+		gv, err := schema.ParseGroupVersion(list.GroupVersion)
+		if err != nil || gv.Group != group {
+			continue
+		}
+		for _, res := range list.APIResources {
+			if res.Kind == kind && !strings.Contains(res.Name, "/") {
+				return gv.WithResource(res.Name), true
+			}
+		}
+	}
+	return schema.GroupVersionResource{}, false
+}
+
+func writeJSON(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling: %w", err)
+	}
+	err = os.WriteFile(path, append(data, '\n'), 0o644)
+	if err != nil {
+		return fmt.Errorf("writing %s: %w", path, err)
+	}
+	log.Printf("wrote %s", path)
 	return nil
 }
 
@@ -421,6 +519,12 @@ func writeApplications(dir string, apps []unstructured.Unstructured) error {
 
 // fixedTimestamp for replacing all timestamps in the written files.
 const fixedTimestamp = "2000-01-01T00:00:00Z"
+
+// fixedOtherManagerTimestamp is used for managedFields of managers other than ArgoCD.
+const fixedOtherManagerTimestamp = "2000-01-02T00:00:00Z"
+
+// argoFieldManager is the field manager ArgoCD applies resources as.
+const argoFieldManager = "argocd-controller"
 
 var timestampRe = regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`)
 

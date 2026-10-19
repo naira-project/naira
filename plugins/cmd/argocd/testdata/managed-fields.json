@@ -1,0 +1,174 @@
+{
+  "/Service/guestbook/guestbook-ui": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    }
+  ],
+  "/Service/helm-guestbook/helm-guestbook": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    }
+  ],
+  "/Service/kustomize-guestbook/kustomize-guestbook-ui": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    }
+  ],
+  "/Service/multi-path/guestbook-ui": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    }
+  ],
+  "/Service/multi-path/kustomize-guestbook-ui": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    }
+  ],
+  "/Service/multi-source/multi-source-helm-guestbook": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    }
+  ],
+  "apps/Deployment/guestbook/guestbook-ui": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    },
+    {
+      "manager": "k3s",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-02T00:00:00Z",
+      "fieldsType": "FieldsV1",
+      "subresource": "status"
+    }
+  ],
+  "apps/Deployment/helm-guestbook/helm-guestbook": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    },
+    {
+      "manager": "k3s",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-02T00:00:00Z",
+      "fieldsType": "FieldsV1",
+      "subresource": "status"
+    }
+  ],
+  "apps/Deployment/kustomize-guestbook/kustomize-guestbook-ui": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    },
+    {
+      "manager": "k3s",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-02T00:00:00Z",
+      "fieldsType": "FieldsV1",
+      "subresource": "status"
+    }
+  ],
+  "apps/Deployment/multi-path/guestbook-ui": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    },
+    {
+      "manager": "k3s",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-02T00:00:00Z",
+      "fieldsType": "FieldsV1",
+      "subresource": "status"
+    }
+  ],
+  "apps/Deployment/multi-path/kustomize-guestbook-ui": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    },
+    {
+      "manager": "k3s",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-02T00:00:00Z",
+      "fieldsType": "FieldsV1",
+      "subresource": "status"
+    }
+  ],
+  "apps/Deployment/multi-source/multi-source-helm-guestbook": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    },
+    {
+      "manager": "k3s",
+      "operation": "Update",
+      "apiVersion": "apps/v1",
+      "time": "2000-01-02T00:00:00Z",
+      "fieldsType": "FieldsV1",
+      "subresource": "status"
+    }
+  ],
+  "argoproj.io/Application/argocd/example.guestbook": [
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "argoproj.io/v1alpha1",
+      "time": "2000-01-01T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    },
+    {
+      "manager": "argocd-application-controller",
+      "operation": "Update",
+      "apiVersion": "argoproj.io/v1alpha1",
+      "time": "2000-01-02T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    }
+  ]
+}

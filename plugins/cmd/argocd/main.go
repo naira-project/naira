@@ -19,6 +19,31 @@
 // Application Nodes also have a "last_synced_at" property: the time the last sync
 // operation of the Application finished, in RFC 3339 format.
 //
+// # Environment Variables
+//
+//   - KUBECONFIG (optional) - path to the kubeconfig file; if unset, the in-cluster
+//     configuration is used.
+//   - ARGOCD_RESOURCE_TIMES (optional) - if "true", the plugin reads the metadata
+//     of each resource managed by an Application, and sets a "last_synced_at"
+//     property on its Node: the time ArgoCD last applied it, taken from the
+//     newest "managedFields" entry of the "argocd-controller" field manager.
+//     The property is left out for resources that cannot be read. Defaults to
+//     "false", in which case managed resources are not read at all.
+//
+// # Required RBAC
+//
+// By default, the plugin only needs "get" and "list" on "applications" in the
+// "argoproj.io" API group, and "list" on namespaces.
+//
+// With ARGOCD_RESOURCE_TIMES enabled, it additionally needs "get" on every kind
+// of resource the Applications manage. As these are arbitrary, that effectively
+// means "get" on all resources, e.g. a ClusterRole with apiGroups ["*"],
+// resources ["*"], verbs ["get"]. Narrow it down to the kinds you deploy with
+// ArgoCD if you prefer. Only the metadata is requested, never the contents, so
+// the plugin does not see e.g. the data of Secrets, but note that "get" on
+// Secrets still lets whoever holds the credentials read them. A resource the
+// plugin is not allowed to read is skipped with a warning in the log.
+//
 // # Known Limitations
 //
 // Only Applications deploying to the cluster they live in are supported;
@@ -45,10 +70,14 @@ import (
 	"log"
 	"slices"
 	"strings"
+	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/metadata"
 
 	"github.com/naira-project/naira/plugins/internal/kubeutil"
 	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
@@ -59,11 +88,19 @@ import (
 const (
 	argoGroup       = "argoproj.io"
 	argoApplication = "Application"
+
+	// argoFieldManager is the field manager ArgoCD applies resources as.
+	argoFieldManager = "argocd-controller"
 )
 
 type config struct {
 	Kubeconfig string `env:"KUBECONFIG"`
+	// ResourceTimes enables reading each managed resource's metadata, see package godoc.
+	ResourceTimes bool `env:"ARGOCD_RESOURCE_TIMES"`
 }
+
+// getMetadata returns the metadata of the resource, without its contents.
+type getMetadata func(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string) (*metav1.PartialObjectMetadata, error)
 
 type Plugin struct {
 	config config
@@ -79,14 +116,15 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	disc, dyn, err := p.connect()
+	disc, dyn, meta, err := p.connect()
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("connecting to cluster: %w", err)
 	}
-	return p.collect(ctx, disc, dyn)
+	return p.collect(ctx, disc, dyn, meta)
 }
 
-func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface) (pluginapi.CollectResponse, error) {
+// collect scans the cluster. If meta is nil, managed resources are not read.
+func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface, meta getMetadata) (pluginapi.CollectResponse, error) {
 	namespaces, clusterID, err := kubeutil.NamespacesAndClusterIDFromDynamic(ctx, dyn)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces: %w", err)
@@ -204,7 +242,16 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			if resID == appID {
 				continue
 			}
-			addNode(pluginapi.NodeClaim{ID: resID})
+			var resProps pluginapi.PropertyMap
+			if meta != nil && resID.Kind != pluginapi.NodeKindArgoApplication {
+				syncedAt := resourceSyncedAt(ctx, resourceAPIs, meta, group, kind, ns, name)
+				if !syncedAt.IsZero() {
+					resProps = pluginapi.PropertyMap{
+						"last_synced_at": syncedAt.UTC().Format(time.RFC3339),
+					}
+				}
+			}
+			addNode(pluginapi.NodeClaim{ID: resID, Properties: resProps})
 			relations = append(relations, pluginapi.RelationClaim{
 				Kind: pluginapi.RelationKindDescribes,
 				From: appID,
@@ -336,20 +383,71 @@ func sourceType(app unstructured.Unstructured) string {
 	return strings.Join(types, ",")
 }
 
-func (p *Plugin) connect() (discovery.DiscoveryInterface, dynamic.Interface, error) {
+// resourceSyncedAt returns the time ArgoCD last applied the resource, as recorded
+// in the resource's own managedFields, or zero time if unknown (logged).
+// The newest entry of the ArgoCD field manager is used, because other managers
+// (e.g. kube-controller-manager) record their own, unrelated updates.
+func resourceSyncedAt(ctx context.Context, apis []*metav1.APIResourceList, meta getMetadata, group, kind, ns, name string) time.Time {
+	gvr, ok := findResource(apis, group, kind)
+	if !ok {
+		log.Printf("argocd: WARN: no API resource found for %s/%s, not reading %s/%s", group, kind, ns, name)
+		return time.Time{}
+	}
+	obj, err := meta(ctx, gvr, ns, name)
+	if err != nil {
+		log.Printf("argocd: WARN: reading metadata of %s %s/%s: %v", kind, ns, name, err)
+		return time.Time{}
+	}
+	var newest time.Time
+	for _, f := range obj.ManagedFields {
+		if f.Manager == argoFieldManager && f.Time != nil && f.Time.Time.After(newest) {
+			newest = f.Time.Time
+		}
+	}
+	return newest
+}
+
+// findResource returns the API resource of the given group and kind.
+func findResource(apis []*metav1.APIResourceList, group, kind string) (schema.GroupVersionResource, bool) {
+	for _, list := range apis {
+		gv, err := schema.ParseGroupVersion(list.GroupVersion)
+		if err != nil || gv.Group != group {
+			continue
+		}
+		for _, res := range list.APIResources {
+			if res.Kind == kind && !strings.Contains(res.Name, "/") {
+				return gv.WithResource(res.Name), true
+			}
+		}
+	}
+	return schema.GroupVersionResource{}, false
+}
+
+// connect returns Kubernetes clients. The metadata one is nil unless enabled in config.
+func (p *Plugin) connect() (discovery.DiscoveryInterface, dynamic.Interface, getMetadata, error) {
 	cfg, err := kubeutil.RestConfig(p.config.Kubeconfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("loading k8s config: %w", err)
+		return nil, nil, nil, fmt.Errorf("loading k8s config: %w", err)
 	}
 	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating k8s discovery client: %w", err)
+		return nil, nil, nil, fmt.Errorf("creating k8s discovery client: %w", err)
 	}
 	dyn, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("creating k8s dynamic client: %w", err)
+		return nil, nil, nil, fmt.Errorf("creating k8s dynamic client: %w", err)
 	}
-	return disc, dyn, nil
+	if !p.config.ResourceTimes {
+		return disc, dyn, nil, nil
+	}
+	metaClient, err := metadata.NewForConfig(cfg)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("creating k8s metadata client: %w", err)
+	}
+	get := func(ctx context.Context, gvr schema.GroupVersionResource, namespace, name string) (*metav1.PartialObjectMetadata, error) {
+		return metaClient.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	}
+	return disc, dyn, get, nil
 }
 
 func nestedStringOrEmpty(u unstructured.Unstructured, fields ...string) string {
