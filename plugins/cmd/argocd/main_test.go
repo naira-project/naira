@@ -1,10 +1,7 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -34,9 +31,7 @@ func TestCollect(t *testing.T) {
 	tests := []struct {
 		name     string
 		testdata []string // names of testdata/*.json files to load
-		// meta, if set, reads managed resources' metadata (ARGOCD_RESOURCE_TIMES enabled).
-		meta getMetadata
-		want pluginapi.CollectResponse
+		want     pluginapi.CollectResponse
 	}{
 		{
 			name:     "Helm chart from a Git path",
@@ -276,94 +271,6 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
-			name:     "managed resources' last_synced_at is read from ArgoCD's managedFields entry",
-			testdata: []string{"helm-guestbook"},
-			meta:     recordedMetadata(),
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"), Properties: props{
-						"project":                   "default",
-						"sync_status":               "Synced",
-						"health_status":             "Progressing",
-						"destination_namespace":     "helm-guestbook",
-						"source_type":               "Helm",
-						"last_deployed_at":          "2000-01-01T00:00:00Z",
-						"operation_present":         "false",
-						"operationState.finishedAt": "2000-01-01T00:00:00Z",
-						"operationState.phase":      "Succeeded",
-						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
-					{ID: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook"), Properties: props{
-						"last_synced_at": "2000-01-01T00:00:00Z"}},
-					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
-						"url": "https://github.com/argoproj/argocd-example-apps"}},
-					{ID: nodeID("service", "mock-cluster/helm-guestbook/helm-guestbook"), Properties: props{
-						"last_synced_at": "2000-01-01T00:00:00Z"}},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
-						Properties: props{
-							"paths": `["helm-guestbook"]`}},
-					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
-						To:   nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
-					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
-						To:   nodeID("service", "mock-cluster/helm-guestbook/helm-guestbook")},
-					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
-						Properties: props{
-							"paths": `["helm-guestbook"]`}},
-				},
-			},
-		},
-		{
-			name:     "managed resources that cannot be read have no last_synced_at",
-			testdata: []string{"helm-guestbook"},
-			meta: func(context.Context, schema.GroupVersionResource, string, string) (*metav1.PartialObjectMetadata, error) {
-				return nil, errors.New("forbidden")
-			},
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"), Properties: props{
-						"project":                   "default",
-						"sync_status":               "Synced",
-						"health_status":             "Progressing",
-						"destination_namespace":     "helm-guestbook",
-						"source_type":               "Helm",
-						"last_deployed_at":          "2000-01-01T00:00:00Z",
-						"operation_present":         "false",
-						"operationState.finishedAt": "2000-01-01T00:00:00Z",
-						"operationState.phase":      "Succeeded",
-						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
-					{ID: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
-					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
-						"url": "https://github.com/argoproj/argocd-example-apps"}},
-					{ID: nodeID("service", "mock-cluster/helm-guestbook/helm-guestbook")},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{Kind: "deployed_from",
-						From: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
-						Properties: props{
-							"paths": `["helm-guestbook"]`}},
-					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
-						To:   nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
-					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
-						To:   nodeID("service", "mock-cluster/helm-guestbook/helm-guestbook")},
-					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
-						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
-						Properties: props{
-							"paths": `["helm-guestbook"]`}},
-				},
-			},
-		},
-		{
 			name:     "sync in progress: operationState is copied, and last_deployed_at is absent without history",
 			testdata: []string{"mid-sync"},
 			want: pluginapi.CollectResponse{
@@ -443,14 +350,7 @@ func TestCollect(t *testing.T) {
 				}},
 			}}
 
-			disc.Resources = append(disc.Resources,
-				&metav1.APIResourceList{GroupVersion: "v1", APIResources: []metav1.APIResource{
-					{Name: "services", Kind: "Service", Namespaced: true, Verbs: []string{"get", "list"}}}},
-				&metav1.APIResourceList{GroupVersion: "apps/v1", APIResources: []metav1.APIResource{
-					{Name: "deployments", Kind: "Deployment", Namespaced: true, Verbs: []string{"get", "list"}}}},
-			)
-
-			got, err := New(config{}).collect(t.Context(), disc, dyn, tt.meta)
+			got, err := New(config{}).collect(t.Context(), disc, dyn)
 			require.NoError(t, err)
 			sort.Slice(got.Nodes, func(i, j int) bool {
 				a, b := got.Nodes[i].ID, got.Nodes[j].ID
@@ -475,27 +375,3 @@ func nodeID(kind, path string) pluginapi.NodeID {
 }
 
 type props = pluginapi.PropertyMap
-
-// recordedMetadata returns a getMetadata reading the managedFields recorded in
-// testdata/managed-fields.json.
-func recordedMetadata() getMetadata {
-	return func(_ context.Context, gvr schema.GroupVersionResource, namespace, name string) (*metav1.PartialObjectMetadata, error) {
-		data, err := os.ReadFile(filepath.Join("testdata", "managed-fields.json"))
-		if err != nil {
-			return nil, fmt.Errorf("reading managed-fields.json: %w", err)
-		}
-		var recorded map[string][]metav1.ManagedFieldsEntry
-		if err := json.Unmarshal(data, &recorded); err != nil {
-			return nil, fmt.Errorf("parsing managed-fields.json: %w", err)
-		}
-		kinds := map[string]string{"services": "Service", "deployments": "Deployment"}
-		key := strings.Join([]string{gvr.Group, kinds[gvr.Resource], namespace, name}, "/")
-		entries, ok := recorded[key]
-		if !ok {
-			return nil, fmt.Errorf("no recorded metadata for %s", key)
-		}
-		return &metav1.PartialObjectMetadata{
-			ObjectMeta: metav1.ObjectMeta{ManagedFields: entries},
-		}, nil
-	}
-}
