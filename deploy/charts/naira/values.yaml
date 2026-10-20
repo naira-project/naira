@@ -271,7 +271,7 @@ catalog:
       # required. Add them to the catalog Secret under proper keys before
       # enabling.
       enabled: false
-      image: {repository: naira-plugin-thalamus, tag: ""}
+      image: {repository: naira-plugin-depl-uses-thalamus, tag: ""}
       port: 50063
       schedule: "0 0 * * *"
       pathPrefix: thalamus
