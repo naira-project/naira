@@ -1,0 +1,45 @@
+#WANT_OK: apps-parent, example.guestbook
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: ["*"]
+  destinations:
+  - {server: "*", namespace: "*"}
+  clusterResourceWhitelist:
+  - {group: "*", kind: "*"}
+---
+
+# The "apps-parent" Application deploys a Helm chart creating the
+# "example.guestbook" child Application (app-of-apps).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: apps-parent
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: apps
+    helm:
+      valuesObject:
+        config:
+          spec:
+            source:
+              targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+        applications:
+        - name: guestbook
+          destination:
+            namespace: guestbook
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+---
+

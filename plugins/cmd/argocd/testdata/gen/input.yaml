@@ -1,4 +1,4 @@
-#WANT_OK: apps-parent, example.guestbook, helm-guestbook, kustomize-guestbook, multi-source, multi-path
+#WANT_OK: helm-guestbook, kustomize-guestbook, multi-source, multi-path
 #WANT_RUNNING: mid-sync
 #WANT_FAIL: remote-cluster
 
@@ -16,36 +16,6 @@ spec:
   - {server: "*", namespace: "*"}
   clusterResourceWhitelist:
   - {group: "*", kind: "*"}
----
-
-# The "apps-parent" Application deploys a Helm chart creating the
-# "example.guestbook" child Application (app-of-apps).
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: apps-parent
-  namespace: argocd
-spec:
-  project: default
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: argocd
-  source:
-    repoURL: https://github.com/argoproj/argocd-example-apps
-    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-    path: apps
-    helm:
-      valuesObject:
-        config:
-          spec:
-            source:
-              targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
-        applications:
-        - name: guestbook
-          destination:
-            namespace: guestbook
-  syncPolicy:
-    automated: {prune: true, selfHeal: true}
 ---
 
 apiVersion: argoproj.io/v1alpha1
@@ -86,6 +56,8 @@ spec:
     syncOptions: [CreateNamespace=true]
 ---
 
+# Two spec.sources (same repo, but one used as helm chart template, another as
+# chart values) in one Application.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -110,6 +82,7 @@ spec:
     automated: {prune: true, selfHeal: true}
     syncOptions: [CreateNamespace=true]
 ---
+
 # Two sources from the same repository, with different paths.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -132,6 +105,7 @@ spec:
     automated: {prune: true, selfHeal: true}
     syncOptions: [CreateNamespace=true]
 ---
+
 # A sync that stays in progress: the PreSync hook Job of the "pre-post-sync"
 # example cannot be created, because the namespace quota forbids Jobs, so the
 # sync never leaves the Running phase.
@@ -168,6 +142,7 @@ spec:
     retry: {limit: -1, backoff: {duration: 1h, maxDuration: 1h}}
 ---
 
+# A sync that fails because the destination cluster is unreachable.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

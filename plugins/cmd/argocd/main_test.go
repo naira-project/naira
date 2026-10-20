@@ -22,6 +22,7 @@ import (
 )
 
 //go:generate go run ./testdata/gen
+//go:generate go run ./testdata/gen -in testdata/app-of-apps/input.yaml -out testdata/app-of-apps
 
 const mockClusterID = "mock-cluster"
 
@@ -126,7 +127,7 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
-			name:     "multiple sources from the same repository are emitted once",
+			name:     "multiple spec.sources with the same repoURL are emitted once",
 			testdata: []string{"multi-source"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
@@ -172,8 +173,10 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
-			name:     "app-of-apps: child Application keeps its properties",
-			testdata: []string{"apps-parent", "example.guestbook"},
+			name: "app-of-apps: child Application keeps its properties",
+			testdata: []string{
+				"app-of-apps/apps-parent",
+				"app-of-apps/example.guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"), Properties: props{
