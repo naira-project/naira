@@ -75,6 +75,7 @@ spec:
 {{- define "naira.dbInitSpec" -}}
 {{- $root := .root -}}
 backoffLimit: {{ $root.Values.database.init.backoffLimit }}
+activeDeadlineSeconds: {{ $root.Values.database.init.activeDeadlineSeconds }}
 template:
   metadata:
     labels:
@@ -95,6 +96,8 @@ template:
           - {name: PGHOST, value: {{ include "naira.dbHost" $root | quote }}}
           - {name: PGPORT, value: {{ $root.Values.database.port | quote }}}
           - {name: PGUSER, value: {{ $root.Values.database.admin.username | quote }}}
+          - {name: PGSSLMODE, value: {{ $root.Values.database.sslmode | quote }}}
+          - {name: DB_WAIT_RETRIES, value: {{ $root.Values.database.init.waitRetries | quote }}}
           - name: PGPASSWORD
             valueFrom:
               secretKeyRef: {name: {{ include "naira.dbAdminSecretName" $root }}, key: postgres-password}

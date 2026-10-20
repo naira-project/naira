@@ -62,7 +62,10 @@ development Secrets from values.
 
 The `cloudpirates/postgres` subchart (official `postgres` image) runs one server,
 StatefulSet and Service `postgres`. `postgresql.enabled=false` plus
-`database.host` uses an external server instead.
+`database.host` uses an external server instead; set `database.sslmode` to
+`require` or stricter there (the subchart serves no TLS, so the default is
+`prefer`). The admin may be a superuser or a role with `CREATEROLE` and
+`CREATEDB`, as on managed services.
 
 Each enabled entry in `database.databases` gets a role and a database of the
 same name, owned by that role (also when the database already existed), with
@@ -70,7 +73,8 @@ same name, owned by that role (also when the database already existed), with
 them if missing and sets the password from `<name>-db`. It is idempotent, runs
 on existing volumes, and reruns when its spec, script
 or `database` values change; delete the Job to rerun it by hand, e.g. after
-changing a password in an existing Secret. Defaults: `catalog`. `values-dev.yaml`
+changing a password in an existing Secret. A server that never answers fails
+the Job after `database.init.waitRetries` or `activeDeadlineSeconds`. Defaults: `catalog`. `values-dev.yaml`
 adds `litellm` and `openmetadata`, used by LiteLLM and OpenMetadata from the
 test-dependencies chart.
 
@@ -128,7 +132,8 @@ entry that is a Secret reference without a `key`; an enabled plugin without
 `image.repository`; either Secret (catalog or portal) missing a source
 when something reads it; `database.host` set together with the subchart, or
 missing without it; `postgresql.auth.existingSecret` differing from the
-`database.admin` Secret; a database name other than lowercase letters, digits and inner hyphens starting with a letter; and a
+`database.admin` Secret; a database name other than lowercase letters, digits and inner hyphens starting with a letter, or one of
+`postgres`, `template0`, `template1` and `database.admin.username`; and a
 `database.admin` or `database.databases.<name>` Secret without exactly one
 source.
 

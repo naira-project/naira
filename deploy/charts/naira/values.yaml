@@ -302,7 +302,11 @@ database:
   # Empty -> postgres.<release namespace>.svc.cluster.local (the subchart).
   host: ""
   port: 5432
-  # Superuser for db-init. Secret `postgres-admin` (or existingSecret), key
+  # libpq sslmode for db-init. The subchart serves no TLS; set require or
+  # stricter for an external server.
+  sslmode: prefer
+  # Admin for db-init: a superuser, or a role with CREATEROLE and CREATEDB (e.g.
+  # on a managed service). Secret `postgres-admin` (or existingSecret), key
   # postgres-password. Supplied by the operator; create is for kind.
   admin:
     username: postgres
@@ -324,6 +328,9 @@ database:
     # Same image as the subchart's server.
     image: docker.io/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     backoffLimit: 6
+    # A server that never answers fails the Job instead of hanging it.
+    waitRetries: 60
+    activeDeadlineSeconds: 900
     resources:
       requests: {cpu: 10m, memory: 32Mi}
       limits: {cpu: 100m, memory: 64Mi}

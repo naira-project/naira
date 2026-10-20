@@ -562,6 +562,16 @@ must_fail "subchart and host are exclusive" "database.host: leave empty" \
   --set database.host=pg.example.com
 must_fail "database name is checked" "name must match" \
   --set database.databases.Bad_Name.enabled=true --set database.databases.Bad_Name.secret.existingSecret=x
+for reserved in postgres template0 template1; do
+  must_fail "database name $reserved is reserved" "reserved name" \
+    --set "database.databases.$reserved.enabled=true" --set "database.databases.$reserved.secret.existingSecret=x"
+done
+must_fail "database named like the admin is reserved" "reserved name" --set database.admin.username=dbadmin \
+  --set database.databases.dbadmin.enabled=true --set database.databases.dbadmin.secret.existingSecret=x
+check "db-init gets sslmode, retries and a deadline" "prefer 60 900" \
+  "$(render | yq ea '[select(.kind == "Job")] | .[0] | .spec.template.spec.containers[0].env as $e
+       | [($e[] | select(.name == "PGSSLMODE") | .value), ($e[] | select(.name == "DB_WAIT_RETRIES") | .value),
+          (.spec.activeDeadlineSeconds | tostring)] | join(" ")')"
 
 check "all-fields values render" \
   "ok" \

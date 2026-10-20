@@ -71,6 +71,10 @@ CreateContainerConfigError; fail here with the fix instead.
 {{- if not (regexMatch "^[a-z]([a-z0-9-]*[a-z0-9])?$" $name) }}
 {{- fail (printf "database.databases.%s: name must match ^[a-z]([a-z0-9-]*[a-z0-9])?$" $name) }}
 {{- end }}
+{{- /* db-init would reset these roles' passwords or take over these databases. */}}
+{{- if has $name (list "postgres" "template0" "template1" $.Values.database.admin.username) }}
+{{- fail (printf "database.databases.%s: reserved name (built-in database or database.admin.username)" $name) }}
+{{- end }}
 {{- $s := $db.secret | default dict }}
 {{- if and $s.existingSecret $s.create }}
 {{- fail (printf "database.databases.%s.secret: set existingSecret or create, not both" $name) }}
