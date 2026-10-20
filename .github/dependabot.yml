@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: "docker"
+    directories:
+      - "/**"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "build(docker)"
