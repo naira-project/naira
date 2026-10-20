@@ -21,6 +21,10 @@
 // reports error conditions for them, and never syncs them.
 //
 // The command needs Docker and Internet access, and takes several minutes.
+// If k3s never becomes ready and its logs show "too many open files" from
+// fsnotify, raise the host's inotify limit, e.g.:
+//
+//	sudo sysctl -w fs.inotify.max_user_instances=1024
 package main
 
 import (
