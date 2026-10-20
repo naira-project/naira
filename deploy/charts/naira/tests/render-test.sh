@@ -526,8 +526,7 @@ check "db-init reads each database password from its Secret" \
   "$(render | yq "$DB_JOB | .env[] | select(.name == \"DB_PASSWORD_0\") | .valueFrom.secretKeyRef.name")"
 check "dev: db-init ensures catalog, litellm and openmetadata" \
   "catalog,litellm,openmetadata" \
-  "$(render_raw "${DEV[@]}" | yq 'select(.kind == "ConfigMap" and .metadata.name == "db-init") | .data["db-init.sh"]' \
-     | sed -n 's/^ensure \([a-z0-9-]*\) .*/\1/p' | paste -sd, -)"
+  "$(render_raw "${DEV[@]}" | yq "$DB_JOB | .args | join(\",\")")"
 check "dev: litellm Secret has username and password" \
   "litellm litellm-local-password" \
   "$(render_raw "${DEV[@]}" | yq 'select(.kind == "Secret" and .metadata.name == "litellm-db") | .stringData.username + " " + .stringData.password')"
@@ -551,6 +550,8 @@ else
 fi
 must_fail "database needs a Secret source" "database.databases.catalog: set secret.existingSecret or secret.create" \
   --set database.databases.catalog.secret.existingSecret=
+must_fail "database without a secret block" "database.databases.extra: set secret.existingSecret or secret.create" \
+  --set database.databases.extra.enabled=true
 must_fail "database Secret create needs a password" "database.databases.catalog.secret.create is true but password is empty" \
   --set database.databases.catalog.secret.existingSecret= --set database.databases.catalog.secret.create=true
 must_fail "admin Secret must match the subchart's" "postgresql.auth.existingSecret must equal" \

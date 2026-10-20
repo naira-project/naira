@@ -1,8 +1,7 @@
 {{- /*
-db-init: creates each role and database in database.databases if missing and
-sets its password. Job name = hash of spec, script and values, not
-.Release.Revision (always 1 under Argo CD); not a hook, since Argo's PostSync
-waits for every resource to be Healthy.
+db-init: runs files/db-init.sh for each enabled database in database.databases.
+The Job name is a hash of its spec, script and values: a change creates a new
+Job (Job specs are immutable), an unchanged upgrade keeps the completed one.
 */}}
 {{- $dbs := list }}
 {{- range $name := keys .Values.database.databases | sortAlpha }}
@@ -47,7 +46,7 @@ stringData:
 ---
 {{- end }}
 {{- end }}
-{{- $script := include "naira.dbInitScript" (dict "dbs" $dbs) }}
+{{- $script := .Files.Get "files/db-init.sh" }}
 {{- $spec := include "naira.dbInitSpec" (dict "root" . "dbs" $dbs) }}
 apiVersion: v1
 kind: ConfigMap
@@ -73,26 +72,6 @@ spec:
   {{- $spec | nindent 2 }}
 {{- end }}
 
-{{- define "naira.dbInitScript" -}}
-#!/bin/sh
-set -eu
-until pg_isready -q; do echo "waiting for $PGHOST:$PGPORT"; sleep 2; done
-ensure() {
-  psql -v ON_ERROR_STOP=1 -q -d postgres -v name="$1" -v password="$2" <<'SQL'
-SELECT format('CREATE ROLE %I LOGIN', :'name')
-  WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'name')\gexec
-ALTER ROLE :"name" WITH LOGIN PASSWORD :'password';
-SELECT format('CREATE DATABASE %I OWNER %I', :'name', :'name')
-  WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'name')\gexec
-REVOKE CONNECT ON DATABASE :"name" FROM PUBLIC;
-SQL
-  echo "ensured database and role $1"
-}
-{{- range $i, $name := .dbs }}
-ensure {{ $name }} "$DB_PASSWORD_{{ $i }}"
-{{- end }}
-{{- end -}}
-
 {{- define "naira.dbInitSpec" -}}
 {{- $root := .root -}}
 backoffLimit: {{ $root.Values.database.init.backoffLimit }}
@@ -111,6 +90,7 @@ template:
       - name: db-init
         image: {{ $root.Values.database.init.image | quote }}
         command: [sh, /scripts/db-init.sh]
+        args: {{ toJson .dbs }}
         env:
           - {name: PGHOST, value: {{ include "naira.dbHost" $root | quote }}}
           - {name: PGPORT, value: {{ $root.Values.database.port | quote }}}

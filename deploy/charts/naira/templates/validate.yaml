@@ -71,13 +71,14 @@ CreateContainerConfigError; fail here with the fix instead.
 {{- if not (regexMatch "^[a-z]([a-z0-9-]*[a-z0-9])?$" $name) }}
 {{- fail (printf "database.databases.%s: name must match ^[a-z]([a-z0-9-]*[a-z0-9])?$" $name) }}
 {{- end }}
-{{- if and $db.secret.existingSecret $db.secret.create }}
+{{- $s := $db.secret | default dict }}
+{{- if and $s.existingSecret $s.create }}
 {{- fail (printf "database.databases.%s.secret: set existingSecret or create, not both" $name) }}
 {{- end }}
-{{- if and $db.secret.create (not $db.secret.password) }}
+{{- if and $s.create (not $s.password) }}
 {{- fail (printf "database.databases.%s.secret.create is true but password is empty" $name) }}
 {{- end }}
-{{- if and (not $db.secret.existingSecret) (not $db.secret.create) }}
+{{- if and (not $s.existingSecret) (not $s.create) }}
 {{- fail (printf "database.databases.%s: set secret.existingSecret or secret.create" $name) }}
 {{- end }}
 {{- end }}

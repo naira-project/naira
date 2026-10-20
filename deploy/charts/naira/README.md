@@ -65,9 +65,10 @@ StatefulSet and Service `postgres`. `postgresql.enabled=false` plus
 `database.host` uses an external server instead.
 
 Each enabled entry in `database.databases` gets a role and a database of the
-same name, owned by that role, with `CONNECT` revoked from `PUBLIC`. The
-`db-init` Job creates them if missing and sets the password from `<name>-db`.
-It is idempotent, runs on existing volumes, and reruns when its spec, script
+same name, owned by that role (also when the database already existed), with
+`CONNECT` revoked from `PUBLIC`. The `db-init` Job (`files/db-init.sh`) creates
+them if missing and sets the password from `<name>-db`. It is idempotent, runs
+on existing volumes, and reruns when its spec, script
 or `database` values change; delete the Job to rerun it by hand, e.g. after
 changing a password in an existing Secret. Defaults: `catalog`. `values-dev.yaml`
 adds `litellm` and `openmetadata`, used by LiteLLM and OpenMetadata from the
