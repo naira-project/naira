@@ -7,7 +7,26 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    groups:
+      docker:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
     commit-message:
       prefix: "build(docker)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "ci(deps)"
