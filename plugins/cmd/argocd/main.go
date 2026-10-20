@@ -16,8 +16,34 @@
 // absent when no source has a path (e.g. a source that only provides values files
 // via "ref").
 //
-// Application Nodes also have a "last_synced_at" property: the time the last sync
-// operation of the Application finished, in RFC 3339 format.
+// Application Nodes also have properties describing its syncs, copied as they are
+// in the ArgoCD API, without interpretation, so that a consumer can combine them
+// as it sees fit:
+//
+//   - "operationState.phase", "operationState.startedAt" and
+//     "operationState.finishedAt": from status.operationState, which describes
+//     the current or the most recent sync operation. Each is absent if ArgoCD
+//     does not set it; all are absent if the Application has never been synced.
+//     Note that "phase" stays "Running" while a failed sync waits to be retried,
+//     and "finishedAt" is then the end of the failed attempt.
+//   - "operation_present": "true" if the Application has the top-level
+//     "operation" field, which is a requested or running sync operation, else
+//     "false". The ArgoCD UI ignores status.operationState while it is set,
+//     and shows a "Running" phase instead (see getAppOperationState:
+//     https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/utils.tsx#L1201-L1218).
+//   - "last_deployed_at": the "deployedAt" of the newest entry of status.history,
+//     i.e. the time the last completed sync deployed. Unlike "operationState.*",
+//     it is not affected by a sync in progress. Absent if the history is empty
+//     (it can be disabled with spec.revisionHistoryLimit).
+//
+// For reference, the ArgoCD UI shows the phase together with "finishedAt",
+// falling back to "startedAt" if that is not set
+// (https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/application-status-panel/application-status-panel.tsx#L349),
+// and uses the "deployedAt" of the last history entry only to count the days
+// since the last sync
+// (https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/application-status-panel/application-status-panel.tsx#L210-L214).
+//
+// All the times are in RFC 3339 format.
 //
 // # Environment Variables
 //
@@ -69,6 +95,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -168,18 +195,23 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			healthStatus = nestedStringOrEmpty(app, "status", "health", "status")
 			destNs       = nestedStringOrEmpty(app, "spec", "destination", "namespace")
 			srcType      = sourceType(app)
-			syncedAt     = nestedStringOrEmpty(app, "status", "operationState", "finishedAt")
 		)
+		props := pluginapi.PropertyMap{
+			"project":               project,
+			"sync_status":           syncStatus,
+			"health_status":         healthStatus,
+			"destination_namespace": destNs,
+			"source_type":           srcType,
+		}
+		_, hasOperation, _ := unstructured.NestedFieldNoCopy(app.Object, "operation")
+		props["operation_present"] = strconv.FormatBool(hasOperation)
+		setIfNotEmpty(props, "last_deployed_at", lastDeployedAt(app))
+		for _, field := range []string{"phase", "startedAt", "finishedAt"} {
+			setIfNotEmpty(props, "operationState."+field, nestedStringOrEmpty(app, "status", "operationState", field))
+		}
 		addNode(pluginapi.NodeClaim{
-			ID: applicationID(clusterID, app.GetNamespace(), app.GetName()),
-			Properties: pluginapi.PropertyMap{
-				"project":               project,
-				"sync_status":           syncStatus,
-				"health_status":         healthStatus,
-				"destination_namespace": destNs,
-				"source_type":           srcType,
-				"last_synced_at":        syncedAt,
-			},
+			ID:         applicationID(clusterID, app.GetNamespace(), app.GetName()),
+			Properties: props,
 		})
 	}
 
@@ -448,6 +480,25 @@ func (p *Plugin) connect() (discovery.DiscoveryInterface, dynamic.Interface, get
 		return metaClient.Resource(gvr).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
 	}
 	return disc, dyn, get, nil
+}
+
+// lastDeployedAt returns deployedAt of the newest entry of the Application's
+// status.history, or empty string if there is none.
+func lastDeployedAt(app unstructured.Unstructured) string {
+	history, _, _ := unstructured.NestedSlice(app.Object, "status", "history")
+	if len(history) == 0 {
+		return ""
+	}
+	last, _ := history[len(history)-1].(map[string]any)
+	deployedAt, _ := last["deployedAt"].(string)
+	return deployedAt
+}
+
+// setIfNotEmpty sets props[key] unless value is empty.
+func setIfNotEmpty(props pluginapi.PropertyMap, key, value string) {
+	if value != "" {
+		props[key] = value
+	}
 }
 
 func nestedStringOrEmpty(u unstructured.Unstructured, fields ...string) string {

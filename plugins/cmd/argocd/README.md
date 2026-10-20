@@ -6,7 +6,15 @@ Managed Deployments and Services are emitted as deployment and service Nodes. Ch
 
 An Application "describes" each resource it manages. If its source is a GitHub repository, the Application is "sourced\_from" a git\_repository Node, and managed Deployments are "deployed\_from" it. These two Relations have a "paths" property: a JSON list of the paths within the repository that the Application deploys from, e.g. \["apps","charts/web"]. If multiple sources of an Application use the same repository, it lists all their distinct paths. The property is absent when no source has a path (e.g. a source that only provides values files via "ref").
 
-Application Nodes also have a "last\_synced\_at" property: the time the last sync operation of the Application finished, in RFC 3339 format.
+Application Nodes also have properties describing its syncs, copied as they are in the ArgoCD API, without interpretation, so that a consumer can combine them as it sees fit:
+
+  - "operationState.phase", "operationState.startedAt" and "operationState.finishedAt": from status.operationState, which describes the current or the most recent sync operation. Each is absent if ArgoCD does not set it; all are absent if the Application has never been synced. Note that "phase" stays "Running" while a failed sync waits to be retried, and "finishedAt" is then the end of the failed attempt.
+  - "operation\_present": "true" if the Application has the top-level "operation" field, which is a requested or running sync operation, else "false". The ArgoCD UI ignores status.operationState while it is set, and shows a "Running" phase instead (see getAppOperationState: [https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/utils.tsx#L1201-L1218](https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/utils.tsx#L1201-L1218)).
+  - "last\_deployed\_at": the "deployedAt" of the newest entry of status.history, i.e. the time the last completed sync deployed. Unlike "operationState.\*", it is not affected by a sync in progress. Absent if the history is empty (it can be disabled with spec.revisionHistoryLimit).
+
+For reference, the ArgoCD UI shows the phase together with "finishedAt", falling back to "startedAt" if that is not set ([https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/application-status-panel/application-status-panel.tsx#L349](https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/application-status-panel/application-status-panel.tsx#L349)), and uses the "deployedAt" of the last history entry only to count the days since the last sync ([https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/application-status-panel/application-status-panel.tsx#L210-L214](https://github.com/argoproj/argo-cd/blob/v3.5.5/ui/src/app/applications/components/application-status-panel/application-status-panel.tsx#L210-L214)).
+
+All the times are in RFC 3339 format.
 
 ## Environment Variables
 

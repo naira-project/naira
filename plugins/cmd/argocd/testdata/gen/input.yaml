@@ -1,4 +1,5 @@
 #WANT_OK: apps-parent, example.guestbook, helm-guestbook, kustomize-guestbook, multi-source, multi-path
+#WANT_RUNNING: mid-sync
 #WANT_FAIL: remote-cluster
 
 # The following manifests create a few Applications deploying from a pinned
@@ -130,6 +131,41 @@ spec:
   syncPolicy:
     automated: {prune: true, selfHeal: true}
     syncOptions: [CreateNamespace=true]
+---
+# A sync that stays in progress: the PreSync hook Job of the "pre-post-sync"
+# example cannot be created, because the namespace quota forbids Jobs, so the
+# sync never leaves the Running phase.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mid-sync
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: no-jobs
+  namespace: mid-sync
+spec:
+  hard:
+    count/jobs.batch: "0"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mid-sync
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mid-sync
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: pre-post-sync
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    retry: {limit: -1, backoff: {duration: 1h, maxDuration: 1h}}
 ---
 
 apiVersion: argoproj.io/v1alpha1

@@ -157,17 +157,17 @@
   ],
   "argoproj.io/Application/argocd/example.guestbook": [
     {
-      "manager": "argocd-controller",
-      "operation": "Update",
-      "apiVersion": "argoproj.io/v1alpha1",
-      "time": "2000-01-01T00:00:00Z",
-      "fieldsType": "FieldsV1"
-    },
-    {
       "manager": "argocd-application-controller",
       "operation": "Update",
       "apiVersion": "argoproj.io/v1alpha1",
       "time": "2000-01-02T00:00:00Z",
+      "fieldsType": "FieldsV1"
+    },
+    {
+      "manager": "argocd-controller",
+      "operation": "Update",
+      "apiVersion": "argoproj.io/v1alpha1",
+      "time": "2000-01-01T00:00:00Z",
       "fieldsType": "FieldsV1"
     }
   ]

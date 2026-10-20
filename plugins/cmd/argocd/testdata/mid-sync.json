@@ -1,0 +1,107 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "mid-sync",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "08a64f93-a11c-a2f6-a32f-30529685f63f"
+  },
+  "operation": {
+    "initiatedBy": {
+      "automated": true
+    },
+    "retry": {
+      "backoff": {
+        "duration": "1h",
+        "maxDuration": "1h"
+      },
+      "limit": -1
+    },
+    "sync": {
+      "prune": true,
+      "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+      "source": {
+        "path": "pre-post-sync",
+        "repoURL": "https://github.com/argoproj/argocd-example-apps",
+        "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+      }
+    }
+  },
+  "spec": {
+    "destination": {
+      "namespace": "mid-sync",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "source": {
+      "path": "pre-post-sync",
+      "repoURL": "https://github.com/argoproj/argocd-example-apps",
+      "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      },
+      "retry": {
+        "backoff": {
+          "duration": "1h",
+          "maxDuration": "1h"
+        },
+        "limit": -1
+      }
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Missing"
+    },
+    "operationState": {
+      "finishedAt": "2000-01-01T00:00:00Z",
+      "phase": "Running",
+      "startedAt": "2000-01-01T00:00:00Z"
+    },
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "kind": "Service",
+        "name": "pre-post-sync-kustomize-guestbook-ui",
+        "namespace": "mid-sync",
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "pre-post-sync-kustomize-guestbook-ui",
+        "namespace": "mid-sync",
+        "status": "OutOfSync",
+        "version": "v1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceType": "Kustomize",
+    "summary": {},
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "mid-sync",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "path": "pre-post-sync",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      },
+      "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+      "status": "OutOfSync"
+    }
+  }
+}

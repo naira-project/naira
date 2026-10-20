@@ -44,12 +44,16 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"), Properties: props{
-						"project":               "default",
-						"sync_status":           "Synced",
-						"health_status":         "Progressing",
-						"destination_namespace": "helm-guestbook",
-						"source_type":           "Helm",
-						"last_synced_at":        "2000-01-01T00:00:00Z"}},
+						"project":                   "default",
+						"sync_status":               "Synced",
+						"health_status":             "Progressing",
+						"destination_namespace":     "helm-guestbook",
+						"source_type":               "Helm",
+						"last_deployed_at":          "2000-01-01T00:00:00Z",
+						"operation_present":         "false",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Succeeded",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -81,12 +85,16 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"), Properties: props{
-						"project":               "default",
-						"sync_status":           "Synced",
-						"health_status":         "Progressing",
-						"destination_namespace": "kustomize-guestbook",
-						"source_type":           "Kustomize",
-						"last_synced_at":        "2000-01-01T00:00:00Z"}},
+						"project":                   "default",
+						"sync_status":               "Synced",
+						"health_status":             "Progressing",
+						"destination_namespace":     "kustomize-guestbook",
+						"source_type":               "Kustomize",
+						"last_deployed_at":          "2000-01-01T00:00:00Z",
+						"operation_present":         "false",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Succeeded",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -118,12 +126,16 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"), Properties: props{
-						"project":               "default",
-						"sync_status":           "Synced",
-						"health_status":         "Progressing",
-						"destination_namespace": "multi-source",
-						"source_type":           "Helm,",
-						"last_synced_at":        "2000-01-01T00:00:00Z"}},
+						"project":                   "default",
+						"sync_status":               "Synced",
+						"health_status":             "Progressing",
+						"destination_namespace":     "multi-source",
+						"source_type":               "Helm,",
+						"last_deployed_at":          "2000-01-01T00:00:00Z",
+						"operation_present":         "false",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Succeeded",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -155,19 +167,27 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"), Properties: props{
-						"project":               "default",
-						"sync_status":           "Synced",
-						"health_status":         "Healthy",
-						"destination_namespace": "argocd",
-						"source_type":           "Helm",
-						"last_synced_at":        "2000-01-01T00:00:00Z"}},
+						"project":                   "default",
+						"sync_status":               "Synced",
+						"health_status":             "Healthy",
+						"destination_namespace":     "argocd",
+						"source_type":               "Helm",
+						"last_deployed_at":          "2000-01-01T00:00:00Z",
+						"operation_present":         "false",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Succeeded",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"), Properties: props{
-						"project":               "default",
-						"sync_status":           "Synced",
-						"health_status":         "Progressing",
-						"destination_namespace": "guestbook",
-						"source_type":           "Directory",
-						"last_synced_at":        "2000-01-01T00:00:00Z"}},
+						"project":                   "default",
+						"sync_status":               "Synced",
+						"health_status":             "Progressing",
+						"destination_namespace":     "guestbook",
+						"source_type":               "Directory",
+						"last_deployed_at":          "2000-01-01T00:00:00Z",
+						"operation_present":         "false",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Succeeded",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/guestbook/guestbook-ui")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -207,12 +227,16 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"), Properties: props{
-						"project":               "default",
-						"sync_status":           "Synced",
-						"health_status":         "Progressing",
-						"destination_namespace": "multi-path",
-						"source_type":           "Directory,Kustomize",
-						"last_synced_at":        "2000-01-01T00:00:00Z"}},
+						"project":                   "default",
+						"sync_status":               "Synced",
+						"health_status":             "Progressing",
+						"destination_namespace":     "multi-path",
+						"source_type":               "Directory,Kustomize",
+						"last_deployed_at":          "2000-01-01T00:00:00Z",
+						"operation_present":         "false",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Succeeded",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/multi-path/guestbook-ui")},
 					{ID: nodeID("deployment", "mock-cluster/multi-path/kustomize-guestbook-ui")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
@@ -258,12 +282,16 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"), Properties: props{
-						"project":               "default",
-						"sync_status":           "Synced",
-						"health_status":         "Progressing",
-						"destination_namespace": "helm-guestbook",
-						"source_type":           "Helm",
-						"last_synced_at":        "2000-01-01T00:00:00Z"}},
+						"project":                   "default",
+						"sync_status":               "Synced",
+						"health_status":             "Progressing",
+						"destination_namespace":     "helm-guestbook",
+						"source_type":               "Helm",
+						"last_deployed_at":          "2000-01-01T00:00:00Z",
+						"operation_present":         "false",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Succeeded",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook"), Properties: props{
 						"last_synced_at": "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
@@ -300,12 +328,16 @@ func TestCollect(t *testing.T) {
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{ID: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"), Properties: props{
-						"project":               "default",
-						"sync_status":           "Synced",
-						"health_status":         "Progressing",
-						"destination_namespace": "helm-guestbook",
-						"source_type":           "Helm",
-						"last_synced_at":        "2000-01-01T00:00:00Z"}},
+						"project":                   "default",
+						"sync_status":               "Synced",
+						"health_status":             "Progressing",
+						"destination_namespace":     "helm-guestbook",
+						"source_type":               "Helm",
+						"last_deployed_at":          "2000-01-01T00:00:00Z",
+						"operation_present":         "false",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Succeeded",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
 					{ID: nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
 						"url": "https://github.com/argoproj/argocd-example-apps"}},
@@ -328,6 +360,46 @@ func TestCollect(t *testing.T) {
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["helm-guestbook"]`}},
+				},
+			},
+		},
+		{
+			name:     "sync in progress: operationState is copied, and last_deployed_at is absent without history",
+			testdata: []string{"mid-sync"},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("Application.argocd", "mock-cluster/argocd/mid-sync"), Properties: props{
+						"project":                   "default",
+						"sync_status":               "OutOfSync",
+						"health_status":             "Missing",
+						"destination_namespace":     "mid-sync",
+						"source_type":               "Kustomize",
+						"operation_present":         "true",
+						"operationState.finishedAt": "2000-01-01T00:00:00Z",
+						"operationState.phase":      "Running",
+						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
+					{ID: nodeID("deployment", "mock-cluster/mid-sync/pre-post-sync-kustomize-guestbook-ui")},
+					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
+						"url": "https://github.com/argoproj/argocd-example-apps"}},
+					{ID: nodeID("service", "mock-cluster/mid-sync/pre-post-sync-kustomize-guestbook-ui")},
+				},
+				Relations: []pluginapi.RelationClaim{
+					{Kind: "deployed_from",
+						From: nodeID("deployment", "mock-cluster/mid-sync/pre-post-sync-kustomize-guestbook-ui"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["pre-post-sync"]`}},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "mock-cluster/argocd/mid-sync"),
+						To:   nodeID("deployment", "mock-cluster/mid-sync/pre-post-sync-kustomize-guestbook-ui")},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "mock-cluster/argocd/mid-sync"),
+						To:   nodeID("service", "mock-cluster/mid-sync/pre-post-sync-kustomize-guestbook-ui")},
+					{Kind: "sourced_from",
+						From: nodeID("Application.argocd", "mock-cluster/argocd/mid-sync"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["pre-post-sync"]`}},
 				},
 			},
 		},
