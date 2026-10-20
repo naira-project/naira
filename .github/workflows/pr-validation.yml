@@ -152,6 +152,16 @@ jobs:
         uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: Set up chart-testing
         uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
+      - name: Log in to Docker Hub
+        # Optional; lifts the anonymous pull limit for the postgres subchart.
+        # Skipped without the secret (e.g. fork PRs).
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+          fi
       - name: Fetch chart dependencies
         run: helm dependency build deploy/charts/naira
       - name: Render tests
@@ -227,6 +237,16 @@ jobs:
           docker build -q -t mcp-mock:ci test-dependencies/images/mcp-mock
           images+=("mcp-mock:ci")
           kind load docker-image --name naira-ci "${images[@]}"
+      - name: Log in to Docker Hub
+        # Optional; lifts the anonymous pull limit for the postgres subchart.
+        # Skipped without the secret (e.g. fork PRs).
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "$DOCKERHUB_TOKEN" | helm registry login registry-1.docker.io --username "$DOCKERHUB_USERNAME" --password-stdin
+          fi
       - name: Install naira
         # First: LiteLLM's database is on this chart's PostgreSQL. Waited for below.
         run: |
