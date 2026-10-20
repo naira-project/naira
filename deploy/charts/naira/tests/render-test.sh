@@ -569,8 +569,8 @@ done
 must_fail "database named like the admin is reserved" "reserved name" --set database.admin.username=dbadmin \
   --set database.databases.dbadmin.enabled=true --set database.databases.dbadmin.secret.existingSecret=x
 check "db-init gets sslmode, retries and a deadline" "prefer 60 900" \
-  "$(render | yq ea '[select(.kind == "Job")] | .[0] | .spec.template.spec.containers[0].env as $e
-       | [($e[] | select(.name == "PGSSLMODE") | .value), ($e[] | select(.name == "DB_WAIT_RETRIES") | .value),
+  "$(render | yq ea '[select(.kind == "Job")] | .[0]
+       | [(.spec.template.spec.containers[0].env[] | select(.name == "PGSSLMODE" or .name == "DB_WAIT_RETRIES") | .value),
           (.spec.activeDeadlineSeconds | tostring)] | join(" ")')"
 
 check "all-fields values render" \
