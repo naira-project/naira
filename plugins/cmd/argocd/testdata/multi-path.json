@@ -1,0 +1,153 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "multi-path",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "4f60d293-f910-9521-4ff7-cad42ed2c2ba"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "multi-path",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "sources": [
+      {
+        "path": "guestbook",
+        "repoURL": "https://github.com/argoproj/argocd-example-apps",
+        "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+      },
+      {
+        "path": "kustomize-guestbook",
+        "repoURL": "https://github.com/argoproj/argocd-example-apps",
+        "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+      }
+    ],
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      },
+      "syncOptions": [
+        "CreateNamespace=true"
+      ]
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Progressing"
+    },
+    "history": [
+      {
+        "deployStartedAt": "2000-01-01T00:00:00Z",
+        "deployedAt": "2000-01-01T00:00:00Z",
+        "id": 0,
+        "initiatedBy": {
+          "automated": true
+        },
+        "revisions": [
+          "8088f4c0d970abb09e250248cc97e35623447cb5",
+          "8088f4c0d970abb09e250248cc97e35623447cb5"
+        ],
+        "source": {
+          "repoURL": ""
+        },
+        "sources": [
+          {
+            "path": "guestbook",
+            "repoURL": "https://github.com/argoproj/argocd-example-apps",
+            "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+          },
+          {
+            "path": "kustomize-guestbook",
+            "repoURL": "https://github.com/argoproj/argocd-example-apps",
+            "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+          }
+        ]
+      }
+    ],
+    "operationState": {
+      "finishedAt": "2000-01-01T00:00:00Z",
+      "phase": "Succeeded",
+      "startedAt": "2000-01-01T00:00:00Z"
+    },
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "kind": "Service",
+        "name": "guestbook-ui",
+        "namespace": "multi-path",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "kind": "Service",
+        "name": "kustomize-guestbook-ui",
+        "namespace": "multi-path",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "guestbook-ui",
+        "namespace": "multi-path",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "kustomize-guestbook-ui",
+        "namespace": "multi-path",
+        "status": "Synced",
+        "version": "v1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceTypes": [
+      "Directory",
+      "Kustomize"
+    ],
+    "summary": {
+      "images": [
+        "gcr.io/google-samples/gb-frontend:v5"
+      ]
+    },
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "multi-path",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "repoURL": ""
+        },
+        "sources": [
+          {
+            "path": "guestbook",
+            "repoURL": "https://github.com/argoproj/argocd-example-apps",
+            "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+          },
+          {
+            "path": "kustomize-guestbook",
+            "repoURL": "https://github.com/argoproj/argocd-example-apps",
+            "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+          }
+        ]
+      },
+      "revisions": [
+        "8088f4c0d970abb09e250248cc97e35623447cb5",
+        "8088f4c0d970abb09e250248cc97e35623447cb5"
+      ],
+      "status": "Synced"
+    }
+  }
+}

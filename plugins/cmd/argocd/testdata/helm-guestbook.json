@@ -1,0 +1,102 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "helm-guestbook",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "78dc9667-7647-d11c-f33d-8a68d6d26054"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "helm-guestbook",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "source": {
+      "path": "helm-guestbook",
+      "repoURL": "https://github.com/argoproj/argocd-example-apps",
+      "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      },
+      "syncOptions": [
+        "CreateNamespace=true"
+      ]
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Progressing"
+    },
+    "history": [
+      {
+        "deployStartedAt": "2000-01-01T00:00:00Z",
+        "deployedAt": "2000-01-01T00:00:00Z",
+        "id": 0,
+        "initiatedBy": {
+          "automated": true
+        },
+        "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+        "source": {
+          "path": "helm-guestbook",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      }
+    ],
+    "operationState": {
+      "finishedAt": "2000-01-01T00:00:00Z",
+      "phase": "Succeeded",
+      "startedAt": "2000-01-01T00:00:00Z"
+    },
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "kind": "Service",
+        "name": "helm-guestbook",
+        "namespace": "helm-guestbook",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "helm-guestbook",
+        "namespace": "helm-guestbook",
+        "status": "Synced",
+        "version": "v1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceType": "Helm",
+    "summary": {
+      "images": [
+        "gcr.io/google-samples/gb-frontend:v5"
+      ]
+    },
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "helm-guestbook",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "path": "helm-guestbook",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      },
+      "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+      "status": "Synced"
+    }
+  }
+}

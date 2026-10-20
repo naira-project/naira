@@ -1,0 +1,102 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "kustomize-guestbook",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "fe4e691c-578b-8bb5-c84f-ef6bb8cde0b8"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "kustomize-guestbook",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "source": {
+      "path": "kustomize-guestbook",
+      "repoURL": "https://github.com/argoproj/argocd-example-apps",
+      "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      },
+      "syncOptions": [
+        "CreateNamespace=true"
+      ]
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Progressing"
+    },
+    "history": [
+      {
+        "deployStartedAt": "2000-01-01T00:00:00Z",
+        "deployedAt": "2000-01-01T00:00:00Z",
+        "id": 0,
+        "initiatedBy": {
+          "automated": true
+        },
+        "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+        "source": {
+          "path": "kustomize-guestbook",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      }
+    ],
+    "operationState": {
+      "finishedAt": "2000-01-01T00:00:00Z",
+      "phase": "Succeeded",
+      "startedAt": "2000-01-01T00:00:00Z"
+    },
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "kind": "Service",
+        "name": "kustomize-guestbook-ui",
+        "namespace": "kustomize-guestbook",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "kustomize-guestbook-ui",
+        "namespace": "kustomize-guestbook",
+        "status": "Synced",
+        "version": "v1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceType": "Kustomize",
+    "summary": {
+      "images": [
+        "gcr.io/google-samples/gb-frontend:v5"
+      ]
+    },
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "kustomize-guestbook",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "path": "kustomize-guestbook",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      },
+      "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+      "status": "Synced"
+    }
+  }
+}

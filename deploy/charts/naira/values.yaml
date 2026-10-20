@@ -172,6 +172,17 @@ catalog:
             resources: ["gitrepositories"]
             verbs: ["get", "list"]
 
+    argocd:
+      enabled: true
+      image: {repository: naira-plugin-argocd, tag: ""}
+      port: 50060
+      schedule: "*/1 * * * *"
+      rbac:
+        rules:
+          - apiGroups: ["argoproj.io"]
+            resources: ["applications"]
+            verbs: ["get", "list"]
+
     openmetadata:
       enabled: true
       image: {repository: naira-plugin-openmetadata, tag: ""}

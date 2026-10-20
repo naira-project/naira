@@ -1,0 +1,109 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "annotations": {
+      "argocd.argoproj.io/tracking-id": "apps-parent:argoproj.io/Application:argocd/example.guestbook",
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"Application\",\"metadata\":{\"annotations\":{\"argocd.argoproj.io/tracking-id\":\"apps-parent:argoproj.io/Application:argocd/example.guestbook\"},\"finalizers\":[\"resources-finalizer.argocd.argoproj.io\"],\"name\":\"example.guestbook\",\"namespace\":\"argocd\"},\"spec\":{\"destination\":{\"namespace\":\"guestbook\",\"server\":\"https://kubernetes.default.svc\"},\"project\":\"default\",\"source\":{\"path\":\"guestbook\",\"repoURL\":\"https://github.com/argoproj/argocd-example-apps\",\"targetRevision\":\"8088f4c0d970abb09e250248cc97e35623447cb5\"},\"syncPolicy\":{\"automated\":{\"prune\":true,\"selfHeal\":true},\"syncOptions\":[\"CreateNamespace=true\"]}}}\n"
+    },
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "finalizers": [
+      "resources-finalizer.argocd.argoproj.io"
+    ],
+    "generation": 1,
+    "name": "example.guestbook",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "0f0e4c7a-74c0-5cd4-6155-36d98922ccf3"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "guestbook",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "source": {
+      "path": "guestbook",
+      "repoURL": "https://github.com/argoproj/argocd-example-apps",
+      "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      },
+      "syncOptions": [
+        "CreateNamespace=true"
+      ]
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Progressing"
+    },
+    "history": [
+      {
+        "deployStartedAt": "2000-01-01T00:00:00Z",
+        "deployedAt": "2000-01-01T00:00:00Z",
+        "id": 0,
+        "initiatedBy": {
+          "automated": true
+        },
+        "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+        "source": {
+          "path": "guestbook",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      }
+    ],
+    "operationState": {
+      "finishedAt": "2000-01-01T00:00:00Z",
+      "phase": "Succeeded",
+      "startedAt": "2000-01-01T00:00:00Z"
+    },
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "kind": "Service",
+        "name": "guestbook-ui",
+        "namespace": "guestbook",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "guestbook-ui",
+        "namespace": "guestbook",
+        "status": "Synced",
+        "version": "v1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceType": "Directory",
+    "summary": {
+      "images": [
+        "gcr.io/google-samples/gb-frontend:v5"
+      ]
+    },
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "guestbook",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "path": "guestbook",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      },
+      "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+      "status": "Synced"
+    }
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "Application",
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "apps-parent",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "3249e63f-da1c-1913-b9da-77e10f579cb3"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "argocd",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "source": {
+      "helm": {
+        "valuesObject": {
+          "applications": [
+            {
+              "destination": {
+                "namespace": "guestbook"
+              },
+              "name": "guestbook"
+            }
+          ],
+          "config": {
+            "spec": {
+              "source": {
+                "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+              }
+            }
+          }
+        }
+      },
+      "path": "apps",
+      "repoURL": "https://github.com/argoproj/argocd-example-apps",
+      "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      }
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Healthy"
+    },
+    "history": [
+      {
+        "deployStartedAt": "2000-01-01T00:00:00Z",
+        "deployedAt": "2000-01-01T00:00:00Z",
+        "id": 0,
+        "initiatedBy": {
+          "automated": true
+        },
+        "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+        "source": {
+          "helm": {
+            "valuesObject": {
+              "applications": [
+                {
+                  "destination": {
+                    "namespace": "guestbook"
+                  },
+                  "name": "guestbook"
+                }
+              ],
+              "config": {
+                "spec": {
+                  "source": {
+                    "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+                  }
+                }
+              }
+            }
+          },
+          "path": "apps",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      }
+    ],
+    "operationState": {
+      "finishedAt": "2000-01-01T00:00:00Z",
+      "phase": "Succeeded",
+      "startedAt": "2000-01-01T00:00:00Z"
+    },
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "group": "argoproj.io",
+        "kind": "Application",
+        "name": "example.guestbook",
+        "namespace": "argocd",
+        "status": "Synced",
+        "version": "v1alpha1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceType": "Helm",
+    "summary": {
+      "isAppOfApps": true
+    },
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "argocd",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "helm": {
+            "valuesObject": {
+              "applications": [
+                {
+                  "destination": {
+                    "namespace": "guestbook"
+                  },
+                  "name": "guestbook"
+                }
+              ],
+              "config": {
+                "spec": {
+                  "source": {
+                    "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+                  }
+                }
+              }
+            }
+          },
+          "path": "apps",
+          "repoURL": "https://github.com/argoproj/argocd-example-apps",
+          "targetRevision": "8088f4c0d970abb09e250248cc97e35623447cb5"
+        }
+      },
+      "revision": "8088f4c0d970abb09e250248cc97e35623447cb5",
+      "status": "Synced"
+    }
+  }
+}
