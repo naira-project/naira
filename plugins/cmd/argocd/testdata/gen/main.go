@@ -9,8 +9,7 @@
 // replaced by fixed values, so that reruns produce identical files.
 //
 // The input file must start with special comments, naming the Applications
-// to wait for and scrape (comma-separated). WANT_OK and WANT_FAIL are required,
-// WANT_RUNNING is optional:
+// to wait for and scrape (comma-separated):
 //
 //	#WANT_OK: app1, app2
 //	#WANT_RUNNING: app3
@@ -29,7 +28,6 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -61,6 +59,7 @@ import (
 const (
 	k3sImage      = "rancher/k3s:v1.32.1-k3s1"
 	argoVersion   = "v3.5.5"
+	argoManifests = "https://raw.githubusercontent.com/argoproj/argo-cd/" + argoVersion + "/manifests/core-install.yaml"
 	argoNamespace = "argocd"
 
 	runTimeout   = 20 * time.Minute
@@ -147,7 +146,7 @@ func run(ctx context.Context, inFile, outDir string) error {
 		return fmt.Errorf("waiting for Applications: %w", err)
 	}
 
-	err = writeApplications(outDir, apps)
+	err = writeJSONFiles(outDir, apps)
 	if err != nil {
 		return fmt.Errorf("writing Applications: %w", err)
 	}
@@ -180,12 +179,20 @@ type input struct {
 }
 
 // parseInput reads the input file: the "#WANT_OK:", "#WANT_RUNNING:" and
-// "#WANT_FAIL:" header comments, and the manifests. Wanted Applications need not be defined in the
-// manifests, because they can be created by other Applications (app-of-apps).
+// "#WANT_FAIL:" header comments, and the manifests.
 func parseInput(path string) (input, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return input{}, fmt.Errorf("reading file: %w", err)
+	}
+
+	headers := []struct {
+		prefix string
+		expect expectation
+	}{
+		{prefix: "#WANT_OK:", expect: expectSynced},
+		{prefix: "#WANT_RUNNING:", expect: expectRunning},
+		{prefix: "#WANT_FAIL:", expect: expectInvalid},
 	}
 
 	const (
@@ -193,33 +200,27 @@ func parseInput(path string) (input, error) {
 		wantRunningPrefix = "#WANT_RUNNING:"
 		wantFailPrefix    = "#WANT_FAIL:"
 	)
-	var in input
-	var haveOK, haveFail bool
+	var result input
+lines:
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(line, wantOKPrefix):
-			haveOK = true
-			in.wantApps = append(in.wantApps, parseWantApps(strings.TrimPrefix(line, wantOKPrefix), expectSynced)...)
-		case strings.HasPrefix(line, wantRunningPrefix):
-			in.wantApps = append(in.wantApps, parseWantApps(strings.TrimPrefix(line, wantRunningPrefix), expectRunning)...)
-		case strings.HasPrefix(line, wantFailPrefix):
-			haveFail = true
-			in.wantApps = append(in.wantApps, parseWantApps(strings.TrimPrefix(line, wantFailPrefix), expectInvalid)...)
+		for _, h := range headers {
+			if strings.HasPrefix(line, h.prefix) {
+				result.wantApps = append(result.wantApps, parseWantApps(strings.TrimPrefix(line, h.prefix), h.expect)...)
+				continue lines
+			}
 		}
+
 		if line != "" && !strings.HasPrefix(line, "#") {
 			break // the header ends at the first non-comment line
 		}
 	}
-	if !haveOK || !haveFail {
-		return input{}, errors.New(`file must start with "#WANT_OK:" and "#WANT_FAIL:" comments`)
-	}
 
-	in.manifests, err = decodeAll(data)
+	result.manifests, err = decodeObjects(data)
 	if err != nil {
 		return input{}, fmt.Errorf("decoding manifests: %w", err)
 	}
-	return in, nil
+	return result, nil
 }
 
 // parseWantApps splits a comma-separated list of Application names.
@@ -236,16 +237,15 @@ func parseWantApps(list string, expect expectation) []wantApp {
 
 // downloadArgoManifests downloads ArgoCD "core" installation manifests.
 func downloadArgoManifests(ctx context.Context) ([]*unstructured.Unstructured, error) {
-	url := "https://raw.githubusercontent.com/argoproj/argo-cd/" + argoVersion + "/manifests/core-install.yaml"
-	body, err := httpGet(ctx, url)
+	body, err := httpGet(ctx, argoManifests)
 	if err != nil {
 		return nil, fmt.Errorf("downloading ArgoCD manifests: %w", err)
 	}
-	core, err := decodeAll(body)
+	objs, err := decodeObjects(body)
 	if err != nil {
-		return nil, fmt.Errorf("decoding %s: %w", url, err)
+		return nil, fmt.Errorf("decoding %s: %w", argoManifests, err)
 	}
-	return core, nil
+	return objs, nil
 }
 
 // httpGet returns the body of a successful GET response from url.
@@ -269,7 +269,7 @@ func httpGet(ctx context.Context, url string) ([]byte, error) {
 	return body, nil
 }
 
-func decodeAll(data []byte) ([]*unstructured.Unstructured, error) {
+func decodeObjects(data []byte) ([]*unstructured.Unstructured, error) {
 	var objs []*unstructured.Unstructured
 	dec := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
 	for {
@@ -360,18 +360,18 @@ func waitForApplications(ctx context.Context, dyn dynamic.Interface, wantApps []
 		if err != nil {
 			return nil, fmt.Errorf("listing Applications: %w", err)
 		}
-		var apps []unstructured.Unstructured
+		var ready []unstructured.Unstructured
 		var notReady []string
 		for _, want := range wantApps {
 			i := slices.IndexFunc(list.Items, func(u unstructured.Unstructured) bool { return u.GetName() == want.name })
-			if i < 0 || !reconciled(list.Items[i], want.expect) {
+			if i < 0 || !isReady(list.Items[i], want.expect) {
 				notReady = append(notReady, want.name)
 				continue
 			}
-			apps = append(apps, list.Items[i])
+			ready = append(ready, list.Items[i])
 		}
 		if len(notReady) == 0 {
-			return apps, nil
+			return ready, nil
 		}
 		log.Printf("Applications not ready yet: %v", notReady)
 
@@ -383,10 +383,10 @@ func waitForApplications(ctx context.Context, dyn dynamic.Interface, wantApps []
 	}
 }
 
-// reconciled returns true if ArgoCD reached the state of app described by expect.
-// An invalid Application is considered reconciled once it has error conditions.
+// isReady returns true if ArgoCD reached the state of app described by expect.
+// An invalid Application is considered ready once it has error conditions.
 // A running one, once its sync operation is in the Running phase.
-func reconciled(app unstructured.Unstructured, expect expectation) bool {
+func isReady(app unstructured.Unstructured, expect expectation) bool {
 	switch expect {
 	case expectInvalid:
 		conditions, _, _ := unstructured.NestedSlice(app.Object, "status", "conditions")
@@ -406,9 +406,11 @@ func reconciled(app unstructured.Unstructured, expect expectation) bool {
 		(sourceType != "" || len(sourceTypes) > 0)
 }
 
-// writeApplications writes apps as "*.json" files, replacing any such files
-// already present in dir.
-func writeApplications(dir string, apps []unstructured.Unstructured) error {
+// writeJSONFiles writes apps as "*.json" files, replacing any such files
+// already present in dir. Known nondeterministic values in the Application
+// objects are normalized (replaced by fixed values) or removed, so that reruns
+// of the app produce identical output.
+func writeJSONFiles(dir string, apps []unstructured.Unstructured) error {
 	err := os.MkdirAll(dir, 0o755)
 	if err != nil {
 		return fmt.Errorf("creating %s: %w", dir, err)
@@ -446,16 +448,16 @@ const fixedTimestamp = "2000-01-01T00:00:00Z"
 
 var timestampRe = regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$`)
 
-// normalize replaces nondeterministic values in app with fixed ones, so that
-// scraping the same cluster setup again yields identical output.
-//
-// The metadata is normalized explicitly (UID is derived from the name to stay
-// unique), all remaining timestamps anywhere in the object are replaced.
-// status.operationState is reduced to its phase, startedAt and finishedAt (if
-// set), because the rest records details of the sync operation, which depend
-// on timing (e.g. whether an automated sync was retried).
+// normalize replaces nondeterministic values in app with fixed ones, or
+// removes them, so that scraping the same cluster setup again yields identical
+// output.
 func normalize(app *unstructured.Unstructured) {
 	unstructured.RemoveNestedField(app.Object, "metadata", "managedFields")
+
+	// In status.operationState, only the fields we need for the plugin are
+	// retained (phase, startedAt and finishedAt, if set). Most of the fields
+	// record details of the sync operation, which may depend on timing (such
+	// as whether a sync was retried).
 	opState, _, _ := unstructured.NestedMap(app.Object, "status", "operationState")
 	unstructured.RemoveNestedField(app.Object, "status", "operationState")
 	for _, field := range []string{"phase", "startedAt", "finishedAt"} {
@@ -463,11 +465,15 @@ func normalize(app *unstructured.Unstructured) {
 			_ = unstructured.SetNestedField(app.Object, v, "status", "operationState", field)
 		}
 	}
+
+	// UID is replaced by a fixed value - derived from the name to stay unique
 	app.SetUID(uidFromHashed(app.GetNamespace() + "/" + app.GetName()))
+
 	app.SetResourceVersion("1")
 	app.SetGeneration(1)
 	app.SetCreationTimestamp(metav1.Time{})
 	_ = unstructured.SetNestedField(app.Object, fixedTimestamp, "metadata", "creationTimestamp")
+
 	replaceTimestamps(app.Object)
 }
 
