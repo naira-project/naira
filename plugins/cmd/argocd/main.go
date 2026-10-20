@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -118,26 +119,24 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 			continue
 		}
 		inClusterApps = append(inClusterApps, app)
-		var (
-			project      = nestedStringOrEmpty(app, "spec", "project")
-			syncStatus   = nestedStringOrEmpty(app, "status", "sync", "status")
-			healthStatus = nestedStringOrEmpty(app, "status", "health", "status")
-			destNs       = nestedStringOrEmpty(app, "spec", "destination", "namespace")
-			srcType      = sourceType(app)
-		)
+
+		str := nestedStringOrEmpty // helper func
 		props := pluginapi.PropertyMap{
-			"project":               project,
-			"sync_status":           syncStatus,
-			"health_status":         healthStatus,
-			"destination_namespace": destNs,
-			"source_type":           srcType,
+			"project":               str(app, "spec", "project"),
+			"sync_status":           str(app, "status", "sync", "status"),
+			"health_status":         str(app, "status", "health", "status"),
+			"destination_namespace": str(app, "spec", "destination", "namespace"),
+			"source_type":           sourceType(app),
 		}
 		_, hasOperation, _ := unstructured.NestedFieldNoCopy(app.Object, "operation")
 		props["operation_present"] = strconv.FormatBool(hasOperation)
 		setIfNotEmpty(props, "last_deployed_at", lastDeployedAt(app))
 		for _, field := range []string{"phase", "startedAt", "finishedAt"} {
-			setIfNotEmpty(props, "operationState."+field, nestedStringOrEmpty(app, "status", "operationState", field))
+			setIfNotEmpty(props,
+				"operationState."+field,
+				nestedStringOrEmpty(app, "status", "operationState", field))
 		}
+
 		addNode(pluginapi.NodeClaim{
 			ID:         applicationID(clusterID, app.GetNamespace(), app.GetName()),
 			Properties: props,
@@ -147,42 +146,49 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 	for _, app := range inClusterApps {
 		appID := applicationID(clusterID, app.GetNamespace(), app.GetName())
 
-		// Multiple sources can point to the same repository, at different paths.
-		// A relation is identified by its kind and ends, so there is one per
-		// repository, listing all the paths used.
-		var repoIDs []pluginapi.NodeID
+		// Multiple sources from a single Application can point to the same
+		// repository, at different paths. A relation is identified by its kind
+		// and ends, so we need to create only one per repository, listing all
+		// the paths used.
 		pathsByRepo := map[pluginapi.NodeID][]string{}
 		for _, src := range sources(app) {
 			repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(src.repoURL)
 			if repoPath == "" {
+				// As described in the README of the plugin, we currently only
+				// recognize GitHub repository URLs, as for other URLs it's
+				// difficult to know if they're a Git repo, Helm chart, OCI
+				// image, tarball, etc.
 				continue
 			}
 			repoID := pluginapi.NodeID{
 				Kind: pluginapi.NodeKindGitRepository,
 				Path: repoPath,
 			}
-			if !slices.Contains(repoIDs, repoID) {
+			if _, found := pathsByRepo[repoID]; !found {
 				addNode(pluginapi.NodeClaim{
 					ID: repoID,
 					Properties: pluginapi.PropertyMap{
 						"url": src.repoURL,
 					},
 				})
-				repoIDs = append(repoIDs, repoID)
+				pathsByRepo[repoID] = nil
 			}
 			if src.path != "" && !slices.Contains(pathsByRepo[repoID], src.path) {
 				pathsByRepo[repoID] = append(pathsByRepo[repoID], src.path)
 			}
 		}
-		for _, repoID := range repoIDs {
+		for repoID, paths := range pathsByRepo {
+			sort.Strings(paths)
 			relations = append(relations, pluginapi.RelationClaim{
 				Kind:       pluginapi.RelationKindSourcedFrom,
 				From:       appID,
 				To:         repoID,
-				Properties: pathsProperties(pathsByRepo[repoID]),
+				Properties: pathsProperties(paths),
 			})
 		}
 
+		// Find all resources managed by the Application, as listed in its
+		// status.resources.
 		resources, _, _ := unstructured.NestedSlice(app.Object, "status", "resources")
 		for _, r := range resources {
 			res, ok := r.(map[string]any)
@@ -196,10 +202,11 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				name, _  = res["name"].(string)
 			)
 			if kind == "" || name == "" {
+				log.Printf("argocd: WARN: skipping resource with missing kind (%q) or name (%q) in Application %s/%s", kind, name, app.GetNamespace(), app.GetName())
 				continue
 			}
 
-			resID := resourceID(clusterID, group, kind, ns, name)
+			resID := resourceNodeID(clusterID, group, kind, ns, name)
 			if resID == appID {
 				continue
 			}
@@ -209,15 +216,13 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				From: appID,
 				To:   resID,
 			})
-			if resID.Kind == pluginapi.NodeKindDeployment {
-				for _, repoID := range repoIDs {
-					relations = append(relations, pluginapi.RelationClaim{
-						Kind:       pluginapi.RelationKindDeployedFrom,
-						From:       resID,
-						To:         repoID,
-						Properties: pathsProperties(pathsByRepo[repoID]),
-					})
-				}
+			for repoID, paths := range pathsByRepo {
+				relations = append(relations, pluginapi.RelationClaim{
+					Kind:       pluginapi.RelationKindDeployedFrom,
+					From:       resID,
+					To:         repoID,
+					Properties: pathsProperties(paths),
+				})
 			}
 		}
 	}
@@ -232,9 +237,14 @@ func applicationID(clusterID, ns, name string) pluginapi.NodeID {
 	}
 }
 
-// resourceID returns the NodeID of a resource listed in an Application's
-// status.resources. ns is empty for cluster-scoped resources.
-func resourceID(clusterID, group, kind, ns, name string) pluginapi.NodeID {
+// resourceNodeID returns the NodeID of a resource listed in an Application's
+// status.resources. For cluster-scoped resources, ns can be empty.
+func resourceNodeID(clusterID, group, kind, ns, name string) pluginapi.NodeID {
+	// TODO(akavel-reply): should we just use a single naming scheme for all
+	// k8s resources, without special-casing Deployments and Services? Should we
+	// use custom NodeID.Kind for every resource kind, e.g.
+	// `NodeID.Kind=Deployment.apps.k8s`? Would need to be also updated in
+	// other plugins.
 	switch {
 	case group == "apps" && kind == "Deployment":
 		return pluginapi.NodeID{

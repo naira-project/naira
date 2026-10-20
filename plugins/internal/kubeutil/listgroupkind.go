@@ -12,9 +12,11 @@ import (
 )
 
 // ListGroupKind returns all resources of the given API group + kind across all
-// provided namespaces. apiLists is the result of a discovery call.
-// Returns an empty slice (not an error) when the CRD is not installed in the cluster.
-// Failures to list in a particular namespace are logged and skipped.
+// provided namespaces. Returns an empty slice (not an error) if a queried CRD
+// is not installed in the cluster. Failures to list in a particular namespace
+// are logged and skipped. For apiLists, see e.g. the result of
+// "ServerResourcesInterface.ServerGroupsAndResources" from
+// "k8s.io/client-go/discovery" package.
 func ListGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
 	for _, apiList := range apiLists {
 		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
@@ -46,5 +48,5 @@ func ListGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn 
 			return items, nil
 		}
 	}
-	return nil, nil // CRD not installed → no data
+	return nil, nil
 }
