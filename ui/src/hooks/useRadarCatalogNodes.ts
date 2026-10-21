@@ -1,29 +1,38 @@
-import { useMemo } from 'react';
-import type { NodeResource } from '../lib/catalogApi';
-import { useCatalogNodes } from './useCatalogNodes';
+import { type UseQueryResult, useQueries } from '@tanstack/react-query';
+import { buildEqualityFilter, fetchNodes, type NodeResource } from '../lib/catalogApi';
+import { queryKeys } from '../lib/queryKeys';
+import { useOpenMFPContext } from './useOpenMFPContext';
 
 export interface RadarCatalogNodes {
-  /** Where a model is available. */
-  models: NodeResource[];
-  /** Where a model is currently served. */
-  endpoints: NodeResource[];
+  /** Catalog nodes of every requested kind. */
+  nodes: NodeResource[];
   loading: boolean;
   error: string | null;
 }
 
+// Module-level so its reference is stable: useQueries re-runs combine, and
+// returns a new object, whenever the function changes.
+function combineNodes(results: UseQueryResult<NodeResource[]>[]): RadarCatalogNodes {
+  return {
+    nodes: results.flatMap((result) => result.data ?? []),
+    loading: results.some((result) => result.isLoading),
+    error: results.some((result) => result.error) ? 'Failed to load catalog matches' : null,
+  };
+}
+
 /**
- * Fetches the catalog nodes that radar entries can link to via their catalog
- * refs: models and inference endpoints.
+ * Fetches the catalog nodes of the given kinds, the ones radar entries can
+ * link to via their catalog refs. Shares its cache with useCatalogNodes.
  */
-export function useRadarCatalogNodes(): RadarCatalogNodes {
-  const models = useCatalogNodes('model');
-  const endpoints = useCatalogNodes('inference_endpoint');
+export function useRadarCatalogNodes(kinds: string[]): RadarCatalogNodes {
+  const { token } = useOpenMFPContext();
 
-  const loading = models.loading || endpoints.loading;
-  const error = models.error || endpoints.error ? 'Failed to load catalog matches' : null;
-
-  return useMemo(
-    () => ({ models: models.nodes, endpoints: endpoints.nodes, loading, error }),
-    [models.nodes, endpoints.nodes, loading, error],
-  );
+  return useQueries({
+    queries: kinds.map((kind) => ({
+      queryKey: queryKeys.nodes(kind),
+      queryFn: () =>
+        fetchNodes(token, { filter: buildEqualityFilter('kind', kind), pageSize: 1000 }),
+    })),
+    combine: combineNodes,
+  });
 }

@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -7,7 +7,7 @@ import RadarEntryTable from '../components/radar/RadarEntryTable';
 import PluginSyncState from '../components/states/PluginSyncState';
 import { useRadarCatalogNodes } from '../hooks/useRadarCatalogNodes';
 import { useTechRadar } from '../hooks/useTechRadar';
-import { TECH_RADAR_PLUGIN } from '../lib/techRadar';
+import { catalogRefKinds, TECH_RADAR_PLUGIN } from '../lib/techRadar';
 
 /**
  * Quadrant detail: all of one quadrant's entries as a table, filterable by
@@ -17,7 +17,9 @@ export default function TechRadarQuadrant() {
   const { quadrantId = '' } = useParams();
   const navigate = useNavigate();
   const { model, loading, error } = useTechRadar();
-  const catalog = useRadarCatalogNodes();
+  // All entries, not the filtered ones, so toggling a filter refetches nothing.
+  const refKinds = useMemo(() => catalogRefKinds(model?.entries ?? []), [model]);
+  const catalog = useRadarCatalogNodes(refKinds);
 
   const [activeRing, setActiveRing] = useState<string | null>(null);
   const [movedOnly, setMovedOnly] = useState(false);

@@ -102,9 +102,8 @@ export default function RadarEntryTable({ entries, rings, catalog }: RadarEntryT
       },
       {
         id: 'catalog',
-        header: 'In catalog',
+        header: 'Used',
         enableSorting: false,
-        accessorFn: (entry) => entry.catalogRefs.join(', '),
         cell: (info) => <CatalogMatches refs={info.row.original.catalogRefs} catalog={catalog} />,
       },
       {
