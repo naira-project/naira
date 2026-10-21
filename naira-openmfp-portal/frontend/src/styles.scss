@@ -1,1 +1,83 @@
 /* You can add global styles to this file, and also import other style files */
+
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/800.css';
+
+:root {
+  --luigi__left-sidenav--width: 250px;
+}
+
+.fd-tool-layout__navigation-container {
+  width: var(--luigi__left-sidenav--width);
+  flex: 0 0 var(--luigi__left-sidenav--width);
+}
+
+.fd-navigation__list-item.lui-nav-entry {
+  display: flex;
+  height: 36px;
+  /* Figma exports 101px vertical padding; it is an export artifact. */
+  padding: 0 10px 0 0;
+  align-items: center;
+  gap: 10px;
+  align-self: stretch;
+
+  > .fd-navigation__item {
+    display: flex;
+    flex: 1;
+    height: 100%;
+    align-items: center;
+    /* Figma "Group 2": 24px tall, left 20px, top 6px in a 36px row. */
+    padding: 6px 0 6px 20px;
+  }
+
+  .fd-navigation__link {
+    display: flex;
+    height: 24px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .fd-navigation__link .fd-navigation__icon {
+    display: flex;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    aspect-ratio: 1 / 1;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  /* Figma "Side Bar Text". */
+  .fd-navigation__link .fd-navigation__text {
+    color: var(--Deep-Sapphire, #102344);
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 24px;
+  }
+
+  /* Figma "Side Bar Title Text". */
+  .fd-navigation__link[data-testid='overview_overview'] .fd-navigation__text {
+    color: var(--Deep-Sapphire, #102344);
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 800;
+    line-height: 24px;
+    text-transform: uppercase;
+  }
+}
+
+.fd-navigation.fd-navigation--vertical {
+  width: var(--luigi__left-sidenav--width);
+  background: #fff;
+  box-shadow: var(--sds-size-depth-0, 0) var(--sds-size-depth-025, 2px)
+    var(--sds-size-depth-100, 8px) var(--sds-size-depth-0, 0)
+    var(--sds-color-black-100, rgba(12, 12, 12, 0.1));
+}
