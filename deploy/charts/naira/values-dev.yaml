@@ -11,6 +11,8 @@ catalog:
       LITELLM_API_KEY: sk-local-litellm
       OPENMETADATA_ADMIN_PASSWORD: admin
   plugins:
+    litellm:
+      enabled: true
     depl-uses-litellm:
       enabled: true
     openmetadata:
@@ -81,6 +83,8 @@ catalog:
                 owner: ai-board
                 rationale: >
                   Superseded by hybrid retrieval; migrate existing pipelines.
+    openai-api-models:
+      enabled: true
 
 portal:
   oidc:

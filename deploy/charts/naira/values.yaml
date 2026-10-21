@@ -99,7 +99,7 @@ catalog:
   #   config      {mountPath, existingConfigMap | data}: files mounted as a directory
   plugins:
     litellm:
-      enabled: true
+      enabled: false
       image: {repository: naira-plugin-litellm, tag: ""}
       port: 50051
       schedule: "0 0 * * *"
@@ -221,7 +221,7 @@ catalog:
             verbs: ["get", "list"]
 
     openai-api-models:
-      enabled: true
+      enabled: false
       image: {repository: naira-plugin-openai-api-models, tag: ""}
       port: 50060
       schedule: "0 0 * * *"
@@ -243,22 +243,19 @@ catalog:
       pathPrefix: bedrock
       env:
         REGIONS: "us-east-1 eu-central-1"
-        AWS_ACCESS_KEY_ID: {secretKeyRef: {key: AWS_ACCESS_KEY_ID}}
-        AWS_SECRET_ACCESS_KEY: {secretKeyRef: {key: AWS_SECRET_ACCESS_KEY}}
+        AWS_ACCESS_KEY_ID: {secretKeyRef: {key: BEDROCK_AWS_ACCESS_KEY_ID}}
+        AWS_SECRET_ACCESS_KEY: {secretKeyRef: {key: BEDROCK_AWS_SECRET_ACCESS_KEY}}
         METRICS_LOOKBACK: "24h"
 
     thalamus:
-      # Off by default: THALAMUS_BASE_URL and THALAMUS_BEARER_TOKEN are
-      # required. Add them to the catalog Secret under proper keys before
-      # enabling.
+      # Off by default: Thalamus Inference Service is required for this to work
+      # (https://cobaltcore-dev.github.io/thalamus).
       enabled: false
       image: {repository: naira-plugin-thalamus, tag: ""}
       port: 50062
       schedule: "0 0 * * *"
       pathPrefix: thalamus
       env:
-        THALAMUS_BASE_URL: {secretKeyRef: {key: THALAMUS_BASE_URL}}
-        THALAMUS_BEARER_TOKEN: {secretKeyRef: {key: THALAMUS_BEARER_TOKEN}}
         HTTP_TIMEOUT: "5s"
       rbac:
         rules:
@@ -269,7 +266,10 @@ catalog:
     depl-uses-thalamus:
       # Off by default: THALAMUS_BASE_URL and THALAMUS_BEARER_TOKEN are
       # required. Add them to the catalog Secret under proper keys before
-      # enabling.
+      # enabling. (Set THALAMUS_BEARER_TOKEN to empty if the server does not
+      # require authentication.)
+      # For more details, see: Thalamus Inference Service
+      # (https://cobaltcore-dev.github.io/thalamus).
       enabled: false
       image: {repository: naira-plugin-depl-uses-thalamus, tag: ""}
       port: 50063
