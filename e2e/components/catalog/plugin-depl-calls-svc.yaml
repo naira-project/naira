@@ -1,5 +1,5 @@
         - name: plugin-depl-calls-svc
-          image: depl-calls-svc:${TAG}
+          image: ${E2E_IMAGE}:depl-calls-svc-${TAG}
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
           env:
