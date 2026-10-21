@@ -21,6 +21,10 @@
 }
 
 
+.fd-navigation__list-item.lui-nav-entry + .fd-navigation__list-item.lui-nav-entry {
+  border-top: 1px solid rgba(195, 191, 191, 0.22);
+}
+
 .fd-navigation__list-item.lui-nav-entry {
   display: flex;
   flex-direction: row;
