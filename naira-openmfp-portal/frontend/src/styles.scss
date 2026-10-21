@@ -7,9 +7,14 @@
   --luigi__left-sidenav--width: 250px;
 }
 
-.fd-tool-layout__navigation-container {
+/* Leave the collapsed (snapped) sidebar to Luigi's own sizing. */
+.fd-tool-layout__navigation-container:not(:has(.fd-navigation--snapped)) {
   width: var(--luigi__left-sidenav--width);
   flex: 0 0 var(--luigi__left-sidenav--width);
+}
+
+.fd-navigation--snapped .fd-navigation__item--group {
+  display: none;
 }
 
 .fd-navigation__container--top {
@@ -29,7 +34,7 @@
 /* Luigi category groups: a static title, not a collapsible entry. */
 .fd-navigation__item--group {
   display: flex;
-  width: var(--luigi__left-sidenav--width);
+  width: 100%;
   /* Figma exports 151.167px right padding; it is the frame's fill width. */
   padding: 13px 10px 13px 20.833px;
   align-items: center;
@@ -65,7 +70,7 @@
 .fd-navigation__list-item.lui-nav-entry {
   display: flex;
   flex-direction: row;
-  width: var(--luigi__left-sidenav--width);
+  width: 100%;
   height: 36px;
   padding: 0;
   align-items: center;
@@ -127,7 +132,7 @@
   }
 }
 
-.fd-navigation.fd-navigation--vertical {
+.fd-navigation.fd-navigation--vertical:not(.fd-navigation--snapped) {
   width: var(--luigi__left-sidenav--width);
   background: #fff;
   box-shadow: var(--sds-size-depth-0, 0) var(--sds-size-depth-025, 2px)
