@@ -3,3 +3,6 @@
 .claude
 __pycache__/
 *.pyc
+
+# Helm dependency tarballs, fetched by `helm dependency build`
+deploy/charts/naira/charts/

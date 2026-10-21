@@ -211,6 +211,7 @@ jobs:
         run: echo "$REGISTRY_PASSWORD" | helm registry login ghcr.io --username "$REGISTRY_USER" --password-stdin
       - name: Package and push
         run: |
+          helm dependency build deploy/charts/naira
           helm package deploy/charts/naira --version "${TAG#v}" --app-version "$TAG"
           helm push "naira-${TAG#v}.tgz" "$CHART_REGISTRY"
       - name: Verify the pushed chart
