@@ -33,10 +33,10 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
   },
   {
     path: 'model',
-    heading: 'Model',
+    heading: 'Model Catalog',
     subheading: 'Models registered in the catalog.',
     kinds: ['model'],
-    plugins: ['litellm', 'mlflow'],
+    plugins: ['litellm', 'mlflow', 'bedrock'],
   },
   {
     path: 'mcp',
@@ -46,6 +46,13 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
     relatedKinds: ['mcp_tool'],
     columns: ['endpoint', 'description', 'instructions'],
     plugins: ['mcp-servers', 'litellm'],
+  },
+  {
+    path: 'inference_endpoints',
+    heading: 'Inference Endpoints Catalog',
+    subheading: 'Inference endpoints served via different plugins.',
+    kinds: ['inference_endpoint'],
+    plugins: ['litellm', 'bedrock'],
   },
 ];
 

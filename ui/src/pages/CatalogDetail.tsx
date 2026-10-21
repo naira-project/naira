@@ -2,8 +2,10 @@ import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import PropertiesPanel from '../components/PropertiesPanel';
+import { PersesDashboard } from '../components/perses/PersesDashboard';
+import RelatedNodes from '../components/RelatedNodes';
 import { Button } from '../components/ui/button';
-import { detailTabsForKind } from '../config/detailTabs';
+import { relatedNodesConfigForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { nodeProps } from '../lib/catalogApi';
@@ -28,13 +30,11 @@ export default function CatalogDetail() {
   const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
   const backPath = findViewpointForKind(decodedKind)?.path;
 
-  // Kind-specific tabs come from configuration;
-  const kindTabs = detailTabsForKind(decodedKind);
-  const landingTab = kindTabs.find((tab) => tab.primary)?.value ?? GRAPH_TAB;
+  const relatedConfig = relatedNodesConfigForKind(decodedKind);
+  const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 
   const tabs = [
-    ...kindTabs.map((tab) => ({ value: tab.value, label: tab.value })),
     { value: GRAPH_TAB, label: GRAPH_TAB },
     { value: PROPERTIES_TAB, label: PROPERTIES_TAB },
   ];
@@ -109,12 +109,14 @@ export default function CatalogDetail() {
                   </div>
                 )}
 
-                {kindTabs.map(({ value, component: TabComponent }) =>
-                  currentTab === value ? <TabComponent key={value} node={node} /> : null,
-                )}
-
                 {currentTab === PROPERTIES_TAB && (
-                  <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+                  <div className="flex flex-col gap-6">
+                    <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+
+                    {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
+
+                    <PersesDashboard node={node} />
+                  </div>
                 )}
               </div>
             </div>

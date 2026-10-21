@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import '@xyflow/react/dist/style.css';
 
+import InferenceEndpointDetails from '../components/details/InferenceEndpointDetails';
 import PropertiesPanel from '../components/PropertiesPanel';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -52,12 +53,18 @@ function graphNodeId(node: CatalogGraphNode) {
   return node.name;
 }
 
+/** Extra, kind-specific content rendered below the label of a graph node. */
+const kindDetails: Record<string, React.ComponentType<{ node: CatalogGraphNode }>> = {
+  inference_endpoint: InferenceEndpointDetails,
+};
+
 function toFlowNode(
   node: CatalogGraphNode,
   position: { x: number; y: number },
   onFocus: (node: CatalogGraphNode) => void,
 ): Node {
   const palette = typePalette[node.kind] ?? { fill: '#ffffff', stroke: '#94a3b8' };
+  const KindDetails = kindDetails[node.kind];
 
   const displayLabel = (
     <div className="flex gap-2 text-left h-full">
@@ -88,6 +95,7 @@ function toFlowNode(
         <span className="font-semibold break-all text-sm leading-tight text-[#17324d]">
           {node.label}
         </span>
+        {KindDetails && <KindDetails node={node} />}
       </div>
     </div>
   );

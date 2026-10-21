@@ -34,6 +34,10 @@ spec:
           env:
             - name: CATALOG_UPSTREAM
               value: {{ .Values.ui.catalogUpstream | default (printf "http://catalog.%s.svc.cluster.local:%v" .Release.Namespace .Values.catalog.port) | quote }}
+            {{- with .Values.ui.prometheusUpstream }}
+            - name: PROMETHEUS_UPSTREAM
+              value: {{ . | quote }}
+            {{- end }}
           ports:
             - {name: http, containerPort: {{ .Values.ui.port }}}
           startupProbe:

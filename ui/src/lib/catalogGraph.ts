@@ -6,6 +6,7 @@ import {
   nodeProps,
   type RelationResource,
 } from './catalogApi';
+import { displayName } from './kindUtils';
 
 export interface CatalogGraphRoot {
   name: string;
@@ -41,21 +42,17 @@ type FrontierNode = {
   direction: 'incoming' | 'outgoing';
 };
 
-function nameFromPath(path: string) {
-  const parts = path.split('/').filter(Boolean);
-  return parts[parts.length - 1] ?? path;
-}
-
 function toGraphNode(node: NodeResource, depth: number, isRoot = false): CatalogGraphNode {
+  const properties = nodeProps(node);
   return {
     id: node.name,
     name: node.name,
     kind: node.kind,
     path: node.path,
-    label: nameFromPath(node.path),
+    label: displayName(node.kind, node.path, properties),
     depth,
     isRoot,
-    properties: nodeProps(node),
+    properties,
   };
 }
 
@@ -123,10 +120,7 @@ export async function buildCatalogGraphSlice(
   const edges = new Map<string, CatalogGraphEdge>();
   const expanded = new Set<string>();
 
-  nodes.set(rootResource.name, {
-    ...toGraphNode(rootResource, 0, true),
-    label: nameFromPath(rootResource.path),
-  });
+  nodes.set(rootResource.name, toGraphNode(rootResource, 0, true));
 
   let frontier: FrontierNode[] = [
     { name: rootResource.name, depth: 0, direction: 'outgoing' },

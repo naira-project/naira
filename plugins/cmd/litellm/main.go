@@ -2,15 +2,16 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/naira-project/naira/plugins/internal/openaicompat"
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 	"k8s.io/client-go/dynamic"
@@ -28,10 +29,11 @@ const (
 )
 
 type config struct {
-	PathPrefix  string        `env:"PATH_PREFIX" default:"litellm"`
-	BaseURL     string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
-	APIKey      string        `env:"LITELLM_API_KEY"`
-	HTTPTimeout time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`
+	PathPrefix      string        `env:"PATH_PREFIX" default:"litellm"`
+	BaseURL         string        `env:"LITELLM_BASE_URL" default:"http://127.0.0.1:4000"`
+	APIKey          string        `env:"LITELLM_API_KEY"`
+	HTTPTimeout     time.Duration `env:"LITELLM_HTTP_TIMEOUT" default:"5s"`
+	MetricsLookback time.Duration `env:"LITELLM_METRICS_LOOKBACK" default:"24h"`
 }
 
 type Plugin struct {
@@ -69,6 +71,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	seenRelations := make(map[string]struct{})
 	collectErrors := make([]error, 0)
 
+	ownerByModelID := make(map[string]string, len(models))
 	for _, model := range models {
 		node := pluginapi.NodeClaim{
 			ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + model.ID},
@@ -78,6 +81,7 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 		}
 		nodes = append(nodes, node)
 		modelKeys[model.ID] = node
+		ownerByModelID[model.ID] = model.OwnedBy
 	}
 
 	mcpNodes, mcpRelations, err := p.collectMCPServers(ctx)
@@ -86,6 +90,13 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	}
 	nodes = append(nodes, mcpNodes...)
 	relations = append(relations, mcpRelations...)
+
+	endpointNodes, endpointRelations, err := p.listInferenceEndpoints(ctx, ownerByModelID)
+	if err != nil {
+		collectErrors = append(collectErrors, err)
+	}
+	nodes = append(nodes, endpointNodes...)
+	relations = append(relations, endpointRelations...)
 
 	if p.appIdentityProvider == nil {
 		return pluginapi.CollectResponse{Nodes: dedupeNodes(nodes), Relations: relations}, errors.Join(collectErrors...)
@@ -128,7 +139,10 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 			if _, ok := modelKeys[modelName]; !ok {
 				node := pluginapi.NodeClaim{
-					ID: pluginapi.NodeID{Kind: pluginapi.NodeKindModel, Path: p.config.PathPrefix + "/" + modelName},
+					ID: pluginapi.NodeID{
+						Kind: pluginapi.NodeKindModel,
+						Path: p.config.PathPrefix + "/" + modelName,
+					},
 					Properties: pluginapi.PropertyMap{
 						propertyKeyDiscoveredVia: propertyValueKeyInfo,
 					},
@@ -158,38 +172,21 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 }
 
 func (p *Plugin) fetchAllowedModels(ctx context.Context, key string) ([]string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.config.BaseURL+"/key/info", nil)
+	url, err := httpjson.BuildURL(p.config.BaseURL+"/key/info", url.Values{
+		"key": {key},
+	})
 	if err != nil {
-		return nil, fmt.Errorf("building LiteLLM key info request: %w", err)
-	}
-
-	query := req.URL.Query()
-	query.Set("key", key)
-	req.URL.RawQuery = query.Encode()
-	p.addAuthorization(req)
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("calling LiteLLM key info endpoint: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("litellm /key/info returned %s", resp.Status)
+		return nil, fmt.Errorf("building LiteLLM key info URL: %w", err)
 	}
 
 	var payload keyInfoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("decoding LiteLLM key info response: %w", err)
+	err = httpjson.Get(ctx, p.httpClient, url.String(), &payload,
+		httpjson.WithAuthorizationBearer(p.config.APIKey))
+	if err != nil {
+		return nil, fmt.Errorf("calling LiteLLM key info endpoint: %w", err)
 	}
 
 	return payload.Info.Models, nil
-}
-
-func (p *Plugin) addAuthorization(req *http.Request) {
-	if strings.TrimSpace(p.config.APIKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
-	}
 }
 
 func newAppIdentityProvider(logger *log.Logger) AppIdentityProvider {
