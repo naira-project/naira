@@ -12,11 +12,16 @@
   flex: 0 0 var(--luigi__left-sidenav--width);
 }
 
+.fd-navigation__container--top {
+  padding-inline: 0;
+}
+
 .fd-navigation__list-item.lui-nav-entry {
   display: flex;
+  flex-direction: row;
+  width: var(--luigi__left-sidenav--width);
   height: 36px;
-  /* Figma exports 101px vertical padding; it is an export artifact. */
-  padding: 0 10px 0 0;
+  padding: 0;
   align-items: center;
   gap: 10px;
   align-self: stretch;
@@ -26,13 +31,15 @@
     flex: 1;
     height: 100%;
     align-items: center;
-    /* Figma "Group 2": 24px tall, left 20px, top 6px in a 36px row. */
-    padding: 6px 0 6px 20px;
   }
 
+  /* Padding lives on the link so the highlight spans the full row.
+     Figma exports 101px vertical padding; it is an export artifact. */
   .fd-navigation__link {
     display: flex;
-    height: 24px;
+    height: 100%;
+    min-height: 0;
+    padding-inline: 20px 10px;
     align-items: center;
     gap: 10px;
   }
