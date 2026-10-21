@@ -1,5 +1,5 @@
         - name: plugin-litellm
-          image: litellm:${TAG}
+          image: ${E2E_IMAGE}:litellm-${TAG}
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
           env:
