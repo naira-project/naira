@@ -249,6 +249,88 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 	}
 }
 
+func TestListKindsEndpoint(t *testing.T) {
+	store := catalog.NewMemoryStore()
+	router := newTestRouter(t, store, operations.NewMemoryStore(), nil)
+
+	t.Run("empty catalog", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, "/v1/kinds", nil), testBearerToken))
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"kinds":[],"totalSize":0}`, rec.Body.String())
+	})
+
+	app := catalog.NodeID{
+		Kind: "application",
+		Path: "app",
+	}
+	model := catalog.NodeID{
+		Kind: "model",
+		Path: "model",
+	}
+	applyPluginSnapshot(t, store, []catalog.NodeClaim{{ID: app}, {ID: model}}, []catalog.RelationClaim{
+		{
+			Kind: "uses_model",
+			From: app,
+			To:   model,
+		},
+		{
+			Kind: "depends_on",
+			From: app,
+			To:   model,
+		},
+		{
+			Kind: "depends_on",
+			From: model,
+			To:   app,
+		},
+	})
+
+	t.Run("distinct sorted kinds", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, "/v1/kinds", nil), testBearerToken))
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"kinds":["depends_on","uses_model"],"totalSize":2}`, rec.Body.String())
+	})
+
+	t.Run("pagination", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, "/v1/kinds?pageSize=1", nil), testBearerToken))
+		require.Equal(t, http.StatusOK, rec.Code)
+		var first ListKindsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &first))
+		require.NotEmpty(t, first.NextPageToken)
+		assert.Equal(t, ListKindsResponse{
+			Kinds:         []string{"depends_on"},
+			NextPageToken: first.NextPageToken,
+			TotalSize:     2,
+		}, first)
+
+		rec = httptest.NewRecorder()
+		router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, "/v1/kinds?pageSize=1&pageToken="+first.NextPageToken, nil), testBearerToken))
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"kinds":["uses_model"],"totalSize":2}`, rec.Body.String())
+	})
+
+	for _, path := range []string{
+		"/v1/kinds?pageSize=-1",
+		"/v1/kinds?pageToken=invalid",
+		"/v1/kinds?filter=kind=%22uses_model%22",
+	} {
+		t.Run(path, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, path, nil), testBearerToken))
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+	}
+
+	t.Run("requires authentication", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/kinds", nil))
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+}
+
 func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 	store := catalog.NewMemoryStore()
 	applyPluginSnapshot(t, store, []catalog.NodeClaim{{

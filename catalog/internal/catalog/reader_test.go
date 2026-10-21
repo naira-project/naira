@@ -8,6 +8,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestListKindsReturnsDistinctStoredRelationKinds(t *testing.T) {
+	store := NewMemoryStore()
+	app := NodeID{
+		Kind: "application",
+		Path: "litellm/fraud-assistant",
+	}
+	model := NodeID{
+		Kind: "model",
+		Path: "mlflow/fraud-detector",
+	}
+	dataset := NodeID{
+		Kind: "dataset",
+		Path: "mlflow/transactions-v1",
+	}
+	applyPluginSnapshot(t, store,
+		[]NodeClaim{
+			{ID: app},
+			{ID: model},
+			{ID: dataset},
+		},
+		[]RelationClaim{
+			{
+				Kind: "uses_model",
+				From: app,
+				To:   model,
+			},
+			{
+				Kind: "trained_on",
+				From: model,
+				To:   dataset,
+			},
+			{
+				Kind: "trained_on",
+				From: app,
+				To:   dataset,
+			},
+		},
+	)
+
+	response := NewService(store).ListKinds(t.Context())
+
+	assert.Equal(t, []string{"trained_on", "uses_model"}, response)
+}
+
 func TestListNodesProjectsStoredNode(t *testing.T) {
 	store := NewMemoryStore()
 	applyPluginSnapshot(t, store, []NodeClaim{{

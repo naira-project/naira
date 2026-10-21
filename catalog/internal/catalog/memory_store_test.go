@@ -7,6 +7,69 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestListKinds(t *testing.T) {
+	store := NewMemoryStore()
+	assert.Empty(t, store.ListKinds())
+
+	appNode := NodeID{
+		Kind: "application",
+		Path: "app-a",
+	}
+	otherAppNode := NodeID{
+		Kind: "application",
+		Path: "app-b",
+	}
+	modelNode := NodeID{
+		Kind: "model",
+		Path: "shared-model",
+	}
+
+	_, _, err := store.ApplyPluginSnapshot(
+		"mlflow",
+		snapshotV1,
+		[]NodeClaim{
+			{ID: appNode},
+			{ID: otherAppNode},
+			{ID: modelNode},
+		},
+		[]RelationClaim{
+			{
+				Kind: "uses_model",
+				From: appNode,
+				To:   modelNode,
+			},
+			{
+				Kind: "uses_model",
+				From: otherAppNode,
+				To:   modelNode,
+			},
+			{
+				Kind: "depends_on",
+				From: appNode,
+				To:   otherAppNode,
+			},
+		},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"depends_on", "uses_model"}, store.ListKinds())
+
+	_, _, err = store.ApplyPluginSnapshot(
+		"mlflow",
+		snapshotV2,
+		[]NodeClaim{
+			{ID: appNode},
+			{ID: modelNode},
+		},
+		[]RelationClaim{{
+			Kind: "uses_model",
+			From: appNode,
+			To:   modelNode,
+		}},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"uses_model"}, store.ListKinds())
+}
+
 func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	store := NewMemoryStore()
 
