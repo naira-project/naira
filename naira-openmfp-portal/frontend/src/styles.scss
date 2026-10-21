@@ -49,7 +49,11 @@
   }
 }
 
-.fd-navigation__list-item.lui-nav-entry +.fd-navigation__list-item.lui-nav-entry {
+/* Dividers only above each group and between Overview and Plugins. */
+.fd-navigation__item--group,
+.fd-navigation__container--top
+  > .fd-navigation__list
+  > .lui-nav-entry:nth-child(2) {
   border-top: 1px solid rgba(195, 191, 191, 0.22);
 }
 
