@@ -13,6 +13,7 @@ helm = "4.2"
 kubectl = "1.36" # update KIND_NODE_IMAGE in Tiltfile if changing version
 kind = "0.32"
 tilt = "0.37"
+vcluster = "0.37" # must track the vCluster Platform version (4.12 / vCluster 0.37)
 yq = "4" # chart render tests
 helm-ct = "3" # ct lint
 yamllint = "1.33.0" # ct lint; same as chart-testing-action in CI

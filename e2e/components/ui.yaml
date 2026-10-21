@@ -1,4 +1,4 @@
-# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG} ${E2E_IMAGE}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: ui
-          image: ui:${TAG}
+          image: ${E2E_IMAGE}:ui-${TAG}
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
