@@ -74,6 +74,16 @@ data:
         owner: ml-platform
         rationale: >
           Default general-purpose model; served through the central gateway.
+      - id: idp-claude-sonnet
+        name: Claude Sonnet
+        quadrant: models         # must match a quadrant id
+        ring: adopt              # must match a ring id
+        moved: in                # in | out | none; default none
+        owner: ml-platform
+        rationale: >
+          Default general-purpose model; served through the central gateway.
+        catalog_refs:            # optional; matched against catalog node paths
+          - idp-claude-sonnet
       - id: claude-haiku
         name: Claude Haiku
         quadrant: models
@@ -81,6 +91,16 @@ data:
         owner: ml-platform
         rationale: >
           Fast, low-cost model for classification, routing, and high-volume tasks.
+      - id: openrouter-gpt-3-5-turbo
+        name: OpenRouter GPT-3.5 Turbo
+        quadrant: models
+        ring: assess
+        moved: in
+        owner: ai-platform
+        rationale: >
+          Fast, low-cost model for classification, routing, and high-volume tasks.
+        catalog_refs:            # optional; matched against catalog node paths
+          - openrouter-gpt-3-5
       - id: gpt-5
         name: GPT-5
         quadrant: models
