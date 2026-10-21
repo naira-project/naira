@@ -1,45 +1,24 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: idp-system
+  name: litellm-db
 ---
 apiVersion: v1
 kind: Secret
 metadata:
   name: postgres-secrets
-  namespace: idp-system
+  namespace: litellm-db
 type: Opaque
 stringData:
-  POSTGRES_DB: postgres
-  POSTGRES_USER: postgres
-  POSTGRES_PASSWORD: postgres-local-admin-password
-  CATALOG_PASSWORD: catalog-local-password
-  LITELLM_PASSWORD: litellm-local-password
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: postgres-init
-  namespace: idp-system
-data:
-  01-create-app-databases.sh: |
-    #!/bin/sh
-    set -eu
-
-    psql --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-      --set=catalog_password="$CATALOG_PASSWORD" \
-      --set=litellm_password="$LITELLM_PASSWORD" <<'SQL'
-    CREATE ROLE catalog LOGIN PASSWORD :'catalog_password';
-    CREATE DATABASE catalog OWNER catalog;
-    CREATE ROLE litellm LOGIN PASSWORD :'litellm_password';
-    CREATE DATABASE litellm OWNER litellm;
-    SQL
+  POSTGRES_DB: litellm
+  POSTGRES_USER: litellm
+  POSTGRES_PASSWORD: litellm-local-password
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-data
-  namespace: idp-system
+  namespace: litellm-db
 spec:
   accessModes:
     - ReadWriteOnce
@@ -51,7 +30,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
-  namespace: idp-system
+  namespace: litellm-db
 spec:
   replicas: 1
   selector:
@@ -78,8 +57,6 @@ spec:
           volumeMounts:
             - name: postgres-data
               mountPath: /var/lib/postgresql/data
-            - name: postgres-init
-              mountPath: /docker-entrypoint-initdb.d
           readinessProbe:
             exec:
               command:
@@ -107,16 +84,12 @@ spec:
         - name: postgres-data
           persistentVolumeClaim:
             claimName: postgres-data
-        - name: postgres-init
-          configMap:
-            name: postgres-init
-            defaultMode: 0755
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: idp-system
+  namespace: litellm-db
 spec:
   selector:
     app: postgres
