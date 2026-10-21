@@ -94,7 +94,7 @@ func (p *Plugin) buildResponse(cfg *radarConfig) pluginapi.CollectResponse {
 			propertyKeyRadar:     cfg.Radar.ID,
 		}
 		if len(e.CatalogRefs) > 0 {
-			// Marshalling a string slice cannot fail; the error is ignored.
+			// Refs hold only strings, so marshalling cannot fail; the error is ignored.
 			catalogRefsJSON, _ := json.Marshal(e.CatalogRefs)
 			properties[propertyKeyCatalogRefs] = string(catalogRefsJSON)
 		}

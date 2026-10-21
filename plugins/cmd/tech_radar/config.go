@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
 const supportedSchemaVersion = 1
@@ -27,10 +30,14 @@ var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
 // clipping would corrupt references — so oversized ids fail validation.
 const maxIDLength = 100
 
-// maxCatalogRefLength bounds catalog_refs items. Like ids, they are matched
-// rather than displayed, so oversized values fail validation instead of being
-// clipped into a different match.
+// maxCatalogRefLength bounds a catalog ref's match. Like ids, it is matched
+// rather than displayed, so an oversized value fails validation instead of
+// being clipped into a different match.
 const maxCatalogRefLength = 200
+
+// defaultCatalogRefKinds are the node kinds a catalog ref matches when it
+// lists none.
+var defaultCatalogRefKinds = []string{pluginapi.NodeKindModel, pluginapi.NodeKindInferenceEndpoint}
 
 type radarConfig struct {
 	SchemaVersion int        `yaml:"schema_version"`
@@ -67,14 +74,26 @@ type ring struct {
 }
 
 type entry struct {
-	ID          string   `yaml:"id"`
-	Name        string   `yaml:"name"`
-	Quadrant    string   `yaml:"quadrant"`
-	Ring        string   `yaml:"ring"`
-	Moved       string   `yaml:"moved"`
-	Owner       string   `yaml:"owner"`
-	Rationale   string   `yaml:"rationale"`
-	CatalogRefs []string `yaml:"catalog_refs"`
+	ID          string       `yaml:"id"`
+	Name        string       `yaml:"name"`
+	Quadrant    string       `yaml:"quadrant"`
+	Ring        string       `yaml:"ring"`
+	Moved       string       `yaml:"moved"`
+	Owner       string       `yaml:"owner"`
+	Rationale   string       `yaml:"rationale"`
+	CatalogRefs []catalogRef `yaml:"catalog_refs"`
+
+	line int
+}
+
+// catalogRef links an entry to catalog nodes. A node matches when its kind is
+// one of Kinds, its path contains Match ignoring case, and one of Plugins
+// emitted it. An empty Match matches any path and empty Plugins any plugin,
+// but a ref must set at least one of them.
+type catalogRef struct {
+	Match   string   `yaml:"match" json:"match,omitempty"`
+	Kinds   []string `yaml:"kinds" json:"kinds"`
+	Plugins []string `yaml:"plugins" json:"plugins,omitempty"`
 
 	line int
 }
@@ -137,6 +156,17 @@ func (e *entry) UnmarshalYAML(node *yaml.Node) error {
 	}
 	*e = entry(decoded)
 	e.line = line
+	return nil
+}
+
+func (r *catalogRef) UnmarshalYAML(node *yaml.Node) error {
+	type alias catalogRef
+	decoded, line, err := decodeStrict[alias](node)
+	if err != nil {
+		return fmt.Errorf("in catalog ref: %w", err)
+	}
+	*r = catalogRef(decoded)
+	r.line = line
 	return nil
 }
 
@@ -223,6 +253,11 @@ func (c *radarConfig) applyDefaults() {
 	for i := range c.Entries {
 		if c.Entries[i].Moved == "" {
 			c.Entries[i].Moved = movedNone
+		}
+		for j := range c.Entries[i].CatalogRefs {
+			if len(c.Entries[i].CatalogRefs[j].Kinds) == 0 {
+				c.Entries[i].CatalogRefs[j].Kinds = slices.Clone(defaultCatalogRefKinds)
+			}
 		}
 	}
 }
@@ -333,19 +368,51 @@ func (c *radarConfig) validate() error {
 
 		refs := make(map[string]bool, len(e.CatalogRefs))
 		for j, ref := range e.CatalogRefs {
-			switch {
-			case ref == "":
-				report(e.line, "entries[%d] (id %q): catalog_refs[%d] must not be empty", i, e.ID, j)
-			case ref != strings.TrimSpace(ref):
-				report(e.line, "entries[%d] (id %q): catalog_refs[%d] %q must not have leading or trailing whitespace", i, e.ID, j, ref)
-			case len(ref) > maxCatalogRefLength:
-				report(e.line, "entries[%d] (id %q): catalog_refs[%d] must be at most %d characters, got %d", i, e.ID, j, maxCatalogRefLength, len(ref))
-			case refs[ref]:
-				report(e.line, "entries[%d] (id %q): duplicate catalog_refs item %q", i, e.ID, ref)
+			where := fmt.Sprintf("entries[%d] (id %q): catalog_refs[%d]", i, e.ID, j)
+			if ref.Match == "" && len(ref.Plugins) == 0 {
+				report(ref.line, "%s: set field \"match\", \"plugins\", or both", where)
 			}
-			refs[ref] = true
+			switch {
+			case ref.Match != strings.TrimSpace(ref.Match):
+				report(ref.line, "%s: field \"match\" %q must not have leading or trailing whitespace", where, ref.Match)
+			case len(ref.Match) > maxCatalogRefLength:
+				report(ref.line, "%s: field \"match\" must be at most %d characters, got %d", where, maxCatalogRefLength, len(ref.Match))
+			}
+			validateNameList(report, ref.line, where, "kinds", ref.Kinds)
+			validateNameList(report, ref.line, where, "plugins", ref.Plugins)
+
+			key := ref.key()
+			if refs[key] {
+				report(ref.line, "%s: duplicate catalog ref", where)
+			}
+			refs[key] = true
 		}
 	}
 
 	return errors.Join(errs...)
+}
+
+// validateNameList checks a catalog ref's list of kind or plugin names.
+func validateNameList(report func(int, string, ...any), line int, where, field string, names []string) {
+	seen := make(map[string]bool, len(names))
+	for k, name := range names {
+		switch {
+		case name == "":
+			report(line, "%s: field %q item %d must not be empty", where, field, k)
+		case name != strings.TrimSpace(name):
+			report(line, "%s: field %q item %q must not have leading or trailing whitespace", where, field, name)
+		case len(name) > maxIDLength:
+			report(line, "%s: field %q item must be at most %d characters, got %d", where, field, maxIDLength, len(name))
+		case seen[name]:
+			report(line, "%s: duplicate %q item %q", where, field, name)
+		}
+		seen[name] = true
+	}
+}
+
+// key identifies refs that match the same nodes. Match is compared ignoring
+// case, like the matching itself; list order does not matter.
+func (r catalogRef) key() string {
+	kinds, plugins := slices.Sorted(slices.Values(r.Kinds)), slices.Sorted(slices.Values(r.Plugins))
+	return strings.ToLower(r.Match) + "\x00" + strings.Join(kinds, ",") + "\x00" + strings.Join(plugins, ",")
 }

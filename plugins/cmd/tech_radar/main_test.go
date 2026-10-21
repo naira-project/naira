@@ -80,7 +80,7 @@ func TestCollectEmitsRadarAndEntries(t *testing.T) {
 		"rationale":    "Default general-purpose model.",
 		"index":        "0",
 		"radar":        "naira",
-		"catalog_refs": `["claude-sonnet"]`,
+		"catalog_refs": `[{"match":"claude-sonnet","kinds":["model","inference_endpoint"]}]`,
 	}, entries["naira/claude-sonnet"])
 	assert.Equal(t, pluginapi.PropertyMap{
 		"title":     "Naive RAG",

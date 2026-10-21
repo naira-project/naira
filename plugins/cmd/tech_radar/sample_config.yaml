@@ -26,13 +26,20 @@
 #     moved          optional; one of in, out, none; defaults to none.
 #     owner          required.
 #     rationale      required.
-#     catalog_refs   optional; strings linking the entry to catalog nodes.
-#                    Each item is matched case-insensitively as a substring
-#                    of model and inference endpoint node paths, so one ref
-#                    finds the model under every provider that serves it.
-#                    Items must be non-empty, without leading or trailing
-#                    whitespace, at most 200 characters, and unique within
-#                    the entry.
+#     catalog_refs   optional; links the entry to the catalog nodes it is
+#                    used as. A node matches a ref when all of the ref's
+#                    fields match it:
+#       match        optional; matched case-insensitively as a substring of
+#                    the node path, so one ref finds a model under every
+#                    provider that serves it. At most 200 characters.
+#       kinds        optional; node kinds to match; defaults to
+#                    [model, inference_endpoint].
+#       plugins      optional; names of the plugins that emitted the node, as
+#                    configured in this deployment (e.g. [litellm] for a
+#                    LiteLLM entry).
+#                    Each ref needs match, plugins, or both. Values must not
+#                    have leading or trailing whitespace, and refs and list
+#                    items must be unique within the entry.
 #
 # General rules:
 #   - Every id must match ^[a-z0-9][a-z0-9_-]*$, be at most 100 characters,
@@ -78,8 +85,8 @@ entries:
     moved: in                # in | out | none; defaults to none
     owner: ml-platform
     rationale: Default general-purpose model.
-    catalog_refs:            # optional; matched against catalog node paths
-      - claude-sonnet
+    catalog_refs:            # optional; matched against catalog nodes
+      - match: claude-sonnet # kinds default to [model, inference_endpoint]
   - id: naive-rag            # "moved" omitted here; defaults to none
     name: Naive RAG
     quadrant: knowledge
