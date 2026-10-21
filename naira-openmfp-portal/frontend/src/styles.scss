@@ -20,6 +20,11 @@
   --fdNavigation_Item_Spacing: 10px;
 }
 
+/* Items inside a group sit flush. */
+.fd-navigation__list .fd-navigation__list {
+  --fdNavigation_Item_Spacing: 0;
+}
+
 
 /* Luigi category groups: a static title, not a collapsible entry. */
 .fd-navigation__item--group {
