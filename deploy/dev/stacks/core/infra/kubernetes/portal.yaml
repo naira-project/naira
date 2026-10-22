@@ -20,6 +20,8 @@ spec:
           env:
             - name: PORT
               value: "3000"
+            - name: ALLOW_INSECURE_LOCALHOST_COOKIES
+              value: "true"
             - name: NAIRA_UI_BASE_URL
               value: http://localhost:3001
             - name: IDP_NAMES

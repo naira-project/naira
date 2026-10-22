@@ -5,6 +5,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "test": "npm run build && node --test test/*.test.mjs",
     "start": "nest start",
     "start:watch": "nest start --watch",
     "start:dev": "nest start --watch",

@@ -35,6 +35,8 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.portal.port | quote }}
+            - name: ALLOW_INSECURE_LOCALHOST_COOKIES
+              value: {{ .Values.portal.allowInsecureLocalhostCookies | quote }}
             - name: NAIRA_UI_BASE_URL
               value: {{ .Values.portal.uiBaseUrl | quote }}
             - name: IDP_NAMES
