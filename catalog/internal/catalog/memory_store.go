@@ -31,13 +31,12 @@ type MemoryStore struct {
 }
 
 func (s *MemoryStore) ListKinds() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	kinds := make(map[string]struct{})
+	s.mu.RLock()
 	for _, node := range s.nodes {
 		kinds[node.ID.Kind] = struct{}{}
 	}
+	s.mu.RUnlock()
 
 	result := make([]string, 0, len(kinds))
 	for kind := range kinds {
