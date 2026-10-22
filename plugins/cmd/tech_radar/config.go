@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
 const supportedSchemaVersion = 1
@@ -34,10 +32,6 @@ const maxIDLength = 100
 // rather than displayed, so an oversized value fails validation instead of
 // being clipped into a different match.
 const maxCatalogRefLength = 200
-
-// defaultCatalogRefKinds are the node kinds a catalog ref matches when it
-// lists none.
-var defaultCatalogRefKinds = []string{pluginapi.NodeKindModel, pluginapi.NodeKindInferenceEndpoint}
 
 type radarConfig struct {
 	SchemaVersion int        `yaml:"schema_version"`
@@ -88,8 +82,8 @@ type entry struct {
 
 // catalogRef links an entry to catalog nodes. A node matches when its kind is
 // one of Kinds, its path contains Match ignoring case, and one of Plugins
-// emitted it. An empty Match matches any path and empty Plugins any plugin,
-// but a ref must set at least one of them.
+// emitted it. Kinds is required. An empty Match matches any path and empty
+// Plugins any plugin, but a ref must set at least one of them.
 type catalogRef struct {
 	Match   string   `yaml:"match" json:"match,omitempty"`
 	Kinds   []string `yaml:"kinds" json:"kinds"`
@@ -254,11 +248,6 @@ func (c *radarConfig) applyDefaults() {
 		if c.Entries[i].Moved == "" {
 			c.Entries[i].Moved = movedNone
 		}
-		for j := range c.Entries[i].CatalogRefs {
-			if len(c.Entries[i].CatalogRefs[j].Kinds) == 0 {
-				c.Entries[i].CatalogRefs[j].Kinds = slices.Clone(defaultCatalogRefKinds)
-			}
-		}
 	}
 }
 
@@ -366,11 +355,14 @@ func (c *radarConfig) validate() error {
 			report(e.line, "entries[%d] (id %q): field \"moved\" must be one of in, out, none; got %q", i, e.ID, e.Moved)
 		}
 
-		refs := make(map[string]bool, len(e.CatalogRefs))
+		seenRefs := make(map[string]bool, len(e.CatalogRefs))
 		for j, ref := range e.CatalogRefs {
 			where := fmt.Sprintf("entries[%d] (id %q): catalog_refs[%d]", i, e.ID, j)
 			if ref.Match == "" && len(ref.Plugins) == 0 {
 				report(ref.line, "%s: set field \"match\", \"plugins\", or both", where)
+			}
+			if len(ref.Kinds) == 0 {
+				report(ref.line, "%s: field \"kinds\" must list at least one node kind", where)
 			}
 			switch {
 			case ref.Match != strings.TrimSpace(ref.Match):
@@ -382,10 +374,10 @@ func (c *radarConfig) validate() error {
 			validateNameList(report, ref.line, where, "plugins", ref.Plugins)
 
 			key := ref.key()
-			if refs[key] {
+			if seenRefs[key] {
 				report(ref.line, "%s: duplicate catalog ref", where)
 			}
-			refs[key] = true
+			seenRefs[key] = true
 		}
 	}
 

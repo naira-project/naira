@@ -32,7 +32,7 @@
 #       match        optional; matched case-insensitively as a substring of
 #                    the node path, so one ref finds a model under every
 #                    provider that serves it. At most 200 characters.
-#       kinds        optional; node kinds to match; defaults to
+#       kinds        required; node kinds to match, e.g.
 #                    [model, inference_endpoint].
 #       plugins      optional; names of the plugins that emitted the node, as
 #                    configured in this deployment (e.g. [litellm] for a
@@ -86,7 +86,8 @@ entries:
     owner: ml-platform
     rationale: Default general-purpose model.
     catalog_refs:            # optional; matched against catalog nodes
-      - match: claude-sonnet # kinds default to [model, inference_endpoint]
+      - match: claude-sonnet
+        kinds: [model, inference_endpoint]
   - id: naive-rag            # "moved" omitted here; defaults to none
     name: Naive RAG
     quadrant: knowledge

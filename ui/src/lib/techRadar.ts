@@ -37,7 +37,7 @@ export interface RadarEntry {
 export interface CatalogRef {
   /** Substring of the node path, matched ignoring case; empty matches any path. */
   match: string;
-  /** Node kinds to match; the plugin fills in the default. */
+  /** Node kinds to match; required by the plugin. */
   kinds: string[];
   /** Plugins of which one must have emitted the node; empty matches any plugin. */
   plugins: string[];
