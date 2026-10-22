@@ -4,8 +4,7 @@
 #
 #   tilt up -- --deps-repo=<path>
 #
-# Developer tasks (lint, tests, proto) are manual resources: trigger them from
-# the UI or with `tilt trigger <name>`.
+# Developer tasks (lint, tests, proto) are in the Taskfile: they don't need Tilt.
 
 NAMESPACE = 'idp-system'  # test-dependencies reaches PostgreSQL at postgres.idp-system
 CHART = 'deploy/charts/naira'
@@ -190,24 +189,3 @@ k8s_resource(new_name='naira-config', objects=config_objects,
 k8s_resource('catalog', resource_deps=['naira-config'], port_forwards=['8090:8090'], labels=['naira'])
 k8s_resource('portal', resource_deps=['naira-config'], port_forwards=['3000:3000'], labels=['naira'])
 k8s_resource('ui', resource_deps=['naira-config'], port_forwards=['3001:80'], labels=['naira'])
-
-# --- Developer tasks ---------------------------------------------------------
-PROTO_DIR = 'plugins/pkg/pluginapi/proto'
-DEV_TASKS = {
-    'check': 'kind version && kubectl version --client && helm version && go version'
-             + ' && docker version && buf --version',
-    'proto-generate': 'cd %s && go generate' % PROTO_DIR,
-    'proto-lint': 'cd %s && buf lint' % PROTO_DIR,
-    'go-test': 'go test -race ./...',
-    'go-unit-test': 'go test -race ./... -short',
-    'go-lint': 'golangci-lint run',
-    'chart-check': CHART + '/tests/render-test.sh'
-                   + ' && ct lint --config ct.yaml --target-branch main'
-                   + ' && ' + CHART + '/tests/kubeconform.sh',
-    'shell-lint': "git ls-files '*.sh' | xargs shellcheck",
-    # Removes everything; stop tilt afterwards.
-    'cluster-delete': 'kind delete cluster --name %s' % CLUSTER_NAME,
-}
-for name, cmd in DEV_TASKS.items():
-    local_resource(name, cmd=cmd, trigger_mode=TRIGGER_MODE_MANUAL, auto_init=False,
-                   labels=['dev-tasks'])

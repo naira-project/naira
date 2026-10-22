@@ -110,8 +110,8 @@ The root [`Tiltfile`](Tiltfile) deploys the Helm charts to the kind cluster
 3. **Open the UI** at `http://localhost:3000` once the resources in the Tilt UI
    are green, and log in as above.
 
-Developer tasks (lint, tests, proto, chart checks) are manual Tilt resources:
-trigger them from the Tilt UI or with `tilt trigger <name>`.
+Developer tasks (lint, tests, proto, chart checks) are in the Taskfile, and
+do not need Tilt: `task --list`. `task check` verifies the tools.
 
 ### Repository Structure
 
