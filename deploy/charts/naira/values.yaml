@@ -227,9 +227,10 @@ ui:
   port: 80
   # Empty -> http://catalog.<release namespace>.svc.cluster.local:<catalog.port>
   catalogUpstream: ""
-  # Prometheus the UI proxies /prometheus/ to for the metric dashboards.
+  # Prometheus the UI proxies /prometheus/ to for the metric dashboards:
+  # test-dependencies' kube-prometheus-stack (tags.monitoring).
   # Empty -> the image default, http://prometheus-operated.monitoring.svc.cluster.local:9090
-  prometheusUpstream: ""
+  prometheusUpstream: http://prometheus-operated.naira-deps.svc.cluster.local:9090
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 200m, memory: 128Mi}
