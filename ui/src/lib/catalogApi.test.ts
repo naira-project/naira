@@ -7,7 +7,8 @@ afterEach(() => {
 
 describe('fetchKinds', () => {
   it('fetches every page of node kinds with authentication', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(new Response('{"kinds":["application"],"nextPageToken":"next-token"}'))
       .mockResolvedValueOnce(new Response('{"kinds":["model"]}'));
     vi.stubGlobal('fetch', fetchMock);
@@ -28,9 +29,13 @@ describe('fetchKinds', () => {
   });
 
   it('propagates errors from subsequent pages', async () => {
-    vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(new Response('{"kinds":["model"],"nextPageToken":"next-token"}'))
-      .mockResolvedValueOnce(new Response(null, { status: 500 })));
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response('{"kinds":["model"],"nextPageToken":"next-token"}'))
+        .mockResolvedValueOnce(new Response(null, { status: 500 })),
+    );
     await expect(fetchKinds(null)).rejects.toThrow('Request failed');
   });
 });
