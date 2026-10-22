@@ -264,27 +264,22 @@ func TestListKindsEndpoint(t *testing.T) {
 		Kind: "application",
 		Path: "app",
 	}
+	otherApp := catalog.NodeID{
+		Kind: "application",
+		Path: "other-app",
+	}
 	model := catalog.NodeID{
 		Kind: "model",
 		Path: "model",
 	}
-	applyPluginSnapshot(t, store, []catalog.NodeClaim{{ID: app}, {ID: model}}, []catalog.RelationClaim{
-		{
-			Kind: "uses_model",
-			From: app,
-			To:   model,
+	applyPluginSnapshot(t, store,
+		[]catalog.NodeClaim{
+			{ID: app},
+			{ID: otherApp},
+			{ID: model},
 		},
-		{
-			Kind: "depends_on",
-			From: app,
-			To:   model,
-		},
-		{
-			Kind: "depends_on",
-			From: model,
-			To:   app,
-		},
-	})
+		nil,
+	)
 
 	t.Run("distinct sorted kinds", func(t *testing.T) {
 		rec := httptest.NewRecorder()
