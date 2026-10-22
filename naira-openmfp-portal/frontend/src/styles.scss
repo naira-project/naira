@@ -149,6 +149,16 @@
 
 }
 
+/* Collapsed sidebar: icons only, centered. */
+.fd-navigation--snapped .fd-navigation__list-item.lui-nav-entry .fd-navigation__link {
+  padding-inline: 0;
+  justify-content: center;
+
+  .fd-navigation__text {
+    display: none;
+  }
+}
+
 .fd-navigation.fd-navigation--vertical:not(.fd-navigation--snapped) {
   width: var(--luigi__left-sidenav--width);
   background: #fff;
