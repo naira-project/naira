@@ -32,23 +32,7 @@ func TestListKinds(t *testing.T) {
 			{ID: otherAppNode},
 			{ID: modelNode},
 		},
-		[]RelationClaim{
-			{
-				Kind: "uses_model",
-				From: appNode,
-				To:   modelNode,
-			},
-			{
-				Kind: "uses_model",
-				From: otherAppNode,
-				To:   modelNode,
-			},
-			{
-				Kind: "depends_on",
-				From: appNode,
-				To:   otherAppNode,
-			},
-		},
+		nil,
 	)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"application", "model"}, store.ListKinds())
