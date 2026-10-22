@@ -14,6 +14,10 @@ func TestListKindsReturnsDistinctStoredNodeKinds(t *testing.T) {
 		Kind: "application",
 		Path: "litellm/fraud-assistant",
 	}
+	otherApp := NodeID{
+		Kind: "application",
+		Path: "litellm/support-assistant",
+	}
 	model := NodeID{
 		Kind: "model",
 		Path: "mlflow/fraud-detector",
@@ -25,26 +29,11 @@ func TestListKindsReturnsDistinctStoredNodeKinds(t *testing.T) {
 	applyPluginSnapshot(t, store,
 		[]NodeClaim{
 			{ID: app},
+			{ID: otherApp},
 			{ID: model},
 			{ID: dataset},
 		},
-		[]RelationClaim{
-			{
-				Kind: "uses_model",
-				From: app,
-				To:   model,
-			},
-			{
-				Kind: "trained_on",
-				From: model,
-				To:   dataset,
-			},
-			{
-				Kind: "trained_on",
-				From: app,
-				To:   dataset,
-			},
-		},
+		nil,
 	)
 
 	response := NewService(store).ListKinds(t.Context())
