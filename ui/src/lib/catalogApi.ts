@@ -130,7 +130,7 @@ export async function fetchNodes(token: string | null, options: ListRequest = {}
 /** Fetch all pages of distinct node kinds. */
 export async function fetchKinds(token: string | null): Promise<string[]> {
   const kinds: string[] = [];
-  console.log("@@@ 2")
+
   let pageToken: string | undefined;
   do {
     const data = await fetchJson<ListKindsResponse>(
