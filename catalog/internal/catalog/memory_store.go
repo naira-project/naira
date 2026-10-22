@@ -35,8 +35,8 @@ func (s *MemoryStore) ListKinds() []string {
 	defer s.mu.RUnlock()
 
 	kinds := make(map[string]struct{})
-	for _, relation := range s.relations {
-		kinds[relation.Kind] = struct{}{}
+	for _, node := range s.nodes {
+		kinds[node.ID.Kind] = struct{}{}
 	}
 
 	result := make([]string, 0, len(kinds))

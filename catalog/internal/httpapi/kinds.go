@@ -18,7 +18,7 @@ var kindListOptionsSpec = listOptionsSpec{
 	scope: "kinds",
 }
 
-// newListKindsHandler lists distinct catalog relation kinds.
+// newListKindsHandler lists distinct catalog node kinds.
 // Supported query params:
 // - pageSize
 // - pageToken

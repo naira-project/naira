@@ -290,7 +290,7 @@ func TestListKindsEndpoint(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, "/v1/kinds", nil), testBearerToken))
 		require.Equal(t, http.StatusOK, rec.Code)
-		assert.JSONEq(t, `{"kinds":["depends_on","uses_model"],"totalSize":2}`, rec.Body.String())
+		assert.JSONEq(t, `{"kinds":["application","model"],"totalSize":2}`, rec.Body.String())
 	})
 
 	t.Run("pagination", func(t *testing.T) {
@@ -301,7 +301,7 @@ func TestListKindsEndpoint(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &first))
 		require.NotEmpty(t, first.NextPageToken)
 		assert.Equal(t, ListKindsResponse{
-			Kinds:         []string{"depends_on"},
+			Kinds:         []string{"application"},
 			NextPageToken: first.NextPageToken,
 			TotalSize:     2,
 		}, first)
@@ -309,7 +309,7 @@ func TestListKindsEndpoint(t *testing.T) {
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, "/v1/kinds?pageSize=1&pageToken="+first.NextPageToken, nil), testBearerToken))
 		require.Equal(t, http.StatusOK, rec.Code)
-		assert.JSONEq(t, `{"kinds":["uses_model"],"totalSize":2}`, rec.Body.String())
+		assert.JSONEq(t, `{"kinds":["model"],"totalSize":2}`, rec.Body.String())
 	})
 
 	for _, path := range []string{

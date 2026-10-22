@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestListKindsReturnsDistinctStoredRelationKinds(t *testing.T) {
+func TestListKindsReturnsDistinctStoredNodeKinds(t *testing.T) {
 	store := NewMemoryStore()
 	app := NodeID{
 		Kind: "application",
@@ -49,7 +49,7 @@ func TestListKindsReturnsDistinctStoredRelationKinds(t *testing.T) {
 
 	response := NewService(store).ListKinds(t.Context())
 
-	assert.Equal(t, []string{"trained_on", "uses_model"}, response)
+	assert.Equal(t, []string{"application", "dataset", "model"}, response)
 }
 
 func TestListNodesProjectsStoredNode(t *testing.T) {

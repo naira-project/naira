@@ -51,23 +51,18 @@ func TestListKinds(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"depends_on", "uses_model"}, store.ListKinds())
+	assert.Equal(t, []string{"application", "model"}, store.ListKinds())
 
 	_, _, err = store.ApplyPluginSnapshot(
 		"mlflow",
 		snapshotV2,
 		[]NodeClaim{
-			{ID: appNode},
 			{ID: modelNode},
 		},
-		[]RelationClaim{{
-			Kind: "uses_model",
-			From: appNode,
-			To:   modelNode,
-		}},
+		nil,
 	)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"uses_model"}, store.ListKinds())
+	assert.Equal(t, []string{"model"}, store.ListKinds())
 }
 
 func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
