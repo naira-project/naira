@@ -30,6 +30,24 @@
   --fdNavigation_Item_Spacing: 0;
 }
 
+/* Collapsed: groups are hidden, so drop the spacing and the 10px separator
+   they leave behind. */
+.fd-navigation--snapped {
+  .fd-navigation__list {
+    --fdNavigation_Item_Spacing: 0;
+  }
+
+  .fd-navigation__list-item--separator {
+    display: none;
+  }
+
+  .fd-navigation__container--top
+    > .fd-navigation__list
+    > .lui-nav-entry:nth-child(2) {
+    border-top: 0;
+  }
+}
+
 
 /* Luigi category groups: a static title, not a collapsible entry. */
 .fd-navigation__item--group {
@@ -163,10 +181,7 @@
   .fd-navigation__item:is(.is-selected, [aria-selected='true'])
   .fd-navigation__link {
   border-radius: 4px;
-  border-left: 4px solid var(--Vivid-Blue, #1769E8);
   background: var(--Solitude, #EAF4FF);
-  /* The 4px border takes space from the 20px inline padding. */
-  padding-inline-start: 16px;
 
   .fd-navigation__text {
     color: var(--Vivid-Blue, #1769E8);
@@ -186,6 +201,31 @@
 
   .fd-navigation__text {
     display: none;
+  }
+}
+
+/* Luigi hides link children in the collapsed sidebar unless hovered, which
+   also hides the active entry's blue indicator. Keep it visible. */
+.fd-navigation--snapped
+  .fd-navigation__list-item.lui-nav-entry:is(.is-selected, [aria-selected='true'])
+  .fd-navigation__selection-indicator,
+.fd-navigation--snapped
+  .fd-navigation__list-item.lui-nav-entry
+  .fd-navigation__item:is(.is-selected, [aria-selected='true'])
+  .fd-navigation__selection-indicator {
+  display: inline-block;
+}
+
+/* Keep the active highlight rounded on whichever element draws it. */
+.fd-navigation--snapped .fd-navigation__list-item.lui-nav-entry {
+  &:is(.is-selected, [aria-selected='true']),
+  .fd-navigation__item:is(.is-selected, [aria-selected='true']) {
+    border-radius: 4px;
+
+    .fd-navigation__item,
+    .fd-navigation__link {
+      border-radius: inherit;
+    }
   }
 }
 
