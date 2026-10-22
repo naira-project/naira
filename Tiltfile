@@ -1,42 +1,43 @@
 # Dependencies (Keycloak, LiteLLM, MLflow, llama.cpp, MCP mock) come from the
-# test-dependencies chart in a local checkout of naira-project/test-dependencies,
-# by default next to this repo:
+# published test-dependencies chart (DEPS_VERSION), or from a local checkout of
+# naira-project/test-dependencies to change its values or templates:
 #
 #   tilt up -- --deps-repo=<path>
 #
 # Developer tasks (lint, tests, proto) are manual resources: trigger them from
 # the UI or with `tilt trigger <name>`.
 
-NAMESPACE = 'idp-system'  # ui/nginx.conf.template still proxies to catalog.idp-system
+NAMESPACE = 'idp-system'  # test-dependencies reaches PostgreSQL at postgres.idp-system
 CHART = 'deploy/charts/naira'
 CLUSTER_NAME = 'naira-idp'
 KIND_NODE_IMAGE = 'kindest/node:v1.36.1'  # update kubectl in mise.toml if changing version
 DEPS_NAMESPACE = 'naira-deps'  # the naira chart's default addresses point here
+DEPS_OCI = 'oci://ghcr.io/naira-project/charts/test-dependencies'
+DEPS_VERSION = '0.1.0'
 
 config.define_string('deps-repo', usage='Path to a naira-project/test-dependencies checkout')
 cfg = config.parse()
-DEPS_REPO = os.path.abspath(cfg.get('deps-repo', '../test-dependencies'))
-DEPS_CHART = DEPS_REPO + '/charts/test-dependencies'
-if not os.path.exists(DEPS_CHART + '/Chart.yaml'):
-    fail(('test-dependencies chart not found at %s. Clone naira-project/test-dependencies '
-          + 'next to this repo or pass -- --deps-repo=<path>.') % DEPS_CHART)
+DEPS_REPO = cfg.get('deps-repo', '')
+if DEPS_REPO:
+    DEPS_CHART = os.path.abspath(DEPS_REPO) + '/charts/test-dependencies'
+    if not os.path.exists(DEPS_CHART + '/Chart.yaml'):
+        fail('test-dependencies chart not found at %s.' % DEPS_CHART)
+else:
+    # Pulled once per version into the gitignored .local/ (after the context check).
+    DEPS_CHART = os.path.abspath('.local/test-dependencies-' + DEPS_VERSION) + '/test-dependencies'
 
 # --- Cluster ------------------------------------------------------------------
-# Tilt resolves the kube context before the Tiltfile runs, so the first
-# `tilt up` after creating the cluster stops here and needs a restart.
-if config.tilt_subcommand == 'up' and \
-        CLUSTER_NAME not in str(local('kind get clusters', quiet=True)).splitlines():
-    local('kind create cluster --name %s --image %s' % (CLUSTER_NAME, KIND_NODE_IMAGE))
-
-# Tilt keeps the context it started with, so switching only takes effect after
-# a restart; stop instead of deploying into the old context.
+# Checked before any local(): Tilt refuses local() on a non-dev context, and
+# keeps the context it started with.
 if k8s_context() != 'kind-' + CLUSTER_NAME:
-    if config.tilt_subcommand != 'up':
-        fail('kube context is %s, expected kind-%s.' % (k8s_context(), CLUSTER_NAME))
-    # Also restores the context if the cluster exists but kubeconfig lost it.
-    local('kind export kubeconfig --name ' + CLUSTER_NAME)
-    fail('tilt started with kube context %s; switched to kind-%s. Restart tilt.'
-         % (k8s_context(), CLUSTER_NAME))
+    fail(('kube context is "%s", expected kind-%s. Create or select the cluster, then rerun tilt:\n'
+          + '  kind create cluster --name %s --image %s\n'
+          + '  kind export kubeconfig --name %s   # if it exists')
+         % (k8s_context(), CLUSTER_NAME, CLUSTER_NAME, KIND_NODE_IMAGE, CLUSTER_NAME))
+
+if not DEPS_REPO and not os.path.exists(DEPS_CHART + '/Chart.yaml'):
+    local('helm pull %s --version %s --untar --untardir %s'
+          % (DEPS_OCI, DEPS_VERSION, os.path.dirname(DEPS_CHART)))
 
 # --- naira chart ------------------------------------------------------------
 # The PostgreSQL subchart is not vendored; fetch it when missing.
@@ -77,43 +78,57 @@ for job in db_init_jobs:
 DEPS_AFTER = ['db-init'] if db_init_jobs else (['postgres'] if has_pg else [])
 
 # --- test-dependencies chart -------------------------------------------------
-# Installed with helm itself rather than helm(): its subcharts rely on hooks
-# (LiteLLM's migration job) and ship CRDs, which `helm template` would flatten.
+# Installed with helm itself rather than helm(): its subcharts use hooks (MLflow's
+# secret, helm test pods, kube-prometheus-stack's admission jobs) and ship CRDs.
 load('ext://helm_resource', 'helm_resource')
 
-# The published mcp-mock image is a private ghcr package; build it instead.
-docker_build('mcp-mock', DEPS_REPO + '/images/mcp-mock')
-
-local_resource(
-    'test-dependencies-subcharts',
-    cmd='helm dependency build ' + DEPS_CHART,
-    deps=[DEPS_CHART + '/Chart.yaml', DEPS_CHART + '/Chart.lock'],
-    labels=['test-dependencies'],
-)
+# The published chart ships its subcharts; a checkout needs them fetched.
+# `update`, not `build`: it needs no `helm repo add` for the subchart repos.
+if DEPS_REPO:
+    local_resource(
+        'test-dependencies-subcharts',
+        cmd='helm dependency update ' + DEPS_CHART,
+        deps=[DEPS_CHART + '/Chart.yaml', DEPS_CHART + '/Chart.lock'],
+        labels=['test-dependencies'],
+    )
+    DEPS_AFTER = DEPS_AFTER + ['test-dependencies-subcharts']
+DEPS_VALUES = [DEPS_CHART + '/values.yaml', DEPS_CHART + '/values-dev.yaml']
 helm_resource(
     'test-dependencies', DEPS_CHART,
     namespace=DEPS_NAMESPACE,
-    # The local image has no registry, so Tilt leaves the key unset and the
-    # chart would prefix its ghcr default; clear it so kind uses the loaded image.
-    flags=['--create-namespace', '--values=' + DEPS_CHART + '/values-dev.yaml',
-           '--set=mcpMock.image.registry='],
-    deps=[DEPS_CHART + '/values.yaml', DEPS_CHART + '/values-dev.yaml', DEPS_CHART + '/templates'],
-    image_deps=['mcp-mock'],
-    image_keys=[('mcpMock.image.registry', 'mcpMock.image.repository', 'mcpMock.image.tag')],
-    resource_deps=['test-dependencies-subcharts'] + DEPS_AFTER,
+    flags=['--create-namespace', '--values=' + DEPS_VALUES[1]],
+    deps=DEPS_VALUES + [DEPS_CHART + '/templates'],
+    resource_deps=DEPS_AFTER,
     labels=['test-dependencies'],
 )
 
-# One pod per release can't serve every Service, so forward them by name.
-# Keycloak's port matches the portal's OIDC URLs (keycloak.issuer).
-DEPS_FORWARDS = {
-    'keycloak': '8080:8080',
-    'mcp-mock': '8081:8080',
-    'llama-qwen25-05b': '8083:8080',
-    'llama-dummy-model': '8084:8080',
-    'litellm': '4000:4000',
-    'mlflow': '5000:5000',
-}
+# Top-level keys merge like helm does for the keys read here (tags, llamacpp.models).
+deps_values = {}
+for f in DEPS_VALUES:
+    for k, v in (read_yaml(f) or {}).items():
+        deps_values[k] = dict(deps_values.get(k, {}), **v) if type(v) == 'dict' else v
+tags = deps_values.get('tags', {})
+
+# One pod per release can't serve every Service, so forward them by name, only
+# for enabled tags. Keycloak's port matches the portal's OIDC URLs (keycloak.issuer).
+# mlflow uses 5001: macOS AirPlay Receiver listens on 5000.
+DEPS_FORWARDS = {}
+for tag, svc, ports in [
+    ('keycloak', 'keycloak', '8080:8080'),
+    ('mcpMock', 'mcp-mock', '8081:8080'),
+    ('litellm', 'litellm', '4000:4000'),
+    ('mlflow', 'mlflow', '5001:5000'),
+    ('vllm', 'vllm', '8000:8000'),
+    ('openmetadata', 'openmetadata', '8585:8585'),
+    ('monitoring', 'test-dependencies-grafana', '3002:80'),
+    ('monitoring', 'test-dependencies-kube-pro-prometheus', '9090:9090'),
+]:
+    if tags.get(tag):
+        DEPS_FORWARDS[svc] = ports
+if tags.get('llamacpp'):
+    for i, m in enumerate(deps_values.get('llamacpp', {}).get('models', [])):
+        DEPS_FORWARDS[m['name']] = '%d:8080' % (8083 + i)
+
 # The release is ready before its pods are, and port-forward exits while a pod
 # is pending or after it restarts, so retry instead of leaving the resource failed.
 for svc, ports in DEPS_FORWARDS.items():
