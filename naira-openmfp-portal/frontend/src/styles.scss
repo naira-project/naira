@@ -4,7 +4,7 @@
 @import '@fontsource/inter/800.css';
 
 :root {
-  --luigi__left-sidenav--width: 250px;
+  --luigi__left-sidenav--width: clamp(220px, 18vw, 320px);
 }
 
 /* Leave the collapsed (snapped) sidebar to Luigi's own sizing. */
@@ -80,6 +80,7 @@
   > .fd-navigation__item {
     display: flex;
     flex: 1;
+    min-width: 0;
     height: 100%;
     align-items: center;
   }
@@ -88,6 +89,7 @@
      Figma exports 101px vertical padding; it is an export artifact. */
   .fd-navigation__link {
     display: flex;
+    min-width: 0;
     height: 100%;
     min-height: 0;
     padding-inline: 20px 10px;
@@ -112,6 +114,10 @@
 
   /* Figma "Side Bar Text". */
   .fd-navigation__link .fd-navigation__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--Deep-Sapphire, #102344);
     font-family: Inter, sans-serif;
     font-size: 14px;
