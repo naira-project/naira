@@ -130,6 +130,23 @@
     line-height: 24px;
     text-transform: uppercase;
   }
+
+  /* Placeholder entry: not navigable, no hover/active highlight. */
+  .fd-navigation__link[data-testid='coming-soon_morecomingsoon'] {
+    pointer-events: none;
+    cursor: default;
+  }
+
+  /* Figma More Coming Soon being muted gray styling. */
+  .fd-navigation__link[data-testid='coming-soon_morecomingsoon'] .fd-navigation__text {
+    color: #ABBED1;
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 24px;
+  }
+
 }
 
 .fd-navigation.fd-navigation--vertical:not(.fd-navigation--snapped) {
