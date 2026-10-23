@@ -41,7 +41,7 @@ Built with and for the cloud-native ecosystem, Naira is designed to integrate cl
 
 ### Prerequisites
 
-This project requires several local tools: (for example `kind`, `task`,`go`).
+This project requires several local tools: (for example `kind`, `tilt`, `task`, `go`).
 
 **The Recommended Way (Using mise):**
 We use [mise](https://mise.jdx.dev/) to manage tools automatically. If you have `mise` installed and activated (`eval "$(mise activate zsh)"` - [more info](https://mise.jdx.dev/getting-started.html#activate-mise)), simply run:
@@ -53,21 +53,30 @@ If you prefer not to use mise, you can find the exact versions of all tools in t
 
 ### Local Development
 
-To spin up the full environment on your machine:
+The root [`Tiltfile`](Tiltfile) spins up the full environment on the local kind
+cluster `naira-idp`. Tilt is installed by `mise install`.
 
-1. **Deploy the platform** to a local kind cluster:
+1. **Create the cluster** (once); this also selects its kube context:
    ```bash
-   task platform:deploy
+   kind create cluster --name naira-idp --image kindest/node:v1.36.1
    ```
-   This creates a cluster, builds container images, loads them into kind, and applies all Kubernetes manifests.
 
-2. **Port-forward services** to your localhost:
+2. **Deploy the platform**:
    ```bash
-   task forward:all
+   tilt up
    ```
-   Once executed, the terminal will display the specific local endpoints for the UI, APIs, and various backend integrations.
+   This builds the images, installs the published
+   [test-dependencies](https://github.com/naira-project/test-dependencies)
+   chart (Keycloak, LiteLLM, MLflow, llama.cpp, MCP mock) into `naira-deps` and
+   the Naira chart into `idp-system`, and port-forwards the services. Tilt
+   stops if the kube context is not `kind-naira-idp`. `tilt down` removes
+   everything it deployed.
 
-3. **Open the UI** — once port-forwarding is running, go to:
+   To change the components (`tags` in its `values-dev.yaml`) or the chart
+   itself, use a checkout: `tilt up -- --deps-repo=<path>`. Tilt forwards only
+   the enabled components.
+
+3. **Open the UI** — once the resources in the Tilt UI are green, go to:
    ```
    http://localhost:3000
    ```
@@ -82,6 +91,9 @@ To spin up the full environment on your machine:
    (it's OK if some of them show "Failed"),
    then go to **"Catalogs"** and open the "Software Catalog".
 
+Developer tasks (lint, tests, proto, chart checks) are in the Taskfile, and
+do not need Tilt: `task --list`. `task check` verifies the tools.
+
 ### Repository Structure
 
 ```
@@ -89,9 +101,10 @@ To spin up the full environment on your machine:
 ├── plugins/              # Collector plugins (mlflow, litellm, fluxcd, ...)
 ├── ui/                   # React/TypeScript UI
 ├── naira-openmfp-portal/ # OpenMFP Portal (This is the backbone for future UI plugins)
-├── deploy/               # Helm charts + dev environment (kind, k8s manifests)
+├── deploy/charts/        # Helm chart
 ├── docs/                 # Documentation
-└── Taskfile.yml          # Root developer entrypoints
+├── Tiltfile              # Local dev environment (kind)
+└── Taskfile.yml          # Developer tasks (lint, tests, proto, chart checks)
 ```
 
 ## Architecture
