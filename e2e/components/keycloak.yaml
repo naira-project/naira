@@ -1,6 +1,6 @@
 # envsubst template — substituted variables: ${NAMESPACE}
 #
-# Mirrors deploy/dev/stacks/core/infra/keycloak/keycloak.yaml, but namespaced
+# Mirrors the former deploy/dev/stacks/core/infra/keycloak/keycloak.yaml, but namespaced
 # per-PR instead of a dedicated shared "keycloak" namespace, and with
 # KC_HOSTNAME set to the in-cluster Service DNS name instead of localhost:8080
 # — nothing here is an interactive browser login, so there's no dev-machine
@@ -8,7 +8,7 @@
 # same in-cluster URL directly, and it's also the issuer baked into every
 # token this instance mints.
 #
-# Realm/client/user match deploy/dev/stacks/core/infra/keycloak/naira-realm.json
+# Realm/client/user match naira-realm.json in the test-dependencies chart
 # exactly (client "naira-portal" with password-grant enabled, user "testuser")
 # so the seed job and E2E tests can obtain a token via the OAuth2 password
 # grant — no interactive login, no separate admin API calls needed. The

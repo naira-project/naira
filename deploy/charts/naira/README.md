@@ -44,9 +44,8 @@ development Secrets from values.
   `<name>-db`).
   Cluster-scoped RBAC is prefixed with the release name, so several releases
   per cluster are fine as long as their release names differ.
-- Migrating from `deploy/dev/stacks`: uninstall that stack first (`task
-  platform:undeploy` or delete the `catalog`/`ui`/`portal` Deployments in
-  `idp-system`). `helm install` cannot take over those objects: the Deployment
+- Migrating from the former `deploy/dev/stacks`: delete the
+  `catalog`/`ui`/`portal` Deployments in `idp-system` first. `helm install` cannot take over those objects: the Deployment
   selectors differ and are immutable.
 - `keycloak.issuer`, `authUrl`, `baseDomain` and `portal.uiBaseUrl`
   default to `localhost` (kind, port-forward). Anywhere else, set them to the
