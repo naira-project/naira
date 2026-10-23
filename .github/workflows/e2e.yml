@@ -5,12 +5,22 @@
 # into an isolated namespace on a throwaway kind cluster and runs its
 # assertions against it.
 #
-# Runs on PRs and on manual dispatch; both wait for approval via the
-# `e2e` environment.
+# Runs on PRs touching what the scenario builds, and on manual dispatch; both
+# wait for approval via the `e2e` environment. Add the `skip-e2e` label to a
+# PR to skip the run (and the approval) entirely.
 name: E2E
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    paths:
+      - catalog/**
+      - plugins/**
+      - e2e/**
+      - go.mod
+      - go.sum
+      - mise.toml
+      - .github/workflows/e2e.yml
   workflow_dispatch:
     inputs:
       pr-number:
@@ -32,6 +42,8 @@ jobs:
   e2e:
     name: E2E · litellm_chatbot_to_catalog_api
     runs-on: ubuntu-latest
+    # Evaluated before the environment gate, so a skipped job asks no one.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-e2e') }}
     # Requires reviewer approval before running PR code.
     environment: e2e
     steps:
