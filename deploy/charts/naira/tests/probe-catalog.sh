@@ -42,7 +42,7 @@ curl -sf -o /dev/null -H "${AUTH}" localhost:13001/v1/plugins || { echo "::error
 # The UI's /prometheus/ proxy sits behind the catalog's token check. Auth is
 # decided before the upstream is contacted, so these hold without Prometheus.
 status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
-PROM=localhost:13001/prometheus/api/v1/query?query=up
+PROM="localhost:13001/prometheus/api/v1/query?query=up"
 [ "$(status "${PROM}")" = 401 ] || { echo "::error::Prometheus API reachable without a token"; exit 1; }
 [ "$(status -H 'Authorization: Bearer garbage' "${PROM}")" = 401 ] || { echo "::error::Prometheus API accepts an invalid token"; exit 1; }
 code=$(status -H "${AUTH}" "${PROM}")
