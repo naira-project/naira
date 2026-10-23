@@ -17,5 +17,6 @@ yq = "4" # chart render tests
 helm-ct = "3" # ct lint
 yamllint = "1.33.0" # ct lint; same as chart-testing-action in CI
 "pypi:yamale" = "6.0.0" # ct lint; same as chart-testing-action in CI
+uv = "0.13" # installs the pypi tools; without it mise needs pipx
 kubeconform = "0.8"
 python = "3.11"
