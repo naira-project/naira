@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.1.1](https://github.com/naira-project/naira/compare/v0.1.1...v0.1.1) (2026-10-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* deploy/dev and task platform:deploy, platform:undeploy and forward:all are removed; use `tilt up` / `tilt down`.
+
+### Features
+
+* add Tiltfile dev environment ([#252](https://github.com/naira-project/naira/issues/252)) ([8f9ab44](https://github.com/naira-project/naira/commit/8f9ab44e1e79facad0106b9969c05d26d4933652))
+* **chart:** add PostgreSQL subchart with idempotent database seeding ([#262](https://github.com/naira-project/naira/issues/262)) ([b354405](https://github.com/naira-project/naira/commit/b3544059f06a581898dd8e8ffa80337cef981d7c))
+* inference endpoints catalog ([#182](https://github.com/naira-project/naira/issues/182)) ([b668433](https://github.com/naira-project/naira/commit/b668433081ae9dca32fcf37e810da7811cf02048))
+* openai_api_models plugin ([#219](https://github.com/naira-project/naira/issues/219)) ([2c345c1](https://github.com/naira-project/naira/commit/2c345c1cde6f281165efa63e24c982e2c067866a))
+* Remove deploy/dev ([#246](https://github.com/naira-project/naira/issues/246)) ([bf4a725](https://github.com/naira-project/naira/commit/bf4a725e7546675e7f8b9dec32ab2cc71576d2c3))
+* two thalamus plugins ([#222](https://github.com/naira-project/naira/issues/222)) ([620eaed](https://github.com/naira-project/naira/commit/620eaedd6fbcc3b63521e605dc9779562f9d1fa0))
+* **ui:** add Perses dashboard ([#227](https://github.com/naira-project/naira/issues/227)) ([2966b07](https://github.com/naira-project/naira/commit/2966b076b7c71f6408a26acf982de7f9a4a1d107))
+* **ui:** implement icons for portal navbar ([#254](https://github.com/naira-project/naira/issues/254)) ([ddfac79](https://github.com/naira-project/naira/commit/ddfac792f727f3a73a87ccec5c398b48b44c5869))
+* **ui:** left navigation bar implementation in OpenMFP portal ([#276](https://github.com/naira-project/naira/issues/276)) ([5421238](https://github.com/naira-project/naira/commit/5421238149fdb61859d9b6a6514cf07c4a5a7ee3))
+
+
+### Bug Fixes
+
+* fix broken e2e test ([#258](https://github.com/naira-project/naira/issues/258)) ([cadeb29](https://github.com/naira-project/naira/commit/cadeb290e7d51584834eb3d3acc468d367b05281))
+* mise warn ([#265](https://github.com/naira-project/naira/issues/265)) ([339fafd](https://github.com/naira-project/naira/commit/339fafd5f16ea21ea640a6c4b144c2c8151320ce))
+* **ui:** make table items clickable ([#250](https://github.com/naira-project/naira/issues/250)) ([99e4fd0](https://github.com/naira-project/naira/commit/99e4fd0201410ad8a4ebe3a652ba529a7e6bcde9))
+
 ## [0.1.1](https://github.com/naira-project/naira/compare/v0.1.0...v0.1.1) (2026-10-05)
 
 
