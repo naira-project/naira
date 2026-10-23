@@ -103,8 +103,7 @@
     align-items: center;
   }
 
-  /* Padding lives on the link so the highlight spans the full row.
-     Figma exports 101px vertical padding; it is an export artifact. */
+  /* Padding lives on the link so the highlight spans the full row. */
   .fd-navigation__link {
     display: flex;
     min-width: 0;
@@ -130,7 +129,6 @@
     }
   }
 
-  /* Figma "Side Bar Text". */
   .fd-navigation__link .fd-navigation__text {
     min-width: 0;
     overflow: hidden;
@@ -144,7 +142,6 @@
     line-height: 24px;
   }
 
-  /* Figma "Side Bar Title Text". */
   .fd-navigation__link[data-testid='overview_overview'] .fd-navigation__text {
     color: var(--Deep-Sapphire, #102344);
     font-family: Inter, sans-serif;
@@ -161,7 +158,7 @@
     cursor: default;
   }
 
-  /* Figma More Coming Soon being muted gray styling. */
+  /* "More Coming Soon" being muted gray styling. */
   .fd-navigation__link[data-testid='coming-soon_morecomingsoon'] .fd-navigation__text {
     color: #ABBED1;
     font-family: Inter, sans-serif;
