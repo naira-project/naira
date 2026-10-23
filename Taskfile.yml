@@ -7,10 +7,26 @@ vars:
 tasks:
   # Tool versions are managed via mise (https://mise.jdx.dev).
   # See mise.toml in the repo root.
+  # Exit 127 here usually means mise is not activated in this shell.
   check:
     desc: Verify required local tools exist
     cmds:
-      - task --taskfile {{.DEV_TASKFILE}} check
+      - kind version
+      - kubectl version --client
+      - helm version
+      - tilt version
+      - task --version
+      - go version
+      - buf --version
+      - golangci-lint --version
+      - shellcheck --version
+      - ct version
+      - yamllint --version
+      - yamale --help > /dev/null
+      - kubeconform -v
+      - yq --version
+      - python3 --version
+      - docker version
 
   platform:deploy:
     desc: Deploy core (catalog, plugins, ui) + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
@@ -30,7 +46,7 @@ tasks:
   cluster:delete:
     desc: Remove the cluster
     cmds:
-      - task --taskfile {{.DEV_TASKFILE}} cluster:delete
+      - kind delete cluster --name naira-idp
 
   proto:generate:
     desc: Generate protobuf stubs of pluginapi
@@ -60,8 +76,13 @@ tasks:
   chart:check:
     desc: Run the Helm chart checks CI runs (render tests, ct lint, kubeconform)
     cmds:
+      - helm dependency build deploy/charts/naira
       - deploy/charts/naira/tests/render-test.sh
-      - ct lint --config ct.yaml --target-branch main
+      # ct does not look next to its binary, where mise puts chart_schema.yaml and lintconf.yaml.
+      - |
+        d="$(dirname "$(command -v ct)")/etc"
+        if [ -z "${CT_CONFIG_DIR:-}" ] && [ -f "$d/chart_schema.yaml" ]; then export CT_CONFIG_DIR="$d"; fi
+        ct lint --config ct.yaml --target-branch main
       - deploy/charts/naira/tests/kubeconform.sh
 
   shell:lint:

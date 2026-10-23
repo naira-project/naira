@@ -95,3 +95,16 @@ affinity:
   {{- toYaml . | nindent 2 }}
 {{- end }}
 {{- end -}}
+
+{{- define "naira.dbHost" -}}
+{{- .Values.database.host | default (printf "postgres.%s.svc.cluster.local" .Release.Namespace) -}}
+{{- end -}}
+
+{{- define "naira.dbAdminSecretName" -}}
+{{- .Values.database.admin.secret.existingSecret | default "postgres-admin" -}}
+{{- end -}}
+
+{{/* Usage: include "naira.dbSecretName" (dict "name" $name "db" $db) */}}
+{{- define "naira.dbSecretName" -}}
+{{- .db.secret.existingSecret | default (printf "%s-db" .name) -}}
+{{- end -}}
