@@ -177,7 +177,6 @@
 .fd-navigation__list-item.lui-nav-entry
   .fd-navigation__item:is(.is-selected, [aria-selected='true'])
   .fd-navigation__link {
-  border-radius: 4px;
   background: var(--Solitude, #EAF4FF);
 
   .fd-navigation__text {
@@ -188,6 +187,10 @@
     filter: brightness(0) saturate(100%) invert(23%) sepia(84%) saturate(7635%)
       hue-rotate(221deg) brightness(124%) contrast(82%);
   }
+}
+
+.fd-navigation__list-item.lui-nav-entry .fd-navigation__link:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* Collapsed sidebar: icons only, centered. */
