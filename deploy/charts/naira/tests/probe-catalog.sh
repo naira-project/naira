@@ -39,3 +39,14 @@ echo "plugin runs: ${report}"
 ok=$(grep -o 'SUCCEEDED' <<<"${report}" | wc -l)
 if [ "${want}" -eq 0 ] || [ "${ok}" -ne "${want}" ]; then echo "::error::plugin runs did not all succeed (${ok}/${want})"; exit 1; fi
 curl -sf -o /dev/null -H "${AUTH}" localhost:13001/v1/plugins || { echo "::error::UI does not proxy /v1 to the catalog"; exit 1; }
+# The UI's /prometheus/ proxy sits behind the catalog's token check. Auth is
+# decided before the upstream is contacted, so these hold without Prometheus.
+status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+PROM=localhost:13001/prometheus/api/v1/query?query=up
+[ "$(status "${PROM}")" = 401 ] || { echo "::error::Prometheus API reachable without a token"; exit 1; }
+[ "$(status -H 'Authorization: Bearer garbage' "${PROM}")" = 401 ] || { echo "::error::Prometheus API accepts an invalid token"; exit 1; }
+code=$(status -H "${AUTH}" "${PROM}")
+case "${code}" in 401|403) echo "::error::Prometheus API rejects a valid token (${code})"; exit 1 ;; esac
+[ "$(status -X POST -H "${AUTH}" localhost:13001/prometheus/-/quit)" = 403 ] || { echo "::error::Prometheus management endpoint not blocked"; exit 1; }
+[ "$(status -X POST -H "${AUTH}" localhost:13001/prometheus/api/v1/admin/tsdb/snapshot)" = 403 ] || { echo "::error::Prometheus admin API not blocked"; exit 1; }
+echo "prometheus proxy: auth enforced"
