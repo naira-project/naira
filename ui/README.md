@@ -37,7 +37,7 @@ Produces a static build in `dist/`.
 
 ## Deployment
 
-The `ui-poc` is a standalone React app. To showcase its functionalities, we maintain a local Kind cluster setup. See the root [`Tiltfile`](../Tiltfile) for platform-level deployment.
+The `ui` is a standalone React app. To showcase its functionalities, we maintain a local Kind cluster setup. See the root [`Tiltfile`](../Tiltfile) for platform-level deployment.
 
 ## Related
 
