@@ -246,6 +246,13 @@ check "ui catalog upstream override" \
   "http://x:1" \
   "$(render --set ui.catalogUpstream=http://x:1 \
     | yq "$UI | .env[] | select(.name == \"CATALOG_UPSTREAM\") | .value")"
+check "ui prometheus upstream from dependencies" \
+  "http://prometheus-operated.naira-deps.svc.cluster.local:9090" \
+  "$(render | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus upstream empty -> image default" \
+  "" \
+  "$(render --set ui.prometheusUpstream= \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
 check "ui image" \
   "ghcr.io/naira-project/naira-ui:${APP_VERSION}" \
   "$(render | yq "$UI | .image")"
