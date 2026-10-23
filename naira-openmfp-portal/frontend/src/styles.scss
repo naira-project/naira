@@ -183,8 +183,7 @@
   .fd-navigation__text {
     color: var(--Vivid-Blue, #1769E8);
   }
-  /* TODO: Should we provide the translation for the vivid blue here
-      or should we put the active state icons in another folder? */
+
   .fd-navigation__icon img {
     filter: brightness(0) saturate(100%) invert(23%) sepia(84%) saturate(7635%)
       hue-rotate(221deg) brightness(124%) contrast(82%);
