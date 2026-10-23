@@ -248,6 +248,8 @@ ui:
   startupProbe: {periodSeconds: 2, failureThreshold: 30}
 
 portal:
+  # Local HTTP only; see naira-openmfp-portal/README.md#session-cookies.
+  allowInsecureLocalhostCookies: false
   enabled: true
   replicas: 1
   image: {repository: naira-portal, tag: ""}

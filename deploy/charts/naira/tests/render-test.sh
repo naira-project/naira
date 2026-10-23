@@ -239,6 +239,14 @@ check "portal Secret when create=true" \
 UI='select(.kind == "Deployment" and .metadata.name == "ui") | .spec.template.spec.containers[0]'
 PORTAL='select(.kind == "Deployment" and .metadata.name == "portal") | .spec.template.spec.containers[0]'
 
+check "portal cookies secure by default" \
+  "false" \
+  "$(render | yq "$PORTAL | .env[] | select(.name == \"ALLOW_INSECURE_LOCALHOST_COOKIES\") | .value")"
+check "portal local HTTP opt-in" \
+  "true" \
+  "$(render --set portal.allowInsecureLocalhostCookies=true \
+    | yq "$PORTAL | .env[] | select(.name == \"ALLOW_INSECURE_LOCALHOST_COOKIES\") | .value")"
+
 check "ui catalog upstream follows the release namespace" \
   "http://catalog.naira.svc.cluster.local:8090" \
   "$(render | yq "$UI | .env[] | select(.name == \"CATALOG_UPSTREAM\") | .value")"
@@ -314,6 +322,10 @@ check "disabled plugin may share a port" \
 
 # ── Dev values (kind) ────────────────────────────────────────────────────────
 DEV=(-f "$CHART/values-dev.yaml")
+
+check "dev: portal local HTTP cookies" \
+  "true" \
+  "$(render_raw "${DEV[@]}" | yq "$PORTAL | .env[] | select(.name == \"ALLOW_INSECURE_LOCALHOST_COOKIES\") | .value")"
 
 check "dev: local image names" \
   "naira-catalog:${APP_VERSION}" \

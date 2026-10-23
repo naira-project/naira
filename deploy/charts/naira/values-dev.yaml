@@ -83,6 +83,7 @@ catalog:
                   Superseded by hybrid retrieval; migrate existing pipelines.
 
 portal:
+  allowInsecureLocalhostCookies: true
   oidc:
     secret:
       create: true

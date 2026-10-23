@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import {
+  CookiesService,
   EnvAuthConfigService,
   PortalModule,
   PortalModuleOptions,
@@ -7,6 +8,7 @@ import {
 import { config } from 'dotenv';
 import * as path from 'node:path';
 import { ServiceProviderServiceImpl } from './service-provider.js';
+import { NairaCookiesService } from './cookies.service.js';
 
 const __filename = new URL(import.meta.url).pathname;
 const __dirname = path.dirname(__filename);
@@ -21,6 +23,7 @@ const portalOptions: PortalModuleOptions = {
   ),
   serviceProviderService: ServiceProviderServiceImpl,
   authConfigProvider: EnvAuthConfigService,
+  additionalProviders: [{ provide: CookiesService, useClass: NairaCookiesService }],
 };
 
 @Module({
