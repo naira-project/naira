@@ -82,6 +82,37 @@ To spin up the full environment on your machine:
    (it's OK if some of them show "Failed"),
    then go to **"Catalogs"** and open the "Software Catalog".
 
+### Local Development with Tilt (experimental)
+
+The root [`Tiltfile`](Tiltfile) deploys the Helm charts to the kind cluster
+`naira-idp`. Tilt is installed by `mise install`.
+
+1. **Create the cluster** (once); this also selects its kube context:
+   ```bash
+   kind create cluster --name naira-idp --image kindest/node:v1.36.1
+   ```
+
+2. **Deploy the platform**:
+   ```bash
+   tilt up
+   ```
+   This builds the images, installs the published
+   [test-dependencies](https://github.com/naira-project/test-dependencies)
+   chart (Keycloak, LiteLLM, MLflow, llama.cpp, MCP mock) into `naira-deps` and
+   the Naira chart into `idp-system`, and port-forwards the services. Tilt
+   stops if the kube context is not `kind-naira-idp`. `tilt down` removes
+   everything it deployed.
+
+   To change the components (`tags` in its `values-dev.yaml`) or the chart
+   itself, use a checkout: `tilt up -- --deps-repo=<path>`. Tilt forwards only
+   the enabled components.
+
+3. **Open the UI** at `http://localhost:3000` once the resources in the Tilt UI
+   are green, and log in as above.
+
+Developer tasks (lint, tests, proto, chart checks) are in the Taskfile, and
+do not need Tilt: `task --list`. `task check` verifies the tools.
+
 ### Repository Structure
 
 ```

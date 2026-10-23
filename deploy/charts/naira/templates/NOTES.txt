@@ -10,7 +10,9 @@ Catalog plugins:
 {{- end }}
 
 Keycloak (not installed by this chart): {{ .Values.keycloak.baseUrl }}
-{{- if or .Values.catalog.secret.create .Values.portal.oidc.secret.create }}
+{{- $dbCreate := .Values.database.admin.secret.create }}
+{{- range .Values.database.databases }}{{ if and .enabled .secret.create }}{{ $dbCreate = true }}{{ end }}{{ end }}
+{{- if or .Values.catalog.secret.create .Values.portal.oidc.secret.create $dbCreate }}
 
 WARNING: Secrets rendered from values. Development only.
 {{- end }}
