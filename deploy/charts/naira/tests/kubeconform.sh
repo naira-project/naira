@@ -5,7 +5,7 @@
 # Requires helm and kubeconform (both pinned in mise.toml).
 set -euo pipefail
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
-# Keep in sync with the kind node image and deploy/dev/stacks/core/infra/kind/kind-config.yaml.
+# Keep in sync with KIND_NODE_IMAGE in the root Tiltfile.
 KUBERNETES_VERSION=${KUBERNETES_VERSION:-1.36.1}
 
 for values in ci/default-values.yaml ci/all-fields-values.yaml values-dev.yaml; do
