@@ -5,6 +5,9 @@
  * invalidates.
  */
 export const queryKeys = {
+  workspaces: (scope: string) => ['workspaces', scope] as const,
+  registrations: (scope: string, workspaceId: string) =>
+    ['workspaces', scope, 'registrations', workspaceId] as const,
   catalog: ['catalog'] as const,
   kinds: ['catalog', 'kinds'] as const,
 

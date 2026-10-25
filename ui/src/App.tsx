@@ -8,6 +8,7 @@ const CatalogDetail = lazy(() => import('./pages/CatalogDetail'));
 const CatalogView = lazy(() => import('./pages/CatalogView'));
 const Overview = lazy(() => import('./pages/Overview'));
 const PluginsPage = lazy(() => import('./pages/PluginsPage'));
+const WorkspacesPage = lazy(() => import('./pages/WorkspacesPage'));
 const TechRadar = lazy(() => import('./pages/TechRadar'));
 const TechRadarQuadrant = lazy(() => import('./pages/TechRadarQuadrant'));
 
@@ -20,6 +21,7 @@ function App() {
             <Route path="/" element={<Overview />} />
             <Route path="/catalog" element={<Overview />} />
             <Route path="/plugins" element={<PluginsPage />} />
+            <Route path="/workspaces" element={<WorkspacesPage />} />
             <Route path="/tech-radar" element={<TechRadar />} />
             <Route path="/tech-radar/:quadrantId" element={<TechRadarQuadrant />} />
             {CATALOG_VIEWPOINTS.map((viewpoint) => (

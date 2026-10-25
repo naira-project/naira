@@ -94,6 +94,8 @@ cluster `naira-idp`. Tilt is installed by `mise install`.
 Developer tasks (lint, tests, proto, chart checks) are in the Taskfile, and
 do not need Tilt: `task --list`. `task check` verifies the tools.
 
+For workspace ownership and cluster registration, see [Workspaces](docs/workspaces.md).
+
 ### Repository Structure
 
 ```

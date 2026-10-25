@@ -20,6 +20,8 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/sources"
+	"github.com/naira-project/naira/catalog/internal/workspaces"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
@@ -89,7 +91,8 @@ func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.
 	for name := range plugins {
 		configs[name] = catalog.PluginConfig{}
 	}
-	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	workspaceService := workspaces.NewService(workspaces.NewMemoryStore())
+	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer}, workspaceService, sources.NewService(sources.NewMemoryStore(), workspaceService))
 	require.NoError(t, err)
 	return router
 }

@@ -14,6 +14,8 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/sources"
+	"github.com/naira-project/naira/catalog/internal/workspaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -35,12 +37,15 @@ func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) htt
 		5*time.Minute,
 		log.New(io.Discard, "", 0),
 	)
+	workspaceService := workspaces.NewService(workspaces.NewMemoryStore())
 	router, err := NewRouter(
 		catalog.NewService(store),
 		runner,
 		configs,
 		log.New(io.Discard, "", 0),
 		keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer},
+		workspaceService,
+		sources.NewService(sources.NewMemoryStore(), workspaceService),
 	)
 	require.NoError(t, err)
 	return router

@@ -27,9 +27,17 @@ type Config struct {
 
 // TokenClaims holds the user identity extracted from a verified Keycloak JWT.
 type TokenClaims struct {
+	Issuer            string
 	UserID            string
 	Email             string
 	PreferredUsername string
+}
+
+// ClaimsFromContext returns the identity installed by successful authentication.
+// An unauthenticated context yields empty claims.
+func ClaimsFromContext(ctx context.Context) TokenClaims {
+	claims, _ := ctx.Value(claimsKey).(TokenClaims)
+	return claims
 }
 
 // NewAuthMiddleware returns an HTTP middleware that validates the Bearer
@@ -95,6 +103,7 @@ func writeJSONError(w http.ResponseWriter, status int, message string) {
 func parseTokenClaims(rawClaims *jwt.MapClaims) TokenClaims {
 	claims := *rawClaims
 	tc := TokenClaims{
+		Issuer:            stringClaim(claims, "iss"),
 		UserID:            stringClaim(claims, "sub"),
 		Email:             stringClaim(claims, "email"),
 		PreferredUsername: stringClaim(claims, "preferred_username"),

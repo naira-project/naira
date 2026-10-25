@@ -11,12 +11,15 @@ import (
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/sources"
+	"github.com/naira-project/naira/catalog/internal/workspaces"
 )
 
-// NewRouter wires up the catalog HTTP API.
-// catalogService serves read-only graph queries (nodes/relations);
-// runner drives and reports on asynchronous plugin runs (plugins/operations).
-func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugins catalog.PluginConfigsByName, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
+// NewRouter constructs authenticated graph, plugin and workspace management routes.
+func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugins catalog.PluginConfigsByName, logger *log.Logger, kc keycloak.Config, workspaceService *workspaces.Service, sourceService *sources.Service) (http.Handler, error) {
+	if workspaceService == nil || sourceService == nil {
+		return nil, fmt.Errorf("workspace and source services are required")
+	}
 	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
 	if err != nil {
 		return nil, fmt.Errorf("creating auth middleware: %w", err)
@@ -35,6 +38,7 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugin
 
 	router.Route("/v1", func(r chi.Router) {
 		r.Use(authMiddleware)
+		registerWorkspaceRoutes(r, workspaceService, sourceService)
 
 		r.Get("/auth/verify", func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)

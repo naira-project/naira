@@ -12,6 +12,11 @@ import { CATALOG_VIEWPOINTS } from '../config/viewpoints';
  */
 const EXTRA_PAGES = [
   {
+    path: '/workspaces',
+    heading: 'Workspaces',
+    subheading: 'Manage your workspaces and Kubernetes cluster registrations.',
+  },
+  {
     path: '/tech-radar',
     heading: 'Tech Radar',
     subheading: 'Which technologies to adopt, trial, assess, or hold.',

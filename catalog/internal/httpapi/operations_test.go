@@ -18,6 +18,8 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
+	"github.com/naira-project/naira/catalog/internal/sources"
+	"github.com/naira-project/naira/catalog/internal/workspaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -130,7 +132,8 @@ func TestRunPluginAsyncEndpointConflict(t *testing.T) {
 	store := catalog.NewMemoryStore()
 	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, catalog.PluginConfigsByName{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	workspaceService := workspaces.NewService(workspaces.NewMemoryStore())
+	router, err := NewRouter(catalogService, runner, catalog.PluginConfigsByName{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer}, workspaceService, sources.NewService(sources.NewMemoryStore(), workspaceService))
 	require.NoError(t, err)
 
 	rec1 := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
