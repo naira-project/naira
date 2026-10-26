@@ -3,6 +3,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# Baked into the bundle; empty -> UI defaults.
+ARG VITE_GRAFANA_URL=
+ARG VITE_NAMESPACE=
 RUN npm run build
 
 FROM nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
@@ -13,7 +16,7 @@ COPY docker-entrypoint.sh /custom-entrypoint.sh
 RUN chmod +x /custom-entrypoint.sh
 # Upstreams the nginx config proxies to; override per deployment.
 ENV CATALOG_UPSTREAM=http://catalog.idp-system.svc.cluster.local:8090
-ENV PROMETHEUS_UPSTREAM=http://prometheus-operated.monitoring.svc.cluster.local:9090
+ENV PROMETHEUS_UPSTREAM=http://prometheus-operated.naira-deps.svc.cluster.local:9090
 EXPOSE 80
 ENTRYPOINT ["/custom-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]

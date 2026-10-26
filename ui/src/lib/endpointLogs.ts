@@ -4,18 +4,28 @@ import { type NodeResource, nodeProps } from './catalogApi';
 // test-dependencies chart's values.yaml.
 const LOKI_DATASOURCE = { type: 'loki', uid: 'loki' };
 
-// Defaults to the port-forward of the test-dependencies Grafana service.
-const GRAFANA_URL = (import.meta.env.VITE_GRAFANA_URL ?? 'http://localhost:3002').replace(
-  /\/+$/,
-  '',
-);
+// Port-forward of the test-dependencies Grafana service.
+const DEFAULT_GRAFANA_URL = 'http://localhost:3002';
 
-// Every LiteLLM deployment is called through this proxy, so its logs are the
-// one source shared by internal and external endpoints.
-const LITELLM_PROXY_SELECTOR = '{namespace="litellm", app="litellm"}';
+function grafanaUrl(): string {
+  return (import.meta.env.VITE_GRAFANA_URL || DEFAULT_GRAFANA_URL).replace(/\/+$/, '');
+}
 
-// In-cluster Service hosts, e.g. llama-qwen25-05b.test-dependencies.svc.cluster.local.
-const CLUSTER_SERVICE_HOST = /^([a-z0-9-]+)\.([a-z0-9-]+)\.svc(\.cluster\.local)?$/;
+// Namespace the workloads run in, set at build time. Used for the LiteLLM proxy
+// and for Services whose host carries no namespace. Empty -> any namespace.
+function defaultNamespace(): string {
+  return import.meta.env.VITE_NAMESPACE ?? '';
+}
+
+// The `app` label is the chart name for LiteLLM (e.g. litellm-helm), hence the prefix match.
+function litellmProxySelector(): string {
+  const namespace = defaultNamespace();
+  return namespace ? `{namespace="${namespace}", app=~"litellm.*"}` : '{app=~"litellm.*"}';
+}
+
+// In-cluster Service hosts: llama-qwen25-05b.test-dependencies.svc.cluster.local
+// or just llama-qwen25-05b, which resolves in the caller's own namespace.
+const CLUSTER_SERVICE_HOST = /^([a-z0-9-]+)(?:\.([a-z0-9-]+)\.svc(?:\.cluster\.local)?)?$/;
 
 /**
  * LogQL queries selecting an inference endpoint's logs in Loki:
@@ -39,9 +49,9 @@ export function endpointLogQueries(node: NodeResource): string[] {
     queries.push(`{namespace="${service.namespace}", app="${service.name}"}`);
   }
 
-  const model = upstreamModelName(props.upstream_model);
+  const model = upstreamModelName(props.model);
   if (model) {
-    queries.push(`${LITELLM_PROXY_SELECTOR} |= ${JSON.stringify(model)}`);
+    queries.push(`${litellmProxySelector()} |= ${JSON.stringify(model)}`);
   }
 
   return queries;
@@ -69,7 +79,7 @@ export function endpointLogsUrl(node: NodeResource): string | undefined {
     orgId: '1',
     panes: JSON.stringify({ a: pane }),
   });
-  return `${GRAFANA_URL}/explore?${params}`;
+  return `${grafanaUrl()}/explore?${params}`;
 }
 
 function clusterService(
@@ -85,7 +95,8 @@ function clusterService(
     return undefined;
   }
   const match = CLUSTER_SERVICE_HOST.exec(host);
-  return match ? { name: match[1], namespace: match[2] } : undefined;
+  const namespace = match?.[2] ?? defaultNamespace();
+  return match && namespace ? { name: match[1], namespace } : undefined;
 }
 
 // LiteLLM logs the model without its routing prefix, e.g. "gpt-4o-mini" for

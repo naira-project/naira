@@ -161,7 +161,7 @@ for repo in images:
         docker_build(repo, '.', dockerfile='catalog/Dockerfile',
                      only=['go.mod', 'go.sum', 'catalog/', 'plugins/pkg/pluginapi/'])
     elif repo == 'naira-ui':
-        docker_build(repo, 'ui')
+        docker_build(repo, 'ui', build_args={'VITE_NAMESPACE': DEPS_NAMESPACE})
     elif repo == 'naira-portal':
         docker_build(repo, 'naira-openmfp-portal')
     elif repo.startswith('naira-plugin-'):
