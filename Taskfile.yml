@@ -1,7 +1,6 @@
 version: '3'
 
 vars:
-  DEV_TASKFILE: ./deploy/dev/Taskfile.yml
   PROTO_DIR: ./plugins/pkg/pluginapi/proto
 
 tasks:
@@ -27,21 +26,6 @@ tasks:
       - yq --version
       - python3 --version
       - docker version
-
-  platform:deploy:
-    desc: Deploy core (catalog, plugins, ui) + LLM Inference stack (llama.cpp, litellm, monitoring) to kind
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} platform:deploy
-
-  platform:undeploy:
-    desc: Remove the full platform from kind
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} platform:undeploy
-
-  forward:all:
-    desc: Port-forward all developer-facing services
-    cmds:
-      - task --taskfile {{.DEV_TASKFILE}} forward:all
 
   cluster:delete:
     desc: Remove the cluster
