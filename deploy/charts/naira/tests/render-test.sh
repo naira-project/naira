@@ -524,8 +524,8 @@ check "db-init targets the subchart Service as the admin user" \
 check "db-init reads each database password from its Secret" \
   "catalog-db" \
   "$(render | yq "$DB_JOB | .env[] | select(.name == \"DB_PASSWORD_0\") | .valueFrom.secretKeyRef.name")"
-check "dev: db-init ensures catalog, litellm and openmetadata" \
-  "catalog,litellm,openmetadata" \
+check "dev: db-init ensures catalog, langfuse, litellm and openmetadata" \
+  "catalog,langfuse,litellm,openmetadata" \
   "$(render_raw "${DEV[@]}" | yq "$DB_JOB | .args | join(\",\")")"
 check "dev: litellm Secret has username and password" \
   "litellm litellm-local-password" \
