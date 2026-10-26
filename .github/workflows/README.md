@@ -10,6 +10,7 @@ This repository uses [naira-github-workflows](https://github.com/naira-project/n
 | --- | --- | --- |
 | **PR Validation** | PRs/Pushes to `main` | Test code and verify container builds. |
 | **Release** | Version tags (`v*`) | Build and publish images to `ghcr.io`. |
+| **CodeQL** | PRs/Pushes to `main` and `v*`, weekly | Code scanning (advanced setup, so fork PRs are analyzed too). |
 
 ---
 
