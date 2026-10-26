@@ -22,8 +22,8 @@ server {
     }
 
     # Read-only query endpoints only, behind the same auth as /v1/.
-    location ~ ^/prometheus/api/v1/(query|query_range|series|labels|label/[^/]+/values)$ {
-        limit_except GET POST {
+    location ~ ^/prometheus/api/v1/(${PROMETHEUS_ALLOWED_PATHS})$ {
+        limit_except ${PROMETHEUS_ALLOWED_METHODS} {
             deny all;
         }
         auth_request /_auth;
