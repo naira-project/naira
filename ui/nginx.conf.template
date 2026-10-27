@@ -12,12 +12,33 @@ server {
         proxy_pass $catalog_upstream;
     }
 
-    location /prometheus/ {
+    # Subrequest target for auth_request: the catalog validates the Bearer token.
+    location = /_auth {
+        internal;
+        set $catalog_upstream ${CATALOG_UPSTREAM};
+        proxy_pass $catalog_upstream/v1/auth/verify;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+    }
+
+    # Read-only query endpoints only, behind the same auth as /v1/.
+    location ~ ^/prometheus/api/v1/(${PROMETHEUS_ALLOWED_PATHS})$ {
+        limit_except ${PROMETHEUS_ALLOWED_METHODS} {
+            deny all;
+        }
+        auth_request /_auth;
+
         # `set` must come before `rewrite ... break` — break halts the whole
         # rewrite-phase directive sequence, so a `set` placed after it never runs.
         set $prometheus_upstream ${PROMETHEUS_UPSTREAM};
         rewrite ^/prometheus/(.*)$ /$1 break;
+        proxy_set_header Authorization "";
         proxy_pass $prometheus_upstream;
+    }
+
+    # Everything else (/-/quit, /-/reload, admin API, ...) is blocked.
+    location /prometheus/ {
+        return 403;
     }
 
     location /assets/content-configuration.json {

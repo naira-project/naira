@@ -24,3 +24,7 @@ func (s *Service) ListNodes(_ context.Context) []Node {
 func (s *Service) ListRelations(_ context.Context) []Relation {
 	return s.store.ListRelations()
 }
+
+func (s *Service) ListKinds(_ context.Context) []string {
+	return s.store.ListKinds()
+}
