@@ -8,11 +8,13 @@ import { DatasourceStoreProvider, VariableProvider } from '@perses-dev/dashboard
 import { PluginRegistry, TimeRangeProvider } from '@perses-dev/plugin-system';
 import type { DurationString, TimeRangeValue } from '@perses-dev/spec';
 import React from 'react';
+import { useOpenMFPContext } from '../../hooks/useOpenMFPContext';
 import { type NodeResource, nodeProps } from '../../lib/catalogApi';
 import { bedrockPanels } from './catalogPlugins/bedrock';
 import { litellmPanels } from './catalogPlugins/litellm';
+import { createDatasourceApi } from './datasourceApi';
 import { MetricPanel } from './MetricPanel';
-import { datasourceApi, pluginLoader } from './pluginLoader';
+import { pluginLoader } from './pluginLoader';
 import type { PanelConfig } from './types';
 
 const chartsTheme = generateChartsTheme(getTheme('light'), {});
@@ -37,6 +39,8 @@ export function PersesDashboard({ node }: { node: NodeResource }) {
 }
 
 function DashboardPanels({ panels }: { panels: PanelConfig[] }) {
+  const { token } = useOpenMFPContext();
+  const datasourceApi = React.useMemo(() => createDatasourceApi(token), [token]);
   const [timeRange, setTimeRange] = React.useState<TimeRangeValue>({ pastDuration: '6h' });
   const [refreshInterval, setRefreshInterval] = React.useState<DurationString>('0s');
 

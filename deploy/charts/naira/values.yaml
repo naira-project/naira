@@ -227,9 +227,15 @@ ui:
   port: 80
   # Empty -> http://catalog.<release namespace>.svc.cluster.local:<catalog.port>
   catalogUpstream: ""
-  # Prometheus the UI proxies /prometheus/ to for the metric dashboards.
-  # Empty -> the image default, http://prometheus-operated.monitoring.svc.cluster.local:9090
-  prometheusUpstream: ""
+  # Prometheus-compatible API the UI proxies /prometheus/ to for the metric
+  # dashboards. Every empty value falls back to the image default.
+  prometheus:
+    upstream: "http://prometheus-operated.naira-deps.svc.cluster.local:9090"
+    # Regexes of API paths under /api/v1/ that are exposed (read-only; admin and
+    # lifecycle endpoints stay blocked). Empty -> query, query_range, series, labels, label/<name>/values.
+    allowedPaths: []
+    # Empty -> [GET, POST]
+    allowedMethods: []
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 200m, memory: 128Mi}
