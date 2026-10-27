@@ -32,6 +32,7 @@ server {
         # rewrite-phase directive sequence, so a `set` placed after it never runs.
         set $prometheus_upstream ${PROMETHEUS_UPSTREAM};
         rewrite ^/prometheus/(.*)$ /$1 break;
+        proxy_set_header Authorization "";
         proxy_pass $prometheus_upstream;
     }
 
