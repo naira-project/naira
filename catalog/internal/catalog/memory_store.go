@@ -20,12 +20,31 @@ type Store interface {
 	GetNode(id NodeID) (Node, error)
 	ListRelations() []Relation
 	ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error)
+	ListKinds() []string
 }
 
 type MemoryStore struct {
 	mu        sync.RWMutex
 	nodes     map[NodeID]Node
 	relations map[RelationID]Relation
+	kinds     []string
+}
+
+func (s *MemoryStore) ListKinds() []string {
+	kinds := make(map[string]struct{})
+	s.mu.RLock()
+	for _, node := range s.nodes {
+		kinds[node.ID.Kind] = struct{}{}
+	}
+	s.mu.RUnlock()
+
+	result := make([]string, 0, len(kinds))
+	for kind := range kinds {
+		result = append(result, kind)
+	}
+	sort.Strings(result)
+
+	return result
 }
 
 type PluginClaim struct {

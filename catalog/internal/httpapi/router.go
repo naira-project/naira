@@ -48,6 +48,7 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugin
 		r.Get("/nodes/{kind}/*", newGetNodeHandler(catalogService))
 
 		r.Get("/relations", newListRelationsHandler(catalogService, logger))
+		r.Get("/kinds", newListKindsHandler(catalogService, logger))
 	})
 
 	return router, nil
