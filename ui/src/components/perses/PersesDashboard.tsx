@@ -13,7 +13,8 @@ import { type NodeResource, nodeProps } from '../../lib/catalogApi';
 import { bedrockPanels } from './catalogPlugins/bedrock';
 import { litellmPanels } from './catalogPlugins/litellm';
 import { MetricPanel } from './MetricPanel';
-import { createDatasourceApi, pluginLoader } from './pluginLoader';
+import { createDatasourceApi } from './datasourceApi';
+import { pluginLoader } from './pluginLoader';
 import type { PanelConfig } from './types';
 
 const chartsTheme = generateChartsTheme(getTheme('light'), {});
