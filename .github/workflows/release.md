@@ -39,7 +39,7 @@ Release Please opens Stable PR  (e.g. v0.12.0)
         ↓
 Merge Stable PR → GitHub Release published, Docker image built
         ↓
-"Start Next RC Cycle" triggers automatically → resets config for next RC
+Run "Start Next RC Cycle" workflow (manual, with the released tag) → merge its PR to reset config for next RC
 ```
 
 ---
@@ -54,6 +54,8 @@ Merge Stable PR → GitHub Release published, Docker image built
 2. Wait for Release Please to open a Stable PR (titled `chore(main): release x.y.z`)
 3. Review the squashed `CHANGELOG.md` — **edit it directly on the branch if needed** (push a commit to the release branch before merging)
 4. Merge the PR
+5. Go to **Actions → Start Next RC Cycle → Run workflow** and enter the tag that was just released (e.g. `v0.12.0`)
+6. Merge the PR it opens (`chore: start next release candidate cycle after vX.Y.Z`)
 
 **To edit the changelog after a release is published:**
 ```bash
