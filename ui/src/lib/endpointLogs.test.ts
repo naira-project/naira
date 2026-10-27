@@ -30,9 +30,7 @@ describe('endpointLogQueries', () => {
       model: 'openai/gpt-4o-mini',
     });
 
-    expect(endpointLogQueries(node)).toEqual([
-      '{app=~"litellm.*"} |="gpt-4o-mini"',
-    ]);
+    expect(endpointLogQueries(node)).toEqual(['{app=~"litellm.*"} |="gpt-4o-mini"']);
   });
 
   it('keeps nested provider segments after the routing prefix', () => {
@@ -41,9 +39,7 @@ describe('endpointLogQueries', () => {
       model: 'openrouter/openai/gpt-3.5-turbo',
     });
 
-    expect(endpointLogQueries(node)).toEqual([
-      '{app=~"litellm.*"} |="openai/gpt-3.5-turbo"',
-    ]);
+    expect(endpointLogQueries(node)).toEqual(['{app=~"litellm.*"} |="openai/gpt-3.5-turbo"']);
   });
 
   it('returns nothing for a Bedrock plugin endpoint', () => {
@@ -105,9 +101,7 @@ describe('build-time config', () => {
       model: 'openai/qwen2.5-0.5b-instruct',
     });
 
-    expect(endpointLogQueries(node)).toEqual([
-      '{app=~"litellm.*"} |= "qwen2.5-0.5b-instruct"',
-    ]);
+    expect(endpointLogQueries(node)).toEqual(['{app=~"litellm.*"} |= "qwen2.5-0.5b-instruct"']);
   });
 
   it('links to the configured Grafana without a trailing slash', () => {
