@@ -352,3 +352,31 @@ func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 		}},
 	}, response)
 }
+
+func TestAuthVerify(t *testing.T) {
+	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
+
+	tests := []struct {
+		name               string
+		authorization      string
+		expectedStatusCode int
+	}{
+		{name: "accepts valid token", authorization: "Bearer test-token", expectedStatusCode: http.StatusNoContent},
+		{name: "rejects missing header", authorization: "", expectedStatusCode: http.StatusUnauthorized},
+		{name: "rejects invalid token", authorization: "Bearer wrong-token", expectedStatusCode: http.StatusUnauthorized},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v1/auth/verify", nil)
+			if tt.authorization != "" {
+				req.Header.Set("Authorization", tt.authorization)
+			}
+			rec := httptest.NewRecorder()
+
+			router.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatusCode, rec.Code)
+		})
+	}
+}
