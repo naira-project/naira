@@ -12,8 +12,8 @@ import { useOpenMFPContext } from '../../hooks/useOpenMFPContext';
 import { type NodeResource, nodeProps } from '../../lib/catalogApi';
 import { bedrockPanels } from './catalogPlugins/bedrock';
 import { litellmPanels } from './catalogPlugins/litellm';
-import { MetricPanel } from './MetricPanel';
 import { createDatasourceApi } from './datasourceApi';
+import { MetricPanel } from './MetricPanel';
 import { pluginLoader } from './pluginLoader';
 import type { PanelConfig } from './types';
 
