@@ -56,7 +56,7 @@ jobs:
           git commit -am "chore: start next release candidate cycle after ${TAG_NAME}"
           
           # Force push to safely overwrite if a branch for this tag already exists
-          git push -f -u origin "$BRANCH_NAME"
+          git push -f -u "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH_NAME"
           
           # Create PR, ignoring failure if one is already open
           gh pr create \

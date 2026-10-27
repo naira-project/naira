@@ -53,7 +53,7 @@ jobs:
           # and perfectly squash the CHANGELOG.md RC entries into a single Stable entry.
           git commit -a -m "fix: finalize stable release promotion"
 
-          git push -f -u origin chore/promote-to-stable
+          git push -f -u "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" chore/promote-to-stable
 
           # 3. Create the PR without the override footer
           gh pr create \
