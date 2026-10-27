@@ -34,6 +34,11 @@ interface ListNodesResponse {
   nodes?: NodeResource[];
 }
 
+interface ListKindsResponse {
+  kinds?: string[];
+  nextPageToken?: string;
+}
+
 export interface RelationResource {
   name: string;
   kind: string;
@@ -120,6 +125,22 @@ async function fetchJson<T>(url: string, token: string | null) {
 export async function fetchNodes(token: string | null, options: ListRequest = {}) {
   const data = await fetchJson<ListNodesResponse>(buildListNodesUrl(options), token);
   return data.nodes ?? [];
+}
+
+/** Fetch all pages of distinct node kinds. */
+export async function fetchKinds(token: string | null): Promise<string[]> {
+  const kinds: string[] = [];
+
+  let pageToken: string | undefined;
+  do {
+    const data = await fetchJson<ListKindsResponse>(
+      buildListUrl('/v1/kinds', { pageSize: 1000, pageToken }),
+      token,
+    );
+    kinds.push(...(data.kinds ?? []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return kinds;
 }
 
 export async function fetchNode(token: string | null, kind: string, path: string) {
