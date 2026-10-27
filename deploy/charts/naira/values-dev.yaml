@@ -58,6 +58,10 @@ catalog:
                 owner: ml-platform
                 rationale: >
                   Default general-purpose model; served through the central gateway.
+                catalog_refs:            # links the entry to the catalog nodes it is used as
+                  - match: idp-claude-sonnet   # the LiteLLM alias in test-dependencies
+                    kinds: [model, inference_endpoint]
+                    plugins: [litellm]
               - id: react-agents
                 name: ReAct Agents
                 quadrant: agentic
