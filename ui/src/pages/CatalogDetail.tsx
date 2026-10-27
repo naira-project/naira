@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router';
 import PropertiesPanel from '../components/PropertiesPanel';
 import { PersesDashboard } from '../components/perses/PersesDashboard';
 import RelatedNodes from '../components/RelatedNodes';
+import RadarRingBadges from '../components/radar/RadarRingBadges';
 import { Button } from '../components/ui/button';
 import { relatedNodesConfigForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
@@ -105,7 +106,10 @@ export default function CatalogDetail() {
               <div>
                 {currentTab === GRAPH_TAB && (
                   <div className="h-[500px]">
-                    <CatalogGraph rootNode={{ name: node.name }} />
+                    <CatalogGraph
+                      rootNode={{ name: node.name }}
+                      toolbarAddon={<RadarRingBadges node={node} />}
+                    />
                   </div>
                 )}
 
