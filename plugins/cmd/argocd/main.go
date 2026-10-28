@@ -59,8 +59,12 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
 	"github.com/naira-project/naira/plugins/pkg/httpjson"
@@ -80,60 +84,6 @@ type config struct {
 	HTTPTimeout        time.Duration `env:"ARGOCD_HTTP_TIMEOUT" default:"10s"`
 	PathPrefix         string        `env:"PATH_PREFIX" default:"argocd"`
 	ClusterID          string        `env:"CLUSTER_ID"`
-}
-
-// application is the part of ArgoCD's Application, as returned by the API,
-// that we use.
-type application struct {
-	Metadata struct {
-		Name      string `json:"name"`
-		Namespace string `json:"namespace"`
-	} `json:"metadata"`
-	Spec struct {
-		Project     string `json:"project"`
-		Destination struct {
-			Server    string `json:"server"`
-			Name      string `json:"name"`
-			Namespace string `json:"namespace"`
-		} `json:"destination"`
-		Source  *source  `json:"source"`
-		Sources []source `json:"sources"`
-	} `json:"spec"`
-	Status struct {
-		Sync struct {
-			Status string `json:"status"`
-		} `json:"sync"`
-		Health struct {
-			Status string `json:"status"`
-		} `json:"health"`
-		SourceType  string   `json:"sourceType"`
-		SourceTypes []string `json:"sourceTypes"`
-		History     []struct {
-			DeployedAt string `json:"deployedAt"`
-		} `json:"history"`
-		OperationState struct {
-			Phase      string `json:"phase"`
-			StartedAt  string `json:"startedAt"`
-			FinishedAt string `json:"finishedAt"`
-		} `json:"operationState"`
-		Resources []resource `json:"resources"`
-	} `json:"status"`
-	Operation json.RawMessage `json:"operation"`
-}
-
-// source is the part of an Application source we use. A source with a Helm
-// chart or a "ref" has no path.
-type source struct {
-	RepoURL string `json:"repoURL"`
-	Path    string `json:"path"`
-}
-
-// resource is an entry of an Application's status.resources.
-type resource struct {
-	Group     string `json:"group"`
-	Kind      string `json:"kind"`
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
 }
 
 type Plugin struct {
@@ -169,10 +119,8 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 	return p.collect(apps), nil
 }
 
-func (p *Plugin) listApplications(ctx context.Context) ([]application, error) {
-	var list struct {
-		Items []application `json:"items"`
-	}
+func (p *Plugin) listApplications(ctx context.Context) ([]v1alpha1.Application, error) {
+	var list v1alpha1.ApplicationList
 	err := httpjson.Get(ctx, p.httpClient,
 		strings.TrimRight(p.config.BaseURL, "/")+"/api/v1/applications",
 		&list,
@@ -183,7 +131,7 @@ func (p *Plugin) listApplications(ctx context.Context) ([]application, error) {
 	return list.Items, nil
 }
 
-func (p *Plugin) collect(apps []application) pluginapi.CollectResponse {
+func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse {
 	var (
 		nodes     []pluginapi.NodeClaim
 		relations []pluginapi.RelationClaim
@@ -196,30 +144,32 @@ func (p *Plugin) collect(apps []application) pluginapi.CollectResponse {
 		seenNodes[claim.ID] = true
 		nodes = append(nodes, claim)
 	}
-	appNodeID := func(app application) pluginapi.NodeID {
-		return applicationID(p.config.PathPrefix, app.Metadata.Namespace, app.Metadata.Name)
+	appNodeID := func(app v1alpha1.Application) pluginapi.NodeID {
+		return applicationID(p.config.PathPrefix, app.Namespace, app.Name)
 	}
 
-	var inClusterApps []application
+	var inClusterApps []v1alpha1.Application
 	for _, app := range apps {
 		if !isInCluster(app) {
-			log.Printf("argocd: skipping Application %s/%s: destination is not the local cluster", app.Metadata.Namespace, app.Metadata.Name)
+			log.Printf("argocd: skipping Application %s/%s: destination is not the local cluster", app.Namespace, app.Name)
 			continue
 		}
 		inClusterApps = append(inClusterApps, app)
 
 		props := pluginapi.PropertyMap{
 			"project":               app.Spec.Project,
-			"sync_status":           app.Status.Sync.Status,
-			"health_status":         app.Status.Health.Status,
+			"sync_status":           string(app.Status.Sync.Status),
+			"health_status":         string(app.Status.Health.Status),
 			"destination_namespace": app.Spec.Destination.Namespace,
 			"source_type":           sourceType(app),
-			"operation_present":     fmt.Sprint(hasOperation(app)),
+			"operation_present":     strconv.FormatBool(app.Operation != nil),
 		}
 		setIfNotEmpty(props, "last_deployed_at", lastDeployedAt(app))
-		setIfNotEmpty(props, "operationState.phase", app.Status.OperationState.Phase)
-		setIfNotEmpty(props, "operationState.startedAt", app.Status.OperationState.StartedAt)
-		setIfNotEmpty(props, "operationState.finishedAt", app.Status.OperationState.FinishedAt)
+		if op := app.Status.OperationState; op != nil {
+			setIfNotEmpty(props, "operationState.phase", string(op.Phase))
+			setIfNotEmpty(props, "operationState.startedAt", formatTime(&op.StartedAt))
+			setIfNotEmpty(props, "operationState.finishedAt", formatTime(op.FinishedAt))
+		}
 
 		addNode(pluginapi.NodeClaim{
 			ID:         appNodeID(app),
@@ -275,7 +225,7 @@ func (p *Plugin) collect(apps []application) pluginapi.CollectResponse {
 		// status.resources.
 		for _, res := range app.Status.Resources {
 			if res.Kind == "" || res.Name == "" {
-				log.Printf("argocd: WARN: skipping resource with missing kind (%q) or name (%q) in Application %s/%s", res.Kind, res.Name, app.Metadata.Namespace, app.Metadata.Name)
+				log.Printf("argocd: WARN: skipping resource with missing kind (%q) or name (%q) in Application %s/%s", res.Kind, res.Name, app.Namespace, app.Name)
 				continue
 			}
 
@@ -312,7 +262,7 @@ func applicationID(pathPrefix, ns, name string) pluginapi.NodeID {
 
 // resourceNodeID returns the NodeID of a resource listed in an Application's
 // status.resources. For cluster-scoped resources, res.Namespace can be empty.
-func resourceNodeID(pathPrefix, clusterID string, res resource) pluginapi.NodeID {
+func resourceNodeID(pathPrefix, clusterID string, res v1alpha1.ResourceStatus) pluginapi.NodeID {
 	// TODO(akavel-reply): should we just use a single naming scheme for all
 	// k8s resources, without special-casing Deployments and Services? Should we
 	// use custom NodeID.Kind for every resource kind, e.g.
@@ -347,7 +297,7 @@ func resourceNodeID(pathPrefix, clusterID string, res resource) pluginapi.NodeID
 }
 
 // isInCluster returns true if the Application deploys to the cluster ArgoCD runs in.
-func isInCluster(app application) bool {
+func isInCluster(app v1alpha1.Application) bool {
 	// ArgoCD's names for the cluster it runs in.
 	const (
 		inClusterServer = "https://kubernetes.default.svc"
@@ -357,23 +307,18 @@ func isInCluster(app application) bool {
 	return dest.Server == inClusterServer || dest.Name == inClusterName
 }
 
-// hasOperation returns true if a sync operation is requested or in progress.
-func hasOperation(app application) bool {
-	return len(app.Operation) > 0 && string(app.Operation) != "null"
-}
-
 // sources returns the sources of the Application, with non-empty repoURL.
-func sources(app application) []source {
+func sources(app v1alpha1.Application) []v1alpha1.ApplicationSource {
 	specs := app.Spec.Sources
 
 	// According to the ArgoCD documentation as of Oct 2026, "When you
 	// specify the sources field, Argo CD will ignore the source (singular) field."
 	// (https://argo-cd.readthedocs.io/en/stable/user-guide/multiple_sources/)
 	if len(specs) == 0 && app.Spec.Source != nil {
-		specs = []source{*app.Spec.Source}
+		specs = []v1alpha1.ApplicationSource{*app.Spec.Source}
 	}
 
-	return slices.DeleteFunc(slices.Clone(specs), func(s source) bool {
+	return slices.DeleteFunc(slices.Clone(specs), func(s v1alpha1.ApplicationSource) bool {
 		return s.RepoURL == ""
 	})
 }
@@ -394,21 +339,33 @@ func pathsProperties(paths []string) pluginapi.PropertyMap {
 }
 
 // sourceType returns the tool(s) ArgoCD detected for the Application's source(s).
-func sourceType(app application) string {
+func sourceType(app v1alpha1.Application) string {
 	if len(app.Status.SourceTypes) == 0 {
-		return app.Status.SourceType
+		return string(app.Status.SourceType)
 	}
-	return strings.Join(app.Status.SourceTypes, ",")
+	types := make([]string, len(app.Status.SourceTypes))
+	for i, t := range app.Status.SourceTypes {
+		types[i] = string(t)
+	}
+	return strings.Join(types, ",")
 }
 
 // lastDeployedAt returns deployedAt of the newest entry of the Application's
 // status.history, or empty string if there is none.
-func lastDeployedAt(app application) string {
+func lastDeployedAt(app v1alpha1.Application) string {
 	history := app.Status.History
 	if len(history) == 0 {
 		return ""
 	}
-	return history[len(history)-1].DeployedAt
+	return formatTime(&history[len(history)-1].DeployedAt)
+}
+
+// formatTime formats t as RFC 3339, or returns empty string for nil or zero t.
+func formatTime(t *metav1.Time) string {
+	if t == nil || t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }
 
 // setIfNotEmpty sets props[key] unless value is empty.
