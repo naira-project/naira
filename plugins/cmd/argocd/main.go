@@ -15,7 +15,7 @@
 //
 // # Environment Variables
 //
-//   - ARGOCD_BASE_URL - base URL of argocd-server. It must either serve a proper
+//   - ARGOCD_BASE_URL (mandatory) - base URL of argocd-server. It must either serve a proper
 //     HTTPS certificate (see https://argo-cd.readthedocs.io/en/stable/operator-manual/tls/), or be
 //     reachable over plain HTTP without a redirect to HTTPS (see
 //     https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/#option-2-ssl-termination-at-ingress-controller
@@ -26,7 +26,7 @@
 //   - ARGOCD_HTTP_TIMEOUT (optional, default 10s) - timeout of the HTTP requests.
 //   - PATH_PREFIX (optional, default "argocd") - prefix of the paths of the
 //     Application Nodes. Set it to a different value for each ArgoCD instance.
-//   - CLUSTER_ID - ID of the Kubernetes cluster that the Applications deploy to,
+//   - CLUSTER_ID (mandatory) - ID of the Kubernetes cluster that the Applications deploy to,
 //     which is the UID of its "kube-system" namespace, as used by other plugins.
 //     ArgoCD API doesn't expose it, so it must be provided by the user.
 //
@@ -52,7 +52,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -77,11 +76,11 @@ const (
 )
 
 type config struct {
-	BaseURL     string        `env:"ARGOCD_BASE_URL"`
+	BaseURL     string        `env:"ARGOCD_BASE_URL,required"`
 	Token       string        `env:"ARGOCD_TOKEN"`
 	HTTPTimeout time.Duration `env:"ARGOCD_HTTP_TIMEOUT" default:"10s"`
 	PathPrefix  string        `env:"PATH_PREFIX" default:"argocd"`
-	ClusterID   string        `env:"CLUSTER_ID"`
+	ClusterID   string        `env:"CLUSTER_ID,required"`
 }
 
 type Plugin struct {
@@ -102,12 +101,6 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	if p.config.ClusterID == "" {
-		return pluginapi.CollectResponse{}, errors.New("CLUSTER_ID is not set")
-	}
-	if p.config.BaseURL == "" {
-		return pluginapi.CollectResponse{}, errors.New("ARGOCD_BASE_URL is not set")
-	}
 	apps, err := p.listApplications(ctx)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing Applications: %w", err)
