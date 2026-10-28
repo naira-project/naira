@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	github.com/Nerzal/gocloak/v13 v13.9.0
+	github.com/argoproj/argo-cd/v3 v3.5.5
 	github.com/aws/aws-sdk-go-v2 v1.46.0
 	github.com/aws/aws-sdk-go-v2/config v1.33.3
 	github.com/aws/aws-sdk-go-v2/service/bedrock v1.71.0
@@ -44,7 +45,6 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/argoproj/argo-cd/gitops-engine v0.7.1-0.20250908182407-97ad5b59a627 // indirect
-	github.com/argoproj/argo-cd/v3 v3.5.5 // indirect
 	github.com/argoproj/pkg/v2 v2.0.1 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.3 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.19.2 // indirect
@@ -219,4 +219,8 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/argoproj/argo-cd/gitops-engine => github.com/argoproj/argo-cd/gitops-engine v0.0.0-20261012100433-a5038b0e2bba
+// HACK(2026-10): Fugly workaround for: https://github.com/argoproj/argo-cd/issues/30549
+replace (
+	github.com/argoproj/argo-cd/gitops-engine => github.com/argoproj/argo-cd/gitops-engine v0.0.0-20261012100433-a5038b0e2bba
+	k8s.io/kubelet => k8s.io/kubelet v0.36.1
+)
