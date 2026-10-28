@@ -15,14 +15,14 @@
 //
 // # Environment Variables
 //
-//   - ARGOCD_BASE_URL (optional, default "http://argocd-server.argocd.svc.cluster.local") -
-//     base URL of argocd-server.
+//   - ARGOCD_BASE_URL - base URL of argocd-server. It must either serve a proper
+//     HTTPS certificate (see https://argo-cd.readthedocs.io/en/stable/operator-manual/tls/), or be
+//     reachable over plain HTTP without a redirect to HTTPS (see
+//     https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/#option-2-ssl-termination-at-ingress-controller
+//     for the "server.insecure" setting).
 //   - ARGOCD_TOKEN (optional) - API token, sent as a Bearer token. Needs only
 //     read access ("applications, get"), e.g. a token of a local account
 //     with such a role, see "argocd account generate-token".
-//   - ARGOCD_INSECURE_SKIP_VERIFY (optional, default false) - skip verification
-//     of the TLS certificate of argocd-server, e.g. when it uses the self-signed
-//     one it generates by default.
 //   - ARGOCD_HTTP_TIMEOUT (optional, default 10s) - timeout of the HTTP requests.
 //   - PATH_PREFIX (optional, default "argocd") - prefix of the paths of the
 //     Application Nodes. Set it to a different value for each ArgoCD instance.
@@ -51,7 +51,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -78,12 +77,11 @@ const (
 )
 
 type config struct {
-	BaseURL            string        `env:"ARGOCD_BASE_URL" default:"http://argocd-server.argocd.svc.cluster.local"`
-	Token              string        `env:"ARGOCD_TOKEN"`
-	InsecureSkipVerify bool          `env:"ARGOCD_INSECURE_SKIP_VERIFY"`
-	HTTPTimeout        time.Duration `env:"ARGOCD_HTTP_TIMEOUT" default:"10s"`
-	PathPrefix         string        `env:"PATH_PREFIX" default:"argocd"`
-	ClusterID          string        `env:"CLUSTER_ID"`
+	BaseURL     string        `env:"ARGOCD_BASE_URL"`
+	Token       string        `env:"ARGOCD_TOKEN"`
+	HTTPTimeout time.Duration `env:"ARGOCD_HTTP_TIMEOUT" default:"10s"`
+	PathPrefix  string        `env:"PATH_PREFIX" default:"argocd"`
+	ClusterID   string        `env:"CLUSTER_ID"`
 }
 
 type Plugin struct {
@@ -93,13 +91,8 @@ type Plugin struct {
 
 func New(config config) *Plugin {
 	return &Plugin{
-		config: config,
-		httpClient: &http.Client{
-			Timeout: config.HTTPTimeout,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: config.InsecureSkipVerify},
-			},
-		},
+		config:     config,
+		httpClient: &http.Client{Timeout: config.HTTPTimeout},
 	}
 }
 
@@ -111,6 +104,9 @@ func main() {
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
 	if p.config.ClusterID == "" {
 		return pluginapi.CollectResponse{}, errors.New("CLUSTER_ID is not set")
+	}
+	if p.config.BaseURL == "" {
+		return pluginapi.CollectResponse{}, errors.New("ARGOCD_BASE_URL is not set")
 	}
 	apps, err := p.listApplications(ctx)
 	if err != nil {

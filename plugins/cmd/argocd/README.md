@@ -10,9 +10,8 @@ Application Nodes have a path of "\<PATH\_PREFIX>/\<namespace>/\<name>". All oth
 
 ## Environment Variables
 
-  - ARGOCD\_BASE\_URL (optional, default "[http://argocd-server.argocd.svc.cluster.local](http://argocd-server.argocd.svc.cluster.local)") - base URL of argocd-server.
+  - ARGOCD\_BASE\_URL - base URL of argocd-server. It must either serve a proper HTTPS certificate (see [https://argo-cd.readthedocs.io/en/stable/operator-manual/tls/](https://argo-cd.readthedocs.io/en/stable/operator-manual/tls/)), or be reachable over plain HTTP without a redirect to HTTPS (see [https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/#option-2-ssl-termination-at-ingress-controller](https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/#option-2-ssl-termination-at-ingress-controller) for the "server.insecure" setting).
   - ARGOCD\_TOKEN (optional) - API token, sent as a Bearer token. Needs only read access ("applications, get"), e.g. a token of a local account with such a role, see "argocd account generate-token".
-  - ARGOCD\_INSECURE\_SKIP\_VERIFY (optional, default false) - skip verification of the TLS certificate of argocd-server, e.g. when it uses the self-signed one it generates by default.
   - ARGOCD\_HTTP\_TIMEOUT (optional, default 10s) - timeout of the HTTP requests.
   - PATH\_PREFIX (optional, default "argocd") - prefix of the paths of the Application Nodes. Set it to a different value for each ArgoCD instance.
   - CLUSTER\_ID - ID of the Kubernetes cluster that the Applications deploy to, which is the UID of its "kube-system" namespace, as used by other plugins. ArgoCD API doesn't expose it, so it must be provided by the user.

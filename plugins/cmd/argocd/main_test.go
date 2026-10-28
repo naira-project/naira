@@ -397,6 +397,11 @@ func TestCollectErrors(t *testing.T) {
 		assert.ErrorContains(t, err, "CLUSTER_ID")
 	})
 
+	t.Run("missing ARGOCD_BASE_URL", func(t *testing.T) {
+		_, err := New(config{ClusterID: mockClusterID}).Collect(t.Context())
+		assert.ErrorContains(t, err, "ARGOCD_BASE_URL")
+	})
+
 	t.Run("unauthorized", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"no session information"}`, http.StatusUnauthorized)
