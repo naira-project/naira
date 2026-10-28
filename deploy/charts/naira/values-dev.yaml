@@ -112,3 +112,10 @@ database:
       secret:
         create: true
         password: openmetadata-local-password
+    # Langfuse from test-dependencies (tags.langfuse). Equals its
+    # values-dev.yaml secrets.langfuseDatabase.password
+    langfuse:
+      enabled: true
+      secret:
+        create: true
+        password: langfuse-local-password

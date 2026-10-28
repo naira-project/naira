@@ -246,6 +246,28 @@ check "ui catalog upstream override" \
   "http://x:1" \
   "$(render --set ui.catalogUpstream=http://x:1 \
     | yq "$UI | .env[] | select(.name == \"CATALOG_UPSTREAM\") | .value")"
+check "ui prometheus upstream default" \
+  "http://prometheus-operated.naira-deps.svc.cluster.local:9090" \
+  "$(render | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus upstream override" \
+  "http://prom:9090" \
+  "$(render --set ui.prometheus.upstream=http://prom:9090 \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus upstream empty: no env var" \
+  "" \
+  "$(render --set ui.prometheus.upstream= \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus allowed paths and methods default to the image's" \
+  "" \
+  "$(render | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_PATHS\" or .name == \"PROMETHEUS_ALLOWED_METHODS\") | .name")"
+check "ui prometheus allowed paths joined with |" \
+  "query|series" \
+  "$(render --set 'ui.prometheus.allowedPaths[0]=query' --set 'ui.prometheus.allowedPaths[1]=series' \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_PATHS\") | .value")"
+check "ui prometheus allowed methods joined with a space" \
+  "GET HEAD" \
+  "$(render --set 'ui.prometheus.allowedMethods[0]=GET' --set 'ui.prometheus.allowedMethods[1]=HEAD' \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_METHODS\") | .value")"
 check "ui image" \
   "ghcr.io/naira-project/naira-ui:${APP_VERSION}" \
   "$(render | yq "$UI | .image")"
@@ -524,8 +546,8 @@ check "db-init targets the subchart Service as the admin user" \
 check "db-init reads each database password from its Secret" \
   "catalog-db" \
   "$(render | yq "$DB_JOB | .env[] | select(.name == \"DB_PASSWORD_0\") | .valueFrom.secretKeyRef.name")"
-check "dev: db-init ensures catalog, litellm and openmetadata" \
-  "catalog,litellm,openmetadata" \
+check "dev: db-init ensures catalog, langfuse, litellm and openmetadata" \
+  "catalog,langfuse,litellm,openmetadata" \
   "$(render_raw "${DEV[@]}" | yq "$DB_JOB | .args | join(\",\")")"
 check "dev: litellm Secret has username and password" \
   "litellm litellm-local-password" \
