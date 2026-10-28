@@ -68,7 +68,6 @@ import (
 const (
 	k3sImage      = "rancher/k3s:v1.32.1-k3s1"
 	argoVersion   = "v3.5.5"
-	argoManifests = "https://raw.githubusercontent.com/argoproj/argo-cd/" + argoVersion + "/manifests/install.yaml"
 	argoNamespace = "argocd"
 
 	runTimeout   = 20 * time.Minute
@@ -130,7 +129,8 @@ func run(ctx context.Context, inFile, outDir string) error {
 	}
 
 	log.Printf("installing ArgoCD %s", argoVersion)
-	argoManifests, err := downloadArgoManifests(ctx)
+	argoManifests, err := downloadYAMLObjects(ctx,
+		"https://raw.githubusercontent.com/argoproj/argo-cd/"+argoVersion+"/manifests/install.yaml")
 	if err != nil {
 		return fmt.Errorf("loading manifests: %w", err)
 	}
@@ -231,7 +231,7 @@ lines:
 		}
 	}
 
-	result.manifests, err = decodeObjects(data)
+	result.manifests, err = decodeYAMLObjects(data)
 	if err != nil {
 		return input{}, fmt.Errorf("decoding manifests: %w", err)
 	}
@@ -250,15 +250,15 @@ func parseWantApps(list string, expect expectation) []wantApp {
 	return apps
 }
 
-// downloadArgoManifests downloads ArgoCD installation manifests, including argocd-server.
-func downloadArgoManifests(ctx context.Context) ([]*unstructured.Unstructured, error) {
-	body, err := httpGet(ctx, argoManifests)
+// downloadYAMLObjects downloads and decodes YAML objects from yamlURL.
+func downloadYAMLObjects(ctx context.Context, yamlURL string) ([]*unstructured.Unstructured, error) {
+	body, err := httpGet(ctx, yamlURL)
 	if err != nil {
-		return nil, fmt.Errorf("downloading ArgoCD manifests: %w", err)
+		return nil, fmt.Errorf("downloading %s: %w", yamlURL, err)
 	}
-	objs, err := decodeObjects(body)
+	objs, err := decodeYAMLObjects(body)
 	if err != nil {
-		return nil, fmt.Errorf("decoding %s: %w", argoManifests, err)
+		return nil, fmt.Errorf("decoding %s: %w", yamlURL, err)
 	}
 	return objs, nil
 }
@@ -284,7 +284,7 @@ func httpGet(ctx context.Context, url string) ([]byte, error) {
 	return body, nil
 }
 
-func decodeObjects(data []byte) ([]*unstructured.Unstructured, error) {
+func decodeYAMLObjects(data []byte) ([]*unstructured.Unstructured, error) {
 	var objs []*unstructured.Unstructured
 	dec := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
 	for {
@@ -419,7 +419,7 @@ func (c *apiClient) login(ctx context.Context, dyn dynamic.Interface) error {
 	var session struct {
 		Token string `json:"token"`
 	}
-	err = httpjson.Do(ctx, c.http, http.MethodPost, c.baseURL+"/api/v1/session",
+	err = httpjson.Post(ctx, c.http, c.baseURL+"/api/v1/session",
 		map[string]string{"username": "admin", "password": string(password)}, &session)
 	if err != nil {
 		return fmt.Errorf("creating session: %w", err)
@@ -428,8 +428,8 @@ func (c *apiClient) login(ctx context.Context, dyn dynamic.Interface) error {
 	return nil
 }
 
-// listApplications returns the Applications as returned by the API.
-func (c *apiClient) listApplications(ctx context.Context) ([]unstructured.Unstructured, error) {
+// getApplications returns the Applications as returned by the API, wrapped in unstructured.Unstructured objects to slightly mimic the k8s API results and provide some helper utility methods.
+func (c *apiClient) getApplications(ctx context.Context) ([]unstructured.Unstructured, error) {
 	var list struct {
 		Items []map[string]any `json:"items"`
 	}
@@ -440,9 +440,9 @@ func (c *apiClient) listApplications(ctx context.Context) ([]unstructured.Unstru
 	if err != nil {
 		return nil, fmt.Errorf("calling argocd-server API: %w", err)
 	}
-	apps := make([]unstructured.Unstructured, len(list.Items))
-	for i, item := range list.Items {
-		apps[i] = unstructured.Unstructured{Object: item}
+	apps := make([]unstructured.Unstructured, 0, len(list.Items))
+	for _, item := range list.Items {
+		apps = append(apps, unstructured.Unstructured{Object: item})
 	}
 	return apps, nil
 }
@@ -450,19 +450,19 @@ func (c *apiClient) listApplications(ctx context.Context) ([]unstructured.Unstru
 // waitForApplications returns all wantApps once ArgoCD has reconciled them.
 func waitForApplications(ctx context.Context, api *apiClient, wantApps []wantApp) ([]unstructured.Unstructured, error) {
 	for {
-		items, err := api.listApplications(ctx)
+		apps, err := api.getApplications(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("listing Applications: %w", err)
 		}
 		var ready []unstructured.Unstructured
 		var notReady []string
 		for _, want := range wantApps {
-			i := slices.IndexFunc(items, func(u unstructured.Unstructured) bool { return u.GetName() == want.name })
-			if i < 0 || !isReady(items[i], want.expect) {
+			i := slices.IndexFunc(apps, func(u unstructured.Unstructured) bool { return u.GetName() == want.name })
+			if i < 0 || !isReady(apps[i], want.expect) {
 				notReady = append(notReady, want.name)
 				continue
 			}
-			ready = append(ready, items[i])
+			ready = append(ready, apps[i])
 		}
 		if len(notReady) == 0 {
 			return ready, nil

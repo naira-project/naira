@@ -70,11 +70,6 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
 
-const (
-	argoGroup       = "argoproj.io"
-	argoApplication = "Application"
-)
-
 type config struct {
 	BaseURL     string        `env:"ARGOCD_BASE_URL,required"`
 	Token       string        `env:"ARGOCD_TOKEN"`
@@ -166,6 +161,10 @@ func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse 
 		})
 	}
 
+	// Note: we don't create NodeClaims for managed resources immediately in
+	// the earlier loop, so that in case of "App of Apps" pattern, the first
+	// loop (with more details) takes priority creating NodeClaim for the child
+	// App.
 	for _, app := range inClusterApps {
 		appID := appNodeID(app)
 
@@ -218,11 +217,13 @@ func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse 
 				continue
 			}
 
-			resID := resourceNodeID(p.config.PathPrefix, p.config.ClusterID, res)
+			resID := resourceNodeID(res, p.config.PathPrefix, p.config.ClusterID)
 			if resID == appID {
 				continue
 			}
-			addNode(pluginapi.NodeClaim{ID: resID})
+			addNode(pluginapi.NodeClaim{
+				ID: resID,
+			})
 			relations = append(relations, pluginapi.RelationClaim{
 				Kind: pluginapi.RelationKindDescribes,
 				From: appID,
@@ -249,40 +250,47 @@ func applicationID(pathPrefix, ns, name string) pluginapi.NodeID {
 	}
 }
 
-// resourceNodeID returns the NodeID of a resource listed in an Application's
-// status.resources. For cluster-scoped resources, res.Namespace can be empty.
-func resourceNodeID(pathPrefix, clusterID string, res v1alpha1.ResourceStatus) pluginapi.NodeID {
+// resourceNodeID returns a NodeID for res. For cluster-scoped resources,
+// res.Namespace can be empty.
+func resourceNodeID(res v1alpha1.ResourceStatus, pathPrefix, clusterID string) pluginapi.NodeID {
 	// TODO(akavel-reply): should we just use a single naming scheme for all
 	// k8s resources, without special-casing Deployments and Services? Should we
 	// use custom NodeID.Kind for every resource kind, e.g.
-	// `NodeID.Kind=Deployment.apps.k8s`? Would need to be also updated in
+	// NodeID.Kind="Deployment.apps.k8s"? Would need to be also updated in
 	// other plugins.
-	switch {
-	case res.Group == "apps" && res.Kind == "Deployment":
+	type gk struct{ Group, Kind string }
+	switch (gk{res.Group, res.Kind}) {
+	case gk{"apps", "Deployment"}:
 		return pluginapi.NodeID{
 			Kind: pluginapi.NodeKindDeployment,
 			Path: clusterID + "/" + res.Namespace + "/" + res.Name,
 		}
-	case res.Group == "" && res.Kind == "Service":
+	case gk{"", "Service"}:
 		return pluginapi.NodeID{
 			Kind: pluginapi.NodeKindService,
 			Path: clusterID + "/" + res.Namespace + "/" + res.Name,
 		}
-	case res.Group == argoGroup && res.Kind == argoApplication:
+	case gk{"argoproj.io", "Application"}:
 		return applicationID(pathPrefix, res.Namespace, res.Name)
+	default:
+		return pluginapi.NodeID{
+			Kind: pluginapi.NodeKindK8sResource,
+			Path: clusterID +
+				slashedOr(res.Group, "/core") +
+				"/" + res.Kind +
+				slashedOr(res.Namespace, "") +
+				"/" + res.Name,
+		}
 	}
-	group := res.Group
-	if group == "" {
-		group = "core"
+}
+
+// slashedOr returns "/" + segment if segment is non-empty, or alternate
+// otherwise.
+func slashedOr(segment, alternate string) string {
+	if segment == "" {
+		return alternate
 	}
-	path := clusterID + "/" + group + "/" + res.Kind
-	if res.Namespace != "" {
-		path += "/" + res.Namespace
-	}
-	return pluginapi.NodeID{
-		Kind: pluginapi.NodeKindK8sResource,
-		Path: path + "/" + res.Name,
-	}
+	return "/" + segment
 }
 
 // isInCluster returns true if the Application deploys to the cluster ArgoCD runs in.
@@ -320,7 +328,9 @@ func pathsProperties(paths []string) pluginapi.PropertyMap {
 	}
 	encoded, err := json.Marshal(paths)
 	if err != nil {
-		panic(fmt.Sprintf("marshaling []string to JSON: %v", err)) // cannot happen
+		// should never happen for simple []string!
+		log.Printf("argocd: WARN: marshaling []string paths %v to JSON: %v", paths, err)
+		return nil
 	}
 	return pluginapi.PropertyMap{
 		"paths": string(encoded),
@@ -354,7 +364,7 @@ func formatTime(t *metav1.Time) string {
 	if t == nil || t.IsZero() {
 		return ""
 	}
-	return t.UTC().Format(time.RFC3339)
+	return t.In(time.UTC).Format(time.RFC3339)
 }
 
 // setIfNotEmpty sets props[key] unless value is empty.

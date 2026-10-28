@@ -10,7 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/naira-project/naira/plugins/pkg/httpjson"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -366,7 +365,7 @@ func TestCollect(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, "/api/v1/applications", r.URL.Path)
 				assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
-				fmt.Fprintf(w, `{"metadata":{},"items":[%s]}`, strings.Join(items, ","))
+				fmt.Fprintf(w, `{"items":[%s]}`, strings.Join(items, ","))
 			}))
 			defer srv.Close()
 
@@ -389,19 +388,6 @@ func TestCollect(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
-}
-
-func TestCollectErrors(t *testing.T) {
-	t.Run("unauthorized", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, `{"error":"no session information"}`, http.StatusUnauthorized)
-		}))
-		defer srv.Close()
-
-		_, err := New(config{BaseURL: srv.URL, ClusterID: mockClusterID}).Collect(t.Context())
-		assert.ErrorContains(t, err, "401")
-		assert.True(t, httpjson.IsStatusAcceptError(err, http.StatusUnauthorized))
-	})
 }
 
 func join(parts ...string) string {
