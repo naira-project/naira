@@ -1,24 +1,19 @@
 package main
 
 import (
-	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
+	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	discfake "k8s.io/client-go/discovery/fake"
-	"k8s.io/client-go/dynamic/fake"
-
-	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
 //go:generate go run ./testdata/gen
@@ -26,8 +21,8 @@ import (
 
 const mockClusterID = "mock-cluster"
 
-// TestCollect runs the plugin on real Application objects scraped from ArgoCD
-// by the ./testdata/gen command, see testdata/.
+// TestCollect runs the plugin on real Application objects scraped from the
+// argocd-server API by the ./testdata/gen command, see testdata/.
 func TestCollect(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -39,7 +34,7 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"helm-guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"), Properties: props{
+					{ID: nodeID("Application.argocd", "test-prefix/argocd/helm-guestbook"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
 						"health_status":             "Progressing",
@@ -67,13 +62,13 @@ func TestCollect(t *testing.T) {
 						Properties: props{
 							"paths": `["helm-guestbook"]`}},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/helm-guestbook"),
 						To:   nodeID("deployment", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/helm-guestbook"),
 						To:   nodeID("service", "mock-cluster/helm-guestbook/helm-guestbook")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/helm-guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/helm-guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["helm-guestbook"]`}},
@@ -85,7 +80,7 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"kustomize-guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"), Properties: props{
+					{ID: nodeID("Application.argocd", "test-prefix/argocd/kustomize-guestbook"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
 						"health_status":             "Progressing",
@@ -113,13 +108,13 @@ func TestCollect(t *testing.T) {
 						Properties: props{
 							"paths": `["kustomize-guestbook"]`}},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/kustomize-guestbook"),
 						To:   nodeID("deployment", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/kustomize-guestbook"),
 						To:   nodeID("service", "mock-cluster/kustomize-guestbook/kustomize-guestbook-ui")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/kustomize-guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/kustomize-guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["kustomize-guestbook"]`}},
@@ -131,7 +126,7 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"multi-source"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"), Properties: props{
+					{ID: nodeID("Application.argocd", "test-prefix/argocd/multi-source"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
 						"health_status":             "Progressing",
@@ -159,13 +154,13 @@ func TestCollect(t *testing.T) {
 						Properties: props{
 							"paths": `["helm-guestbook"]`}},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/multi-source"),
 						To:   nodeID("deployment", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/multi-source"),
 						To:   nodeID("service", "mock-cluster/multi-source/multi-source-helm-guestbook")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-source"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/multi-source"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["helm-guestbook"]`}},
@@ -179,7 +174,7 @@ func TestCollect(t *testing.T) {
 				"app-of-apps/example.guestbook"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"), Properties: props{
+					{ID: nodeID("Application.argocd", "test-prefix/argocd/apps-parent"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
 						"health_status":             "Healthy",
@@ -190,7 +185,7 @@ func TestCollect(t *testing.T) {
 						"operationState.finishedAt": "2000-01-01T00:00:00Z",
 						"operationState.phase":      "Succeeded",
 						"operationState.startedAt":  "2000-01-01T00:00:00Z"}},
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"), Properties: props{
+					{ID: nodeID("Application.argocd", "test-prefix/argocd/example.guestbook"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
 						"health_status":             "Progressing",
@@ -208,7 +203,7 @@ func TestCollect(t *testing.T) {
 				},
 				Relations: []pluginapi.RelationClaim{
 					{Kind: "deployed_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/example.guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["apps"]`}},
@@ -223,21 +218,21 @@ func TestCollect(t *testing.T) {
 						Properties: props{
 							"paths": `["guestbook"]`}},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"),
-						To:   nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook")},
+						From: nodeID("Application.argocd", "test-prefix/argocd/apps-parent"),
+						To:   nodeID("Application.argocd", "test-prefix/argocd/example.guestbook")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/example.guestbook"),
 						To:   nodeID("deployment", "mock-cluster/guestbook/guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/example.guestbook"),
 						To:   nodeID("service", "mock-cluster/guestbook/guestbook-ui")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/apps-parent"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/apps-parent"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["apps"]`}},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/example.guestbook"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/example.guestbook"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["guestbook"]`}},
@@ -249,7 +244,7 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"multi-path"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"), Properties: props{
+					{ID: nodeID("Application.argocd", "test-prefix/argocd/multi-path"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
 						"health_status":             "Progressing",
@@ -289,19 +284,19 @@ func TestCollect(t *testing.T) {
 						Properties: props{
 							"paths": `["guestbook","kustomize-guestbook"]`}},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/multi-path"),
 						To:   nodeID("deployment", "mock-cluster/multi-path/guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/multi-path"),
 						To:   nodeID("deployment", "mock-cluster/multi-path/kustomize-guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/multi-path"),
 						To:   nodeID("service", "mock-cluster/multi-path/guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/multi-path"),
 						To:   nodeID("service", "mock-cluster/multi-path/kustomize-guestbook-ui")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/multi-path"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/multi-path"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["guestbook","kustomize-guestbook"]`}},
@@ -313,7 +308,7 @@ func TestCollect(t *testing.T) {
 			testdata: []string{"mid-sync"},
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
-					{ID: nodeID("Application.argocd", "mock-cluster/argocd/mid-sync"), Properties: props{
+					{ID: nodeID("Application.argocd", "test-prefix/argocd/mid-sync"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "OutOfSync",
 						"health_status":             "Missing",
@@ -340,13 +335,13 @@ func TestCollect(t *testing.T) {
 						Properties: props{
 							"paths": `["pre-post-sync"]`}},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/mid-sync"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/mid-sync"),
 						To:   nodeID("deployment", "mock-cluster/mid-sync/pre-post-sync-kustomize-guestbook-ui")},
 					{Kind: "describes",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/mid-sync"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/mid-sync"),
 						To:   nodeID("service", "mock-cluster/mid-sync/pre-post-sync-kustomize-guestbook-ui")},
 					{Kind: "sourced_from",
-						From: nodeID("Application.argocd", "mock-cluster/argocd/mid-sync"),
+						From: nodeID("Application.argocd", "test-prefix/argocd/mid-sync"),
 						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
 						Properties: props{
 							"paths": `["pre-post-sync"]`}},
@@ -362,38 +357,25 @@ func TestCollect(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			objs := []runtime.Object{
-				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "kube-system", UID: mockClusterID}},
-				&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "argocd", UID: "argocd-uid"}},
-			}
+			var items []string
 			for _, name := range tt.testdata {
 				data, err := os.ReadFile(filepath.Join("testdata", name+".json"))
 				require.NoError(t, err)
-				var u unstructured.Unstructured
-				require.NoError(t, json.Unmarshal(data, &u.Object))
-				objs = append(objs, &u)
+				items = append(items, string(data))
 			}
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.Equal(t, "/api/v1/applications", r.URL.Path)
+				assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+				fmt.Fprintf(w, `{"metadata":{},"items":[%s]}`, strings.Join(items, ","))
+			}))
+			defer srv.Close()
 
-			gvr := schema.GroupVersionResource{Group: "argoproj.io", Version: "v1alpha1", Resource: "applications"}
-			s := runtime.NewScheme()
-			_ = corev1.AddToScheme(s)
-			s.AddKnownTypeWithName(gvr.GroupVersion().WithKind("ApplicationList"), &unstructured.UnstructuredList{})
-			dyn := fake.NewSimpleDynamicClientWithCustomListKinds(s,
-				map[schema.GroupVersionResource]string{
-					gvr: "ApplicationList",
-				},
-				objs...)
-			disc := &discfake.FakeDiscovery{Fake: &dyn.Fake}
-			disc.Resources = []*metav1.APIResourceList{{
-				GroupVersion: gvr.GroupVersion().String(),
-				APIResources: []metav1.APIResource{{
-					Name:  "applications",
-					Kind:  "Application",
-					Verbs: []string{"list"},
-				}},
-			}}
-
-			got, err := New(config{}).collect(t.Context(), disc, dyn)
+			got, err := New(config{
+				BaseURL:    srv.URL + "/",
+				Token:      "test-token",
+				PathPrefix: "test-prefix",
+				ClusterID:  mockClusterID,
+			}).Collect(t.Context())
 			require.NoError(t, err)
 			sort.Slice(got.Nodes, func(i, j int) bool {
 				a, b := got.Nodes[i].ID, got.Nodes[j].ID
@@ -407,6 +389,24 @@ func TestCollect(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestCollectErrors(t *testing.T) {
+	t.Run("missing CLUSTER_ID", func(t *testing.T) {
+		_, err := New(config{}).Collect(t.Context())
+		assert.ErrorContains(t, err, "CLUSTER_ID")
+	})
+
+	t.Run("unauthorized", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, `{"error":"no session information"}`, http.StatusUnauthorized)
+		}))
+		defer srv.Close()
+
+		_, err := New(config{BaseURL: srv.URL, ClusterID: mockClusterID}).Collect(t.Context())
+		assert.ErrorContains(t, err, "401")
+		assert.True(t, httpjson.IsStatusAcceptError(err, http.StatusUnauthorized))
+	})
 }
 
 func join(parts ...string) string {

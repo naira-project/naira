@@ -1,6 +1,4 @@
 {
-  "apiVersion": "argoproj.io/v1alpha1",
-  "kind": "Application",
   "metadata": {
     "creationTimestamp": "2000-01-01T00:00:00Z",
     "generation": 1,
@@ -33,7 +31,15 @@
       "lastTransitionTime": "2000-01-01T00:00:00Z",
       "status": "Unknown"
     },
+    "sourceHydrator": {},
+    "summary": {},
     "sync": {
+      "comparedTo": {
+        "destination": {},
+        "source": {
+          "repoURL": ""
+        }
+      },
       "status": "Unknown"
     }
   }

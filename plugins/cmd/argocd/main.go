@@ -1,20 +1,38 @@
 // Plugin argocd collects ArgoCD Application objects and all the Kubernetes
 // resources they manage, as reported in each Application's status.
 //
+// The data is read from the REST API of argocd-server ("/api/v1/applications"),
+// not from the Kubernetes API.
+//
 // Managed Deployments and Services are emitted as deployment and service Nodes.
 // Child Applications (app-of-apps) are emitted as Application Nodes. Any other
 // managed resource is emitted as a k8s_resource Node, with a path of
 // "<cluster>/<group>/<Kind>/<namespace>/<name>" ("core" is used as the group of
 // the core API, and the namespace segment is omitted for cluster-scoped resources).
 //
+// Application Nodes have a path of "<PATH_PREFIX>/<namespace>/<name>".
+// All other Nodes use CLUSTER_ID as the "<cluster>" path segment.
+//
 // # Environment Variables
 //
-//   - KUBECONFIG (optional) - path to the kubeconfig file; if unset, the in-cluster
-//     configuration is used.
+//   - ARGOCD_BASE_URL (optional, default "http://argocd-server.argocd.svc.cluster.local") -
+//     base URL of argocd-server.
+//   - ARGOCD_TOKEN (optional) - API token, sent as a Bearer token. Needs only
+//     read access ("applications, get"), e.g. a token of a local account
+//     with such a role, see "argocd account generate-token".
+//   - ARGOCD_INSECURE_SKIP_VERIFY (optional, default false) - skip verification
+//     of the TLS certificate of argocd-server, e.g. when it uses the self-signed
+//     one it generates by default.
+//   - ARGOCD_HTTP_TIMEOUT (optional, default 10s) - timeout of the HTTP requests.
+//   - PATH_PREFIX (optional, default "argocd") - prefix of the paths of the
+//     Application Nodes. Set it to a different value for each ArgoCD instance.
+//   - CLUSTER_ID - ID of the Kubernetes cluster that the Applications deploy to,
+//     which is the UID of its "kube-system" namespace, as used by other plugins.
+//     ArgoCD API doesn't expose it, so it must be provided by the user.
 //
 // # Known Limitations
 //
-// Only Applications deploying to the cluster they live in are supported;
+// Only Applications deploying to the cluster ArgoCD runs in are supported;
 // Applications targeting other clusters are skipped.
 //
 // Currently, we only recognize Application sources ("repoURL") that match
@@ -33,20 +51,19 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"slices"
 	"sort"
-	"strconv"
 	"strings"
+	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/discovery"
-	"k8s.io/client-go/dynamic"
-
-	"github.com/naira-project/naira/plugins/internal/kubeutil"
 	"github.com/naira-project/naira/plugins/internal/repositoryidentity"
+	"github.com/naira-project/naira/plugins/pkg/httpjson"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/naira-project/naira/plugins/pkg/pluginmain"
 )
@@ -57,15 +74,83 @@ const (
 )
 
 type config struct {
-	Kubeconfig string `env:"KUBECONFIG"`
+	BaseURL            string        `env:"ARGOCD_BASE_URL" default:"http://argocd-server.argocd.svc.cluster.local"`
+	Token              string        `env:"ARGOCD_TOKEN"`
+	InsecureSkipVerify bool          `env:"ARGOCD_INSECURE_SKIP_VERIFY"`
+	HTTPTimeout        time.Duration `env:"ARGOCD_HTTP_TIMEOUT" default:"10s"`
+	PathPrefix         string        `env:"PATH_PREFIX" default:"argocd"`
+	ClusterID          string        `env:"CLUSTER_ID"`
+}
+
+// application is the part of ArgoCD's Application, as returned by the API,
+// that we use.
+type application struct {
+	Metadata struct {
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+	} `json:"metadata"`
+	Spec struct {
+		Project     string `json:"project"`
+		Destination struct {
+			Server    string `json:"server"`
+			Name      string `json:"name"`
+			Namespace string `json:"namespace"`
+		} `json:"destination"`
+		Source  *source  `json:"source"`
+		Sources []source `json:"sources"`
+	} `json:"spec"`
+	Status struct {
+		Sync struct {
+			Status string `json:"status"`
+		} `json:"sync"`
+		Health struct {
+			Status string `json:"status"`
+		} `json:"health"`
+		SourceType  string   `json:"sourceType"`
+		SourceTypes []string `json:"sourceTypes"`
+		History     []struct {
+			DeployedAt string `json:"deployedAt"`
+		} `json:"history"`
+		OperationState struct {
+			Phase      string `json:"phase"`
+			StartedAt  string `json:"startedAt"`
+			FinishedAt string `json:"finishedAt"`
+		} `json:"operationState"`
+		Resources []resource `json:"resources"`
+	} `json:"status"`
+	Operation json.RawMessage `json:"operation"`
+}
+
+// source is the part of an Application source we use. A source with a Helm
+// chart or a "ref" has no path.
+type source struct {
+	RepoURL string `json:"repoURL"`
+	Path    string `json:"path"`
+}
+
+// resource is an entry of an Application's status.resources.
+type resource struct {
+	Group     string `json:"group"`
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
 }
 
 type Plugin struct {
-	config config
+	config     config
+	httpClient *http.Client
 }
 
 func New(config config) *Plugin {
-	return &Plugin{config: config}
+	return &Plugin{
+		config: config,
+		httpClient: &http.Client{
+			Timeout: config.HTTPTimeout,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: config.InsecureSkipVerify},
+			},
+		},
+	}
 }
 
 func main() {
@@ -74,31 +159,31 @@ func main() {
 }
 
 func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error) {
-	disc, dyn, err := p.connect()
-	if err != nil {
-		return pluginapi.CollectResponse{}, fmt.Errorf("connecting to cluster: %w", err)
+	if p.config.ClusterID == "" {
+		return pluginapi.CollectResponse{}, errors.New("CLUSTER_ID is not set")
 	}
-	return p.collect(ctx, disc, dyn)
-}
-
-func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface, dyn dynamic.Interface) (pluginapi.CollectResponse, error) {
-	namespaces, clusterID, err := kubeutil.NamespacesAndClusterIDFromDynamic(ctx, dyn)
-	if err != nil {
-		return pluginapi.CollectResponse{}, fmt.Errorf("listing namespaces: %w", err)
-	}
-	_, resourceAPIs, err := disc.ServerGroupsAndResources()
-	if err != nil {
-		log.Printf("argocd: WARN: listing resource APIs: %v", err)
-		// NOTE: ServerGroupsAndResources godoc says the returned lists might be
-		// non-nil with partial results even in the case of non-nil error.
-		// Thus, we continue trying to scan what we can.
-	}
-
-	apps, err := kubeutil.ListGroupKind(ctx, resourceAPIs, dyn, argoGroup, argoApplication, namespaces)
+	apps, err := p.listApplications(ctx)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing Applications: %w", err)
 	}
+	return p.collect(apps), nil
+}
 
+func (p *Plugin) listApplications(ctx context.Context) ([]application, error) {
+	var list struct {
+		Items []application `json:"items"`
+	}
+	err := httpjson.Get(ctx, p.httpClient,
+		strings.TrimRight(p.config.BaseURL, "/")+"/api/v1/applications",
+		&list,
+		httpjson.WithAuthorizationBearer(p.config.Token))
+	if err != nil {
+		return nil, fmt.Errorf("calling argocd-server API: %w", err)
+	}
+	return list.Items, nil
+}
+
+func (p *Plugin) collect(apps []application) pluginapi.CollectResponse {
 	var (
 		nodes     []pluginapi.NodeClaim
 		relations []pluginapi.RelationClaim
@@ -111,40 +196,39 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		seenNodes[claim.ID] = true
 		nodes = append(nodes, claim)
 	}
+	appNodeID := func(app application) pluginapi.NodeID {
+		return applicationID(p.config.PathPrefix, app.Metadata.Namespace, app.Metadata.Name)
+	}
 
-	var inClusterApps []unstructured.Unstructured
+	var inClusterApps []application
 	for _, app := range apps {
 		if !isInCluster(app) {
-			log.Printf("argocd: skipping Application %s/%s: destination is not the local cluster", app.GetNamespace(), app.GetName())
+			log.Printf("argocd: skipping Application %s/%s: destination is not the local cluster", app.Metadata.Namespace, app.Metadata.Name)
 			continue
 		}
 		inClusterApps = append(inClusterApps, app)
 
-		str := nestedStringOrEmpty // helper func
 		props := pluginapi.PropertyMap{
-			"project":               str(app, "spec", "project"),
-			"sync_status":           str(app, "status", "sync", "status"),
-			"health_status":         str(app, "status", "health", "status"),
-			"destination_namespace": str(app, "spec", "destination", "namespace"),
+			"project":               app.Spec.Project,
+			"sync_status":           app.Status.Sync.Status,
+			"health_status":         app.Status.Health.Status,
+			"destination_namespace": app.Spec.Destination.Namespace,
 			"source_type":           sourceType(app),
+			"operation_present":     fmt.Sprint(hasOperation(app)),
 		}
-		_, hasOperation, _ := unstructured.NestedFieldNoCopy(app.Object, "operation")
-		props["operation_present"] = strconv.FormatBool(hasOperation)
 		setIfNotEmpty(props, "last_deployed_at", lastDeployedAt(app))
-		for _, field := range []string{"phase", "startedAt", "finishedAt"} {
-			setIfNotEmpty(props,
-				"operationState."+field,
-				nestedStringOrEmpty(app, "status", "operationState", field))
-		}
+		setIfNotEmpty(props, "operationState.phase", app.Status.OperationState.Phase)
+		setIfNotEmpty(props, "operationState.startedAt", app.Status.OperationState.StartedAt)
+		setIfNotEmpty(props, "operationState.finishedAt", app.Status.OperationState.FinishedAt)
 
 		addNode(pluginapi.NodeClaim{
-			ID:         applicationID(clusterID, app.GetNamespace(), app.GetName()),
+			ID:         appNodeID(app),
 			Properties: props,
 		})
 	}
 
 	for _, app := range inClusterApps {
-		appID := applicationID(clusterID, app.GetNamespace(), app.GetName())
+		appID := appNodeID(app)
 
 		// Multiple sources from a single Application can point to the same
 		// repository, at different paths. A relation is identified by its kind
@@ -152,7 +236,7 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		// the paths used.
 		pathsByRepo := map[pluginapi.NodeID][]string{}
 		for _, src := range sources(app) {
-			repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(src.repoURL)
+			repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(src.RepoURL)
 			if repoPath == "" {
 				// As described in the README of the plugin, we currently only
 				// recognize GitHub repository URLs, as for other URLs it's
@@ -168,13 +252,13 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 				addNode(pluginapi.NodeClaim{
 					ID: repoID,
 					Properties: pluginapi.PropertyMap{
-						"url": src.repoURL,
+						"url": src.RepoURL,
 					},
 				})
 				pathsByRepo[repoID] = nil
 			}
-			if src.path != "" && !slices.Contains(pathsByRepo[repoID], src.path) {
-				pathsByRepo[repoID] = append(pathsByRepo[repoID], src.path)
+			if src.Path != "" && !slices.Contains(pathsByRepo[repoID], src.Path) {
+				pathsByRepo[repoID] = append(pathsByRepo[repoID], src.Path)
 			}
 		}
 		for repoID, paths := range pathsByRepo {
@@ -189,24 +273,13 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 
 		// Find all resources managed by the Application, as listed in its
 		// status.resources.
-		resources, _, _ := unstructured.NestedSlice(app.Object, "status", "resources")
-		for _, r := range resources {
-			res, ok := r.(map[string]any)
-			if !ok {
-				continue
-			}
-			var (
-				group, _ = res["group"].(string)
-				kind, _  = res["kind"].(string)
-				ns, _    = res["namespace"].(string)
-				name, _  = res["name"].(string)
-			)
-			if kind == "" || name == "" {
-				log.Printf("argocd: WARN: skipping resource with missing kind (%q) or name (%q) in Application %s/%s", kind, name, app.GetNamespace(), app.GetName())
+		for _, res := range app.Status.Resources {
+			if res.Kind == "" || res.Name == "" {
+				log.Printf("argocd: WARN: skipping resource with missing kind (%q) or name (%q) in Application %s/%s", res.Kind, res.Name, app.Metadata.Namespace, app.Metadata.Name)
 				continue
 			}
 
-			resID := resourceNodeID(clusterID, group, kind, ns, name)
+			resID := resourceNodeID(p.config.PathPrefix, p.config.ClusterID, res)
 			if resID == appID {
 				continue
 			}
@@ -227,98 +300,82 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		}
 	}
 
-	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}, nil
+	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
 }
 
-func applicationID(clusterID, ns, name string) pluginapi.NodeID {
+func applicationID(pathPrefix, ns, name string) pluginapi.NodeID {
 	return pluginapi.NodeID{
 		Kind: pluginapi.NodeKindArgoApplication,
-		Path: clusterID + "/" + ns + "/" + name,
+		Path: pathPrefix + "/" + ns + "/" + name,
 	}
 }
 
 // resourceNodeID returns the NodeID of a resource listed in an Application's
-// status.resources. For cluster-scoped resources, ns can be empty.
-func resourceNodeID(clusterID, group, kind, ns, name string) pluginapi.NodeID {
+// status.resources. For cluster-scoped resources, res.Namespace can be empty.
+func resourceNodeID(pathPrefix, clusterID string, res resource) pluginapi.NodeID {
 	// TODO(akavel-reply): should we just use a single naming scheme for all
 	// k8s resources, without special-casing Deployments and Services? Should we
 	// use custom NodeID.Kind for every resource kind, e.g.
 	// `NodeID.Kind=Deployment.apps.k8s`? Would need to be also updated in
 	// other plugins.
 	switch {
-	case group == "apps" && kind == "Deployment":
+	case res.Group == "apps" && res.Kind == "Deployment":
 		return pluginapi.NodeID{
 			Kind: pluginapi.NodeKindDeployment,
-			Path: clusterID + "/" + ns + "/" + name,
+			Path: clusterID + "/" + res.Namespace + "/" + res.Name,
 		}
-	case group == "" && kind == "Service":
+	case res.Group == "" && res.Kind == "Service":
 		return pluginapi.NodeID{
 			Kind: pluginapi.NodeKindService,
-			Path: clusterID + "/" + ns + "/" + name,
+			Path: clusterID + "/" + res.Namespace + "/" + res.Name,
 		}
-	case group == argoGroup && kind == argoApplication:
-		return applicationID(clusterID, ns, name)
+	case res.Group == argoGroup && res.Kind == argoApplication:
+		return applicationID(pathPrefix, res.Namespace, res.Name)
 	}
+	group := res.Group
 	if group == "" {
 		group = "core"
 	}
-	path := clusterID + "/" + group + "/" + kind
-	if ns != "" {
-		path += "/" + ns
+	path := clusterID + "/" + group + "/" + res.Kind
+	if res.Namespace != "" {
+		path += "/" + res.Namespace
 	}
 	return pluginapi.NodeID{
 		Kind: pluginapi.NodeKindK8sResource,
-		Path: path + "/" + name,
+		Path: path + "/" + res.Name,
 	}
 }
 
-// isInCluster returns true if the Application deploys to the cluster it lives in.
-func isInCluster(app unstructured.Unstructured) bool {
-	var (
-		server = nestedStringOrEmpty(app, "spec", "destination", "server")
-		name   = nestedStringOrEmpty(app, "spec", "destination", "name")
-	)
-	// ArgoCD's names for the cluster the Application lives in.
+// isInCluster returns true if the Application deploys to the cluster ArgoCD runs in.
+func isInCluster(app application) bool {
+	// ArgoCD's names for the cluster it runs in.
 	const (
 		inClusterServer = "https://kubernetes.default.svc"
 		inClusterName   = "in-cluster"
 	)
-	return server == inClusterServer || name == inClusterName
+	dest := app.Spec.Destination
+	return dest.Server == inClusterServer || dest.Name == inClusterName
 }
 
-// source is the part of an Application source we use. A source with a Helm
-// chart or a "ref" has no path.
-type source struct {
-	repoURL string
-	path    string
+// hasOperation returns true if a sync operation is requested or in progress.
+func hasOperation(app application) bool {
+	return len(app.Operation) > 0 && string(app.Operation) != "null"
 }
 
 // sources returns the sources of the Application, with non-empty repoURL.
-func sources(app unstructured.Unstructured) []source {
-	specs, _, _ := unstructured.NestedSlice(app.Object, "spec", "sources")
+func sources(app application) []source {
+	specs := app.Spec.Sources
 
 	// According to the ArgoCD documentation as of Oct 2026, "When you
 	// specify the sources field, Argo CD will ignore the source (singular) field."
 	// (https://argo-cd.readthedocs.io/en/stable/user-guide/multiple_sources/)
-	if len(specs) == 0 {
-		single, _, _ := unstructured.NestedMap(app.Object, "spec", "source")
-		if single == nil {
-			return nil
-		}
-		specs = []any{single}
+	if len(specs) == 0 && app.Spec.Source != nil {
+		specs = []source{*app.Spec.Source}
 	}
 
-	var sources []source
-	for _, spec := range specs {
-		m, _ := spec.(map[string]any)
-		url, _ := m["repoURL"].(string)
-		if url == "" {
-			continue
-		}
-		path, _ := m["path"].(string)
-		sources = append(sources, source{repoURL: url, path: path})
-	}
-	return sources
+	return slices.DeleteFunc(slices.Clone(specs), func(s source) bool {
+		return s.RepoURL == ""
+	})
 }
 
 // pathsProperties returns the "paths" property: a JSON list of paths within a
@@ -337,40 +394,21 @@ func pathsProperties(paths []string) pluginapi.PropertyMap {
 }
 
 // sourceType returns the tool(s) ArgoCD detected for the Application's source(s).
-func sourceType(app unstructured.Unstructured) string {
-	types, _, _ := unstructured.NestedStringSlice(app.Object, "status", "sourceTypes")
-	if len(types) == 0 {
-		return nestedStringOrEmpty(app, "status", "sourceType")
+func sourceType(app application) string {
+	if len(app.Status.SourceTypes) == 0 {
+		return app.Status.SourceType
 	}
-	return strings.Join(types, ",")
-}
-
-func (p *Plugin) connect() (discovery.DiscoveryInterface, dynamic.Interface, error) {
-	cfg, err := kubeutil.RestConfig(p.config.Kubeconfig)
-	if err != nil {
-		return nil, nil, fmt.Errorf("loading k8s config: %w", err)
-	}
-	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating k8s discovery client: %w", err)
-	}
-	dyn, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating k8s dynamic client: %w", err)
-	}
-	return disc, dyn, nil
+	return strings.Join(app.Status.SourceTypes, ",")
 }
 
 // lastDeployedAt returns deployedAt of the newest entry of the Application's
 // status.history, or empty string if there is none.
-func lastDeployedAt(app unstructured.Unstructured) string {
-	history, _, _ := unstructured.NestedSlice(app.Object, "status", "history")
+func lastDeployedAt(app application) string {
+	history := app.Status.History
 	if len(history) == 0 {
 		return ""
 	}
-	last, _ := history[len(history)-1].(map[string]any)
-	deployedAt, _ := last["deployedAt"].(string)
-	return deployedAt
+	return history[len(history)-1].DeployedAt
 }
 
 // setIfNotEmpty sets props[key] unless value is empty.
@@ -378,9 +416,4 @@ func setIfNotEmpty(props pluginapi.PropertyMap, key, value string) {
 	if value != "" {
 		props[key] = value
 	}
-}
-
-func nestedStringOrEmpty(u unstructured.Unstructured, fields ...string) string {
-	s, _, _ := unstructured.NestedString(u.Object, fields...)
-	return s
 }
