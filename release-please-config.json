@@ -3,13 +3,22 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "prerelease": false,
+      "prerelease": true,
       "versioning": "prerelease",
-      "release-as": "0.1.1",
       "extra-files": [
-        {"type": "yaml", "path": "deploy/charts/naira/Chart.yaml", "jsonpath": "$.version"},
-        {"type": "yaml", "path": "deploy/charts/naira/Chart.yaml", "jsonpath": "$.appVersion"}
-      ]
+        {
+          "type": "yaml",
+          "path": "deploy/charts/naira/Chart.yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "deploy/charts/naira/Chart.yaml",
+          "jsonpath": "$.appVersion"
+        }
+      ],
+      "prerelease-type": "rc",
+      "skip-github-release": true
     }
   }
 }
