@@ -15,18 +15,22 @@
 //
 // # Environment Variables
 //
-//   - ARGOCD_BASE_URL (mandatory) - base URL of argocd-server. It must either serve a proper
+//   - ARGOCD_BASE_URL - MANDATORY - base URL of argocd-server. It must either serve a proper
 //     HTTPS certificate (see https://argo-cd.readthedocs.io/en/stable/operator-manual/tls/), or be
 //     reachable over plain HTTP without a redirect to HTTPS (see
 //     https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/#option-2-ssl-termination-at-ingress-controller
 //     for the "server.insecure" setting).
+//
 //   - ARGOCD_TOKEN (optional) - API token, sent as a Bearer token. Needs only
 //     read access ("applications, get"), e.g. a token of a local account
 //     with such a role, see "argocd account generate-token".
+//
 //   - ARGOCD_HTTP_TIMEOUT (optional, default 10s) - timeout of the HTTP requests.
+//
 //   - PATH_PREFIX (optional, default "argocd") - prefix of the paths of the
 //     Application Nodes. Set it to a different value for each ArgoCD instance.
-//   - CLUSTER_ID (mandatory) - ID of the Kubernetes cluster that the Applications deploy to,
+//
+//   - CLUSTER_ID - MANDATORY - ID of the Kubernetes cluster that the Applications deploy to,
 //     which is the UID of its "kube-system" namespace, as used by other plugins.
 //     ArgoCD API doesn't expose it, so it must be provided by the user.
 //
