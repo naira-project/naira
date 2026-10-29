@@ -435,7 +435,6 @@ func generateToken(ctx context.Context, k3sContainer testcontainers.Container, d
 		cmd := append([]string{
 			"kubectl", "-n", argoNamespace, "exec", "deploy/argocd-server", "--",
 			"argocd", "--config", config}, args...)
-		// cmd = append(cmd, "--config", config)
 		code, out, err := execInContainer(ctx, k3sContainer, cmd)
 		if err != nil {
 			return "", fmt.Errorf("running argocd CLI: %w", err)
