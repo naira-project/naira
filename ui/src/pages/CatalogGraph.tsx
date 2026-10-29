@@ -208,9 +208,11 @@ function toFlowEdge(edge: CatalogGraphEdge): Edge {
 
 type CatalogGraphProps = {
   rootNode: CatalogGraphRoot;
+  /** Rendered in the toolbar, right before the graph stats. */
+  toolbarAddon?: React.ReactNode;
 };
 
-export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
+export default function CatalogGraph({ rootNode, toolbarAddon }: CatalogGraphProps) {
   const navigate = useNavigate();
   const [depth, setDepth] = useState(DEFAULT_DEPTH);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -277,6 +279,8 @@ export default function CatalogGraph({ rootNode }: CatalogGraphProps) {
         </div>
 
         <div className="flex-1 min-w-4" />
+
+        {toolbarAddon}
 
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1">

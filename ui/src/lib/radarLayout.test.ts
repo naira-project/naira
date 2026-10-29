@@ -14,6 +14,7 @@ function makeEntry(overrides: Partial<RadarEntry> & { path: string; index: numbe
     moved: 'none',
     owner: 'team',
     rationale: 'because',
+    catalogRefs: [],
     ...overrides,
   };
 }

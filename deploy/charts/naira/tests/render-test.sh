@@ -18,6 +18,10 @@ fail=0
 
 # BASE lists flags to add a minimal set of values required to render the chart.
 BASE=(-f "$CHART/ci/default-values.yaml")
+# DB names the operator-supplied database Secrets, for render_raw calls that
+# test something else.
+DB=(--set database.admin.secret.existingSecret=postgres-admin
+  --set database.databases.catalog.secret.existingSecret=catalog-db)
 # render_raw renders the chart without applying BASE flags; it is intended
 # for tests that set them themselves or verify behavior without them.
 render_raw() {
@@ -218,7 +222,7 @@ check "no Secrets by default" \
   "${secrets:-0}"
 check "catalog Secret when create=true" \
   "k1" \
-  "$(render_raw --set portal.enabled=false \
+  "$(render_raw "${DB[@]}" --set portal.enabled=false \
       --set catalog.secret.create=true --set catalog.secret.data.LITELLM_API_KEY=k1 \
     | yq 'select(.kind == "Secret" and .metadata.name == "catalog-secrets") | .stringData.LITELLM_API_KEY')"
 check "existingSecret reaches plugin env" \
@@ -227,7 +231,7 @@ check "existingSecret reaches plugin env" \
     | yq "$LITELLM_ENV | select(.name == \"LITELLM_API_KEY\") | .valueFrom.secretKeyRef.name")"
 check "portal Secret when create=true" \
   "s3" \
-  "$(render_raw --set catalog.enabled=false \
+  "$(render_raw "${DB[@]}" --set catalog.enabled=false \
       --set portal.oidc.secret.create=true --set portal.oidc.secret.value=s3 \
     | yq 'select(.kind == "Secret" and .metadata.name == "portal-oidc") | .stringData["client-secret"]')"
 
@@ -242,6 +246,28 @@ check "ui catalog upstream override" \
   "http://x:1" \
   "$(render --set ui.catalogUpstream=http://x:1 \
     | yq "$UI | .env[] | select(.name == \"CATALOG_UPSTREAM\") | .value")"
+check "ui prometheus upstream default" \
+  "http://prometheus-operated.naira-deps.svc.cluster.local:9090" \
+  "$(render | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus upstream override" \
+  "http://prom:9090" \
+  "$(render --set ui.prometheus.upstream=http://prom:9090 \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus upstream empty: no env var" \
+  "" \
+  "$(render --set ui.prometheus.upstream= \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus allowed paths and methods default to the image's" \
+  "" \
+  "$(render | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_PATHS\" or .name == \"PROMETHEUS_ALLOWED_METHODS\") | .name")"
+check "ui prometheus allowed paths joined with |" \
+  "query|series" \
+  "$(render --set 'ui.prometheus.allowedPaths[0]=query' --set 'ui.prometheus.allowedPaths[1]=series' \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_PATHS\") | .value")"
+check "ui prometheus allowed methods joined with a space" \
+  "GET HEAD" \
+  "$(render --set 'ui.prometheus.allowedMethods[0]=GET' --set 'ui.prometheus.allowedMethods[1]=HEAD' \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_METHODS\") | .value")"
 check "ui image" \
   "ghcr.io/naira-project/naira-ui:${APP_VERSION}" \
   "$(render | yq "$UI | .image")"
@@ -295,12 +321,12 @@ RENDER=render_raw must_fail "no portal Secret source" \
   --set catalog.secret.existingSecret=x
 check "no Secret needed when nothing reads one" \
   "ok" \
-  "$(render_raw --set portal.enabled=false \
+  "$(render_raw "${DB[@]}" --set portal.enabled=false \
       --set catalog.plugins.litellm.enabled=false \
       --set catalog.plugins.openmetadata.enabled=false >/dev/null && echo ok)"
 check "a plugin naming its own Secret needs no catalog Secret" \
   "ok" \
-  "$(render_raw --set portal.enabled=false \
+  "$(render_raw "${DB[@]}" --set portal.enabled=false \
       --set catalog.plugins.openmetadata.enabled=false \
       --set catalog.plugins.litellm.env.LITELLM_API_KEY.secretKeyRef.name=own >/dev/null && echo ok)"
 check "disabled plugin may share a port" \
@@ -503,6 +529,72 @@ check "NetworkPolicy extraIngress is appended" \
       --set 'catalog.networkPolicy.extraIngress[0].from[0].namespaceSelector.matchLabels.n=ingress-nginx' \
     | yq "$NETWORK_POLICY | (.ingress | length | tostring) + \" \"
           + .ingress[1].from[0].namespaceSelector.matchLabels.n")"
+# ── PostgreSQL and db-init ───────────────────────────────────────────────────
+DB_JOB='select(.kind == "Job") | .spec.template.spec.containers[0]'
+db_job_name() { render "$@" | yq 'select(.kind == "Job") | .metadata.name'; }
+
+check "postgres reads the admin Secret, renders none of its own" \
+  "postgres-admin|0" \
+  "$(o=$(render); echo "$o" | yq 'select(.kind == "StatefulSet" and .metadata.name == "postgres")
+       | .spec.template.spec.containers[0].env[] | select(.name == "POSTGRES_PASSWORD") | .valueFrom.secretKeyRef.name' \
+     )|$(render | yq ea '[select(.kind == "Secret")] | length')"
+check "db-init targets the subchart Service as the admin user" \
+  "postgres.naira.svc.cluster.local postgres postgres-admin" \
+  "$(render | yq "$DB_JOB | (.env[] | select(.name == \"PGHOST\") | .value) + \" \"
+       + (.env[] | select(.name == \"PGUSER\") | .value) + \" \"
+       + (.env[] | select(.name == \"PGPASSWORD\") | .valueFrom.secretKeyRef.name)")"
+check "db-init reads each database password from its Secret" \
+  "catalog-db" \
+  "$(render | yq "$DB_JOB | .env[] | select(.name == \"DB_PASSWORD_0\") | .valueFrom.secretKeyRef.name")"
+check "dev: db-init ensures catalog, langfuse, litellm and openmetadata" \
+  "catalog,langfuse,litellm,openmetadata" \
+  "$(render_raw "${DEV[@]}" | yq "$DB_JOB | .args | join(\",\")")"
+check "dev: litellm Secret has username and password" \
+  "litellm litellm-local-password" \
+  "$(render_raw "${DEV[@]}" | yq 'select(.kind == "Secret" and .metadata.name == "litellm-db") | .stringData.username + " " + .stringData.password')"
+check "external server: no StatefulSet, db-init uses database.host" \
+  "0 pg.example.com" \
+  "$(o=$(render --set postgresql.enabled=false --set database.host=pg.example.com)
+     echo "$(echo "$o" | yq ea '[select(.kind == "StatefulSet")] | length') $(echo "$o" | yq "$DB_JOB | .env[] | select(.name == \"PGHOST\") | .value")")"
+check "no databases and no subchart: no db-init, no Secret needed" \
+  "0" \
+  "$(render_raw --set postgresql.enabled=false --set database.databases.catalog.enabled=false \
+      -f "$CHART/ci/default-values.yaml" --set database.admin.secret.existingSecret= \
+    | yq ea '[select(.kind == "Job" or .kind == "ConfigMap" and .metadata.name == "db-init")] | length')"
+check "db-init Job name is stable across renders" \
+  "$(db_job_name)" \
+  "$(db_job_name)"
+if [ "$(db_job_name)" = "$(db_job_name --set database.databases.extra.enabled=true \
+      --set database.databases.extra.secret.existingSecret=extra-db)" ]; then
+  echo "FAIL db-init Job name changes with its databases"; fail=1
+else
+  echo "ok   db-init Job name changes with its databases"
+fi
+must_fail "database needs a Secret source" "database.databases.catalog: set secret.existingSecret or secret.create" \
+  --set database.databases.catalog.secret.existingSecret=
+must_fail "database without a secret block" "database.databases.extra: set secret.existingSecret or secret.create" \
+  --set database.databases.extra.enabled=true
+must_fail "database Secret create needs a password" "database.databases.catalog.secret.create is true but password is empty" \
+  --set database.databases.catalog.secret.existingSecret= --set database.databases.catalog.secret.create=true
+must_fail "admin Secret must match the subchart's" "postgresql.auth.existingSecret must equal" \
+  --set database.admin.secret.existingSecret=other
+must_fail "external server needs a host" "set database.host" \
+  --set postgresql.enabled=false
+must_fail "subchart and host are exclusive" "database.host: leave empty" \
+  --set database.host=pg.example.com
+must_fail "database name is checked" "name must match" \
+  --set database.databases.Bad_Name.enabled=true --set database.databases.Bad_Name.secret.existingSecret=x
+for reserved in postgres template0 template1; do
+  must_fail "database name $reserved is reserved" "reserved name" \
+    --set "database.databases.$reserved.enabled=true" --set "database.databases.$reserved.secret.existingSecret=x"
+done
+must_fail "database named like the admin is reserved" "reserved name" --set database.admin.username=dbadmin \
+  --set database.databases.dbadmin.enabled=true --set database.databases.dbadmin.secret.existingSecret=x
+check "db-init gets sslmode, retries and a deadline" "prefer 60 900" \
+  "$(render | yq ea '[select(.kind == "Job")] | .[0]
+       | [(.spec.template.spec.containers[0].env[] | select(.name == "PGSSLMODE" or .name == "DB_WAIT_RETRIES") | .value),
+          (.spec.activeDeadlineSeconds | tostring)] | join(" ")')"
+
 check "all-fields values render" \
   "ok" \
   "$(render_raw -f "$CHART/ci/all-fields-values.yaml" >/dev/null && echo ok)"

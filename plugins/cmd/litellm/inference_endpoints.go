@@ -25,6 +25,7 @@ const (
 	propertyKeyAPIBase                    = "api_base"
 	propertyKeyRegionName                 = "region_name"
 	propertyKeyModelName                  = "model_name"
+	propertyKeyModel                      = "model"
 	propertyKeyLifecycleStatus            = "lifecycle_status"
 	propertyKeyMode                       = "mode"
 	propertyKeyMaxTokens                  = "max_tokens"
@@ -229,6 +230,7 @@ func (p *Plugin) fetchInferenceEndpoints(ctx context.Context, statusByKey map[mo
 			propertyKeyAPIBase:        entry.LiteLLMParams.APIBase,
 			propertyKeyRegionName:     strings.TrimSpace(entry.LiteLLMParams.RegionName),
 			propertyKeyModelName:      modelName,
+			propertyKeyModel:          strings.TrimSpace(entry.LiteLLMParams.Model),
 			propertyKeyMode:           entry.ModelInfo.Mode,
 		} {
 			if value != "" {

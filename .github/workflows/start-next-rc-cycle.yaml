@@ -37,13 +37,10 @@ jobs:
           ' release-please-config.json > tmp.json
           mv tmp.json release-please-config.json
           
-      - name: Create Reset PR
+      - name: Create Reset PR (signed commit via GitHub API)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
           # Branch name based on tag
           BRANCH_NAME="chore/start-next-rc-${TAG_NAME}"
 
@@ -51,15 +48,24 @@ jobs:
             echo "::error::Release tag must have the form v1.2.3"
             exit 1
           fi
-          
-          git checkout -b "$BRANCH_NAME"
-          git commit -am "chore: start next release candidate cycle after ${TAG_NAME}"
-          
-          # Force push to safely overwrite if a branch for this tag already exists
-          git push -f -u origin "$BRANCH_NAME"
-          
+
+          # Point the branch at current main (create, or force-reset if it exists)
+          BASE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs" -X POST \
+            -f ref="refs/heads/${BRANCH_NAME}" -f sha="$BASE_SHA" 2>/dev/null || \
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs/heads/${BRANCH_NAME}" -X PATCH \
+            -f sha="$BASE_SHA" -F force=true
+
+          # Commit via the Contents API so GitHub signs it; main requires signed commits.
+          FILE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/release-please-config.json?ref=${BRANCH_NAME}" --jq '.sha')
+          gh api "repos/${GITHUB_REPOSITORY}/contents/release-please-config.json" -X PUT \
+            -f message="chore: start next release candidate cycle after ${TAG_NAME}" \
+            -f branch="$BRANCH_NAME" \
+            -f sha="$FILE_SHA" \
+            -f content="$(base64 -w0 release-please-config.json)"
+
           # Create PR, ignoring failure if one is already open
           gh pr create \
             --title "chore: start next release candidate cycle after ${TAG_NAME}" \
             --body "Merging this PR will re-enable prerelease configuration and silence the changelog so Release Please starts generating silent RC builds for the next version." \
-            --base main || true
+            --base main --head "$BRANCH_NAME" || true

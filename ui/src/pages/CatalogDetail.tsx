@@ -1,13 +1,14 @@
 import { ArrowLeft } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import PropertiesPanel from '../components/PropertiesPanel';
+import PluginPropertiesPanels from '../components/PluginPropertiesPanels';
+import { PersesDashboard } from '../components/perses/PersesDashboard';
 import RelatedNodes from '../components/RelatedNodes';
+import RadarRingBadges from '../components/radar/RadarRingBadges';
 import { Button } from '../components/ui/button';
-import { relatedCardForKind } from '../config/detailTabs';
+import { relatedNodesConfigForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
-import { nodeProps } from '../lib/catalogApi';
 import { cn } from '../lib/utils';
 import CatalogGraph from './CatalogGraph';
 
@@ -19,7 +20,7 @@ const PROPERTIES_TAB = 'Properties';
  * Displays:
  * - Node identity (name, kind, path)
  * - Graph tab: relationship graph centred on this node
- * - Properties tab: key-value rendering of all props
+ * - Properties tab: key-value rendering of the props, one section per plugin
  */
 export default function CatalogDetail() {
   const { kind = '', '*': path = '' } = useParams();
@@ -29,7 +30,7 @@ export default function CatalogDetail() {
   const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
   const backPath = findViewpointForKind(decodedKind)?.path;
 
-  const relatedConfig = relatedCardForKind(decodedKind);
+  const relatedConfig = relatedNodesConfigForKind(decodedKind);
   const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 
@@ -104,15 +105,20 @@ export default function CatalogDetail() {
               <div>
                 {currentTab === GRAPH_TAB && (
                   <div className="h-[500px]">
-                    <CatalogGraph rootNode={{ name: node.name }} />
+                    <CatalogGraph
+                      rootNode={{ name: node.name }}
+                      toolbarAddon={<RadarRingBadges node={node} />}
+                    />
                   </div>
                 )}
 
                 {currentTab === PROPERTIES_TAB && (
                   <div className="flex flex-col gap-6">
-                    <PropertiesPanel props={nodeProps(node)} title={`${node.kind} Properties`} />
+                    <PluginPropertiesPanels node={node} />
 
                     {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
+
+                    <PersesDashboard node={node} />
                   </div>
                 )}
               </div>

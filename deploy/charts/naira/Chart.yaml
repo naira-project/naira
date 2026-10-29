@@ -8,3 +8,10 @@ appVersion: 0.1.1
 home: https://github.com/naira-project/naira
 sources:
   - https://github.com/naira-project/naira
+dependencies:
+  # Official postgres image; bitnami's pinned images are frozen (bitnamilegacy).
+  - name: postgres
+    alias: postgresql
+    version: 0.21.2
+    repository: oci://registry-1.docker.io/cloudpirates
+    condition: postgresql.enabled

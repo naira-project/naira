@@ -14,7 +14,6 @@ export interface NodeResource {
  * Merge all plugin claim props into a single flat map.
  * Later plugins override earlier ones for the same key.
  */
-// TODO(#104): Visualise props from all plugins in the properties panel, instead of overwriting them by key.
 export function nodeProps(node: NodeResource): Record<string, string> {
   const merged: Record<string, string> = {};
   for (const claim of node.pluginClaims ?? []) {
@@ -32,6 +31,11 @@ export interface NodeNameParts {
 
 interface ListNodesResponse {
   nodes?: NodeResource[];
+}
+
+interface ListKindsResponse {
+  kinds?: string[];
+  nextPageToken?: string;
 }
 
 export interface RelationResource {
@@ -120,6 +124,22 @@ async function fetchJson<T>(url: string, token: string | null) {
 export async function fetchNodes(token: string | null, options: ListRequest = {}) {
   const data = await fetchJson<ListNodesResponse>(buildListNodesUrl(options), token);
   return data.nodes ?? [];
+}
+
+/** Fetch all pages of distinct node kinds. */
+export async function fetchKinds(token: string | null): Promise<string[]> {
+  const kinds: string[] = [];
+
+  let pageToken: string | undefined;
+  do {
+    const data = await fetchJson<ListKindsResponse>(
+      buildListUrl('/v1/kinds', { pageSize: 1000, pageToken }),
+      token,
+    );
+    kinds.push(...(data.kinds ?? []));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return kinds;
 }
 
 export async function fetchNode(token: string | null, kind: string, path: string) {

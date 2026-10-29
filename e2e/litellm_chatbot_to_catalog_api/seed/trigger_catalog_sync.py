@@ -28,7 +28,7 @@ POLL_INTERVAL_SECONDS = 2
 
 def fetch_token():
     """Password-grant token from the realm/user/client seeded by keycloak.yaml
-    (see deploy/dev/stacks/core/infra/keycloak/naira-realm.json for the
+    (see naira-realm.json in the test-dependencies chart for the
     source of truth this mirrors). The catalog API requires a Bearer token
     on every /v1/* route as of the Keycloak auth integration."""
     form = urllib.parse.urlencode({
@@ -60,7 +60,7 @@ def main():
 
     deadline = time.monotonic() + POLL_TIMEOUT_SECONDS
     while True:
-        pending = [name for name, op in operations.items() if op["state"] in ("PENDING", "RUNNING")]
+        pending = [name for name, op in operations.items() if not op["done"]]
         if not pending:
             break
         if time.monotonic() > deadline:
@@ -70,9 +70,13 @@ def main():
         for name in pending:
             operations[name] = request("GET", f"/v1/operations/{name}", token)
 
-    failed = {name: op for name, op in operations.items() if op["state"] == "FAILED"}
+    failed = {name: op for name, op in operations.items() if "error" in op}
     for name, op in operations.items():
-        print(f"  {name}: {op['state']} (plugin={op['plugin']}, nodesUpserted={op.get('nodesUpserted', 0)})")
+        if name in failed:
+            outcome = f"FAILED: {op['error']['message']}"
+        else:
+            outcome = f"SUCCEEDED (nodesUpserted={op['response']['nodesUpserted']})"
+        print(f"  {name}: {outcome} (plugin={op['metadata']['plugin']})")
 
     if failed:
         print(f"{len(failed)} plugin run(s) failed", file=sys.stderr)

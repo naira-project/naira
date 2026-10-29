@@ -7,3 +7,11 @@ portal:
   oidc:
     secret:
       existingSecret: portal-oidc
+database:
+  admin:
+    secret:
+      existingSecret: postgres-admin
+  databases:
+    catalog:
+      secret:
+        existingSecret: catalog-db

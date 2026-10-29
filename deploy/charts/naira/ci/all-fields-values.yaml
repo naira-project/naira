@@ -29,3 +29,11 @@ portal:
         nodeSelectorTerms:
           - matchExpressions:
               - {key: kubernetes.io/arch, operator: In, values: [amd64, arm64]}
+database:
+  admin:
+    secret:
+      existingSecret: postgres-admin
+  databases:
+    catalog:
+      secret:
+        existingSecret: catalog-db

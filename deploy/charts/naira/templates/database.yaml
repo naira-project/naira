@@ -1,0 +1,126 @@
+{{- /*
+db-init: runs files/db-init.sh for each enabled database in database.databases.
+The Job name is a hash of its spec, script and values: a change creates a new
+Job (Job specs are immutable), an unchanged upgrade keeps the completed one.
+*/}}
+{{- $dbs := list }}
+{{- range $name := keys .Values.database.databases | sortAlpha }}
+{{- if (get $.Values.database.databases $name).enabled }}
+{{- $dbs = append $dbs $name }}
+{{- end }}
+{{- end }}
+{{- if and (or .Values.postgresql.enabled $dbs) .Values.database.admin.secret.create }}
+{{- with .Values.database.admin.secret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "naira.dbAdminSecretName" $ }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+  annotations:
+    naira.io/warning: "Generated from chart values. Development only."
+type: Opaque
+stringData:
+  postgres-password: {{ .password | quote }}
+{{- end }}
+{{- end }}
+{{- if $dbs }}
+---
+{{- range $name := $dbs }}
+{{- $db := get $.Values.database.databases $name }}
+{{- if $db.secret.create }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "naira.dbSecretName" (dict "name" $name "db" $db) }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+  annotations:
+    naira.io/warning: "Generated from chart values. Development only."
+type: Opaque
+stringData:
+  username: {{ $name | quote }}
+  password: {{ $db.secret.password | quote }}
+---
+{{- end }}
+{{- end }}
+{{- $script := .Files.Get "files/db-init.sh" }}
+{{- $spec := include "naira.dbInitSpec" (dict "root" . "dbs" $dbs) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    {{- include "naira.selector" (dict "root" . "name" "db-init") | nindent 4 }}
+data:
+  db-init.sh: |
+    {{- $script | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init-{{ print $spec $script (toYaml .Values.database) | sha256sum | trunc 8 }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+    {{- include "naira.selector" (dict "root" . "name" "db-init") | nindent 4 }}
+spec:
+  {{- $spec | nindent 2 }}
+{{- end }}
+
+{{- define "naira.dbInitSpec" -}}
+{{- $root := .root -}}
+backoffLimit: {{ $root.Values.database.init.backoffLimit }}
+activeDeadlineSeconds: {{ $root.Values.database.init.activeDeadlineSeconds }}
+template:
+  metadata:
+    labels:
+      {{- include "naira.labels" $root | nindent 6 }}
+      {{- include "naira.selector" (dict "root" $root "name" "db-init") | nindent 6 }}
+  spec:
+    restartPolicy: Never
+    {{- with $root.Values.imagePullSecrets }}
+    imagePullSecrets:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    containers:
+      - name: db-init
+        image: {{ $root.Values.database.init.image | quote }}
+        command: [sh, /scripts/db-init.sh]
+        args: {{ toJson .dbs }}
+        env:
+          - {name: PGHOST, value: {{ include "naira.dbHost" $root | quote }}}
+          - {name: PGPORT, value: {{ $root.Values.database.port | quote }}}
+          - {name: PGUSER, value: {{ $root.Values.database.admin.username | quote }}}
+          - {name: PGSSLMODE, value: {{ $root.Values.database.sslmode | quote }}}
+          - {name: DB_WAIT_RETRIES, value: {{ $root.Values.database.init.waitRetries | quote }}}
+          - name: PGPASSWORD
+            valueFrom:
+              secretKeyRef: {name: {{ include "naira.dbAdminSecretName" $root }}, key: postgres-password}
+          {{- range $i, $name := .dbs }}
+          - name: DB_PASSWORD_{{ $i }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "naira.dbSecretName" (dict "name" $name "db" (get $root.Values.database.databases $name)) }}
+                key: password
+          {{- end }}
+        resources:
+          {{- toYaml $root.Values.database.init.resources | nindent 10 }}
+        # uid 999 is the image's postgres user.
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities: {drop: [ALL]}
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 999
+          runAsGroup: 999
+          seccompProfile: {type: RuntimeDefault}
+        volumeMounts:
+          - {name: scripts, mountPath: /scripts}
+    volumes:
+      - {name: scripts, configMap: {name: db-init}}
+{{- end -}}

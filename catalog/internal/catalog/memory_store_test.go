@@ -7,6 +7,48 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestListKinds(t *testing.T) {
+	store := NewMemoryStore()
+	assert.Empty(t, store.ListKinds())
+
+	appNode := NodeID{
+		Kind: "application",
+		Path: "app-a",
+	}
+	otherAppNode := NodeID{
+		Kind: "application",
+		Path: "app-b",
+	}
+	modelNode := NodeID{
+		Kind: "model",
+		Path: "shared-model",
+	}
+
+	_, _, err := store.ApplyPluginSnapshot(
+		"mlflow",
+		snapshotV1,
+		[]NodeClaim{
+			{ID: appNode},
+			{ID: otherAppNode},
+			{ID: modelNode},
+		},
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"application", "model"}, store.ListKinds())
+
+	_, _, err = store.ApplyPluginSnapshot(
+		"mlflow",
+		snapshotV2,
+		[]NodeClaim{
+			{ID: modelNode},
+		},
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"model"}, store.ListKinds())
+}
+
 func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	store := NewMemoryStore()
 

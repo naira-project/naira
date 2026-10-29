@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { discoverKinds } from '../lib/kindUtils';
+import { fetchKinds } from '../lib/catalogApi';
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
 
@@ -14,7 +14,7 @@ interface UseKindsResult {
 }
 
 /**
- * Encapsulates kind discovery, loading/error state, active kind selection,
+ * Encapsulates node kind loading/error state, active kind selection,
  * and a refresh mechanism.
  */
 export function useKinds(viewpointKinds?: string[]): UseKindsResult {
@@ -28,7 +28,7 @@ export function useKinds(viewpointKinds?: string[]): UseKindsResult {
     refetch,
   } = useQuery({
     queryKey: queryKeys.kinds,
-    queryFn: () => discoverKinds(token),
+    queryFn: () => fetchKinds(token),
   });
 
   const kinds = useMemo(
@@ -49,7 +49,7 @@ export function useKinds(viewpointKinds?: string[]): UseKindsResult {
   return {
     kinds,
     kindsLoading,
-    kindsError: error ? 'Failed to discover kinds' : null,
+    kindsError: error ? 'Failed to load node kinds' : null,
     activeKind,
     setActiveKind,
     refreshKinds,
