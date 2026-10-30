@@ -1,4 +1,4 @@
-# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG} ${E2E_IMAGE}
 #
 # First fragment of the catalog Deployment. scripts/create-environment.sh
 # concatenates this with one plugin-<name>.yaml per entry in the scenario's

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Creates an E2E environment for one scenario on an existing kind cluster:
-# builds and loads only the images that scenario's components.env asks for,
-# deploys them into a fresh namespace, waits for it to be genuinely ready,
-# and seeds a starting dataset.
+# Creates an E2E environment for one scenario on an existing cluster (kind by
+# default, or any kube context via --context): builds only the images that
+# scenario's components.env asks for, loads them into kind (or pushes them
+# with --registry), deploys them into a fresh namespace, waits for it to be
+# genuinely ready, and seeds a starting dataset.
 #
 # e2e/components/ holds every piece any scenario might use (catalog is
 # always deployed with a configurable set of plugin sidecars; keycloak is
@@ -12,7 +13,11 @@
 # PLUGINS) — see e2e/README.md for the full model.
 #
 # Usage:
-#   create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG> [--cluster-name <NAME>]
+#   create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG>
+#     [--cluster-name <NAME>] [--context <NAME>] [--registry]
+#
+# Every image is <E2E_IMAGE>:<component>-<TAG>. E2E_IMAGE defaults to
+# naira-e2e; --registry requires it to be set explicitly.
 #
 # On success, prints ENV_ID=<id>. On failure, dumps pod/job state and logs
 # for the namespace before exiting, so a failed run is debuggable without
@@ -41,10 +46,13 @@ CLUSTER_NAME="naira-idp-e2e"
 TAG=""
 ENV_ID=""
 SCENARIO=""
+CONTEXT=""
+REGISTRY=0
 
 usage() {
   cat >&2 <<'EOF'
-Usage: create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG> [--cluster-name <NAME>]
+Usage: create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG>
+         [--cluster-name <NAME>] [--context <NAME>] [--registry]
 
 Flags:
   --scenario NAME    Required. Name of a directory under e2e/ whose
@@ -55,8 +63,17 @@ Flags:
                       teardown step can find it even if setup fails.
   --tag TAG           Required. Image tag to build/deploy every component
                       image under.
-  --cluster-name NAME Kind cluster context to deploy into. Defaults to
+  --cluster-name NAME Kind cluster to deploy into. Defaults to
                       naira-idp-e2e.
+  --context NAME      kubectl context to deploy into. Defaults to
+                      kind-<cluster-name>.
+  --registry          docker push linux/amd64 images to the registry in
+                      $E2E_IMAGE (required) instead of kind load. Registry
+                      login is the caller's job.
+
+Environment:
+  E2E_IMAGE           Image repository; images are <E2E_IMAGE>:<component>-<TAG>.
+                      Defaults to naira-e2e.
 EOF
 }
 
@@ -66,6 +83,8 @@ while [ $# -gt 0 ]; do
     --env-id) ENV_ID="$2"; shift 2 ;;
     --tag) TAG="$2"; shift 2 ;;
     --cluster-name) CLUSTER_NAME="$2"; shift 2 ;;
+    --context) CONTEXT="$2"; shift 2 ;;
+    --registry) REGISTRY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -78,6 +97,12 @@ if [ -z "${ENV_ID}" ]; then
   usage
   exit 1
 fi
+if [ "${REGISTRY}" -eq 1 ] && [ -z "${E2E_IMAGE:-}" ]; then
+  echo "error: --registry requires E2E_IMAGE to be set" >&2
+  exit 1
+fi
+E2E_IMAGE="${E2E_IMAGE:-naira-e2e}"
+CONTEXT="${CONTEXT:-kind-${CLUSTER_NAME}}"
 
 SCENARIO_DIR="${E2E_DIR}/${SCENARIO}"
 if [ ! -f "${SCENARIO_DIR}/components.env" ]; then
@@ -90,12 +115,12 @@ COMPONENTS="${COMPONENTS:-}"
 PLUGINS="${PLUGINS:-}"
 
 NAMESPACE="${ENV_ID}"
-export NAMESPACE TAG
+export NAMESPACE TAG E2E_IMAGE
 
 echo "==> Environment: ${ENV_ID} (namespace: ${NAMESPACE}, image tag: ${TAG}, scenario: ${SCENARIO})"
 echo "==> Components: ${COMPONENTS:-<none>} · Plugins: ${PLUGINS:-<none>}"
 
-kubectl config use-context "kind-${CLUSTER_NAME}"
+kubectl config use-context "${CONTEXT}"
 
 # ---------------------------------------------------------------------------
 # Component metadata lookups. Every scenario draws from the same pool in
@@ -125,7 +150,7 @@ component_wait_timeout() {
 }
 
 # ---------------------------------------------------------------------------
-# Build and load images.
+# Build and load (or push) images.
 #
 # catalog and the plugins need the repo root as build context (their
 # Dockerfiles COPY from multiple repo-root-relative paths, e.g.
@@ -138,13 +163,19 @@ component_wait_timeout() {
 # breaks their `COPY frontend/ ./`-style paths).
 # ---------------------------------------------------------------------------
 build_and_load() {
-  local image="$1" dockerfile_dir="$2" build_root="${3:-$2}"
-  echo "==> Building ${image}:${TAG}"
-  docker build -t "${image}:${TAG}" -f "${dockerfile_dir}/Dockerfile" "${build_root}"
-  kind load docker-image "${image}:${TAG}" --name "${CLUSTER_NAME}"
+  local component="$1" dockerfile_dir="$2" build_root="${3:-$2}"
+  local ref="${E2E_IMAGE}:${component}-${TAG}"
+  echo "==> Building ${ref}"
+  if [ "${REGISTRY}" -eq 1 ]; then
+    docker build --platform linux/amd64 -t "${ref}" -f "${dockerfile_dir}/Dockerfile" "${build_root}"
+    docker push "${ref}"
+  else
+    docker build -t "${ref}" -f "${dockerfile_dir}/Dockerfile" "${build_root}"
+    kind load docker-image "${ref}" --name "${CLUSTER_NAME}"
+  fi
 }
 
-echo "==> Building and loading images"
+echo "==> Building and publishing images"
 build_and_load catalog "${REPO_ROOT}/catalog" "${REPO_ROOT}"
 build_and_load seed "${SCENARIO_DIR}/seed"
 for plugin in ${PLUGINS}; do
@@ -167,7 +198,7 @@ apply() {
   # snippets (e.g. postgres.yaml's $POSTGRES_DB) with their own $VAR syntax
   # that an unrestricted envsubst would blank out.
   # shellcheck disable=SC2016 # envsubst takes a literal list of var names
-  envsubst '${NAMESPACE} ${TAG}' < "$1" | kubectl apply -f -
+  envsubst '${NAMESPACE} ${TAG} ${E2E_IMAGE}' < "$1" | kubectl apply -f -
 }
 
 # Renders and applies the catalog-plugin-config ConfigMap (consumed by
@@ -195,14 +226,14 @@ render_catalog() {
     done
     echo "---"
 
-    envsubst '${NAMESPACE} ${TAG}' < "${E2E_DIR}/components/catalog/header.yaml"
+    envsubst '${NAMESPACE} ${TAG} ${E2E_IMAGE}' < "${E2E_DIR}/components/catalog/header.yaml"
     port=50051
     for plugin in ${PLUGINS}; do
       export PLUGIN_PORT="${port}"
-      envsubst '${NAMESPACE} ${TAG} ${PLUGIN_PORT}' < "${E2E_DIR}/components/catalog/plugin-${plugin}.yaml"
+      envsubst '${NAMESPACE} ${TAG} ${E2E_IMAGE} ${PLUGIN_PORT}' < "${E2E_DIR}/components/catalog/plugin-${plugin}.yaml"
       port=$((port + 1))
     done
-    envsubst '${NAMESPACE} ${TAG}' < "${E2E_DIR}/components/catalog/footer.yaml"
+    envsubst '${NAMESPACE} ${TAG} ${E2E_IMAGE}' < "${E2E_DIR}/components/catalog/footer.yaml"
   } | kubectl apply -f -
 }
 

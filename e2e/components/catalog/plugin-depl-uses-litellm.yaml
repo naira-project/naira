@@ -1,5 +1,5 @@
         - name: plugin-depl-uses-litellm
-          image: depl-uses-litellm:${TAG}
+          image: ${E2E_IMAGE}:depl-uses-litellm-${TAG}
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
           env:
