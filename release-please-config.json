@@ -3,7 +3,7 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "prerelease": true,
+      "prerelease": false,
       "versioning": "prerelease",
       "extra-files": [
         {
@@ -17,11 +17,9 @@
           "jsonpath": "$.appVersion"
         }
       ],
-      "prerelease-type": "rc",
-      "skip-github-release": true,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
-      "release-as": "0.1.2-rc"
+      "release-as": "0.1.2"
     }
   }
 }
