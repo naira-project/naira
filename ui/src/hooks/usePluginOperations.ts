@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   runAllPlugins as apiRunAllPlugins,
@@ -11,9 +11,19 @@ import {
 import { queryKeys } from '../lib/queryKeys';
 import { useOpenMFPContext } from './useOpenMFPContext';
 
-const POLL_INTERVAL_MS = 2000;
-const EMPTY_OPERATIONS: OperationResource[] = [];
+const ACTIVE_POLL_MS = 2000;
+const IDLE_POLL_MS = 20_000;
 const STALE_AFTER_MS = 2 * 60 * 1000;
+const EMPTY_OPERATIONS: OperationResource[] = [];
+const RUN_MUTATION_KEY = ['plugins', 'run'] as const;
+
+/** Plugin names to run, or `null` for all registered plugins. */
+type RunTarget = string[] | null;
+
+interface RunResult {
+  operations: OperationResource[];
+  errors: string[];
+}
 
 function isStale(op: OperationResource) {
   if (op.done) return false;
@@ -40,22 +50,76 @@ export interface RunErrorEntry {
 }
 
 /**
- * Single source of truth for the plugins list and their run operations.
+ * Polls plugin run operations and invalidates catalog data whenever a run
+ * finishes successfully, regardless of who started it (UI or scheduler).
  *
- * Each plugin's running state is derived directly from the operations list,
- * allowing single plugin runs and batch runs ("Run All") to operate independently.
- * Polling for operations automatically activates every 2 seconds via React Query
- * whenever non-terminal operations exist.
+ * Polls every 2s while any operation is unfinished and every 20s otherwise,
+ * and refetches on window focus. Each poll returns the full list, so a missed
+ * response is repaired by the next one.
+ *
+ * Can be mounted on its own to keep catalog data fresh outside the Plugins page.
  */
+export function useOperationsSync() {
+  const queryClient = useQueryClient();
+  const { token } = useOpenMFPContext();
+
+  const query = useQuery({
+    queryKey: queryKeys.operations,
+    queryFn: () => fetchOperations(token),
+    refetchOnWindowFocus: true,
+    refetchInterval: (currentQuery) =>
+      (currentQuery.state.data ?? []).some((op) => !op.done) ? ACTIVE_POLL_MS : IDLE_POLL_MS,
+  });
+
+  const initializedRef = useRef(false);
+  const finishedSeenRef = useRef<Set<string>>(new Set());
+  const runningSeenRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const operations = query.data;
+    if (!operations) return;
+
+    const finishedSeen = finishedSeenRef.current;
+    const present = new Set(operations.map((op) => op.name));
+    const running = new Set<string>();
+    let catalogChanged = false;
+
+    for (const op of operations) {
+      if (!op.done) {
+        running.add(op.name);
+      } else if (!finishedSeen.has(op.name)) {
+        finishedSeen.add(op.name);
+        // The first load only records history; it must not trigger a refetch.
+        if (initializedRef.current && !op.error) catalogChanged = true;
+      }
+    }
+
+    // An operation seen running that is gone from the list finished unobserved.
+    if (initializedRef.current) {
+      for (const name of runningSeenRef.current) {
+        if (!present.has(name)) catalogChanged = true;
+      }
+    }
+
+    runningSeenRef.current = running;
+    initializedRef.current = true;
+
+    if (catalogChanged) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.catalog });
+    }
+  }, [query.data, queryClient]);
+
+  return query;
+}
+
 interface UsePluginsStatusResult {
   plugins: PluginResource[];
   operations: OperationResource[];
   loading: boolean;
-  /** Set of plugin names currently executing or awaiting response. */
+  /** Plugins with an unfinished operation or a run request in flight. */
   runningPlugins: Set<string>;
-  /** Indicates whether a "Run All" execution is currently in progress. */
+  /** True while any plugin is running. */
   runAllActive: boolean;
-  /** List of execution or timeout errors. */
   runErrors: RunErrorEntry[];
   dismissError: (id: string) => void;
   refresh: () => Promise<void>;
@@ -64,58 +128,90 @@ interface UsePluginsStatusResult {
   runSubset: (pluginNames: string[]) => Promise<void>;
 }
 
+/**
+ * Plugins list plus their run state. Running state is derived from the
+ * operations returned by the backend; the only local state is the set of run
+ * requests awaiting a response, tracked by the mutation itself.
+ */
 export function usePluginsStatus(): UsePluginsStatusResult {
   const queryClient = useQueryClient();
-  const [runErrors, setRunErrors] = useState<RunErrorEntry[]>([]);
-
-  // Tracks locally triggered plugins while waiting for the POST mutation response
-  const [pendingLocal, setPendingLocal] = useState<Set<string>>(new Set());
-
-  // Tracks operation names triggered by "Run All" until they reach a terminal state
-  const [pendingRunAllOps, setPendingRunAllOps] = useState<Set<string>>(new Set());
-
-  // Indicates whether a "Run Subset" execution is currently in progress
-  const [subsetActive, setSubsetActive] = useState(false);
-
-  const warnedRef = useRef<Set<string>>(new Set());
   const { token } = useOpenMFPContext();
+  const [runErrors, setRunErrors] = useState<RunErrorEntry[]>([]);
+  const warnedRef = useRef<Set<string>>(new Set());
 
   const addError = useCallback((message: string) => {
-    setRunErrors((prev) => [
-      ...prev,
+    setRunErrors((previous) => [
+      ...previous,
       { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, message },
     ]);
   }, []);
 
   const dismissError = useCallback((id: string) => {
-    setRunErrors((prev) => prev.filter((e) => e.id !== id));
+    setRunErrors((previous) => previous.filter((error) => error.id !== id));
   }, []);
 
   const pluginsQuery = useQuery({
     queryKey: queryKeys.plugins,
     queryFn: () => fetchPlugins(token),
   });
+  const operationsQuery = useOperationsSync();
 
-  const operationsQuery = useQuery({
-    queryKey: queryKeys.operations,
-    queryFn: () => fetchOperations(token),
-    refetchInterval: (query) => {
-      const ops = query.state.data ?? [];
-      return ops.some((op) => !op.done) ? POLL_INTERVAL_MS : false;
+  const plugins = pluginsQuery.data ?? [];
+  const operations = operationsQuery.data ?? EMPTY_OPERATIONS;
+
+  const runMutation = useMutation<RunResult, Error, RunTarget>({
+    mutationKey: RUN_MUTATION_KEY,
+    mutationFn: async (target) => {
+      if (target === null) {
+        return { operations: await apiRunAllPlugins(token), errors: [] };
+      }
+      const settled = await Promise.allSettled(target.map((name) => apiRunPlugin(token, name)));
+      const result: RunResult = { operations: [], errors: [] };
+      settled.forEach((outcome, index) => {
+        if (outcome.status === 'fulfilled') {
+          result.operations.push(outcome.value);
+        } else {
+          result.errors.push(
+            outcome.reason instanceof Error
+              ? outcome.reason.message
+              : `Failed to run "${target[index]}"`,
+          );
+        }
+      });
+      return result;
+    },
+    onSuccess: ({ operations: started, errors }) => {
+      // Show the new operations immediately instead of waiting for the next poll.
+      queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (old) =>
+        mergeOperations(old, started),
+      );
+      // Each cache write restarts the refetchInterval timer, so rapid runs would
+      // starve polling. Refetch now to keep the list fresh.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.operations });
+      errors.forEach(addError);
+    },
+    onError: (error) => {
+      addError(error.message || 'Failed to trigger plugin run');
     },
   });
 
-  const operations = operationsQuery.data ?? EMPTY_OPERATIONS;
+  // Several run requests can be in flight at once, so read all pending ones.
+  const pendingTargets = useMutationState({
+    filters: { mutationKey: RUN_MUTATION_KEY, status: 'pending' },
+    select: (mutation) => mutation.state.variables as RunTarget,
+  });
 
   const runningPlugins = useMemo(() => {
     const running = new Set(operations.filter((op) => !op.done).map((op) => op.metadata.plugin));
-    pendingLocal.forEach((p) => {
-      running.add(p);
-    });
+    for (const target of pendingTargets) {
+      for (const name of target ?? plugins.map((plugin) => plugin.name)) {
+        running.add(name);
+      }
+    }
     return running;
-  }, [operations, pendingLocal]);
+  }, [operations, pendingTargets, plugins]);
 
-  // Emit a warning notice if an operation exceeds the stale threshold
+  // Warn once per operation that exceeds the stale threshold.
   useEffect(() => {
     operations.filter(isStale).forEach((op) => {
       if (!warnedRef.current.has(op.name)) {
@@ -125,20 +221,6 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     });
   }, [operations, addError]);
 
-  // Remove settled operations from the "Run All" tracking set
-  useEffect(() => {
-    if (pendingRunAllOps.size === 0) return;
-    setPendingRunAllOps((prev) => {
-      const next = new Set(
-        Array.from(prev).filter((name) => {
-          const op = operations.find((o) => o.name === name);
-          return op ? !op.done : true;
-        }),
-      );
-      return next.size === prev.size ? prev : next;
-    });
-  }, [operations, pendingRunAllOps]);
-
   const refresh = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.plugins }),
@@ -146,107 +228,24 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     ]);
   }, [queryClient]);
 
-  const runOneMutation = useMutation({
-    mutationFn: (pluginName: string) => apiRunPlugin(token, pluginName),
-    onMutate: (pluginName: string) => {
-      setPendingLocal((prev) => new Set(prev).add(pluginName));
+  const { mutateAsync } = runMutation;
+  const run = useCallback(
+    async (target: RunTarget) => {
+      await mutateAsync(target).catch(() => {});
     },
-    onSuccess: (newOp) => {
-      queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
-        mergeOperations(oldOps, [newOp]),
-      );
-    },
-    onError: (err, pluginName) => {
-      addError(err instanceof Error ? err.message : `Failed to run "${pluginName}"`);
-    },
-    onSettled: (_data, _err, pluginName) => {
-      setPendingLocal((prev) => {
-        const next = new Set(prev);
-        next.delete(pluginName);
-        return next;
-      });
-    },
-  });
-
-  const runAllMutation = useMutation({
-    mutationFn: () => apiRunAllPlugins(token),
-    onSuccess: (ops) => {
-      setPendingRunAllOps(new Set(ops.map((op) => op.name)));
-      queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
-        mergeOperations(oldOps, ops),
-      );
-    },
-    onError: (err) => {
-      addError(err instanceof Error ? err.message : 'Failed to trigger plugin run');
-    },
-  });
-
-  const runOne = useCallback(
-    async (pluginName: string) => {
-      await runOneMutation.mutateAsync(pluginName).catch(() => {});
-    },
-    [runOneMutation],
+    [mutateAsync],
   );
 
-  const runAll = useCallback(async () => {
-    await runAllMutation.mutateAsync().catch(() => {});
-  }, [runAllMutation]);
-
-  const runAllActive = pendingRunAllOps.size > 0 || runAllMutation.isPending || subsetActive;
-
-  /**
-   * Like `runAll`, but scoped to a specific set of plugins — used by viewpoints
-   * (e.g. Model, Software Catalog) that only want to trigger the plugins they show,
-   * rather than every plugin the backend knows about.
-   */
-  const runSubset = useCallback(
-    async (pluginNames: string[]) => {
-      setPendingLocal((prev) => {
-        const next = new Set(prev);
-        pluginNames.forEach((name) => {
-          next.add(name);
-        });
-        return next;
-      });
-      setSubsetActive(true);
-      try {
-        const results = await Promise.allSettled(
-          pluginNames.map(async (name) => {
-            const op = await apiRunPlugin(token, name);
-            queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (oldOps = []) =>
-              mergeOperations(oldOps, [op]),
-            );
-          }),
-        );
-        results.forEach((result, i) => {
-          if (result.status === 'rejected') {
-            addError(
-              result.reason instanceof Error
-                ? result.reason.message
-                : `Failed to run "${pluginNames[i]}"`,
-            );
-          }
-        });
-      } finally {
-        setPendingLocal((prev) => {
-          const next = new Set(prev);
-          pluginNames.forEach((name) => {
-            next.delete(name);
-          });
-          return next;
-        });
-        setSubsetActive(false);
-      }
-    },
-    [token, queryClient, addError],
-  );
+  const runOne = useCallback((pluginName: string) => run([pluginName]), [run]);
+  const runAll = useCallback(() => run(null), [run]);
+  const runSubset = useCallback((pluginNames: string[]) => run(pluginNames), [run]);
 
   return {
-    plugins: pluginsQuery.data ?? [],
+    plugins,
     operations,
     loading: pluginsQuery.isLoading || operationsQuery.isLoading,
     runningPlugins,
-    runAllActive,
+    runAllActive: runningPlugins.size > 0,
     runErrors,
     dismissError,
     refresh,
