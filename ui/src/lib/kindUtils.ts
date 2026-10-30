@@ -1,4 +1,4 @@
-import { fetchNodes, fetchRelations, type NodeResource, nodeProps } from './catalogApi';
+import { fetchRelations, type NodeResource, nodeProps } from './catalogApi';
 
 /**
  * Parse a node path into its structural segments.
@@ -66,17 +66,6 @@ export function nodePlugins(node: NodeResource): string[] {
     if (claim.plugin) plugins.add(claim.plugin);
   }
   return Array.from(plugins).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-}
-
-/**
- * Discover all unique node kinds from the catalog API.
- * Fetches a large page of nodes and deduplicates their `kind` values.
- */
-// TODO(#105): add API endpoint to fetch kinds directly, instead of fetching nodes and deduplicating
-export async function discoverKinds(token: string | null): Promise<string[]> {
-  const nodes = await fetchNodes(token, { pageSize: 1000 });
-  const kinds = new Set(nodes.map((n) => n.kind).filter(Boolean));
-  return Array.from(kinds).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
 /**

@@ -10,14 +10,29 @@ Naira doesn't implement directly features e.g. for inferencing, AI Gateways and 
 - Understand [codebase patterns] and output [clear docs/tests].
 
 ## This Project Part/Component
-- **Tech Stack:** Go 1.26 for backend services, Chi HTTP router, React 19, TypeScript 5, Tailwind CSS 4, Docker, kind, Helm, Task, and Python helper scripts for local seeding.
+- **Tech Stack:** Go 1.26 for backend services, Chi HTTP router, React 19, TypeScript 5, Tailwind CSS 4, Docker, kind, Helm, Tilt and Task.
 - **File Structure:**
-  - `catalog/` - Go model-catalog service, including HTTP API, plugins, and unit tests.
-  - `deploy/dev/` - Local development environment assets: Taskfile, Kubernetes manifests, Helm values, and helper tooling.
+  - `catalog/` - Go models-catalog service, including HTTP API, and unit tests.
+  - `plugins/` - Go plugins that scan external systems and emit data for ingestion into the catalog.
+  - `docs/` - Markdown documentation for contributors.
+  - `deploy/charts/naira/` - Helm chart for catalog, plugins, UI and portal.
   - `ui/` - React/TypeScript UI.
   - `README.md` - Project overview and developer quick start.
-  - `Taskfile.yml` - Root developer entrypoints that delegate to the full dev Taskfile.
+  - `Tiltfile` - Local kind environment (Naira chart plus the test-dependencies chart).
+  - `Taskfile.yml` - Developer tasks: lint, tests, proto, chart checks.
+  - `mise.toml` - list of tools and versions used for project development.
 
-## Go Code
-- Always wrap propagated errors with `%w` and describe the callee operation, not the caller.
-- When passing on raw data from external APIs, keep original field names. If the data is transformed enough to justify a rename, add a comment with rationale.
+## Documentation and Code Comments
+- Don't duplicate explanations across files (e.g. plugin README vs. godoc vs. workflow README vs.
+  sample config). Duplication drifts out of sync quickly. Pick one source of truth and have
+  everything else link to it.
+- Never mention in godoc comments how the entity you're documenting _is_ used/called by other entities.
+  This is wishful thinking and will inevitably drift out of sync and become misleading comments, doing more harm than benefit.
+  Instead, write what the entity does and how to use it, by anyone who wants.
+  When needed, write that it is intended to be used only in some specific way(s), constraints that must be upheld - describe the usage contract.
+- Within a function/entity's body, only when some fragment of code is not self-explanatory, or there are
+  non-obvious hidden assumptions made, add a comment explaining primarily the _why_ it's done this way.
+- Keep any comments terse and short. Prefer short sentences over long, winded ones.
+  Prefer no comments at all if the code is self-explanatory
+  (except godocs - for them, skip comment only if the function signature alone is self-explanatory).
+

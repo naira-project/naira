@@ -10,6 +10,7 @@ This repository uses [naira-github-workflows](https://github.com/naira-project/n
 | --- | --- | --- |
 | **PR Validation** | PRs/Pushes to `main` | Test code and verify container builds. |
 | **Release** | Version tags (`v*`) | Build and publish images to `ghcr.io`. |
+| **CodeQL** | PRs/Pushes to `main` and `v*`, weekly | Code scanning (advanced setup, so fork PRs are analyzed too). |
 
 ---
 
@@ -18,7 +19,7 @@ This repository uses [naira-github-workflows](https://github.com/naira-project/n
 Ensures code quality and buildability. Gatekeeper: `All Checks Passed`.
 
 * **`go-test`**: Runs tests in `catalog/` (Go 1.26, race detector enabled).
-* **`container-build-catalog` / `ui**`: Multi-arch build checks (`linux/amd64`, `linux/arm64`)—push disabled.
+* **`container-build-catalog` / `ui**`: Multi-arch build checks (`linux/amd64` + `linux/arm64`, each on a native runner, no QEMU)—push disabled.
 * **`all-checks`**: Required status check; aggregates results from above jobs.
 
 ---

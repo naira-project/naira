@@ -56,3 +56,48 @@ CreateContainerConfigError; fail here with the fix instead.
 {{- if and .Values.portal.enabled (not $o.existingSecret) (not $o.create) }}
 {{- fail "portal reads its OIDC client secret: set portal.oidc.secret.existingSecret or portal.oidc.secret.create" }}
 {{- end }}
+{{- /* PostgreSQL and db-init. */}}
+{{- if and .Values.postgresql.enabled .Values.database.host }}
+{{- fail "database.host: leave empty while postgresql.enabled (the subchart's Service is used)" }}
+{{- end }}
+{{- $admin := .Values.database.admin.secret }}
+{{- if and .Values.postgresql.enabled (ne (toString .Values.postgresql.auth.existingSecret) (include "naira.dbAdminSecretName" .)) }}
+{{- fail (printf "postgresql.auth.existingSecret must equal the database.admin Secret %q" (include "naira.dbAdminSecretName" .)) }}
+{{- end }}
+{{- $dbs := 0 }}
+{{- range $name, $db := .Values.database.databases }}
+{{- if $db.enabled }}
+{{- $dbs = add1 $dbs }}
+{{- if not (regexMatch "^[a-z]([a-z0-9-]*[a-z0-9])?$" $name) }}
+{{- fail (printf "database.databases.%s: name must match ^[a-z]([a-z0-9-]*[a-z0-9])?$" $name) }}
+{{- end }}
+{{- /* db-init would reset these roles' passwords or take over these databases. */}}
+{{- if has $name (list "postgres" "template0" "template1" $.Values.database.admin.username) }}
+{{- fail (printf "database.databases.%s: reserved name (built-in database or database.admin.username)" $name) }}
+{{- end }}
+{{- $s := $db.secret | default dict }}
+{{- if and $s.existingSecret $s.create }}
+{{- fail (printf "database.databases.%s.secret: set existingSecret or create, not both" $name) }}
+{{- end }}
+{{- if and $s.create (not $s.password) }}
+{{- fail (printf "database.databases.%s.secret.create is true but password is empty" $name) }}
+{{- end }}
+{{- if and (not $s.existingSecret) (not $s.create) }}
+{{- fail (printf "database.databases.%s: set secret.existingSecret or secret.create" $name) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if and $dbs (not .Values.postgresql.enabled) (not .Values.database.host) }}
+{{- fail "postgresql.enabled is false: set database.host to the external server" }}
+{{- end }}
+{{- if or .Values.postgresql.enabled $dbs }}
+{{- if and $admin.existingSecret $admin.create }}
+{{- fail "database.admin.secret: set existingSecret or create, not both" }}
+{{- end }}
+{{- if and $admin.create (not $admin.password) }}
+{{- fail "database.admin.secret.create is true but password is empty" }}
+{{- end }}
+{{- if and (not $admin.existingSecret) (not $admin.create) }}
+{{- fail "database.admin.secret: set existingSecret or create" }}
+{{- end }}
+{{- end }}

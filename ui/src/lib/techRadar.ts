@@ -1,4 +1,5 @@
 import { type NodeResource, nodeProps } from './catalogApi';
+import { nodePlugins } from './kindUtils';
 
 export const TECH_RADAR_KIND = 'tech_radar';
 export const TECH_RADAR_ENTRY_KIND = 'tech_radar_entry';
@@ -28,6 +29,18 @@ export interface RadarEntry {
   rationale: string;
   /** Position in the config file; drives the blip numbering. */
   index: number;
+  /** Links to the catalog nodes the entry is used as; see matchesCatalogRef. */
+  catalogRefs: CatalogRef[];
+}
+
+/** One catalog_refs item of a radar entry, as emitted by the tech-radar plugin. */
+export interface CatalogRef {
+  /** Substring of the node path, matched ignoring case; empty matches any path. */
+  match: string;
+  /** Node kinds to match; required by the plugin. */
+  kinds: string[];
+  /** Plugins of which one must have emitted the node; empty matches any plugin. */
+  plugins: string[];
 }
 
 export interface RadarModel {
@@ -58,6 +71,78 @@ export function ringColor(ringIndex: number): string {
 
 function parseMovement(value: string | undefined): RadarMovement {
   return value === 'in' || value === 'out' ? value : 'none';
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+/** Parses the catalog_refs property, skipping items that are not well-formed refs. */
+function parseCatalogRefs(raw: string | undefined): CatalogRef[] {
+  if (!raw) {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.flatMap((item): CatalogRef[] => {
+    if (typeof item !== 'object' || item === null) {
+      return [];
+    }
+    const { match = '', kinds, plugins = [] } = item as Record<string, unknown>;
+    if (typeof match !== 'string' || !isStringArray(kinds) || !isStringArray(plugins)) {
+      return [];
+    }
+    return [{ match, kinds, plugins }];
+  });
+}
+
+/**
+ * Reports whether `node` is one the ref points at: its kind is listed, its
+ * path contains the ref's match ignoring case, and one of the ref's plugins
+ * emitted it. A ref without match and plugins matches nothing, so a
+ * malformed ref cannot link an entry to every node of a kind.
+ */
+export function matchesCatalogRef(node: NodeResource, ref: CatalogRef): boolean {
+  if (ref.match === '' && ref.plugins.length === 0) {
+    return false;
+  }
+  if (!ref.kinds.includes(node.kind)) {
+    return false;
+  }
+  if (ref.match !== '' && !node.path.toLowerCase().includes(ref.match.toLowerCase())) {
+    return false;
+  }
+  return (
+    ref.plugins.length === 0 || nodePlugins(node).some((plugin) => ref.plugins.includes(plugin))
+  );
+}
+
+/**
+ * Returns the nodes matching any of the refs, sorted by kind and then path.
+ * One ref can match the same model under several providers.
+ */
+export function matchCatalogRefs(refs: CatalogRef[], nodes: NodeResource[]): NodeResource[] {
+  return nodes
+    .filter((node) => refs.some((ref) => matchesCatalogRef(node, ref)))
+    .sort((a, b) => a.kind.localeCompare(b.kind) || a.path.localeCompare(b.path));
+}
+
+/** The node kinds that the entries' catalog refs can match, sorted. */
+export function catalogRefKinds(entries: RadarEntry[]): string[] {
+  const kinds = new Set(entries.flatMap((entry) => entry.catalogRefs.flatMap((ref) => ref.kinds)));
+  return Array.from(kinds).sort();
+}
+
+/** The entries with a catalog ref matching `node`, in radar order. */
+export function entriesMatchingNode(entries: RadarEntry[], node: NodeResource): RadarEntry[] {
+  return entries.filter((entry) => entry.catalogRefs.some((ref) => matchesCatalogRef(node, ref)));
 }
 
 function parseTaxonomy<T>(raw: string | undefined, isValid: (item: T) => boolean): T[] | null {
@@ -124,6 +209,7 @@ export function parseRadarModel(
         owner: entryProps.owner ?? '',
         rationale: entryProps.rationale ?? '',
         index: Number.parseInt(entryProps.index ?? '0', 10) || 0,
+        catalogRefs: parseCatalogRefs(entryProps.catalog_refs),
       };
     })
     .sort((a, b) => a.index - b.index);
