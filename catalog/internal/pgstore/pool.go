@@ -27,7 +27,7 @@ var migrationsFS embed.FS
 // See [pgxpool.ParseConfig] for details on supported options.
 //
 // Migrations are embedded in the binary. They run under a Postgres
-// advisory lock, see goose.WithSessionLocker below
+// advisory lock
 func Connect(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 	if err := migrate(ctx, dsn); err != nil {
 		return nil, fmt.Errorf("migrating database: %w", err)
