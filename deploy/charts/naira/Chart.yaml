@@ -3,13 +3,12 @@ name: naira
 description: Naira — catalog with its plugin sidecars, UI and portal
 type: application
 kubeVersion: '>=1.29.0-0'
-version: 0.1.1
-appVersion: 0.1.1
+version: 0.1.2-rc
+appVersion: 0.1.2-rc
 home: https://github.com/naira-project/naira
 sources:
   - https://github.com/naira-project/naira
 dependencies:
-  # Official postgres image; bitnami's pinned images are frozen (bitnamilegacy).
   - name: postgres
     alias: postgresql
     version: 0.21.2

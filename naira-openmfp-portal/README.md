@@ -25,7 +25,7 @@ Start both frontend and backend in development mode:
 npm start
 ```
 
-- After port-forwarding through `task forward:all`, frontend will be available at `http://localhost:3000`.
+- With `tilt up` running in the repo root, frontend will be available at `http://localhost:3000`.
 - Click on the button at the upper right part of the OpenMFP portal and go to `Settings`. There, toggle **Is Development Mode active?** and click on `Save`.
 
 ## Build
@@ -54,21 +54,15 @@ npm run build
 ## kind Cluster Deployment
 
 The portal is deployed as a container in the local kind cluster as part of the platform.
-Use the tasks from the repo root:
+Use the Tiltfile in the repo root:
 
 ```bash
-# Deploy the full platform including the portal
-task platform:deploy
+# Deploy the full platform, port-forwarding the portal to localhost:3000
+tilt up
 
-# Deploy only the portal (build image, load into kind, apply manifest)
-task portal:deploy
+# Deploy only the portal and what it depends on
+tilt up portal
 
-# Remove the portal from the cluster
-task portal:undeploy
-
-# Port-forward the portal to localhost:3000
-task portal:port-forward
-
-# Port-forward all platform services (includes portal on :3000)
-task forward:all
+# Remove the platform from the cluster
+tilt down
 ```

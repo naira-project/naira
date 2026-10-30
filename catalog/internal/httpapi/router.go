@@ -43,6 +43,10 @@ func NewRouter(catalogReader catalogReader, runner *pluginrun.Runner, plugins ca
 	router.Route("/v1", func(r chi.Router) {
 		r.Use(authMiddleware)
 
+		r.Get("/auth/verify", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		})
+
 		r.Get("/plugins", newListPluginsHandler(plugins, logger))
 		r.Get("/plugins/{plugin}", newGetPluginHandler(plugins))
 		r.Post("/plugins:run", newRunAllPluginsHandler(runner))
