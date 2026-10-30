@@ -17,6 +17,7 @@ const STALE_AFTER_MS = 2 * 60 * 1000;
 const EMPTY_OPERATIONS: OperationResource[] = [];
 const RUN_MUTATION_KEY = ['plugins', 'run'] as const;
 
+/** Plugin names to run, or `null` for all registered plugins. */
 type RunTarget = string[] | null;
 
 interface RunResult {
@@ -48,7 +49,16 @@ export interface RunErrorEntry {
   message: string;
 }
 
-/** Polls operation state and refreshes catalog queries when a run may have changed catalog data. */
+/**
+ * Polls plugin run operations and invalidates catalog data whenever a run
+ * finishes successfully, regardless of who started it (UI or scheduler).
+ *
+ * Polls every 2s while any operation is unfinished and every 20s otherwise,
+ * and refetches on window focus. Each poll returns the full list, so a missed
+ * response is repaired by the next one.
+ *
+ * Can be mounted on its own to keep catalog data fresh outside the Plugins page.
+ */
 export function useOperationsSync() {
   const queryClient = useQueryClient();
   const { token } = useOpenMFPContext();
@@ -79,10 +89,12 @@ export function useOperationsSync() {
         running.add(op.name);
       } else if (!finishedSeen.has(op.name)) {
         finishedSeen.add(op.name);
+        // The first load only records history; it must not trigger a refetch.
         if (initializedRef.current && !op.error) catalogChanged = true;
       }
     }
 
+    // An operation seen running that is gone from the list finished unobserved.
     if (initializedRef.current) {
       for (const name of runningSeenRef.current) {
         if (!present.has(name)) catalogChanged = true;
@@ -116,7 +128,11 @@ interface UsePluginsStatusResult {
   runSubset: (pluginNames: string[]) => Promise<void>;
 }
 
-/** Returns the registered plugins, operation history, and commands for starting runs. */
+/**
+ * Plugins list plus their run state. Running state is derived from the
+ * operations returned by the backend; the only local state is the set of run
+ * requests awaiting a response, tracked by the mutation itself.
+ */
 export function usePluginsStatus(): UsePluginsStatusResult {
   const queryClient = useQueryClient();
   const { token } = useOpenMFPContext();
@@ -138,10 +154,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     queryKey: queryKeys.plugins,
     queryFn: () => fetchPlugins(token),
   });
-  const operationsQuery = useQuery({
-    queryKey: queryKeys.operations,
-    queryFn: () => fetchOperations(token),
-  });
+  const operationsQuery = useOperationsSync();
 
   const plugins = pluginsQuery.data ?? [];
   const operations = operationsQuery.data ?? EMPTY_OPERATIONS;
@@ -152,7 +165,6 @@ export function usePluginsStatus(): UsePluginsStatusResult {
       if (target === null) {
         return { operations: await apiRunAllPlugins(token), errors: [] };
       }
-
       const settled = await Promise.allSettled(target.map((name) => apiRunPlugin(token, name)));
       const result: RunResult = { operations: [], errors: [] };
       settled.forEach((outcome, index) => {
@@ -169,9 +181,13 @@ export function usePluginsStatus(): UsePluginsStatusResult {
       return result;
     },
     onSuccess: ({ operations: started, errors }) => {
+      // Show the new operations immediately instead of waiting for the next poll.
       queryClient.setQueryData<OperationResource[]>(queryKeys.operations, (old) =>
         mergeOperations(old, started),
       );
+      // Each cache write restarts the refetchInterval timer, so rapid runs would
+      // starve polling. Refetch now to keep the list fresh.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.operations });
       errors.forEach(addError);
     },
     onError: (error) => {
@@ -179,6 +195,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     },
   });
 
+  // Several run requests can be in flight at once, so read all pending ones.
   const pendingTargets = useMutationState({
     filters: { mutationKey: RUN_MUTATION_KEY, status: 'pending' },
     select: (mutation) => mutation.state.variables as RunTarget,
@@ -194,6 +211,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     return running;
   }, [operations, pendingTargets, plugins]);
 
+  // Warn once per operation that exceeds the stale threshold.
   useEffect(() => {
     operations.filter(isStale).forEach((op) => {
       if (!warnedRef.current.has(op.name)) {
