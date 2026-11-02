@@ -95,7 +95,7 @@ CHECKSUM='select(.kind == "Deployment" and .metadata.name == "catalog")
           | .spec.template.metadata.annotations["checksum/plugin-config"]'
 
 check "default sidecars (tech-radar off), sorted" \
-  "plugin-argocd,plugin-depl-calls-svc,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata" \
+  "plugin-depl-calls-svc,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata" \
   "$(render | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
 check "sidecars are native sidecars" \
   "Always" \
@@ -154,10 +154,10 @@ check "checksum changes with plugins" "different" "$checksum_changed"
 
 # ── RBAC ─────────────────────────────────────────────────────────────────────
 check "ClusterRoles are release-prefixed" \
-  "t-catalog,t-plugin-argocd,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
+  "t-catalog,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
   "$(render | yq ea '[select(.kind == "ClusterRole") | .metadata.name] | sort | join(",")')"
 check "bindings match roles" \
-  "t-catalog,t-plugin-argocd,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
+  "t-catalog,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
   "$(render | yq ea '[select(.kind == "ClusterRoleBinding") | .roleRef.name] | sort | join(",")')"
 check "binding subject is the catalog SA in the release namespace" \
   "catalog/naira" \
@@ -207,8 +207,8 @@ check "existingConfigMap: no generated ConfigMap" \
 check "existingConfigMap: volume points at it" \
   "my-radar" \
   "$(render "${TECH_RADAR_EXISTING[@]}" | yq "$TECH_RADAR_VOLUME | .configMap.name")"
-check "default plus tech-radar and depl-uses-litellm: 9 sidecars" \
-  "9" \
+check "default plus tech-radar and depl-uses-litellm: 8 sidecars" \
+  "8" \
   "$(render "${TECH_RADAR[@]}" --set catalog.plugins.depl-uses-litellm.enabled=true \
     | yq "$CATALOG | .initContainers | length")"
 check "tech-radar registered in plugins.yaml" \
@@ -341,7 +341,7 @@ check "dev: local image names" \
   "naira-catalog:${APP_VERSION}" \
   "$(render_raw "${DEV[@]}" | yq "$CATALOG | .containers[0].image")"
 check "dev: sidecars (openmetadata off, tech-radar on)" \
-  "plugin-argocd,plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-tech-radar" \
+  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-tech-radar" \
   "$(render_raw "${DEV[@]}" | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
 check "dev: catalog Secret matches test-dependencies master key" \
   "sk-local-litellm" \
@@ -410,6 +410,32 @@ RENDER=render_raw must_fail "github on without a catalog Secret source" \
   "catalog.plugins.github reads GITHUB_TOKEN from the catalog Secret" \
   --set portal.enabled=false --set catalog.plugins.github.enabled=true \
   --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
+
+ARGOCD=(--set catalog.plugins.argocd.enabled=true --set catalog.plugins.argocd.env.CLUSTER_ID=test-cluster)
+ARGOCD_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-argocd\")"
+
+check "argocd off by default" \
+  "" \
+  "$(render | yq "$ARGOCD_SIDECAR | .name")"
+check "argocd token from the catalog Secret" \
+  "catalog-secrets/ARGOCD_TOKEN" \
+  "$(render "${ARGOCD[@]}" \
+    | yq "$ARGOCD_SIDECAR | .env[] | select(.name == \"ARGOCD_TOKEN\")
+          | .valueFrom.secretKeyRef | .name + \"/\" + .key")"
+check "argocd path prefix and cluster ID" \
+  "argocd,test-cluster" \
+  "$(render "${ARGOCD[@]}" \
+    | yq ea "[$ARGOCD_SIDECAR | .env[] | select(.name == \"CLUSTER_ID\" or .name == \"PATH_PREFIX\") | .value] | join(\",\")")"
+check "argocd registered in plugins.yaml" \
+  "localhost:50060" \
+  "$(render "${ARGOCD[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.argocd.address')"
+check "argocd needs no RBAC" \
+  "" \
+  "$(render "${ARGOCD[@]}" \
+    | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-argocd") | .metadata.name')"
+RENDER=render must_fail "argocd on without CLUSTER_ID" \
+  "catalog.plugins.argocd.env.CLUSTER_ID is required" \
+  --set catalog.plugins.argocd.enabled=true
 
 check "depl-uses-litellm off by default: no Secret read grant" \
   "0" \

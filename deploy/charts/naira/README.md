@@ -90,7 +90,7 @@ in a value fails the render.
 | depl-calls-svc | 50053 | yes | RBAC: namespaces, services, deployments |
 | depl-uses-litellm | 50054 | no | RBAC: namespaces, secrets (cluster-wide), deployments |
 | fluxcd | 50055 | yes | RBAC: deployments, kustomizations, helmreleases, gitrepositories |
-| argocd | 50060 | yes | RBAC: applications |
+| argocd | 50060 | no | Env `CLUSTER_ID`; Secret key `ARGOCD_TOKEN` |
 | openmetadata | 50056 | yes | Secret key `OPENMETADATA_ADMIN_PASSWORD` |
 | tech-radar | 50057 | no | Config file (`config.data` or `config.existingConfigMap`) |
 | mcp-servers | 50058 | yes | — |
@@ -128,7 +128,7 @@ templates render in file order, before `validate.yaml` can catch it) reject: `ca
 `portal.oidc.secret.value` empty; two enabled plugins on the same port; an enabled plugin whose name makes
 `plugin-<name>` longer than 63 characters; a plugin
 `config` block with neither `existingConfigMap` nor `data`; a plugin `env`
-entry that is a Secret reference without a `key`; an enabled plugin without
+entry that is a Secret reference without a `key`; an enabled `argocd` plugin without `env.CLUSTER_ID`; an enabled plugin without
 `image.repository`; either Secret (catalog or portal) missing a source
 when something reads it; `database.host` set together with the subchart, or
 missing without it; `postgresql.auth.existingSecret` differing from the

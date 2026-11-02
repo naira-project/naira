@@ -36,6 +36,11 @@ silently does nothing.
 {{- end }}
 {{- end }}
 {{- end }}
+{{- with .Values.catalog.plugins.argocd }}
+{{- if and .enabled (not (get (.env | default dict) "CLUSTER_ID")) }}
+{{- fail "catalog.plugins.argocd.env.CLUSTER_ID is required: set it to the UID of the kube-system namespace of the cluster ArgoCD deploys to" }}
+{{- end }}
+{{- end }}
 {{- /*
 No Secret source. Without these the render succeeds and the pod sits in
 CreateContainerConfigError; fail here with the fix instead.
