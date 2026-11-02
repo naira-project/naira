@@ -19,12 +19,19 @@ jobs:
           persist-credentials: false
 
       - name: Update Release Please Config & Manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Compute the stable target from the manifest (strip -rc.* suffix).
-          # The manifest is intentionally left unchanged so the existing git tag
-          # (e.g. v0.12.0-rc) remains a valid changelog boundary for Release Please.
           CURRENT=$(jq -r '."."' .release-please-manifest.json)
           STABLE_VERSION=${CURRENT%%-rc*}
+
+          # Point the manifest at the last stable release so the stable changelog
+          # covers every commit since then, not just those after the last RC tag.
+          # RCs skip GitHub Releases, so the latest release is the last stable one.
+          LAST_STABLE=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name')
+          jq --arg v "${LAST_STABLE#v}" '."." = $v' .release-please-manifest.json > tmp-manifest.json
+          mv tmp-manifest.json .release-please-manifest.json
 
           # Strip only the flags that gate RC behaviour; keep versioning:prerelease
           # so Release Please can recognise bare -rc versions and graduate them correctly.
@@ -61,6 +68,12 @@ jobs:
             -f branch="$BRANCH_NAME" \
             -f sha="$FILE_SHA" \
             -f content="$(base64 -w0 release-please-config.json)"
+          FILE_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/contents/.release-please-manifest.json?ref=${BRANCH_NAME}" --jq '.sha')
+          gh api "repos/${GITHUB_REPOSITORY}/contents/.release-please-manifest.json" -X PUT \
+            -f message="fix: finalize stable release promotion" \
+            -f branch="$BRANCH_NAME" \
+            -f sha="$FILE_SHA" \
+            -f content="$(base64 -w0 .release-please-manifest.json)"
 
           # Create the PR without the override footer
           gh pr create \
