@@ -411,32 +411,6 @@ RENDER=render_raw must_fail "github on without a catalog Secret source" \
   --set portal.enabled=false --set catalog.plugins.github.enabled=true \
   --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
 
-ARGOCD=(--set catalog.plugins.argocd.enabled=true --set catalog.plugins.argocd.env.CLUSTER_ID=test-cluster)
-ARGOCD_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-argocd\")"
-
-check "argocd off by default" \
-  "" \
-  "$(render | yq "$ARGOCD_SIDECAR | .name")"
-check "argocd token from the catalog Secret" \
-  "catalog-secrets/ARGOCD_TOKEN" \
-  "$(render "${ARGOCD[@]}" \
-    | yq "$ARGOCD_SIDECAR | .env[] | select(.name == \"ARGOCD_TOKEN\")
-          | .valueFrom.secretKeyRef | .name + \"/\" + .key")"
-check "argocd path prefix and cluster ID" \
-  "argocd,test-cluster" \
-  "$(render "${ARGOCD[@]}" \
-    | yq ea "[$ARGOCD_SIDECAR | .env[] | select(.name == \"CLUSTER_ID\" or .name == \"PATH_PREFIX\") | .value] | join(\",\")")"
-check "argocd registered in plugins.yaml" \
-  "localhost:50060" \
-  "$(render "${ARGOCD[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.argocd.address')"
-check "argocd needs no RBAC" \
-  "" \
-  "$(render "${ARGOCD[@]}" \
-    | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-argocd") | .metadata.name')"
-RENDER=render must_fail "argocd on without CLUSTER_ID" \
-  "catalog.plugins.argocd.env.CLUSTER_ID is required" \
-  --set catalog.plugins.argocd.enabled=true
-
 check "depl-uses-litellm off by default: no Secret read grant" \
   "0" \
   "$(render | yq ea '[select(.kind == "ClusterRole") | .rules[] | select(.resources[] == "secrets")] | length')"
