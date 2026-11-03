@@ -1,0 +1,121 @@
+{
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "oci-chart",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "3fd23d80-2777-bd7e-2258-fec3f2d10654"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "oci-chart",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "source": {
+      "path": ".",
+      "repoURL": "oci://ghcr.io/prometheus-community/charts/kube-state-metrics",
+      "targetRevision": "8.8.0"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      },
+      "syncOptions": [
+        "CreateNamespace=true"
+      ]
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Healthy"
+    },
+    "history": [
+      {
+        "deployStartedAt": "2000-01-01T00:00:00Z",
+        "deployedAt": "2000-01-01T00:00:00Z",
+        "id": 0,
+        "initiatedBy": {
+          "automated": true
+        },
+        "revision": "sha256:29a6423d82f2e6cdc44b6355903575d1b9c851a688648012368bb63bde65ed69",
+        "source": {
+          "path": ".",
+          "repoURL": "oci://ghcr.io/prometheus-community/charts/kube-state-metrics",
+          "targetRevision": "8.8.0"
+        }
+      }
+    ],
+    "operationState": {
+      "finishedAt": "2000-01-01T00:00:00Z",
+      "phase": "Succeeded",
+      "startedAt": "2000-01-01T00:00:00Z"
+    },
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "kind": "Service",
+        "name": "oci-chart-kube-state-metrics",
+        "namespace": "oci-chart",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "kind": "ServiceAccount",
+        "name": "oci-chart-kube-state-metrics",
+        "namespace": "oci-chart",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "oci-chart-kube-state-metrics",
+        "namespace": "oci-chart",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "oci-chart-kube-state-metrics",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "ClusterRoleBinding",
+        "name": "oci-chart-kube-state-metrics",
+        "status": "Synced",
+        "version": "v1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceType": "Helm",
+    "summary": {
+      "images": [
+        "registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0"
+      ]
+    },
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "oci-chart",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "path": ".",
+          "repoURL": "oci://ghcr.io/prometheus-community/charts/kube-state-metrics",
+          "targetRevision": "8.8.0"
+        }
+      },
+      "revision": "sha256:29a6423d82f2e6cdc44b6355903575d1b9c851a688648012368bb63bde65ed69",
+      "status": "Synced"
+    }
+  }
+}

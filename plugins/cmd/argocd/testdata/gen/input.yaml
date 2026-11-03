@@ -1,4 +1,4 @@
-#WANT_OK: helm-guestbook, kustomize-guestbook, multi-source, multi-path, k8s-resource
+#WANT_OK: helm-guestbook, kustomize-guestbook, multi-source, multi-path, k8s-resource, namespaced-rbac
 #WANT_RUNNING: mid-sync
 #WANT_FAIL: remote-cluster
 # The gb-frontend image has no arm64 build, so its pods never start on arm64
@@ -183,4 +183,30 @@ spec:
     repoURL: https://github.com/argoproj/argocd-example-apps
     targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
     path: guestbook
+---
 
+# A Helm chart from a chart repository (not Git). It renders namespaced
+# resources of a non-core API group (Role, RoleBinding), and a namespaced one of
+# the core group (ServiceAccount).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: namespaced-rbac
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: namespaced-rbac
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-state-metrics
+    targetRevision: 8.8.0
+    helm:
+      valuesObject:
+        rbac:
+          useClusterRole: false
+        namespaces: namespaced-rbac
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
