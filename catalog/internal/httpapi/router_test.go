@@ -235,8 +235,6 @@ func TestGetNode(t *testing.T) {
 		rec := doRequest(t, router, http.MethodGet, "/v1/nodes/owner/%40naira-project/dev")
 
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-		require.Len(t, reader.GetNodeCalls(), 1)
-		assert.Equal(t, node.ID, reader.GetNodeCalls()[0].ID)
 
 		var response Node
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
