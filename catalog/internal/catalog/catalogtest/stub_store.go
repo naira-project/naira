@@ -12,9 +12,17 @@ import (
 var ErrUnexpectedCall = errors.New("unexpected call to unconfigured catalog store method")
 
 type StubStore struct {
+	ListKindsFunc     func(context.Context) ([]string, error)
 	ListNodesFunc     func(context.Context) ([]catalog.Node, error)
 	GetNodeFunc       func(context.Context, catalog.NodeID) (catalog.Node, error)
 	ListRelationsFunc func(context.Context) ([]catalog.Relation, error)
+}
+
+func (s *StubStore) ListKinds(ctx context.Context) ([]string, error) {
+	if s.ListKindsFunc == nil {
+		return nil, fmt.Errorf("ListKinds: %w", ErrUnexpectedCall)
+	}
+	return s.ListKindsFunc(ctx)
 }
 
 func (s *StubStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {

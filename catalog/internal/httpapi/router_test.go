@@ -263,36 +263,26 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 }
 
 func TestListKindsEndpoint(t *testing.T) {
-	store := catalog.NewMemoryStore()
-	router := newTestRouter(t, store, operations.NewMemoryStore(), nil)
+	store := &catalogtest.StubStore{
+		ListKindsFunc: func(context.Context) ([]string, error) {
+			return []string{"application", "model"}, nil
+		},
+	}
+	router, _ := newTestRouter(t, store, nil, nil)
 
 	t.Run("empty catalog", func(t *testing.T) {
+		store.ListKindsFunc = func(context.Context) ([]string, error) {
+			return []string{}, nil
+		}
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, "/v1/kinds", nil), testBearerToken))
 		require.Equal(t, http.StatusOK, rec.Code)
 		assert.JSONEq(t, `{"kinds":[],"totalSize":0}`, rec.Body.String())
 	})
 
-	app := catalog.NodeID{
-		Kind: "application",
-		Path: "app",
+	store.ListKindsFunc = func(context.Context) ([]string, error) {
+		return []string{"application", "model"}, nil
 	}
-	otherApp := catalog.NodeID{
-		Kind: "application",
-		Path: "other-app",
-	}
-	model := catalog.NodeID{
-		Kind: "model",
-		Path: "model",
-	}
-	applyPluginSnapshot(t, store,
-		[]catalog.NodeClaim{
-			{ID: app},
-			{ID: otherApp},
-			{ID: model},
-		},
-		nil,
-	)
 
 	t.Run("distinct sorted kinds", func(t *testing.T) {
 		rec := httptest.NewRecorder()
@@ -330,6 +320,19 @@ func TestListKindsEndpoint(t *testing.T) {
 			router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, path, nil), testBearerToken))
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
 		})
+	}
+
+	t.Run("store error", func(t *testing.T) {
+		store.ListKindsFunc = func(context.Context) ([]string, error) {
+			return nil, errors.New("database unavailable")
+		}
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, withAuth(httptest.NewRequest(http.MethodGet, "/v1/kinds", nil), testBearerToken))
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+
+	store.ListKindsFunc = func(context.Context) ([]string, error) {
+		return []string{"application", "model"}, nil
 	}
 
 	t.Run("requires authentication", func(t *testing.T) {
@@ -378,7 +381,7 @@ func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
 }
 
 func TestAuthVerify(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
+	router, _ := newTestRouter(t, &catalogtest.StubStore{}, nil, nil)
 
 	tests := []struct {
 		name               string

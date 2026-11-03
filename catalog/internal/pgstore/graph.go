@@ -10,6 +10,29 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
+func (s *GraphStore) ListKinds(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT kind
+		FROM nodes
+		ORDER BY kind
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("querying node kinds: %w", err)
+	}
+
+	var kind string
+	kinds := make([]string, 0)
+	_, err = pgx.ForEachRow(rows, []any{&kind}, func() error {
+		kinds = append(kinds, kind)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("reading node kinds: %w", err)
+	}
+
+	return kinds, nil
+}
+
 func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT n.kind, n.path, c.plugin_name, c.snapshot_id, c.properties

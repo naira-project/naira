@@ -15,6 +15,7 @@ import (
 )
 
 type catalogReader interface {
+	ListKinds(ctx context.Context) ([]string, error)
 	GetNode(ctx context.Context, id catalog.NodeID) (catalog.Node, error)
 	ListNodes(ctx context.Context) ([]catalog.Node, error)
 	ListRelations(ctx context.Context) ([]catalog.Relation, error)
@@ -55,6 +56,7 @@ func NewRouter(catalogReader catalogReader, runner *pluginrun.Runner, plugins ca
 		r.Get("/operations", newListOperationsHandler(runner, logger))
 		r.Get("/operations/{operationId}", newGetOperationHandler(runner))
 
+		r.Get("/kinds", newListKindsHandler(catalogReader, logger))
 		r.Get("/nodes", newListNodesHandler(catalogReader, logger))
 		r.Get("/nodes/{kind}/*", newGetNodeHandler(catalogReader))
 
