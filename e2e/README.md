@@ -25,7 +25,8 @@ it isn't resized per scenario.
 `components.env` and only builds/deploys/waits-on what it lists — see that
 script's header comment for the full mechanics. `destroy-environment.sh`
 tears down any scenario's environment the same way (it's driven by env-id,
-not by scenario).
+not by scenario). It is for local kind use only; CI deletes the whole
+vCluster instead.
 
 Images are published as `${E2E_IMAGE}:<component>-<tag>` — one repository,
 component in the tag. `E2E_IMAGE` defaults to `naira-e2e` (fine for
