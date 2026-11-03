@@ -305,6 +305,43 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
+			name:     "resource other than Deployment and Service becomes a k8s_resource Node",
+			testdata: []string{"k8s-resource"},
+			want: pluginapi.CollectResponse{
+				Nodes: []pluginapi.NodeClaim{
+					{ID: nodeID("Application.argocd", "test-prefix/argocd/k8s-resource"), Properties: props{
+						"project":                     "default",
+						"sync.status":                 "Synced",
+						"health.status":               "Healthy",
+						"destination.namespace":       "k8s-resource-test",
+						"source_type":                 "Directory",
+						"last_deployed_at":            "2000-01-01T00:00:00Z",
+						"operation_present":           "false",
+						"operation_state.finished_at": "2000-01-01T00:00:00Z",
+						"operation_state.phase":       "Succeeded",
+						"operation_state.started_at":  "2000-01-01T00:00:00Z"}},
+					{ID: nodeID("git_repository", "github.com/argoproj/argocd-example-apps"), Properties: props{
+						"url": "https://github.com/argoproj/argocd-example-apps"}},
+					{ID: nodeID("k8s_resource", "mock-cluster/core/ConfigMap/k8s-resource-test/appset-demo")},
+				},
+				Relations: []pluginapi.RelationClaim{
+					{Kind: "deployed_from",
+						From: nodeID("k8s_resource", "mock-cluster/core/ConfigMap/k8s-resource-test/appset-demo"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["lightweight/app-a"]`}},
+					{Kind: "describes",
+						From: nodeID("Application.argocd", "test-prefix/argocd/k8s-resource"),
+						To:   nodeID("k8s_resource", "mock-cluster/core/ConfigMap/k8s-resource-test/appset-demo")},
+					{Kind: "sourced_from",
+						From: nodeID("Application.argocd", "test-prefix/argocd/k8s-resource"),
+						To:   nodeID("git_repository", "github.com/argoproj/argocd-example-apps"),
+						Properties: props{
+							"paths": `["lightweight/app-a"]`}},
+				},
+			},
+		},
+		{
 			name:     "sync in progress: operation_state is copied, and last_deployed_at is absent without history",
 			testdata: []string{"mid-sync"},
 			want: pluginapi.CollectResponse{

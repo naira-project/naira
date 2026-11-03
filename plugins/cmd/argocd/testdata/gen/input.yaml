@@ -1,4 +1,4 @@
-#WANT_OK: helm-guestbook, kustomize-guestbook, multi-source, multi-path
+#WANT_OK: helm-guestbook, kustomize-guestbook, multi-source, multi-path, k8s-resource
 #WANT_RUNNING: mid-sync
 #WANT_FAIL: remote-cluster
 # The gb-frontend image has no arm64 build, so its pods never start on arm64
@@ -111,6 +111,27 @@ spec:
     syncOptions: [CreateNamespace=true]
 ---
 
+# A resource other than Deployment and Service (a ConfigMap), which is emitted
+# as a k8s_resource Node.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-resource
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: k8s-resource-test
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: lightweight/app-a
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
+---
+
 # A sync that stays in progress: the PreSync hook Job of the "pre-post-sync"
 # example cannot be created, because the namespace quota forbids Jobs, so the
 # sync never leaves the Running phase.
@@ -162,3 +183,4 @@ spec:
     repoURL: https://github.com/argoproj/argocd-example-apps
     targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
     path: guestbook
+
