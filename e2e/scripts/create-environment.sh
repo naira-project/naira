@@ -15,7 +15,6 @@
 # Usage:
 #   create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG>
 #     [--cluster-name <NAME>] [--context <NAME>] [--registry]
-#     [--build-only | --skip-build]
 #
 # Every image is <E2E_IMAGE>:<component>-<TAG>. E2E_IMAGE defaults to
 # naira-e2e; --registry requires it to be set explicitly.
@@ -41,6 +40,7 @@ dump_diagnostics() {
   done
   return "${status}"
 }
+trap dump_diagnostics ERR
 
 CLUSTER_NAME="naira-idp-e2e"
 TAG=""
@@ -48,21 +48,11 @@ ENV_ID=""
 SCENARIO=""
 CONTEXT=""
 REGISTRY=0
-PHASE=all
-
-set_phase() {
-  if [ "${PHASE}" != "all" ] && [ "${PHASE}" != "$1" ]; then
-    echo "error: --build-only and --skip-build are mutually exclusive" >&2
-    exit 1
-  fi
-  PHASE="$1"
-}
 
 usage() {
   cat >&2 <<'EOF'
 Usage: create-environment.sh --scenario <NAME> --env-id <ID> --tag <TAG>
          [--cluster-name <NAME>] [--context <NAME>] [--registry]
-         [--build-only | --skip-build]
 
 Flags:
   --scenario NAME    Required. Name of a directory under e2e/ whose
@@ -80,9 +70,6 @@ Flags:
   --registry          docker push linux/amd64 images to the registry in
                       $E2E_IMAGE (required) instead of kind load. Registry
                       login is the caller's job.
-  --build-only        Build and load/push the images, then stop. Touches no
-                      kube context.
-  --skip-build        Deploy images a previous --build-only run published.
 
 Environment:
   E2E_IMAGE           Image repository; images are <E2E_IMAGE>:<component>-<TAG>.
@@ -98,8 +85,6 @@ while [ $# -gt 0 ]; do
     --cluster-name) CLUSTER_NAME="$2"; shift 2 ;;
     --context) CONTEXT="$2"; shift 2 ;;
     --registry) REGISTRY=1; shift ;;
-    --build-only) set_phase build; shift ;;
-    --skip-build) set_phase deploy; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -134,6 +119,8 @@ export NAMESPACE TAG E2E_IMAGE
 
 echo "==> Environment: ${ENV_ID} (namespace: ${NAMESPACE}, image tag: ${TAG}, scenario: ${SCENARIO})"
 echo "==> Components: ${COMPONENTS:-<none>} · Plugins: ${PLUGINS:-<none>}"
+
+kubectl config use-context "${CONTEXT}"
 
 # ---------------------------------------------------------------------------
 # Component metadata lookups. Every scenario draws from the same pool in
@@ -188,28 +175,18 @@ build_and_load() {
   fi
 }
 
-if [ "${PHASE}" != "deploy" ]; then
-  echo "==> Building and publishing images"
-  build_and_load catalog "${REPO_ROOT}/catalog" "${REPO_ROOT}"
-  build_and_load seed "${SCENARIO_DIR}/seed"
-  for plugin in ${PLUGINS}; do
-    build_and_load "${plugin}" "${REPO_ROOT}/plugins/cmd/${plugin//-/_}" "${REPO_ROOT}"
-  done
-  for component in ${COMPONENTS}; do
-    build_dir="$(component_build_dir "${component}")"
-    if [ -n "${build_dir}" ]; then
-      build_and_load "${component}" "${build_dir}"
-    fi
-  done
-fi
-
-if [ "${PHASE}" = "build" ]; then
-  echo "==> Images published"
-  exit 0
-fi
-
-kubectl config use-context "${CONTEXT}"
-trap dump_diagnostics ERR
+echo "==> Building and publishing images"
+build_and_load catalog "${REPO_ROOT}/catalog" "${REPO_ROOT}"
+build_and_load seed "${SCENARIO_DIR}/seed"
+for plugin in ${PLUGINS}; do
+  build_and_load "${plugin}" "${REPO_ROOT}/plugins/cmd/${plugin//-/_}" "${REPO_ROOT}"
+done
+for component in ${COMPONENTS}; do
+  build_dir="$(component_build_dir "${component}")"
+  if [ -n "${build_dir}" ]; then
+    build_and_load "${component}" "${build_dir}"
+  fi
+done
 
 # ---------------------------------------------------------------------------
 # Deploy the namespace and quota before any workload, so nothing is ever

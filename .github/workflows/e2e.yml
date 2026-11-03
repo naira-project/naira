@@ -13,6 +13,8 @@
 # Accepted residual risks (approvers must review these paths):
 # - A same-repo PR that edits this file runs those edits with the `e2e` identity once approved.
 # - GITHUB_TOKEN has `packages: write` on `naira-e2e` for the whole e2e job.
+# - PR code can read this run's vCluster kubeconfig and teardown key. Both
+#   reach only this run's vCluster and expire after 1h.
 name: E2E
 
 on:
@@ -116,7 +118,13 @@ jobs:
       E2E_IMAGE: ghcr.io/naira-project/naira-e2e
       VCLUSTER_PROJECT: e2e
       VCLUSTER_TEMPLATE: vcluster-e2e-template
+      VCLUSTER_CI_USER: github-e2e
+    # Every step up to and including "Provision vCluster" must not run code
+    # from the PR (scripts, mise.toml, Go modules, local actions): PR code can
+    # take over the runner for all later steps (PATH, BASH_ENV, background
+    # processes, sudo). The platform access key is used only before that.
     steps:
+      # Checkout runs no repo code.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/pull/${{ needs.authorize.outputs.pr-number }}/merge
@@ -148,37 +156,24 @@ jobs:
             echo "TAG=$(git rev-parse HEAD)"
             echo "ENV_ID=pr-${PR_NUMBER}-${RUN_ID}-${RUN_ATTEMPT}"
             echo "KUBECONFIG=${RUNNER_TEMP}/e2e-kubeconfig"
-            echo "PLATFORM_CONFIG_DIR=${RUNNER_TEMP}/vcluster-platform"
+            echo "PLATFORM_DIR=${RUNNER_TEMP}/vcluster-platform"
+            echo "TEARDOWN_KEY_FILE=${RUNNER_TEMP}/vcluster-teardown-key"
+            echo "VCLUSTER_BIN=${RUNNER_TEMP}/bin/vcluster"
           } >> "$GITHUB_ENV"
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.26"
-
-      # CLI versions come from mise.toml, the same source of truth as local
-      # dev, instead of a second set that could drift from it.
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-        with:
-          install_args: kubectl helm vcluster
-
-      - name: Log in to GHCR
+      # Pinned here, not taken from the PR's mise.toml, because this binary
+      # receives the access key. Keep the version in step with mise.toml.
+      - name: Install vcluster CLI
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
-
-      # Runs before any tailnet or platform credential exists.
-      - name: Build and push images
+          VCLUSTER_VERSION: 0.37.5
+          VCLUSTER_SHA256: a6720986d05dd3af15d68689b5e19ed769b694bc25d79e3f626f97795c2c56ca
         run: |
-          ./e2e/scripts/create-environment.sh \
-            --scenario litellm_chatbot_to_catalog_api \
-            --env-id "${ENV_ID}" \
-            --tag "${TAG}" \
-            --registry \
-            --build-only
-
-      - name: Log out of GHCR
-        if: always()
-        run: docker logout ghcr.io
+          set -euo pipefail
+          mkdir -p "$(dirname "${VCLUSTER_BIN}")"
+          curl -fsSL -o "${VCLUSTER_BIN}" \
+            "https://github.com/loft-sh/vcluster/releases/download/v${VCLUSTER_VERSION}/vcluster-linux-amd64"
+          echo "${VCLUSTER_SHA256}  ${VCLUSTER_BIN}" | sha256sum -c -
+          chmod +x "${VCLUSTER_BIN}"
 
       - name: Join tailnet
         uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
@@ -187,23 +182,18 @@ jobs:
           audience: ${{ vars.TS_E2E_AUDIENCE }}
           tags: tag:ci
 
-      - name: Wait for vCluster Platform
-        env:
-          VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
-        run: ./e2e/scripts/wait-for-platform.sh
-
-      # The only step besides teardown that sees the access key. It leaves
-      # behind a kubeconfig holding a short-lived token for this vCluster
-      # only, and no platform login.
+      # The only step that sees the access key. It leaves behind:
+      #  - a kubeconfig with a 1h service account token for this vCluster;
+      #  - a teardown key that expires after 1h and may only get and delete
+      #    this vCluster (scope.rules), for "Delete vCluster".
+      # Flags:
       #  - --docker-login=false: login would otherwise write registry
-      #    credentials to ~/.docker for later steps to read.
+      #    credentials to ~/.docker.
       #  - --connect=false on create: its connect embeds the access key in
       #    the kubeconfig. The explicit connect uses a service account token
-      #    instead (needs forwardToken on the template).
-      # Inline, not a script or local action: those are PR-controlled and
-      # must never see the access key (ADR-012).
+      #    instead (needs forwardTokenMode TokenReview on the template).
+      # Uses the runner image's kubectl, curl and jq, not PR-installed tools.
       - name: Provision vCluster
-        id: provision
         env:
           VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
           VCLUSTER_PLATFORM_ACCESS_KEY: ${{ secrets.VCLUSTER_PLATFORM_ACCESS_KEY }}
@@ -216,45 +206,98 @@ jobs:
             exit 1
           fi
           echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
-          platform_config="${PLATFORM_CONFIG_DIR}/config.json"
+
+          # The tailnet route can take a few seconds after joining.
+          for _ in $(seq 1 30); do
+            curl -s -o /dev/null --max-time 5 "${VCLUSTER_PLATFORM_URL}" && break
+            sleep 2
+          done
+
+          mkdir -p "${PLATFORM_DIR}"
+          cfg="${PLATFORM_DIR}/config.json"
+          mgmt="${PLATFORM_DIR}/management.kubeconfig"
+          created=false
+          provisioned=false
           cleanup() {
-            vcluster platform logout --config "${platform_config}" || true
-            rm -rf "${PLATFORM_CONFIG_DIR}" "${HOME}/.vcluster"
+            # PR code runs on this runner later, so a vCluster without a
+            # teardown key must go now, while the access key is still here.
+            if [ "${created}" = true ] && [ "${provisioned}" != true ]; then
+              "${VCLUSTER_BIN}" platform delete vcluster "${ENV_ID}" \
+                --project "${VCLUSTER_PROJECT}" --delete-context=false --config "${cfg}" || true
+              rm -f "${KUBECONFIG}" "${TEARDOWN_KEY_FILE}"
+            fi
+            "${VCLUSTER_BIN}" platform logout --config "${cfg}" || true
+            rm -rf "${PLATFORM_DIR}" "${HOME}/.vcluster"
           }
           trap cleanup EXIT
 
-          vcluster platform login "${VCLUSTER_PLATFORM_URL}" \
+          "${VCLUSTER_BIN}" platform login "${VCLUSTER_PLATFORM_URL}" \
             --access-key "${VCLUSTER_PLATFORM_ACCESS_KEY}" \
             --docker-login=false \
-            --config "${platform_config}"
+            --config "${cfg}"
 
-          echo "create-attempted=true" >> "$GITHUB_OUTPUT"
-          vcluster platform create vcluster "${ENV_ID}" \
+          created=true
+          "${VCLUSTER_BIN}" platform create vcluster "${ENV_ID}" \
             --project "${VCLUSTER_PROJECT}" \
             --template "${VCLUSTER_TEMPLATE}" \
             --connect=false \
-            --config "${platform_config}"
+            --config "${cfg}"
 
-          vcluster platform connect vcluster "${ENV_ID}" \
+          "${VCLUSTER_BIN}" platform connect vcluster "${ENV_ID}" \
             --project "${VCLUSTER_PROJECT}" \
             --service-account kube-system/naira-e2e \
             --cluster-role cluster-admin \
             --token-expiration 3600 \
-            --config "${platform_config}"
+            --config "${cfg}"
           kubectl config rename-context "$(kubectl config current-context)" "${ENV_ID}"
 
-          if grep -qF "${VCLUSTER_PLATFORM_ACCESS_KEY}" "${KUBECONFIG}"; then
-            echo "::error::kubeconfig contains the platform access key" >&2
-            rm -f "${KUBECONFIG}"
-            exit 1
-          fi
+          # loft-cli lets the CLI log in; the rule allows nothing but get and
+          # delete on this vCluster. Verified against vCluster Platform 4.12.
+          "${VCLUSTER_BIN}" platform connect management --print --config "${cfg}" > "${mgmt}"
+          jq -n \
+            --arg user "${VCLUSTER_CI_USER}" \
+            --arg name "${ENV_ID}" \
+            --arg ns "p-${VCLUSTER_PROJECT}" \
+            '{apiVersion: "management.loft.sh/v1", kind: "OwnedAccessKey",
+              metadata: {generateName: "e2e-teardown-"},
+              spec: {displayName: ("e2e teardown " + $name), type: "User", user: $user, ttl: 3600,
+                scope: {roles: [{role: "loft-cli"}],
+                  rules: [{verbs: ["get", "delete"], namespaces: [$ns],
+                    resources: [{group: "management.loft.sh",
+                      resources: ["virtualclusterinstances"], resourceNames: [$name]}]}]}}}' |
+            KUBECONFIG="${mgmt}" kubectl create -f - -o jsonpath='{.spec.key}' > "${TEARDOWN_KEY_FILE}"
+          echo "::add-mask::$(cat "${TEARDOWN_KEY_FILE}")"
+
+          for f in "${KUBECONFIG}" "${TEARDOWN_KEY_FILE}"; do
+            if grep -qF "${VCLUSTER_PLATFORM_ACCESS_KEY}" "${f}"; then
+              echo "::error::${f} contains the platform access key" >&2
+              exit 1
+            fi
+          done
+          provisioned=true
 
       - name: Check platform login is gone
         run: |
-          if [ -e "${PLATFORM_CONFIG_DIR}" ] || [ -e "${HOME}/.vcluster" ]; then
+          if [ -e "${PLATFORM_DIR}" ] || [ -e "${HOME}/.vcluster" ]; then
             echo "::error::vcluster CLI config left on disk" >&2
             exit 1
           fi
+
+      # From here on, PR code runs.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26"
+
+      # CLI versions come from mise.toml, the same source of truth as local
+      # dev, instead of a second set that could drift from it.
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install_args: kubectl helm
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
       - name: Create E2E environment
         run: |
@@ -263,8 +306,11 @@ jobs:
             --env-id "${ENV_ID}" \
             --tag "${TAG}" \
             --context "${ENV_ID}" \
-            --registry \
-            --skip-build
+            --registry
+
+      - name: Log out of GHCR
+        if: always()
+        run: docker logout ghcr.io
 
       # Goes through the platform proxy like every other kubectl call.
       - name: Port-forward catalog
@@ -329,45 +375,38 @@ jobs:
           kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
           kubectl describe pods -n "${ENV_ID}" || true
 
-      # Deleting the vCluster removes the whole E2E environment. Skipped when
-      # create was never attempted, so early failures report only themselves.
-      # The template's inactivity auto-delete covers a delete that never runs.
-      # Inline, duplicating Provision's login: same key exposure
-      # reason as Provision (ADR-012).
+      # Deleting the vCluster removes the whole E2E environment. Uses the
+      # teardown key from Provision, never the access key: PR code has run on
+      # this runner by now. Skipped without a teardown key; Provision deletes
+      # the vCluster itself if it fails. The template's inactivity
+      # auto-delete covers a delete that never runs.
       - name: Delete vCluster
-        if: ${{ always() && steps.provision.outputs.create-attempted == 'true' }}
+        if: always()
         env:
           VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
-          VCLUSTER_PLATFORM_ACCESS_KEY: ${{ secrets.VCLUSTER_PLATFORM_ACCESS_KEY }}
         run: |
           set -euo pipefail
           umask 077
-          # An empty key would make login fall back to an interactive flow.
-          if [ -z "${VCLUSTER_PLATFORM_URL}" ] || [ -z "${VCLUSTER_PLATFORM_ACCESS_KEY}" ]; then
-            echo "::error::VCLUSTER_PLATFORM_URL or VCLUSTER_PLATFORM_ACCESS_KEY is not set" >&2
-            exit 1
+          if [ ! -s "${TEARDOWN_KEY_FILE:-}" ]; then
+            echo "No teardown key, nothing to delete."
+            exit 0
           fi
           echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
-          platform_config="${PLATFORM_CONFIG_DIR}/config.json"
-          cleanup() {
-            vcluster platform logout --config "${platform_config}" || true
-            rm -rf "${PLATFORM_CONFIG_DIR}" "${HOME}/.vcluster"
-          }
-          trap cleanup EXIT
-
-          vcluster platform login "${VCLUSTER_PLATFORM_URL}" \
-            --access-key "${VCLUSTER_PLATFORM_ACCESS_KEY}" \
+          cfg="$(mktemp -d)/config.json"
+          trap 'rm -rf "$(dirname "${cfg}")" "${TEARDOWN_KEY_FILE}"' EXIT
+          "${VCLUSTER_BIN}" platform login "${VCLUSTER_PLATFORM_URL}" \
+            --access-key "$(cat "${TEARDOWN_KEY_FILE}")" \
             --docker-login=false \
-            --config "${platform_config}"
+            --config "${cfg}"
 
           # Error text from find.VClusterNotFoundError in vcluster 0.37.
-          if ! out="$(vcluster platform delete vcluster "${ENV_ID}" \
+          if ! out="$("${VCLUSTER_BIN}" platform delete vcluster "${ENV_ID}" \
             --project "${VCLUSTER_PROJECT}" \
             --delete-context=false \
-            --config "${platform_config}" 2>&1)"; then
+            --config "${cfg}" 2>&1)"; then
             echo "${out}"
             if grep -qF "couldn't find vcluster ${ENV_ID}" <<<"${out}"; then
-              echo "vCluster ${ENV_ID} was never created."
+              echo "vCluster ${ENV_ID} is already gone."
               exit 0
             fi
             exit 1
