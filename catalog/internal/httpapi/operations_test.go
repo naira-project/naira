@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/naira-project/naira/catalog/internal/httpapi/mocks"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
@@ -129,7 +130,7 @@ func TestRunPluginEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runner := &PluginRunnerMock{
+			runner := &mocks.PluginRunnerMock{
 				RunPluginAsyncFunc: func(context.Context, string) (operations.Operation, error) {
 					return tt.runnerOp, tt.runnerErr
 				},
@@ -147,7 +148,7 @@ func TestRunPluginEndpoint(t *testing.T) {
 }
 
 func TestRunAllPluginsEndpoint(t *testing.T) {
-	runner := &PluginRunnerMock{
+	runner := &mocks.PluginRunnerMock{
 		RunAllPluginsAsyncFunc: func(context.Context) []operations.Operation {
 			return []operations.Operation{pendingOperation("plugin-run-1", "mlflow")}
 		},
@@ -195,7 +196,7 @@ func TestGetOperationEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			runner := &PluginRunnerMock{
+			runner := &mocks.PluginRunnerMock{
 				GetOperationFunc: func(context.Context, string) (operations.Operation, error) {
 					return tt.runnerOp, tt.runnerErr
 				},
@@ -213,9 +214,9 @@ func TestGetOperationEndpoint(t *testing.T) {
 }
 
 func TestListOperationsEndpoint(t *testing.T) {
-	newOperationsRouter := func(t *testing.T) (http.Handler, *PluginRunnerMock) {
+	newOperationsRouter := func(t *testing.T) (http.Handler, *mocks.PluginRunnerMock) {
 		t.Helper()
-		runner := &PluginRunnerMock{
+		runner := &mocks.PluginRunnerMock{
 			ListOperationsFunc: func(context.Context, operations.Filter) ([]operations.Operation, error) {
 				return []operations.Operation{
 					succeededOperation("plugin-run-1", "seed", 0, 0),

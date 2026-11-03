@@ -5,6 +5,7 @@ goreadme = "go:github.com/posener/goreadme/cmd/goreadme"
 buf = "1.71"
 go = "1.26"
 "go:github.com/akavel-reply/goreadme/cmd/goreadme" = "v0.0.0-20260713150707-1c867fc238cb" # personal fork with improvements
+"go:github.com/matryer/moq" = "v0.8.1"
 golangci-lint = "2.13.2"
 shellcheck = "0.11"
 task = "3.51"

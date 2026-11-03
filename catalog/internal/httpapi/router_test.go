@@ -15,6 +15,7 @@ import (
 
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/httpapi/mocks"
 )
 
 const testBearerToken = "test-token"
@@ -40,9 +41,6 @@ func withAuth(req *http.Request, bearerToken string) *http.Request {
 	return req
 }
 
-// routerDeps are the dependencies of the router under test. Anything left nil
-// is replaced by an empty mock, which panics (-> HTTP 500) if the handler calls
-// it, so a test fails loudly when a handler touches something it should not.
 type routerDeps struct {
 	reader  catalog.Reader
 	runner  PluginRunner
@@ -53,10 +51,10 @@ func newTestRouter(t *testing.T, deps routerDeps) http.Handler {
 	t.Helper()
 
 	if deps.reader == nil {
-		deps.reader = &CatalogReaderMock{}
+		deps.reader = &mocks.CatalogReaderMock{}
 	}
 	if deps.runner == nil {
-		deps.runner = &PluginRunnerMock{}
+		deps.runner = &mocks.PluginRunnerMock{}
 	}
 
 	router, err := NewRouter(deps.reader, deps.runner, deps.plugins, nil, keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
@@ -105,7 +103,7 @@ var (
 )
 
 func TestRouterServesCurrentEndpoints(t *testing.T) {
-	reader := &CatalogReaderMock{
+	reader := &mocks.CatalogReaderMock{
 		ListNodesFunc: func(context.Context) ([]catalog.Node, error) {
 			return []catalog.Node{modelNode, appNode}, nil
 		},
@@ -204,7 +202,7 @@ func TestRouterServesCurrentEndpoints(t *testing.T) {
 }
 
 func TestListNodesSortsByName(t *testing.T) {
-	reader := &CatalogReaderMock{
+	reader := &mocks.CatalogReaderMock{
 		ListNodesFunc: func(context.Context) ([]catalog.Node, error) {
 			return []catalog.Node{modelNode, appNode}, nil // intentionally not sorted
 		},
@@ -227,7 +225,7 @@ func TestGetNode(t *testing.T) {
 			ID:           catalog.NodeID{Kind: "owner", Path: "@naira-project/dev"},
 			PluginClaims: testClaims(nil),
 		}
-		reader := &CatalogReaderMock{
+		reader := &mocks.CatalogReaderMock{
 			GetNodeFunc: func(context.Context, catalog.NodeID) (catalog.Node, error) {
 				return node, nil
 			},
@@ -251,7 +249,7 @@ func TestGetNode(t *testing.T) {
 	})
 
 	t.Run("maps missing node to 404", func(t *testing.T) {
-		reader := &CatalogReaderMock{
+		reader := &mocks.CatalogReaderMock{
 			GetNodeFunc: func(context.Context, catalog.NodeID) (catalog.Node, error) {
 				return catalog.Node{}, fmt.Errorf("node: %w", catalog.ErrNodeNotFound)
 			},
@@ -265,9 +263,9 @@ func TestGetNode(t *testing.T) {
 }
 
 func TestListKindsEndpoint(t *testing.T) {
-	newKindsRouter := func(t *testing.T, kinds []string) (http.Handler, *CatalogReaderMock) {
+	newKindsRouter := func(t *testing.T, kinds []string) (http.Handler, *mocks.CatalogReaderMock) {
 		t.Helper()
-		reader := &CatalogReaderMock{
+		reader := &mocks.CatalogReaderMock{
 			ListKindsFunc: func(context.Context) ([]string, error) { return kinds, nil },
 		}
 		return newTestRouter(t, routerDeps{reader: reader}), reader
@@ -326,7 +324,7 @@ func TestListKindsEndpoint(t *testing.T) {
 	}
 
 	t.Run("maps reader failure to 500", func(t *testing.T) {
-		reader := &CatalogReaderMock{
+		reader := &mocks.CatalogReaderMock{
 			ListKindsFunc: func(context.Context) ([]string, error) { return nil, errors.New("database offline") },
 		}
 		router := newTestRouter(t, routerDeps{reader: reader})

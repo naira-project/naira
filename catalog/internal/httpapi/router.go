@@ -14,6 +14,8 @@ import (
 	"github.com/naira-project/naira/catalog/internal/operations"
 )
 
+//go:generate moq -out mocks/reader_mock.go -pkg mocks -skip-ensure ../catalog Reader:CatalogReaderMock
+//go:generate moq -out mocks/plugin_runner_mock.go -pkg mocks -skip-ensure . PluginRunner
 type PluginRunner interface {
 	RunPluginAsync(ctx context.Context, plugin string) (operations.Operation, error)
 	RunAllPluginsAsync(ctx context.Context) []operations.Operation
