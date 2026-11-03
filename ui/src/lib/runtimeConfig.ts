@@ -2,6 +2,10 @@ export interface LogsConfig {
   /** Base URL of the Grafana Explore UI, without a trailing slash. */
   explorerUrl: string;
   datasource: { type: string; uid: string };
+  /** Grafana organization to open. Defaults to "1". */
+  orgId?: string;
+  /** Explore time range, in Grafana syntax. Defaults to now-1h .. now. */
+  timeRange?: { from: string; to: string };
   /** Namespace for Services and the log proxy when the endpoint carries none. */
   defaultNamespace?: string;
   /** LogQL for a backend Service's pods. Placeholders: {{namespace}}, {{name}}. */

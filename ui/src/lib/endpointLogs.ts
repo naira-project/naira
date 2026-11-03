@@ -1,3 +1,15 @@
+// Builds Grafana Explore links to an inference endpoint's logs.
+//
+// Generic: the datasource, LogQL templates and Explore URL come from the
+// deployment's config.json (logs block), so any Loki-backed Grafana works.
+//
+// Assumes:
+// - logs are in Loki, queried with LogQL through Grafana Explore;
+// - backend pods are found via an in-cluster Service host in the endpoint's api_base;
+// - the proxy is LiteLLM, whose logs mention the model without its routing prefix
+//   (see upstreamModelName).
+// Endpoints outside this setup, e.g. Bedrock with logs in CloudWatch, get no link.
+
 import { type NodeResource, nodeProps } from './catalogApi';
 import type { LogsConfig } from './runtimeConfig';
 
@@ -65,13 +77,14 @@ export function endpointLogsUrl(node: NodeResource, logs?: LogsConfig): string |
       queryType: 'range',
       expr,
     })),
-    range: { from: 'now-1h', to: 'now' },
+    range: logs.timeRange ?? { from: 'now-1h', to: 'now' },
   };
   const params = new URLSearchParams({
     schemaVersion: '1',
-    orgId: '1',
+    orgId: logs.orgId ?? '1',
     panes: JSON.stringify({ a: pane }),
   });
+  // explorerUrl comes from config.json (logs.explorerUrl), so tolerate trailing slashes.
   return `${logs.explorerUrl.replace(/\/+$/, '')}/explore?${params}`;
 }
 
@@ -95,6 +108,9 @@ function clusterService(
 
 // LiteLLM logs the model without its routing prefix, e.g. "gpt-4o-mini" for
 // "openai/gpt-4o-mini" and "openai/gpt-3.5-turbo" for "openrouter/openai/gpt-3.5-turbo".
+// LiteLLM-specific: a gateway whose model names carry no routing prefix, or that
+// logs the full string, would get a query that matches nothing.
+// TODO: generalize logging mechanism to other gateways.
 function upstreamModelName(upstreamModel: string | undefined): string | undefined {
   const model = upstreamModel?.trim();
   if (!model) {

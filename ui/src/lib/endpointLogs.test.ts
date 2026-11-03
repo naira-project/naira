@@ -183,4 +183,24 @@ describe('endpointLogsUrl', () => {
       },
     });
   });
+
+  it('uses the configured organization and time range', () => {
+    const node = endpointNode('litellm', 'litellm/idp-llama-qwen25-05b-abc123', {
+      api_base: 'http://llama-qwen25-05b.llamacpp.svc.cluster.local:8080/v1',
+      model: 'openai/qwen2.5-0.5b-instruct',
+    });
+    const config: LogsConfig = {
+      ...logsConfig,
+      orgId: '2',
+      timeRange: { from: 'now-6h', to: 'now-1h' },
+    };
+
+    const url = new URL(endpointLogsUrl(node, config) ?? '');
+
+    expect(url.searchParams.get('orgId')).toBe('2');
+    expect(JSON.parse(url.searchParams.get('panes') ?? '').a.range).toEqual({
+      from: 'now-6h',
+      to: 'now-1h',
+    });
+  });
 });

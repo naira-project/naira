@@ -88,6 +88,19 @@ portal:
       create: true
       value: naira-local-dev-secret
 
+ui:
+  # Endpoint "View Logs" links: Grafana and Loki from test-dependencies
+  # (Tiltfile forwards Grafana to localhost:3002). Schema: ui/src/lib/runtimeConfig.ts.
+  config:
+    logs:
+      explorerUrl: http://localhost:3002
+      datasource: {type: loki, uid: loki}
+      orgId: "1"
+      timeRange: {from: now-1h, to: now}
+      defaultNamespace: naira-deps
+      serviceQuery: '{namespace="{{namespace}}", app="{{name}}"}'
+      proxyQuery: '{namespace="{{namespace}}", app=~"litellm.*"} |= {{model}}'
+
 database:
   admin:
     secret:
