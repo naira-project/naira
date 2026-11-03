@@ -3,8 +3,8 @@ name: naira
 description: Naira — catalog with its plugin sidecars, UI and portal
 type: application
 kubeVersion: '>=1.29.0-0'
-version: 0.1.2-rc
-appVersion: 0.1.2-rc
+version: 0.1.2
+appVersion: 0.1.2
 home: https://github.com/naira-project/naira
 sources:
   - https://github.com/naira-project/naira
