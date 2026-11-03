@@ -155,17 +155,17 @@ func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse 
 
 		props := pluginapi.PropertyMap{
 			"project":               app.Spec.Project,
-			"sync_status":           string(app.Status.Sync.Status),
-			"health_status":         string(app.Status.Health.Status),
-			"destination_namespace": app.Spec.Destination.Namespace,
+			"sync.status":           string(app.Status.Sync.Status),
+			"health.status":         string(app.Status.Health.Status),
+			"destination.namespace": app.Spec.Destination.Namespace,
 			"source_type":           sourceType(app),
 			"operation_present":     strconv.FormatBool(app.Operation != nil),
 		}
 		setIfNotEmpty(props, "last_deployed_at", lastDeployedAt(app))
 		if op := app.Status.OperationState; op != nil {
-			setIfNotEmpty(props, "operationState.phase", string(op.Phase))
-			setIfNotEmpty(props, "operationState.startedAt", formatTime(&op.StartedAt))
-			setIfNotEmpty(props, "operationState.finishedAt", formatTime(op.FinishedAt))
+			setIfNotEmpty(props, "operation_state.phase", string(op.Phase))
+			setIfNotEmpty(props, "operation_state.started_at", formatTime(&op.StartedAt))
+			setIfNotEmpty(props, "operation_state.finished_at", formatTime(op.FinishedAt))
 		}
 
 		addNode(pluginapi.NodeClaim{
