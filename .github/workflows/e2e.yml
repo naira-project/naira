@@ -2,11 +2,17 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Deploys the litellm_chatbot_to_catalog_api scenario (see e2e/README.md)
-# into an isolated namespace on a throwaway kind cluster and runs its
-# assertions against it.
+# into a throwaway vCluster on vCluster Platform, reached over Tailscale, and
+# runs its assertions against it. Threat model and ownership: ADR-012 in
+# https://github.com/naira-project/architecture/tree/main/adr
 #
 # Opt-in: runs on PRs labeled `run-e2e` that touch what the scenario builds,
-# and on manual dispatch; both wait for approval via the `e2e` environment.
+# and on manual dispatch. Only branches of this repo run; every run waits for
+# approval via the `e2e` deployment environment.
+#
+# Accepted residual risks (approvers must review these paths):
+# - A same-repo PR that edits this file runs those edits with the `e2e` identity once approved.
+# - GITHUB_TOKEN has `packages: write` on `naira-e2e` for the whole e2e job.
 name: E2E
 
 on:
@@ -34,67 +40,222 @@ concurrency:
   group: ${{ github.workflow }}-${{ inputs.pr-number || github.event.pull_request.number }}
   cancel-in-progress: true
 
-env:
-  CLUSTER_NAME: naira-idp-e2e
-
 jobs:
-  e2e:
-    name: E2E · litellm_chatbot_to_catalog_api
+  # A skipped job can't print anything, so fork PRs get the notice here while
+  # authorize and e2e show as skipped.
+  fork-notice:
+    name: E2E skipped for fork PR
     runs-on: ubuntu-latest
-    # Evaluated before the environment gate, so a skipped job asks no one.
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
-    # Requires reviewer approval before running PR code.
-    environment: e2e
+    permissions: {}
+    if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e') && github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
-      - name: Determine PR number
-        id: pr
+      - run: echo "::notice::E2E runs only for branches of this repo."
+
+  authorize:
+    name: Authorize
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # read PR state and head repo
+    # Fork PRs skip here, before e2e could request the deployment environment.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.pull_request.labels.*.name, 'run-e2e') &&
+      github.event.pull_request.head.repo.full_name == github.repository) }}
+    outputs:
+      pr-number: ${{ steps.check.outputs.pr-number }}
+    steps:
+      # Checked through the API for dispatches too, which carry no PR payload.
+      - name: Check PR is open and from this repo
+        id: check
         env:
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ inputs.pr-number || github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          NUMBER="${PR_NUMBER}"
-          if [ -z "${NUMBER}" ]; then
-            echo "::error::pr-number input is required." >&2
+          set -euo pipefail
+          if ! [[ "${PR_NUMBER}" =~ ^[1-9][0-9]{0,9}$ ]]; then
+            echo "::error::pr-number must be a positive integer." >&2
             exit 1
           fi
-          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+          state="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.state')"
+          head_repo="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.repo.full_name // ""')"
+          if [ "${state}" != "open" ]; then
+            echo "::error::PR #${PR_NUMBER} is ${state}, not open." >&2
+            exit 1
+          fi
+          if [ "${head_repo}" != "${REPO}" ]; then
+            echo "::error::PR #${PR_NUMBER} is from a fork. E2E runs only for branches of this repo." >&2
+            exit 1
+          fi
+          echo "pr-number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
 
+  e2e:
+    name: E2E · litellm_chatbot_to_catalog_api
+    needs: authorize
+    if: ${{ needs.authorize.outputs.pr-number != '' }}
+    runs-on: ubuntu-latest
+    # Requires reviewer approval before running PR code.
+    environment: e2e
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write # push images to ghcr.io/naira-project/naira-e2e
+      id-token: write # Tailscale join via GitHub OIDC
+    env:
+      PR_NUMBER: ${{ needs.authorize.outputs.pr-number }}
+      E2E_IMAGE: ghcr.io/naira-project/naira-e2e
+    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/pull/${{ steps.pr.outputs.number }}/merge
+          ref: refs/pull/${{ needs.authorize.outputs.pr-number }}/merge
           persist-credentials: false
+
+      # TAG is the merge commit, not github.sha (main's SHA on dispatch), so
+      # images on cached EKS nodes are never shared between PRs. ENV_ID names
+      # both the vCluster and the namespace, so it must stay DNS-1123; the
+      # run attempt keeps re-runs clear of a leftover vCluster.
+      - name: Compute identifiers
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          {
+            echo "TAG=$(git rev-parse HEAD)"
+            echo "ENV_ID=pr-${PR_NUMBER}-${RUN_ID}-${RUN_ATTEMPT}"
+            echo "KUBECONFIG=${RUNNER_TEMP}/e2e-kubeconfig"
+            echo "PLATFORM_CONFIG_DIR=${RUNNER_TEMP}/vcluster-platform"
+          } >> "$GITHUB_ENV"
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
 
-      # kind/kubectl/helm versions come from mise.toml — the same source of
-      # truth used for local dev — instead of a second, separately hardcoded
-      # set of versions here that could drift from it.
+      # CLI versions come from mise.toml, the same source of truth as local
+      # dev, instead of a second set that could drift from it.
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          install_args: kind kubectl helm
+          install_args: kubectl helm vcluster
 
-      # Computed once, here, rather than inside create-environment.sh: if that
-      # script fails before it would derive an ID itself, the destroy step at
-      # the bottom (if: always()) still knows what to tear down.
-      - name: Compute environment ID
-        run: echo "ENV_ID=pr-${{ steps.pr.outputs.number }}-${{ github.run_id }}" >> "$GITHUB_ENV"
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
-      - name: Create kind cluster
-        run: kind create cluster --config e2e/base/kind-config.yaml
+      # Runs before any tailnet or platform credential exists.
+      - name: Build and push images
+        run: |
+          ./e2e/scripts/create-environment.sh \
+            --scenario litellm_chatbot_to_catalog_api \
+            --env-id "${ENV_ID}" \
+            --tag "${TAG}" \
+            --registry \
+            --build-only
+
+      - name: Log out of GHCR
+        if: always()
+        run: docker logout ghcr.io
+
+      - name: Join tailnet
+        uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
+        with:
+          oauth-client-id: ${{ vars.TS_E2E_OAUTH_CLIENT_ID }}
+          audience: ${{ vars.TS_E2E_AUDIENCE }}
+          tags: tag:ci
+
+      # The tailnet propagates new peers eventually, and the platform host is
+      # only known at runtime. Any HTTP response means it is reachable.
+      - name: Wait for vCluster Platform
+        env:
+          VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
+        run: |
+          echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
+          for _ in $(seq 1 30); do
+            if curl -s -o /dev/null --max-time 5 "${VCLUSTER_PLATFORM_URL}"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::vCluster Platform not reachable over the tailnet" >&2
+          exit 1
+
+      # The only step besides teardown that sees the access key. It leaves
+      # behind a kubeconfig holding a short-lived token for this vCluster
+      # only, and no platform login.
+      #  - --docker-login=false: login would otherwise write registry
+      #    credentials to ~/.docker for later steps to read.
+      #  - --connect=false on create: its connect embeds the access key in
+      #    the kubeconfig. The explicit connect uses a service account token
+      #    instead (needs forwardToken on the template).
+      - name: Provision vCluster
+        id: provision
+        env:
+          VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
+          VCLUSTER_PLATFORM_ACCESS_KEY: ${{ secrets.VCLUSTER_PLATFORM_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # An empty key would make login fall back to an interactive flow.
+          if [ -z "${VCLUSTER_PLATFORM_URL}" ] || [ -z "${VCLUSTER_PLATFORM_ACCESS_KEY}" ]; then
+            echo "::error::VCLUSTER_PLATFORM_URL or VCLUSTER_PLATFORM_ACCESS_KEY is not set" >&2
+            exit 1
+          fi
+          echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
+          platform_config="${PLATFORM_CONFIG_DIR}/config.json"
+          cleanup() {
+            vcluster platform logout --config "${platform_config}" || true
+            rm -rf "${PLATFORM_CONFIG_DIR}" "${HOME}/.vcluster"
+          }
+          trap cleanup EXIT
+
+          vcluster platform login "${VCLUSTER_PLATFORM_URL}" \
+            --access-key "${VCLUSTER_PLATFORM_ACCESS_KEY}" \
+            --docker-login=false \
+            --config "${platform_config}"
+
+          echo "create-attempted=true" >> "$GITHUB_OUTPUT"
+          vcluster platform create vcluster "${ENV_ID}" \
+            --project e2e \
+            --template vcluster-e2e-template \
+            --connect=false \
+            --config "${platform_config}"
+
+          vcluster platform connect vcluster "${ENV_ID}" \
+            --project e2e \
+            --service-account kube-system/naira-e2e \
+            --cluster-role cluster-admin \
+            --token-expiration 3600 \
+            --config "${platform_config}"
+          kubectl config rename-context "$(kubectl config current-context)" "${ENV_ID}"
+
+          if grep -qF "${VCLUSTER_PLATFORM_ACCESS_KEY}" "${KUBECONFIG}"; then
+            echo "::error::kubeconfig contains the platform access key" >&2
+            rm -f "${KUBECONFIG}"
+            exit 1
+          fi
+
+      - name: Check platform login is gone
+        run: |
+          if [ -e "${PLATFORM_CONFIG_DIR}" ] || [ -e "${HOME}/.vcluster" ]; then
+            echo "::error::vcluster CLI config left on disk" >&2
+            exit 1
+          fi
 
       - name: Create E2E environment
         run: |
           ./e2e/scripts/create-environment.sh \
             --scenario litellm_chatbot_to_catalog_api \
             --env-id "${ENV_ID}" \
-            --tag "${{ github.sha }}" \
-            --cluster-name "${CLUSTER_NAME}"
+            --tag "${TAG}" \
+            --context "${ENV_ID}" \
+            --registry \
+            --skip-build
 
+      # Goes through the platform proxy like every other kubectl call.
       - name: Port-forward catalog
         run: |
           kubectl -n "${ENV_ID}" port-forward svc/catalog 8090:8090 &
-          echo $! > /tmp/catalog-port-forward.pid
+          echo $! > "${RUNNER_TEMP}/catalog-port-forward.pid"
           # Retry for up to 30 seconds while the port-forward and readiness
           # probe settle.
           for _ in $(seq 1 30); do
@@ -112,7 +273,7 @@ jobs:
       - name: Port-forward keycloak
         run: |
           kubectl -n "${ENV_ID}" port-forward svc/keycloak 8080:8080 &
-          echo $! > /tmp/keycloak-port-forward.pid
+          echo $! > "${RUNNER_TEMP}/keycloak-port-forward.pid"
           # The keycloak Service only exposes the http port (8080), not the
           # management/health port (9000) — check a realm endpoint instead of
           # /health/ready, which isn't reachable through this forward.
@@ -138,22 +299,60 @@ jobs:
       - name: Stop port-forwards
         if: always()
         run: |
-          kill "$(cat /tmp/catalog-port-forward.pid)" || true
-          kill "$(cat /tmp/keycloak-port-forward.pid)" || true
+          kill "$(cat "${RUNNER_TEMP}/catalog-port-forward.pid")" || true
+          kill "$(cat "${RUNNER_TEMP}/keycloak-port-forward.pid")" || true
 
       - name: Collect diagnostics
         if: always()
         run: |
+          if [ ! -s "${KUBECONFIG}" ]; then
+            echo "No vCluster kubeconfig, nothing to collect."
+            exit 0
+          fi
           kubectl get pods,services -n "${ENV_ID}" -o wide || true
           kubectl logs -n "${ENV_ID}" -l app=catalog --all-containers --tail=-1 --prefix=true || true
           kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
           kubectl describe pods -n "${ENV_ID}" || true
 
-      # Deletes the namespace and the cluster-scoped resources it leaves
-      # behind. No Cleanup Job, no GC sweeper — nothing else outlives this.
-      - name: Destroy environment
-        if: always()
+      # Deleting the vCluster removes the whole E2E environment. Skipped when
+      # create was never attempted, so early failures report only themselves.
+      # The template's inactivity auto-delete covers a delete that never runs.
+      - name: Delete vCluster
+        if: ${{ always() && steps.provision.outputs.create-attempted == 'true' }}
+        env:
+          VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
+          VCLUSTER_PLATFORM_ACCESS_KEY: ${{ secrets.VCLUSTER_PLATFORM_ACCESS_KEY }}
         run: |
-          ./e2e/scripts/destroy-environment.sh \
-            --env-id "${ENV_ID}" \
-            --cluster-name "${CLUSTER_NAME}"
+          set -euo pipefail
+          umask 077
+          # An empty key would make login fall back to an interactive flow.
+          if [ -z "${VCLUSTER_PLATFORM_URL}" ] || [ -z "${VCLUSTER_PLATFORM_ACCESS_KEY}" ]; then
+            echo "::error::VCLUSTER_PLATFORM_URL or VCLUSTER_PLATFORM_ACCESS_KEY is not set" >&2
+            exit 1
+          fi
+          echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
+          platform_config="${PLATFORM_CONFIG_DIR}/config.json"
+          cleanup() {
+            vcluster platform logout --config "${platform_config}" || true
+            rm -rf "${PLATFORM_CONFIG_DIR}" "${HOME}/.vcluster"
+          }
+          trap cleanup EXIT
+
+          vcluster platform login "${VCLUSTER_PLATFORM_URL}" \
+            --access-key "${VCLUSTER_PLATFORM_ACCESS_KEY}" \
+            --docker-login=false \
+            --config "${platform_config}"
+
+          # Error text from find.VClusterNotFoundError in vcluster 0.37.
+          if ! out="$(vcluster platform delete vcluster "${ENV_ID}" \
+            --project e2e \
+            --delete-context=false \
+            --config "${platform_config}" 2>&1)"; then
+            echo "${out}"
+            if grep -qF "couldn't find vcluster ${ENV_ID}" <<<"${out}"; then
+              echo "vCluster ${ENV_ID} was never created."
+              exit 0
+            fi
+            exit 1
+          fi
+          echo "${out}"
