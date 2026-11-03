@@ -36,7 +36,7 @@ func TestCollect(t *testing.T) {
 					{ID: nodeID("Application.argocd", "test-prefix/argocd/helm-guestbook"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
-						"health_status":             "Progressing",
+						"health_status":             "Healthy",
 						"destination_namespace":     "helm-guestbook",
 						"source_type":               "Helm",
 						"last_deployed_at":          "2000-01-01T00:00:00Z",
@@ -82,7 +82,7 @@ func TestCollect(t *testing.T) {
 					{ID: nodeID("Application.argocd", "test-prefix/argocd/kustomize-guestbook"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
-						"health_status":             "Progressing",
+						"health_status":             "Healthy",
 						"destination_namespace":     "kustomize-guestbook",
 						"source_type":               "Kustomize",
 						"last_deployed_at":          "2000-01-01T00:00:00Z",
@@ -128,7 +128,7 @@ func TestCollect(t *testing.T) {
 					{ID: nodeID("Application.argocd", "test-prefix/argocd/multi-source"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
-						"health_status":             "Progressing",
+						"health_status":             "Healthy",
 						"destination_namespace":     "multi-source",
 						"source_type":               "Helm,",
 						"last_deployed_at":          "2000-01-01T00:00:00Z",
@@ -187,7 +187,7 @@ func TestCollect(t *testing.T) {
 					{ID: nodeID("Application.argocd", "test-prefix/argocd/example.guestbook"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
-						"health_status":             "Progressing",
+						"health_status":             "Healthy",
 						"destination_namespace":     "guestbook",
 						"source_type":               "Directory",
 						"last_deployed_at":          "2000-01-01T00:00:00Z",
@@ -246,7 +246,7 @@ func TestCollect(t *testing.T) {
 					{ID: nodeID("Application.argocd", "test-prefix/argocd/multi-path"), Properties: props{
 						"project":                   "default",
 						"sync_status":               "Synced",
-						"health_status":             "Progressing",
+						"health_status":             "Healthy",
 						"destination_namespace":     "multi-path",
 						"source_type":               "Directory,Kustomize",
 						"last_deployed_at":          "2000-01-01T00:00:00Z",

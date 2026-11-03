@@ -1,4 +1,7 @@
 #WANT_OK: apps-parent, example.guestbook
+# The gb-frontend image has no arm64 build, so its pods never start on arm64
+# hosts. Nginx is multi-arch and works good enough as a replacement.
+#REPLACE: gcr.io/google-samples/gb-frontend:v5=docker.io/library/nginx:1.27-alpine
 
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject

@@ -20,10 +20,23 @@
 //	#WANT_RUNNING: app3
 //	#WANT_FAIL: app4
 //
-// WANT_OK Applications are expected to sync. WANT_RUNNING ones are expected to
-// be stuck in the middle of a sync (operation phase Running), which is scraped
-// as is. WANT_FAIL ones are expected to have an invalid spec, so ArgoCD only
-// reports error conditions for them, and never syncs them.
+// WANT_OK Applications are expected to sync and become Healthy. WANT_RUNNING
+// ones are expected to be stuck in the middle of a sync (operation phase
+// Running), which is scraped as is. WANT_FAIL ones are expected to have an
+// invalid spec, so ArgoCD only reports error conditions for them, and never
+// syncs them.
+//
+// The header may also have any number of directives replacing container images
+// used by the manifests, e.g. because an image has no build for the CPU
+// architecture of the host, or is unavailable:
+//
+//	#REPLACE: gcr.io/app/to/be/replaced:v1=docker.io/library/nginx:1.27-alpine
+//
+// Before applying the manifests, the replacement (the part after "=") is
+// pulled into the cluster and tagged with the name of the replaced image.
+// Both must be fully qualified, with a tag. The cluster doesn't pull images
+// it already has, if they use the IfNotPresent pull policy (the default for
+// tagged images), so it uses the replacement.
 //
 // The command needs Docker and Internet access, and takes several minutes.
 // If k3s never becomes ready and its logs show "too many open files" from
@@ -121,6 +134,11 @@ func run(ctx context.Context, inFile, outDir string) error {
 	}
 	defer func() { _ = k3sContainer.Terminate(context.Background()) }()
 
+	err = replaceImages(ctx, k3sContainer, input.imageReplacements)
+	if err != nil {
+		return fmt.Errorf("replacing images: %w", err)
+	}
+
 	kubeconfig, err := k3sContainer.GetKubeConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("getting k3s kubeconfig: %w", err)
@@ -207,12 +225,20 @@ type wantApp struct {
 
 // input is the parsed content of the input file.
 type input struct {
-	manifests []*unstructured.Unstructured
-	wantApps  []wantApp
+	manifests         []*unstructured.Unstructured
+	wantApps          []wantApp
+	imageReplacements []imageReplacement
 }
 
-// parseInput reads the input file: the "#WANT_OK:", "#WANT_RUNNING:" and
-// "#WANT_FAIL:" header comments, and the manifests.
+// imageReplacement describes a container image replacement, which
+// makes image resolve to the contents of with.
+type imageReplacement struct {
+	image string
+	with  string
+}
+
+// parseInput reads the input file. It parses the "#WANT_OK:", "#WANT_RUNNING:",
+// "#WANT_FAIL:" and "#REPLACE:" header comments, and the manifests.
 func parseInput(path string) (input, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -228,18 +254,21 @@ func parseInput(path string) (input, error) {
 		{prefix: "#WANT_FAIL:", expect: expectInvalid},
 	}
 
-	const (
-		wantOKPrefix      = "#WANT_OK:"
-		wantRunningPrefix = "#WANT_RUNNING:"
-		wantFailPrefix    = "#WANT_FAIL:"
-	)
 	var result input
 lines:
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
+		if spec, ok := strings.CutPrefix(line, "#REPLACE:"); ok {
+			image, with, ok := strings.Cut(strings.TrimSpace(spec), "=")
+			if !ok || image == "" || with == "" {
+				return input{}, fmt.Errorf("parsing #REPLACE: %q: expected image=replacement", spec)
+			}
+			result.imageReplacements = append(result.imageReplacements, imageReplacement{image: image, with: with})
+			continue
+		}
 		for _, h := range headers {
-			if strings.HasPrefix(line, h.prefix) {
-				result.wantApps = append(result.wantApps, parseWantApps(strings.TrimPrefix(line, h.prefix), h.expect)...)
+			if spec, ok := strings.CutPrefix(line, h.prefix); ok {
+				result.wantApps = append(result.wantApps, parseWantApps(spec, h.expect)...)
 				continue lines
 			}
 		}
@@ -491,6 +520,27 @@ func execInContainer(ctx context.Context, c testcontainers.Container, cmd []stri
 	return code, string(out), nil
 }
 
+// replaceImages makes each replaced image resolve to its replacement in the
+// cluster: it pulls the replacement and tags it with the name of the original.
+func replaceImages(ctx context.Context, k3sContainer testcontainers.Container, replacements []imageReplacement) error {
+	for _, r := range replacements {
+		log.Printf("replacing image %s with %s", r.image, r.with)
+		for _, cmd := range [][]string{
+			{"ctr", "-n", "k8s.io", "images", "pull", r.with},
+			{"ctr", "-n", "k8s.io", "images", "tag", r.with, r.image},
+		} {
+			code, out, err := execInContainer(ctx, k3sContainer, cmd)
+			if err != nil {
+				return fmt.Errorf("running %v: %w", cmd, err)
+			}
+			if code != 0 {
+				return fmt.Errorf("running %v: exit code %d, output: %s", cmd, code, strings.TrimSpace(out))
+			}
+		}
+	}
+	return nil
+}
+
 // newAPIClient returns a client of argocd-server, authenticated with token.
 func newAPIClient(cfg *rest.Config, token string) (*apiClient, error) {
 	httpClient, err := rest.HTTPClientFor(cfg)
@@ -536,9 +586,17 @@ func waitForApplications(ctx context.Context, api *apiClient, wantApps []wantApp
 		var ready []unstructured.Unstructured
 		var notReady []string
 		for _, want := range wantApps {
-			i := slices.IndexFunc(apps, func(u unstructured.Unstructured) bool { return u.GetName() == want.name })
-			if i < 0 || !isReady(apps[i], want.expect) {
-				notReady = append(notReady, want.name)
+			i := slices.IndexFunc(apps, func(u unstructured.Unstructured) bool {
+				return u.GetName() == want.name
+			})
+			if i < 0 {
+				notReady = append(notReady, want.name+" (not found)")
+				continue
+			}
+			if !isReady(apps[i], want.expect) {
+				syncStatus, _, _ := unstructured.NestedString(apps[i].Object, "status", "sync", "status")
+				healthStatus, _, _ := unstructured.NestedString(apps[i].Object, "status", "health", "status")
+				notReady = append(notReady, fmt.Sprintf("%s (sync=%s, health=%s)", want.name, syncStatus, healthStatus))
 				continue
 			}
 			ready = append(ready, apps[i])
@@ -559,6 +617,7 @@ func waitForApplications(ctx context.Context, api *apiClient, wantApps []wantApp
 // isReady returns true if ArgoCD reached the state of app described by expect.
 // An invalid Application is considered ready once it has error conditions.
 // A running one, once its sync operation is in the Running phase.
+// Any other one, once it is Synced and Healthy.
 func isReady(app unstructured.Unstructured, expect expectation) bool {
 	switch expect {
 	case expectInvalid:
@@ -575,7 +634,7 @@ func isReady(app unstructured.Unstructured, expect expectation) bool {
 		sourceType, _, _   = unstructured.NestedString(app.Object, "status", "sourceType")
 		sourceTypes, _, _  = unstructured.NestedStringSlice(app.Object, "status", "sourceTypes")
 	)
-	return syncStatus == "Synced" && healthStatus != "" && len(resources) > 0 &&
+	return syncStatus == "Synced" && healthStatus == "Healthy" && len(resources) > 0 &&
 		(sourceType != "" || len(sourceTypes) > 0)
 }
 

@@ -17,7 +17,7 @@
       {
         "helm": {
           "valueFiles": [
-            "$values/helm-guestbook/values-production.yaml"
+            "$values/helm-guestbook/values.yaml"
           ]
         },
         "path": "helm-guestbook",
@@ -44,7 +44,7 @@
     "controllerNamespace": "argocd",
     "health": {
       "lastTransitionTime": "2000-01-01T00:00:00Z",
-      "status": "Progressing"
+      "status": "Healthy"
     },
     "history": [
       {
@@ -65,7 +65,7 @@
           {
             "helm": {
               "valueFiles": [
-                "$values/helm-guestbook/values-production.yaml"
+                "$values/helm-guestbook/values.yaml"
               ]
             },
             "path": "helm-guestbook",
@@ -127,7 +127,7 @@
           {
             "helm": {
               "valueFiles": [
-                "$values/helm-guestbook/values-production.yaml"
+                "$values/helm-guestbook/values.yaml"
               ]
             },
             "path": "helm-guestbook",

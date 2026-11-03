@@ -1,6 +1,9 @@
 #WANT_OK: helm-guestbook, kustomize-guestbook, multi-source, multi-path
 #WANT_RUNNING: mid-sync
 #WANT_FAIL: remote-cluster
+# The gb-frontend image has no arm64 build, so its pods never start on arm64
+# hosts. Nginx is multi-arch and works good enough as a replacement.
+#REPLACE: gcr.io/google-samples/gb-frontend:v5=docker.io/library/nginx:1.27-alpine
 
 # The following manifests create a few Applications deploying from a pinned
 # revision of: https://github.com/argoproj/argocd-example-apps
@@ -57,7 +60,9 @@ spec:
 ---
 
 # Two spec.sources (same repo, but one used as helm chart template, another as
-# chart values) in one Application.
+# chart values) in one Application. The chart's default values.yaml is used,
+# because values-production.yaml makes the Service a LoadBalancer, which stays
+# Progressing in k3s without a load balancer.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -74,7 +79,7 @@ spec:
     path: helm-guestbook
     helm:
       valueFiles:
-      - $values/helm-guestbook/values-production.yaml
+      - $values/helm-guestbook/values.yaml
   - repoURL: https://github.com/argoproj/argocd-example-apps
     targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
     ref: values
