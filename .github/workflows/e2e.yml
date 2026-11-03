@@ -163,21 +163,10 @@ jobs:
           audience: ${{ vars.TS_E2E_AUDIENCE }}
           tags: tag:ci
 
-      # The tailnet propagates new peers eventually, and the platform host is
-      # only known at runtime. Any HTTP response means it is reachable.
       - name: Wait for vCluster Platform
         env:
           VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
-        run: |
-          echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
-          for _ in $(seq 1 30); do
-            if curl -s -o /dev/null --max-time 5 "${VCLUSTER_PLATFORM_URL}"; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "::error::vCluster Platform not reachable over the tailnet" >&2
-          exit 1
+        run: ./e2e/scripts/wait-for-platform.sh
 
       # The only step besides teardown that sees the access key. It leaves
       # behind a kubeconfig holding a short-lived token for this vCluster
