@@ -64,8 +64,11 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository) }}
     outputs:
       pr-number: ${{ steps.check.outputs.pr-number }}
+      head-sha: ${{ steps.check.outputs.head-sha }}
     steps:
       # Checked through the API for dispatches too, which carry no PR payload.
+      # Inline on purpose: this is the gate, so it must not run PR-controlled
+      # code.
       - name: Check PR is open and from this repo
         id: check
         env:
@@ -78,8 +81,11 @@ jobs:
             echo "::error::pr-number must be a positive integer." >&2
             exit 1
           fi
-          state="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.state')"
-          head_repo="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.repo.full_name // ""')"
+          # A deleted head repo is null; the placeholder keeps the
+          # tab-separated fields aligned.
+          pr="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" \
+            --jq '[.state, (.head.repo.full_name // "-"), .head.sha] | @tsv')"
+          IFS=$'\t' read -r state head_repo head_sha <<<"${pr}"
           if [ "${state}" != "open" ]; then
             echo "::error::PR #${PR_NUMBER} is ${state}, not open." >&2
             exit 1
@@ -88,7 +94,10 @@ jobs:
             echo "::error::PR #${PR_NUMBER} is from a fork. E2E runs only for branches of this repo." >&2
             exit 1
           fi
-          echo "pr-number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          {
+            echo "pr-number=${PR_NUMBER}"
+            echo "head-sha=${head_sha}"
+          } >> "$GITHUB_OUTPUT"
 
   e2e:
     name: E2E · litellm_chatbot_to_catalog_api
@@ -109,7 +118,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/pull/${{ needs.authorize.outputs.pr-number }}/merge
+          fetch-depth: 2 # for HEAD^2
           persist-credentials: false
+
+      # The merge ref follows every push. Pinning to the head authorize saw
+      # keeps a push after approval from running unreviewed.
+      - name: Check merge ref is the authorized head
+        env:
+          HEAD_SHA: ${{ needs.authorize.outputs.head-sha }}
+        run: |
+          actual="$(git rev-parse HEAD^2)"
+          if [ "${actual}" != "${HEAD_SHA}" ]; then
+            echo "::error::PR head moved to ${actual} after authorization (${HEAD_SHA}). Re-run all jobs to test the new head." >&2
+            exit 1
+          fi
 
       # TAG is the merge commit, not github.sha (main's SHA on dispatch), so
       # images on cached EKS nodes are never shared between PRs. ENV_ID names
