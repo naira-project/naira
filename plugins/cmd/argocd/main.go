@@ -54,6 +54,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -122,8 +123,12 @@ func (p *Plugin) listApplications(ctx context.Context) ([]v1alpha1.Application, 
 func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse {
 	var (
 		nodes     []pluginapi.NodeClaim
-		relations []pluginapi.RelationClaim
 		seenNodes = map[pluginapi.NodeID]bool{}
+
+		// A relation is identified by its kind and ends. Different
+		// Applications can yield the same relation with different paths, so
+		// we merge the paths and emit each relation once.
+		relPaths = map[relationKey][]string{}
 	)
 	addNode := func(claim pluginapi.NodeClaim) {
 		if seenNodes[claim.ID] {
@@ -131,6 +136,10 @@ func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse 
 		}
 		seenNodes[claim.ID] = true
 		nodes = append(nodes, claim)
+	}
+	addRelation := func(kind string, from, to pluginapi.NodeID, paths ...string) {
+		key := relationKey{kind, from, to}
+		relPaths[key] = append(relPaths[key], paths...)
 	}
 	appNodeID := func(app v1alpha1.Application) pluginapi.NodeID {
 		return applicationID(p.config.PathPrefix, app.Namespace, app.Name)
@@ -173,9 +182,7 @@ func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse 
 		appID := appNodeID(app)
 
 		// Multiple sources from a single Application can point to the same
-		// repository, at different paths. A relation is identified by its kind
-		// and ends, so we need to create only one per repository, listing all
-		// the paths used.
+		// repository, at different paths.
 		pathsByRepo := map[pluginapi.NodeID][]string{}
 		for _, src := range sources(app) {
 			repoPath := repositoryidentity.GitHubRepositoryNodePathFromURL(src.RepoURL)
@@ -204,13 +211,7 @@ func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse 
 			}
 		}
 		for repoID, paths := range pathsByRepo {
-			sort.Strings(paths)
-			relations = append(relations, pluginapi.RelationClaim{
-				Kind:       pluginapi.RelationKindSourcedFrom,
-				From:       appID,
-				To:         repoID,
-				Properties: pathsProperties(paths),
-			})
+			addRelation(pluginapi.RelationKindSourcedFrom, appID, repoID, paths...)
 		}
 
 		// Find all resources managed by the Application, as listed in its
@@ -228,23 +229,40 @@ func (p *Plugin) collect(apps []v1alpha1.Application) pluginapi.CollectResponse 
 			addNode(pluginapi.NodeClaim{
 				ID: resID,
 			})
-			relations = append(relations, pluginapi.RelationClaim{
-				Kind: pluginapi.RelationKindDescribes,
-				From: appID,
-				To:   resID,
-			})
+			addRelation(pluginapi.RelationKindDescribes, appID, resID)
 			for repoID, paths := range pathsByRepo {
-				relations = append(relations, pluginapi.RelationClaim{
-					Kind:       pluginapi.RelationKindDeployedFrom,
-					From:       resID,
-					To:         repoID,
-					Properties: pathsProperties(paths),
-				})
+				addRelation(pluginapi.RelationKindDeployedFrom, resID, repoID, paths...)
 			}
 		}
 	}
 
+	var relations []pluginapi.RelationClaim
+	for key, paths := range relPaths {
+		sort.Strings(paths)
+		relations = append(relations, pluginapi.RelationClaim{
+			Kind:       key.kind,
+			From:       key.from,
+			To:         key.to,
+			Properties: pathsProperties(slices.Compact(paths)),
+		})
+	}
+	// Map iteration order is random; keep the output deterministic.
+	slices.SortFunc(relations, func(a, b pluginapi.RelationClaim) int {
+		return cmp.Or(
+			cmp.Compare(a.Kind, b.Kind),
+			cmp.Compare(a.From.Kind, b.From.Kind),
+			cmp.Compare(a.From.Path, b.From.Path),
+			cmp.Compare(a.To.Kind, b.To.Kind),
+			cmp.Compare(a.To.Path, b.To.Path),
+		)
+	})
+
 	return pluginapi.CollectResponse{Nodes: nodes, Relations: relations}
+}
+
+type relationKey struct {
+	kind     string
+	from, to pluginapi.NodeID
 }
 
 func applicationID(pathPrefix, ns, name string) pluginapi.NodeID {

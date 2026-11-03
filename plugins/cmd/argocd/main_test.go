@@ -10,9 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 //go:generate go run ./testdata/gen
@@ -399,3 +401,56 @@ func nodeID(kind, path string) pluginapi.NodeID {
 }
 
 type props = pluginapi.PropertyMap
+
+func TestCollectMergesRelationsAcrossApplications(t *testing.T) {
+	app := func(name, repoPath string) v1alpha1.Application {
+		return v1alpha1.Application{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "argocd",
+				Name:      name,
+			},
+			Spec: v1alpha1.ApplicationSpec{
+				Destination: v1alpha1.ApplicationDestination{
+					Name: "in-cluster",
+				},
+				Source: &v1alpha1.ApplicationSource{
+					RepoURL: "https://github.com/shared-org/shared-repo",
+					Path:    repoPath,
+				},
+			},
+			Status: v1alpha1.ApplicationStatus{
+				Resources: []v1alpha1.ResourceStatus{
+					{
+						Group:     "apps",
+						Kind:      "Deployment",
+						Namespace: "shared-ns",
+						Name:      "shared-deployment",
+					},
+				},
+			},
+		}
+	}
+
+	apps := []v1alpha1.Application{
+		app("app1", "path/z"),
+		app("app2", "path/yyy"),
+		app("app3", "path/z"),
+	}
+
+	got := New(config{PathPrefix: "prefix", ClusterID: "cluster"}).collect(apps)
+
+	// We're only interested in the "deployed_from" relations.
+	var testedRelations []pluginapi.RelationClaim
+	for _, r := range got.Relations {
+		if r.Kind == "deployed_from" {
+			testedRelations = append(testedRelations, r)
+		}
+	}
+	assert.Equal(t, []pluginapi.RelationClaim{
+		{Kind: "deployed_from",
+			From: nodeID("deployment", "cluster/shared-ns/shared-deployment"),
+			To:   nodeID("git_repository", "github.com/shared-org/shared-repo"),
+			Properties: props{
+				"paths": `["path/yyy","path/z"]`}},
+	}, testedRelations)
+}
