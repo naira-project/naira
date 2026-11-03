@@ -36,7 +36,8 @@ func TestListKindsReturnsDistinctStoredNodeKinds(t *testing.T) {
 		nil,
 	)
 
-	response := NewService(store).ListKinds(t.Context())
+	response, err := NewService(store).ListKinds(t.Context())
+	require.NoError(t, err)
 
 	assert.Equal(t, []string{"application", "dataset", "model"}, response)
 }
@@ -52,7 +53,8 @@ func TestListNodesProjectsStoredNode(t *testing.T) {
 		},
 	}}, nil)
 
-	response := NewService(store).ListNodes(t.Context())
+	response, err := NewService(store).ListNodes(t.Context())
+	require.NoError(t, err)
 
 	assert.Equal(t, []Node{
 		{
@@ -157,7 +159,8 @@ func TestListRelationsReturnsStoredRelations(t *testing.T) {
 		},
 	)
 
-	response := NewService(store).ListRelations(t.Context())
+	response, err := NewService(store).ListRelations(t.Context())
+	require.NoError(t, err)
 
 	assert.Equal(t, []Relation{
 		{

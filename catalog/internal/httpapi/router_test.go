@@ -74,7 +74,7 @@ func (p blockingStubPlugin) Collect(ctx context.Context) (catalog.CollectRespons
 func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
 	t.Helper()
 
-	_, _, err := store.ApplyPluginSnapshot("test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
+	_, _, err := store.ApplyPluginSnapshot(t.Context(), "test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
 	require.NoError(t, err)
 }
 

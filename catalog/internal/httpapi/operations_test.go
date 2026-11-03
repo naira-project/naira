@@ -212,14 +212,14 @@ func waitForState(t *testing.T, opStore operations.Store, name string, condition
 
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		op, err := opStore.Get(name)
+		op, err := opStore.Get(t.Context(), name)
 		if err == nil && condition(op) {
 			return op
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	op, err := opStore.Get(name)
+	op, err := opStore.Get(t.Context(), name)
 	require.NoError(t, err, "operation %q not found", name)
 	t.Fatalf("timed out waiting for operation %q; final state = %s", name, op.State)
 	return operations.Operation{}

@@ -17,6 +17,6 @@ var (
 func applyPluginSnapshot(t *testing.T, store *MemoryStore, nodes []NodeClaim, relations []RelationClaim) {
 	t.Helper()
 
-	_, _, err := store.ApplyPluginSnapshot("test-plugin", snapshotV1, nodes, relations)
+	_, _, err := store.ApplyPluginSnapshot(t.Context(), "test-plugin", snapshotV1, nodes, relations)
 	require.NoError(t, err)
 }
