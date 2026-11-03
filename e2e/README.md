@@ -32,7 +32,9 @@ component in the tag. `E2E_IMAGE` defaults to `naira-e2e` (fine for
 `kind load`). By default the script loads images into kind; `--registry`
 pushes them instead (`linux/amd64`, `E2E_IMAGE` required, registry login is
 the caller's job). `--context <name>` deploys into any kube context instead of
-`kind-<cluster-name>`, e.g. a vCluster.
+`kind-<cluster-name>`, e.g. a vCluster. `--build-only` and `--skip-build`
+split the run into a build phase and a deploy phase, so images can be
+published before any cluster credential exists.
 
 Adding a new scenario means adding a new directory with those four things —
 nothing in `e2e/components/` or the scripts needs to change unless the new
