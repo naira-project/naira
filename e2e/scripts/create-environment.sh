@@ -48,8 +48,15 @@ ENV_ID=""
 SCENARIO=""
 CONTEXT=""
 REGISTRY=0
-BUILD=1
-DEPLOY=1
+PHASE=all
+
+set_phase() {
+  if [ "${PHASE}" != "all" ] && [ "${PHASE}" != "$1" ]; then
+    echo "error: --build-only and --skip-build are mutually exclusive" >&2
+    exit 1
+  fi
+  PHASE="$1"
+}
 
 usage() {
   cat >&2 <<'EOF'
@@ -91,8 +98,8 @@ while [ $# -gt 0 ]; do
     --cluster-name) CLUSTER_NAME="$2"; shift 2 ;;
     --context) CONTEXT="$2"; shift 2 ;;
     --registry) REGISTRY=1; shift ;;
-    --build-only) DEPLOY=0; shift ;;
-    --skip-build) BUILD=0; shift ;;
+    --build-only) set_phase build; shift ;;
+    --skip-build) set_phase deploy; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -103,10 +110,6 @@ if [ -z "${TAG}" ]; then echo "error: --tag is required" >&2; usage; exit 1; fi
 if [ -z "${ENV_ID}" ]; then
   echo "error: --env-id is required" >&2
   usage
-  exit 1
-fi
-if [ "${BUILD}" -eq 0 ] && [ "${DEPLOY}" -eq 0 ]; then
-  echo "error: --build-only and --skip-build are mutually exclusive" >&2
   exit 1
 fi
 if [ "${REGISTRY}" -eq 1 ] && [ -z "${E2E_IMAGE:-}" ]; then
@@ -185,7 +188,7 @@ build_and_load() {
   fi
 }
 
-if [ "${BUILD}" -eq 1 ]; then
+if [ "${PHASE}" != "deploy" ]; then
   echo "==> Building and publishing images"
   build_and_load catalog "${REPO_ROOT}/catalog" "${REPO_ROOT}"
   build_and_load seed "${SCENARIO_DIR}/seed"
@@ -200,7 +203,7 @@ if [ "${BUILD}" -eq 1 ]; then
   done
 fi
 
-if [ "${DEPLOY}" -eq 0 ]; then
+if [ "${PHASE}" = "build" ]; then
   echo "==> Images published"
   exit 0
 fi
