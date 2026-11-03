@@ -2,29 +2,35 @@ package catalog
 
 import "context"
 
-// Service exposes read-only access to the catalog graph. It intentionally
-// knows nothing about plugins or async operations - see the pluginrun
-// package for the code that populates the graph via Store.ApplyPluginSnapshot.
-type Service struct {
-	store Store
+// Reader provides read-only access to the catalog graph.
+type Reader interface {
+	GetNode(ctx context.Context, id NodeID) (Node, error)
+	ListNodes(ctx context.Context) ([]Node, error)
+	ListRelations(ctx context.Context) ([]Relation, error)
+	ListKinds(ctx context.Context) ([]string, error)
 }
 
-func NewService(store Store) *Service {
+// Service exposes read-only access to the catalog graph.
+type Service struct {
+	store Reader
+}
+
+func NewService(store Reader) *Service {
 	return &Service{store: store}
 }
 
-func (s *Service) GetNode(_ context.Context, id NodeID) (Node, error) {
-	return s.store.GetNode(id)
+func (s *Service) GetNode(ctx context.Context, id NodeID) (Node, error) {
+	return s.store.GetNode(ctx, id)
 }
 
-func (s *Service) ListNodes(_ context.Context) []Node {
-	return s.store.ListNodes()
+func (s *Service) ListNodes(ctx context.Context) ([]Node, error) {
+	return s.store.ListNodes(ctx)
 }
 
-func (s *Service) ListRelations(_ context.Context) []Relation {
-	return s.store.ListRelations()
+func (s *Service) ListRelations(ctx context.Context) ([]Relation, error) {
+	return s.store.ListRelations(ctx)
 }
 
-func (s *Service) ListKinds(_ context.Context) []string {
-	return s.store.ListKinds()
+func (s *Service) ListKinds(ctx context.Context) ([]string, error) {
+	return s.store.ListKinds(ctx)
 }

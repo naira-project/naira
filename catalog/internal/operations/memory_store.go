@@ -1,7 +1,7 @@
 package operations
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -19,11 +19,6 @@ const (
 	ttl = 3 * 24 * time.Hour
 )
 
-var (
-	ErrNotFound      = errors.New("operation not found")
-	ErrAlreadyExists = errors.New("operation already exists")
-)
-
 // MemoryStore is a Store implementation backed by a map, keyed by operation
 // name and protected by a read-write mutex.
 type MemoryStore struct {
@@ -37,7 +32,7 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-func (s *MemoryStore) Create(op Operation) error {
+func (s *MemoryStore) Create(_ context.Context, op Operation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -50,7 +45,7 @@ func (s *MemoryStore) Create(op Operation) error {
 	return nil
 }
 
-func (s *MemoryStore) Get(name string) (Operation, error) {
+func (s *MemoryStore) Get(_ context.Context, name string) (Operation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -70,7 +65,7 @@ func (s *MemoryStore) Get(name string) (Operation, error) {
 // List returns all non-expired operations ordered by creation time
 // descending (most recent first). The optional filter narrows the result
 // set by plugin name and/or operation state.
-func (s *MemoryStore) List(filter Filter) ([]Operation, error) {
+func (s *MemoryStore) List(_ context.Context, filter Filter) ([]Operation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -94,7 +89,7 @@ func (s *MemoryStore) List(filter Filter) ([]Operation, error) {
 	return result, nil
 }
 
-func (s *MemoryStore) UpdateState(name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error {
+func (s *MemoryStore) UpdateState(_ context.Context, name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

@@ -1,26 +1,20 @@
 package catalog
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/google/uuid"
 )
 
-var (
-	ErrInvalidIngestion = errors.New("invalid ingestion payload")
-	ErrNodeNotFound     = errors.New("node not found")
-)
-
 type Store interface {
-	ListNodes() []Node
-	GetNode(id NodeID) (Node, error)
-	ListRelations() []Relation
-	ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error)
-	ListKinds() []string
+	ListNodes(ctx context.Context) ([]Node, error)
+	GetNode(ctx context.Context, id NodeID) (Node, error)
+	ListRelations(ctx context.Context) ([]Relation, error)
+	ApplyPluginSnapshot(ctx context.Context, pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error)
+	ListKinds(ctx context.Context) ([]string, error)
 }
 
 type MemoryStore struct {
@@ -30,7 +24,7 @@ type MemoryStore struct {
 	kinds     []string
 }
 
-func (s *MemoryStore) ListKinds() []string {
+func (s *MemoryStore) ListKinds(_ context.Context) ([]string, error) {
 	kinds := make(map[string]struct{})
 	s.mu.RLock()
 	for _, node := range s.nodes {
@@ -44,30 +38,7 @@ func (s *MemoryStore) ListKinds() []string {
 	}
 	sort.Strings(result)
 
-	return result
-}
-
-type PluginClaim struct {
-	SnapshotID uuid.UUID
-	Properties map[string]string
-}
-
-type Node struct {
-	ID           NodeID
-	PluginClaims map[string]PluginClaim
-}
-
-type Relation struct {
-	Kind         string
-	From         NodeID
-	To           NodeID
-	PluginClaims map[string]PluginClaim
-}
-
-type RelationID struct {
-	Kind string
-	From NodeID
-	To   NodeID
+	return result, nil
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -77,7 +48,7 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-func (s *MemoryStore) ListNodes() []Node {
+func (s *MemoryStore) ListNodes(_ context.Context) ([]Node, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -90,10 +61,10 @@ func (s *MemoryStore) ListNodes() []Node {
 		return lessNodeID(result[i].ID, result[j].ID)
 	})
 
-	return result
+	return result, nil
 }
 
-func (s *MemoryStore) GetNode(id NodeID) (Node, error) {
+func (s *MemoryStore) GetNode(_ context.Context, id NodeID) (Node, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -105,7 +76,7 @@ func (s *MemoryStore) GetNode(id NodeID) (Node, error) {
 	return node, nil
 }
 
-func (s *MemoryStore) ListRelations() []Relation {
+func (s *MemoryStore) ListRelations(_ context.Context) ([]Relation, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -117,14 +88,14 @@ func (s *MemoryStore) ListRelations() []Relation {
 		return lessRelation(result[i], result[j])
 	})
 
-	return result
+	return result, nil
 }
 
-func (s *MemoryStore) ApplyPluginSnapshot(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error) {
+func (s *MemoryStore) ApplyPluginSnapshot(_ context.Context, pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) (int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := validateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
+	if err := ValidateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
 		return 0, 0, fmt.Errorf("validate snapshot input: %w", err)
 	}
 
@@ -216,54 +187,6 @@ func (s *MemoryStore) pruneRelations(pluginName string, snapshotID uuid.UUID) {
 			delete(s.relations, id)
 		}
 	}
-}
-
-func validateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []NodeClaim, relations []RelationClaim) error {
-	if pluginName == "" {
-		return fmt.Errorf("%w: plugin name is empty", ErrInvalidIngestion)
-	}
-
-	if snapshotID == uuid.Nil {
-		return fmt.Errorf("%w: snapshot ID is empty", ErrInvalidIngestion)
-	}
-
-	availableNodes := make(map[NodeID]struct{}, len(nodes))
-
-	for _, node := range nodes {
-		id := node.ID
-		if id.Kind == "" || id.Path == "" {
-			return fmt.Errorf("%w: node ID with empty kind or path", ErrInvalidIngestion)
-		}
-		if strings.Contains(id.Kind, "/") {
-			return fmt.Errorf("%w: node kind %q contains reserved separator '/'", ErrInvalidIngestion, id.Kind)
-		}
-
-		availableNodes[id] = struct{}{}
-	}
-
-	for _, relation := range relations {
-		fromID := relation.From
-		toID := relation.To
-
-		switch {
-		case relation.Kind == "" || fromID.Kind == "" || fromID.Path == "" || toID.Kind == "" || toID.Path == "":
-			return fmt.Errorf("%w: relation ID with empty kind, source, or target", ErrInvalidIngestion)
-		case strings.Contains(relation.Kind, "/"):
-			return fmt.Errorf("%w: relation kind %q contains reserved separator '/'", ErrInvalidIngestion, relation.Kind)
-		case strings.Contains(fromID.Kind, "/"):
-			return fmt.Errorf("%w: source node kind %q contains reserved separator '/'", ErrInvalidIngestion, fromID.Kind)
-		case strings.Contains(toID.Kind, "/"):
-			return fmt.Errorf("%w: target node kind %q contains reserved separator '/'", ErrInvalidIngestion, toID.Kind)
-		}
-		if _, ok := availableNodes[fromID]; !ok {
-			return fmt.Errorf("%w: source node %q/%q not found", ErrInvalidIngestion, fromID.Kind, fromID.Path)
-		}
-		if _, ok := availableNodes[toID]; !ok {
-			return fmt.Errorf("%w: target node %q/%q not found", ErrInvalidIngestion, toID.Kind, toID.Path)
-		}
-	}
-
-	return nil
 }
 
 func lessNodeID(left, right NodeID) bool {

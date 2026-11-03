@@ -68,10 +68,15 @@ func nodeName(id pluginapi.NodeID) string {
 // - pageToken
 // - filter: only field="value" equality filters
 // Supported node filter fields: name, kind, path.
-func newListNodesHandler(service *catalog.Service, logger *log.Logger) http.HandlerFunc {
+func newListNodesHandler(reader catalog.Reader, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(nodeListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-		nodes := make([]Node, 0)
-		for _, node := range service.ListNodes(r.Context()) {
+		catalogNodes, err := reader.ListNodes(r.Context())
+		if err != nil {
+			return fmt.Errorf("listing nodes: %w", err)
+		}
+
+		nodes := make([]Node, 0, len(catalogNodes))
+		for _, node := range catalogNodes {
 			node := nodeFromCatalogNode(node)
 			matches, err := matchNodeFilter(node, options.filter)
 			if err != nil {
@@ -95,14 +100,14 @@ func newListNodesHandler(service *catalog.Service, logger *log.Logger) http.Hand
 }
 
 // newGetNodeHandler returns a single catalog node.
-func newGetNodeHandler(service *catalog.Service) http.HandlerFunc {
+func newGetNodeHandler(reader catalog.Reader) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		path, err := url.PathUnescape(chi.URLParam(r, "*"))
 		if err != nil {
 			return fmt.Errorf("unescaping node path: %w", err)
 		}
 
-		node, err := service.GetNode(r.Context(), catalog.NodeID{
+		node, err := reader.GetNode(r.Context(), catalog.NodeID{
 			Kind: chi.URLParam(r, "kind"),
 			Path: path,
 		})
