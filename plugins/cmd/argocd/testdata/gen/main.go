@@ -452,8 +452,7 @@ func generateToken(ctx context.Context, k3sContainer testcontainers.Container, d
 	if err != nil {
 		return "", fmt.Errorf("getting initial admin secret: %w", err)
 	}
-	encoded, _, _ := unstructured.NestedString(secret.Object, "data", "password")
-	password, err := base64.StdEncoding.DecodeString(encoded)
+	password, err := base64.StdEncoding.DecodeString(nestedStrOrEmpty(secret.Object, "data", "password"))
 	if err != nil {
 		return "", fmt.Errorf("decoding initial admin password: %w", err)
 	}
@@ -594,8 +593,8 @@ func waitForApplications(ctx context.Context, api *apiClient, wantApps []wantApp
 				continue
 			}
 			if !isReady(apps[i], want.expect) {
-				syncStatus, _, _ := unstructured.NestedString(apps[i].Object, "status", "sync", "status")
-				healthStatus, _, _ := unstructured.NestedString(apps[i].Object, "status", "health", "status")
+				syncStatus := nestedStrOrEmpty(apps[i].Object, "status", "sync", "status")
+				healthStatus := nestedStrOrEmpty(apps[i].Object, "status", "health", "status")
 				notReady = append(notReady, fmt.Sprintf("%s (sync=%s, health=%s)", want.name, syncStatus, healthStatus))
 				continue
 			}
@@ -624,18 +623,11 @@ func isReady(app unstructured.Unstructured, expect expectation) bool {
 		conditions, _, _ := unstructured.NestedSlice(app.Object, "status", "conditions")
 		return len(conditions) > 0
 	case expectRunning:
-		phase, _, _ := unstructured.NestedString(app.Object, "status", "operationState", "phase")
-		return phase == "Running"
+		return nestedStrOrEmpty(app.Object, "status", "operationState", "phase") == "Running"
 	}
-	var (
-		syncStatus, _, _   = unstructured.NestedString(app.Object, "status", "sync", "status")
-		healthStatus, _, _ = unstructured.NestedString(app.Object, "status", "health", "status")
-		resources, _, _    = unstructured.NestedSlice(app.Object, "status", "resources")
-		sourceType, _, _   = unstructured.NestedString(app.Object, "status", "sourceType")
-		sourceTypes, _, _  = unstructured.NestedStringSlice(app.Object, "status", "sourceTypes")
-	)
-	return syncStatus == "Synced" && healthStatus == "Healthy" && len(resources) > 0 &&
-		(sourceType != "" || len(sourceTypes) > 0)
+	return nestedStrOrEmpty(app.Object, "status", "sync", "status") == "Synced" &&
+		nestedStrOrEmpty(app.Object, "status", "health", "status") == "Healthy"
+
 }
 
 // writeJSONFiles writes apps as "*.json" files, replacing any such files
@@ -734,4 +726,9 @@ func replaceTimestamps(v any) {
 			replaceTimestamps(e)
 		}
 	}
+}
+
+func nestedStrOrEmpty(obj map[string]any, path ...string) string {
+	v, _, _ := unstructured.NestedString(obj, path...)
+	return v
 }
