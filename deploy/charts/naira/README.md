@@ -74,8 +74,8 @@ on existing volumes, and reruns when its spec, script
 or `database` values change; delete the Job to rerun it by hand, e.g. after
 changing a password in an existing Secret. A server that never answers fails
 the Job after `database.init.waitRetries` or `activeDeadlineSeconds`. Defaults: `catalog`. `values-dev.yaml`
-adds `litellm` and `openmetadata`, used by LiteLLM and OpenMetadata from the
-test-dependencies chart.
+adds `langfuse`, `litellm` and `openmetadata`, used by Langfuse, LiteLLM and
+OpenMetadata from the test-dependencies chart.
 
 ## Plugins
 
