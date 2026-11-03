@@ -3,7 +3,7 @@
 CREATE TABLE nodes (
     id   UUID PRIMARY KEY,
     kind VARCHAR(40) NOT NULL,
-    path VARCHAR(400) NOT NULL,
+    path VARCHAR(300) NOT NULL,
     CONSTRAINT nodes_identity_key UNIQUE (kind, path)
 );
 
