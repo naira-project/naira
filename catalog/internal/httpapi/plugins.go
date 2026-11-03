@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
 
 var errPluginResourceNotFound = errors.New("plugin resource not found")
@@ -72,7 +71,7 @@ func newGetPluginHandler(configs catalog.PluginConfigsByName) http.HandlerFunc {
 
 // newRunAllPluginsHandler asynchronously runs all registered plugins and
 // returns the tracking operations (AIP-151).
-func newRunAllPluginsHandler(runner *pluginrun.Runner) http.HandlerFunc {
+func newRunAllPluginsHandler(runner PluginRunner) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		ops := runner.RunAllPluginsAsync(r.Context())
 
@@ -83,7 +82,7 @@ func newRunAllPluginsHandler(runner *pluginrun.Runner) http.HandlerFunc {
 
 // newRunPluginHandler asynchronously runs a single plugin and returns the
 // tracking operation (AIP-151).
-func newRunPluginHandler(runner *pluginrun.Runner) http.HandlerFunc {
+func newRunPluginHandler(runner PluginRunner) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		plugin := chi.URLParam(r, "plugin")
 		op, err := runner.RunPluginAsync(r.Context(), plugin)
