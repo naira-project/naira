@@ -1,74 +1,67 @@
 import { type NodeResource, nodeProps } from './catalogApi';
-
-// Must match the Loki entry in grafana.additionalDataSources (uid: loki) in the
-// test-dependencies chart's values.yaml.
-const LOKI_DATASOURCE = { type: 'loki', uid: 'loki' };
-
-// Port-forward of the test-dependencies Grafana service.
-const DEFAULT_GRAFANA_URL = 'http://localhost:3002';
-
-function grafanaUrl(): string {
-  return (import.meta.env.VITE_GRAFANA_URL || DEFAULT_GRAFANA_URL).replace(/\/+$/, '');
-}
-
-// Namespace the workloads run in, set at build time. Used for the LiteLLM proxy
-// and for Services whose host carries no namespace. Empty -> any namespace.
-function defaultNamespace(): string {
-  return import.meta.env.VITE_NAMESPACE ?? '';
-}
-
-// The `app` label is the chart name for LiteLLM (e.g. litellm-helm), hence the prefix match.
-function litellmProxySelector(): string {
-  const namespace = defaultNamespace();
-  return namespace ? `{namespace="${namespace}", app=~"litellm.*"}` : '{app=~"litellm.*"}';
-}
+import type { LogsConfig } from './runtimeConfig';
 
 // In-cluster Service hosts: llama-qwen25-05b.test-dependencies.svc.cluster.local
 // or just llama-qwen25-05b, which resolves in the caller's own namespace.
 const CLUSTER_SERVICE_HOST = /^([a-z0-9-]+)(?:\.([a-z0-9-]+)\.svc(?:\.cluster\.local)?)?$/;
 
+// Fills {{key}} placeholders. Undefined when a placeholder has no value, so a
+// query never silently drops a matcher.
+function fillTemplate(template: string, values: Record<string, string>): string | undefined {
+  let complete = true;
+  const query = template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
+    if (!values[key]) {
+      complete = false;
+    }
+    return values[key] ?? '';
+  });
+  return complete ? query : undefined;
+}
+
 /**
- * LogQL queries selecting an inference endpoint's logs in Loki:
- * - the backend pods, when api_base points at an in-cluster Service (the
- *   test-dependencies Alloy labels pods by namespace and their `app` label,
- *   which the chart sets to the Service name), and
- * - the LiteLLM proxy's lines mentioning the upstream model.
+ * LogQL queries selecting an inference endpoint's logs:
+ * - the backend pods, when api_base points at an in-cluster Service, and
+ * - the proxy's lines mentioning the upstream model.
  *
  * Endpoints without either, such as those from the Bedrock plugin whose logs
  * live in CloudWatch, get no queries.
  */
-export function endpointLogQueries(node: NodeResource): string[] {
+export function endpointLogQueries(node: NodeResource, logs: LogsConfig): string[] {
   if (node.kind !== 'inference_endpoint') {
     return [];
   }
   const props = nodeProps(node);
-  const queries: string[] = [];
+  const namespace = logs.defaultNamespace ?? '';
+  const queries: (string | undefined)[] = [];
 
-  const service = clusterService(props.api_base);
+  const service = clusterService(props.api_base, namespace);
   if (service) {
-    queries.push(`{namespace="${service.namespace}", app="${service.name}"}`);
+    queries.push(fillTemplate(logs.serviceQuery, service));
   }
 
   const model = upstreamModelName(props.model);
   if (model) {
-    queries.push(`${litellmProxySelector()} |= ${JSON.stringify(model)}`);
+    queries.push(fillTemplate(logs.proxyQuery, { namespace, model: JSON.stringify(model) }));
   }
 
-  return queries;
+  return queries.filter((q): q is string => q !== undefined);
 }
 
-/** Grafana Explore URL showing the endpoint's logs, or undefined when there are none to show. */
-export function endpointLogsUrl(node: NodeResource): string | undefined {
-  const queries = endpointLogQueries(node);
+/** Explore URL showing the endpoint's logs, or undefined when there are none to show. */
+export function endpointLogsUrl(node: NodeResource, logs?: LogsConfig): string | undefined {
+  if (!logs) {
+    return undefined;
+  }
+  const queries = endpointLogQueries(node, logs);
   if (queries.length === 0) {
     return undefined;
   }
 
   const pane = {
-    datasource: LOKI_DATASOURCE.uid,
+    datasource: logs.datasource.uid,
     queries: queries.map((expr, i) => ({
       refId: String.fromCharCode('A'.charCodeAt(0) + i),
-      datasource: LOKI_DATASOURCE,
+      datasource: logs.datasource,
       queryType: 'range',
       expr,
     })),
@@ -79,11 +72,12 @@ export function endpointLogsUrl(node: NodeResource): string | undefined {
     orgId: '1',
     panes: JSON.stringify({ a: pane }),
   });
-  return `${grafanaUrl()}/explore?${params}`;
+  return `${logs.explorerUrl.replace(/\/+$/, '')}/explore?${params}`;
 }
 
 function clusterService(
   apiBase: string | undefined,
+  defaultNamespace: string,
 ): { name: string; namespace: string } | undefined {
   if (!apiBase) {
     return undefined;
@@ -95,7 +89,7 @@ function clusterService(
     return undefined;
   }
   const match = CLUSTER_SERVICE_HOST.exec(host);
-  const namespace = match?.[2] ?? defaultNamespace();
+  const namespace = match?.[2] ?? defaultNamespace;
   return match && namespace ? { name: match[1], namespace } : undefined;
 }
 

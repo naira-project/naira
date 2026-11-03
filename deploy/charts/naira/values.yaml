@@ -236,6 +236,9 @@ ui:
     allowedPaths: []
     # Empty -> [GET, POST]
     allowedMethods: []
+  # Served as /config.json; replaces the image's default file (ui/public/config.json,
+  # the schema's source of truth) as a whole. Empty -> the image's default.
+  config: {}
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 200m, memory: 128Mi}

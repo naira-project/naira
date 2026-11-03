@@ -1,6 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { NodeResource } from './catalogApi';
 import { endpointLogQueries, endpointLogsUrl } from './endpointLogs';
+import type { LogsConfig } from './runtimeConfig';
+
+const logsConfig: LogsConfig = {
+  explorerUrl: 'http://localhost:3002',
+  datasource: { type: 'loki', uid: 'loki' },
+  serviceQuery: '{namespace="{{namespace}}", app="{{name}}"}',
+  proxyQuery: '{app=~"litellm.*"} |= {{model}}',
+};
 
 function endpointNode(plugin: string, path: string, props: Record<string, string>): NodeResource {
   return {
@@ -18,9 +26,9 @@ describe('endpointLogQueries', () => {
       model: 'openai/qwen2.5-0.5b-instruct',
     });
 
-    expect(endpointLogQueries(node)).toEqual([
+    expect(endpointLogQueries(node, logsConfig)).toEqual([
       '{namespace="llamacpp", app="llama-qwen25-05b"}',
-      '{app=~"litellm.*"} |="qwen2.5-0.5b-instruct"',
+      '{app=~"litellm.*"} |= "qwen2.5-0.5b-instruct"',
     ]);
   });
 
@@ -30,7 +38,7 @@ describe('endpointLogQueries', () => {
       model: 'openai/gpt-4o-mini',
     });
 
-    expect(endpointLogQueries(node)).toEqual(['{app=~"litellm.*"} |="gpt-4o-mini"']);
+    expect(endpointLogQueries(node, logsConfig)).toEqual(['{app=~"litellm.*"} |= "gpt-4o-mini"']);
   });
 
   it('keeps nested provider segments after the routing prefix', () => {
@@ -39,7 +47,9 @@ describe('endpointLogQueries', () => {
       model: 'openrouter/openai/gpt-3.5-turbo',
     });
 
-    expect(endpointLogQueries(node)).toEqual(['{app=~"litellm.*"} |="openai/gpt-3.5-turbo"']);
+    expect(endpointLogQueries(node, logsConfig)).toEqual([
+      '{app=~"litellm.*"} |= "openai/gpt-3.5-turbo"',
+    ]);
   });
 
   it('returns nothing for a Bedrock plugin endpoint', () => {
@@ -49,8 +59,8 @@ describe('endpointLogQueries', () => {
       model_id: 'amazon.nova-micro-v1:0',
     });
 
-    expect(endpointLogQueries(node)).toEqual([]);
-    expect(endpointLogsUrl(node)).toBeUndefined();
+    expect(endpointLogQueries(node, logsConfig)).toEqual([]);
+    expect(endpointLogsUrl(node, logsConfig)).toBeUndefined();
   });
 
   it('returns nothing for other kinds', () => {
@@ -61,37 +71,37 @@ describe('endpointLogQueries', () => {
       pluginClaims: [{ plugin: 'litellm', props: { model: 'openai/gpt-4o-mini' } }],
     };
 
-    expect(endpointLogQueries(node)).toEqual([]);
+    expect(endpointLogQueries(node, logsConfig)).toEqual([]);
   });
 });
 
-describe('build-time config', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('restricts the proxy lines to the configured LiteLLM namespace', () => {
-    vi.stubEnv('VITE_NAMESPACE', 'naira-deps');
+describe('runtime config', () => {
+  it('fills the configured namespace into the proxy query', () => {
     const node = endpointNode('litellm', 'litellm/idp-gpt-4o-mini-def456', {
       api_base: 'https://api.openai.com/v1',
       model: 'openai/gpt-4o-mini',
     });
+    const config: LogsConfig = {
+      ...logsConfig,
+      defaultNamespace: 'naira-deps',
+      proxyQuery: '{namespace="{{namespace}}", app=~"litellm.*"} |= {{model}}',
+    };
 
-    expect(endpointLogQueries(node)).toEqual([
+    expect(endpointLogQueries(node, config)).toEqual([
       '{namespace="naira-deps", app=~"litellm.*"} |= "gpt-4o-mini"',
     ]);
   });
 
   it('places a Service host without a namespace in the configured namespace', () => {
-    vi.stubEnv('VITE_NAMESPACE', 'naira-deps');
     const node = endpointNode('litellm', 'litellm/idp-llama-qwen25-05b-abc123', {
       api_base: 'http://llama-qwen25-05b:8080/v1',
       model: 'openai/qwen2.5-0.5b-instruct',
     });
+    const config: LogsConfig = { ...logsConfig, defaultNamespace: 'naira-deps' };
 
-    expect(endpointLogQueries(node)).toEqual([
+    expect(endpointLogQueries(node, config)).toEqual([
       '{namespace="naira-deps", app="llama-qwen25-05b"}',
-      '{namespace="naira-deps", app=~"litellm.*"} |= "qwen2.5-0.5b-instruct"',
+      '{app=~"litellm.*"} |= "qwen2.5-0.5b-instruct"',
     ]);
   });
 
@@ -101,30 +111,54 @@ describe('build-time config', () => {
       model: 'openai/qwen2.5-0.5b-instruct',
     });
 
-    expect(endpointLogQueries(node)).toEqual(['{app=~"litellm.*"} |= "qwen2.5-0.5b-instruct"']);
+    expect(endpointLogQueries(node, logsConfig)).toEqual([
+      '{app=~"litellm.*"} |= "qwen2.5-0.5b-instruct"',
+    ]);
   });
 
-  it('links to the configured Grafana without a trailing slash', () => {
-    vi.stubEnv('VITE_GRAFANA_URL', 'https://grafana.example.com/');
+  it('skips a query whose placeholder has no value', () => {
+    const node = endpointNode('litellm', 'litellm/idp-gpt-4o-mini-def456', {
+      api_base: 'https://api.openai.com/v1',
+      model: 'openai/gpt-4o-mini',
+    });
+    const config: LogsConfig = {
+      ...logsConfig,
+      proxyQuery: '{namespace="{{namespace}}", app=~"litellm.*"} |= {{model}}',
+    };
+
+    expect(endpointLogQueries(node, config)).toEqual([]);
+  });
+
+  it('links to the configured explorer without a trailing slash', () => {
+    const node = endpointNode('litellm', 'litellm/idp-gpt-4o-mini-def456', {
+      api_base: 'https://api.openai.com/v1',
+      model: 'openai/gpt-4o-mini',
+    });
+    const config: LogsConfig = { ...logsConfig, explorerUrl: 'https://grafana.example.com/' };
+
+    const url = new URL(endpointLogsUrl(node, config) ?? '');
+
+    expect(`${url.origin}${url.pathname}`).toBe('https://grafana.example.com/explore');
+  });
+
+  it('offers no link when no logs are configured', () => {
     const node = endpointNode('litellm', 'litellm/idp-gpt-4o-mini-def456', {
       api_base: 'https://api.openai.com/v1',
       model: 'openai/gpt-4o-mini',
     });
 
-    const url = new URL(endpointLogsUrl(node) ?? '');
-
-    expect(`${url.origin}${url.pathname}`).toBe('https://grafana.example.com/explore');
+    expect(endpointLogsUrl(node, undefined)).toBeUndefined();
   });
 });
 
 describe('endpointLogsUrl', () => {
-  it('opens Grafana Explore on the Loki datasource with one query per source', () => {
+  it('opens Explore on the configured datasource with one query per source', () => {
     const node = endpointNode('litellm', 'litellm/idp-llama-qwen25-05b-abc123', {
       api_base: 'http://llama-qwen25-05b.llamacpp.svc.cluster.local:8080/v1',
       model: 'openai/qwen2.5-0.5b-instruct',
     });
 
-    const url = new URL(endpointLogsUrl(node) ?? '');
+    const url = new URL(endpointLogsUrl(node, logsConfig) ?? '');
 
     expect(`${url.origin}${url.pathname}`).toBe('http://localhost:3002/explore');
     expect(url.searchParams.get('orgId')).toBe('1');
@@ -142,7 +176,7 @@ describe('endpointLogsUrl', () => {
             refId: 'B',
             datasource: { type: 'loki', uid: 'loki' },
             queryType: 'range',
-            expr: '{app=~"litellm.*"} |="qwen2.5-0.5b-instruct"',
+            expr: '{app=~"litellm.*"} |= "qwen2.5-0.5b-instruct"',
           },
         ],
         range: { from: 'now-1h', to: 'now' },

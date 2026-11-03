@@ -1,0 +1,12 @@
+{
+  "logs": {
+    "explorerUrl": "http://localhost:3002",
+    "datasource": {
+      "type": "loki",
+      "uid": "loki"
+    },
+    "defaultNamespace": "naira-deps",
+    "serviceQuery": "{namespace=\"{{namespace}}\", app=\"{{name}}\"}",
+    "proxyQuery": "{namespace=\"{{namespace}}\", app=~\"litellm.*\"} |= {{model}}"
+  }
+}

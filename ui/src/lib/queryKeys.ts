@@ -19,4 +19,6 @@ export const queryKeys = {
   plugins: ['plugins'] as const,
   schedules: ['schedules'] as const,
   operations: ['operations'] as const,
+
+  runtimeConfig: ['runtimeConfig'] as const,
 };

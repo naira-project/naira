@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { relatedNodesConfigForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
+import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
 import { nodeProps } from '../lib/catalogApi';
 import { endpointLogsUrl } from '../lib/endpointLogs';
 import { cn } from '../lib/utils';
@@ -33,7 +34,8 @@ export default function CatalogDetail() {
   const backPath = findViewpointForKind(decodedKind)?.path;
 
   const relatedConfig = relatedNodesConfigForKind(decodedKind);
-  const logsUrl = node ? endpointLogsUrl(node) : undefined;
+  const { logs } = useRuntimeConfig();
+  const logsUrl = node ? endpointLogsUrl(node, logs) : undefined;
   const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 

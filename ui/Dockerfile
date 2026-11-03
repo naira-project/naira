@@ -3,9 +3,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-# Baked into the bundle; empty -> UI defaults.
-ARG VITE_GRAFANA_URL=
-ARG VITE_NAMESPACE=
 RUN npm run build
 
 FROM nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
