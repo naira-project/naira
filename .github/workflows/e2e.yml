@@ -114,6 +114,8 @@ jobs:
     env:
       PR_NUMBER: ${{ needs.authorize.outputs.pr-number }}
       E2E_IMAGE: ghcr.io/naira-project/naira-e2e
+      VCLUSTER_PROJECT: e2e
+      VCLUSTER_TEMPLATE: vcluster-e2e-template
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -198,6 +200,8 @@ jobs:
       #  - --connect=false on create: its connect embeds the access key in
       #    the kubeconfig. The explicit connect uses a service account token
       #    instead (needs forwardToken on the template).
+      # Inline, not a script or local action: those are PR-controlled and
+      # must never see the access key (ADR-012).
       - name: Provision vCluster
         id: provision
         env:
@@ -226,13 +230,13 @@ jobs:
 
           echo "create-attempted=true" >> "$GITHUB_OUTPUT"
           vcluster platform create vcluster "${ENV_ID}" \
-            --project e2e \
-            --template vcluster-e2e-template \
+            --project "${VCLUSTER_PROJECT}" \
+            --template "${VCLUSTER_TEMPLATE}" \
             --connect=false \
             --config "${platform_config}"
 
           vcluster platform connect vcluster "${ENV_ID}" \
-            --project e2e \
+            --project "${VCLUSTER_PROJECT}" \
             --service-account kube-system/naira-e2e \
             --cluster-role cluster-admin \
             --token-expiration 3600 \
@@ -328,6 +332,8 @@ jobs:
       # Deleting the vCluster removes the whole E2E environment. Skipped when
       # create was never attempted, so early failures report only themselves.
       # The template's inactivity auto-delete covers a delete that never runs.
+      # Inline, duplicating Provision's login: same key exposure
+      # reason as Provision (ADR-012).
       - name: Delete vCluster
         if: ${{ always() && steps.provision.outputs.create-attempted == 'true' }}
         env:
@@ -356,7 +362,7 @@ jobs:
 
           # Error text from find.VClusterNotFoundError in vcluster 0.37.
           if ! out="$(vcluster platform delete vcluster "${ENV_ID}" \
-            --project e2e \
+            --project "${VCLUSTER_PROJECT}" \
             --delete-context=false \
             --config "${platform_config}" 2>&1)"; then
             echo "${out}"
