@@ -1,0 +1,121 @@
+{
+  "metadata": {
+    "creationTimestamp": "2000-01-01T00:00:00Z",
+    "generation": 1,
+    "name": "cluster-rbac",
+    "namespace": "argocd",
+    "resourceVersion": "1",
+    "uid": "a04cdef2-003e-a452-a794-8e43070f74d3"
+  },
+  "spec": {
+    "destination": {
+      "namespace": "cluster-rbac",
+      "server": "https://kubernetes.default.svc"
+    },
+    "project": "default",
+    "source": {
+      "chart": "kube-state-metrics",
+      "repoURL": "https://prometheus-community.github.io/helm-charts",
+      "targetRevision": "8.8.0"
+    },
+    "syncPolicy": {
+      "automated": {
+        "prune": true,
+        "selfHeal": true
+      },
+      "syncOptions": [
+        "CreateNamespace=true"
+      ]
+    }
+  },
+  "status": {
+    "controllerNamespace": "argocd",
+    "health": {
+      "lastTransitionTime": "2000-01-01T00:00:00Z",
+      "status": "Healthy"
+    },
+    "history": [
+      {
+        "deployStartedAt": "2000-01-01T00:00:00Z",
+        "deployedAt": "2000-01-01T00:00:00Z",
+        "id": 0,
+        "initiatedBy": {
+          "automated": true
+        },
+        "revision": "8.8.0",
+        "source": {
+          "chart": "kube-state-metrics",
+          "repoURL": "https://prometheus-community.github.io/helm-charts",
+          "targetRevision": "8.8.0"
+        }
+      }
+    ],
+    "operationState": {
+      "finishedAt": "2000-01-01T00:00:00Z",
+      "phase": "Succeeded",
+      "startedAt": "2000-01-01T00:00:00Z"
+    },
+    "reconciledAt": "2000-01-01T00:00:00Z",
+    "resourceHealthSource": "appTree",
+    "resources": [
+      {
+        "kind": "Service",
+        "name": "cluster-rbac-kube-state-metrics",
+        "namespace": "cluster-rbac",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "kind": "ServiceAccount",
+        "name": "cluster-rbac-kube-state-metrics",
+        "namespace": "cluster-rbac",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "apps",
+        "kind": "Deployment",
+        "name": "cluster-rbac-kube-state-metrics",
+        "namespace": "cluster-rbac",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "ClusterRole",
+        "name": "cluster-rbac-kube-state-metrics",
+        "status": "Synced",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "ClusterRoleBinding",
+        "name": "cluster-rbac-kube-state-metrics",
+        "status": "Synced",
+        "version": "v1"
+      }
+    ],
+    "sourceHydrator": {},
+    "sourceType": "Helm",
+    "summary": {
+      "images": [
+        "registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0"
+      ]
+    },
+    "sync": {
+      "comparedTo": {
+        "destination": {
+          "namespace": "cluster-rbac",
+          "server": "https://kubernetes.default.svc"
+        },
+        "source": {
+          "chart": "kube-state-metrics",
+          "repoURL": "https://prometheus-community.github.io/helm-charts",
+          "targetRevision": "8.8.0"
+        }
+      },
+      "revision": "8.8.0",
+      "status": "Synced"
+    }
+  }
+}

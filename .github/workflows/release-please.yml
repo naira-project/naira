@@ -171,6 +171,10 @@ jobs:
             image-name: "naira-plugin-depl-uses-thalamus"
             dockerfile: "plugins/cmd/depl_uses_thalamus/Dockerfile"
             context: "."
+          - name: Plugin ArgoCD
+            image-name: "naira-plugin-argocd"
+            dockerfile: "plugins/cmd/argocd/Dockerfile"
+            context: "."
     uses: naira-project/naira-github-workflows/.github/workflows/reusable-publish-and-sbom.yml@7112a4077f0d0facfc3290a1e5c6eedfd1e2fd95 # main
     with:
       image-name: ${{ matrix.image-name }}

@@ -94,6 +94,7 @@ in a value fails the render.
 | tech-radar | 50057 | no | Config file (`config.data` or `config.existingConfigMap`) |
 | mcp-servers | 50058 | yes | — |
 | github | 50059 | no | Secret key `GITHUB_TOKEN`; RBAC: namespaces, deployments |
+| argocd | 50060 | no | Secret key `ARGOCD_TOKEN`; Env `CLUSTER_ID` |
 
 ## Scheduling and security
 

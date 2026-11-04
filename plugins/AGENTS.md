@@ -41,6 +41,7 @@
   Each extra layer of indirection makes it harder, not easier, to understand what the test is
   actually doing and what is being tested. Also, complex logic increases a risk
   of a bug in the test itself, which can lead to false positives.
+  Exception: do use trivial `nodeID(kind, path string) NodeID` helper.
 - Use `t.Context()` in tests instead of `context.Background()`.
 - Use `testify`'s `assert`/`require` helpers (`require.NoError`, `assert.Truef`, `require.Len`,
   `assert.ErrorContains`) rather than hand-rolled `if err != nil { t.Fatal(...) }` patterns.
