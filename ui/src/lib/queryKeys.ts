@@ -20,5 +20,5 @@ export const queryKeys = {
   schedules: ['schedules'] as const,
   operations: ['operations'] as const,
 
-  runtimeConfig: ['runtimeConfig'] as const,
+  runtimeConfig: (token: string | null) => ['runtimeConfig', token] as const,
 };

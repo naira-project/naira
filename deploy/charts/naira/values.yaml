@@ -239,7 +239,7 @@ ui:
     allowedMethods: []
   # Served as /config.json (schema: ui/src/lib/runtimeConfig.ts). Empty -> no
   # file is served and nothing is configured (no logs links).
-  # Served unauthenticated: no secrets.
+  # Served behind the same auth as /v1/.
   # Example, "View Logs" links to Grafana Explore on a Loki datasource:
   #   logs:
   #     explorerUrl: https://grafana.example.com

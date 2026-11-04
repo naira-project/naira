@@ -42,6 +42,7 @@ server {
     }
 
     location = /config.json {
+        auth_request /_auth;
         add_header Cache-Control "no-store";
     }
 

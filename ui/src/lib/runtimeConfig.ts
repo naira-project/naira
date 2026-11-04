@@ -19,10 +19,13 @@ export interface RuntimeConfig {
   logs?: LogsConfig;
 }
 
-/** Loads the deployment's `/config.json`; an unreadable file yields an empty config. */
-export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
+/** Loads the deployment's `/config.json`; an unreadable or unauthorized file yields an empty config. */
+export async function fetchRuntimeConfig(token: string | null): Promise<RuntimeConfig> {
   try {
-    const response = await fetch('/config.json', { cache: 'no-store' });
+    const response = await fetch('/config.json', {
+      cache: 'no-store',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!response.ok) {
       return {};
     }

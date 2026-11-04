@@ -84,7 +84,7 @@ export function endpointLogsUrl(node: NodeResource, logs?: LogsConfig): string |
     orgId: logs.orgId ?? '1',
     panes: JSON.stringify({ a: pane }),
   });
-  // explorerUrl comes from config.json (logs.explorerUrl), so tolerate trailing slashes.
+  // explorerUrl comes from Helm chart values (logs.explorerUrl), so tolerate trailing slashes.
   return `${logs.explorerUrl.replace(/\/+$/, '')}/explore?${params}`;
 }
 
