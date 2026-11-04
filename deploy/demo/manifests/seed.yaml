@@ -1,0 +1,100 @@
+# Story data for LiteLLM, MLflow and OpenMetadata (scripts in deploy/demo/seed/,
+# mounted from ConfigMap demo-seed, which the Tiltfile generates). Every script
+# waits for its server and is idempotent. Delete a Job to rerun it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-litellm-keys
+  namespace: naira-deps
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: python:3.13-slim
+          command: [python, -I, /seed/litellm_keys.py]
+          env:
+            - {name: LITELLM_BASE_URL, value: "http://litellm:4000"}
+            - name: LITELLM_MASTER_KEY
+              valueFrom: {secretKeyRef: {name: litellm-masterkey, key: masterkey}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: seed, mountPath: /seed}
+      volumes:
+        - {name: seed, configMap: {name: demo-seed}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-mlflow-models
+  namespace: naira-deps
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          # Keep equal to the test-dependencies mlflow image.
+          image: burakince/mlflow:3.16.0
+          command: [python, /seed/mlflow_models.py]
+          # Artifacts land in this container's /mlflow/mlruns; only the registry entry matters.
+          workingDir: /tmp
+          env:
+            - {name: MLFLOW_TRACKING_URI, value: "http://mlflow:5000"}
+            - {name: HOME, value: /tmp}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            # uid of the image's mlflow user
+            runAsUser: 1001
+            runAsGroup: 1001
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: seed, mountPath: /seed}
+      volumes:
+        - {name: seed, configMap: {name: demo-seed}}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-openmetadata-tables
+  namespace: naira-deps
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: python:3.13-slim
+          command: [python, -I, /seed/openmetadata_tables.py]
+          env:
+            - {name: OPENMETADATA_HOST_PORT, value: "http://openmetadata:8585"}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 65534
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: seed, mountPath: /seed}
+      volumes:
+        - {name: seed, configMap: {name: demo-seed}}

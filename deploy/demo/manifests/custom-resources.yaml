@@ -1,0 +1,58 @@
+# Objects of the CRDs in crds.yaml, applied after them.
+#
+# Flux: the claims-platform repository is deployed by the claims-apps
+# Kustomization (claims-portal, claims-assistant) and the pii-redactor
+# HelmRelease. claims-faq-bot has no Flux source on purpose.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: flux-system
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: claims-platform
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: https://github.com/acme-insurance/claims-platform
+  ref: {branch: main}
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: claims-apps
+  namespace: flux-system
+spec:
+  interval: 10m
+  path: ./apps/claims
+  prune: true
+  targetNamespace: claims
+  sourceRef:
+    kind: GitRepository
+    name: claims-platform
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: pii-redactor
+  namespace: claims
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: ./charts/pii-redactor
+      sourceRef:
+        kind: GitRepository
+        name: claims-platform
+        namespace: flux-system
+---
+# Declares the claims assistant's gateway identity to the litellm plugin.
+apiVersion: naira.io/v1alpha1
+kind: AppIdentity
+metadata:
+  name: claims-assistant
+  namespace: claims
+spec:
+  team: claims-ai
+  litellmVirtualKey: sk-claimsassistant2026nov

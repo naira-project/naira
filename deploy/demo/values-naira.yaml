@@ -1,0 +1,236 @@
+# Demo overlay for the naira chart, over values-dev.yaml (tilt up -- --demo).
+# Storyline and click path: deploy/demo/README.md.
+
+catalog:
+  plugins:
+    # Every plugin runs every 2 minutes, so the demo fills up without a manual run.
+    litellm:
+      schedule: "*/2 * * * *"
+    mlflow:
+      schedule: "*/2 * * * *"
+    depl-calls-svc:
+      schedule: "*/2 * * * *"
+    depl-uses-litellm:
+      enabled: true
+      schedule: "*/2 * * * *"
+    fluxcd:
+      schedule: "*/2 * * * *"
+    mcp-servers:
+      schedule: "*/2 * * * *"
+    openmetadata:
+      enabled: true
+      schedule: "*/2 * * * *"
+    # The self-hosted Qwen model, read straight from llama.cpp next to LiteLLM.
+    openai-api-models:
+      enabled: true
+      image: {repository: naira-plugin-openai-api-models, tag: ""}
+      port: 50060
+      schedule: "*/2 * * * *"
+      pathPrefix: onprem
+      env:
+        OPENAI_API_MODELS_BASE_URL: http://llama-qwen25-05b.naira-deps.svc.cluster.local:8080
+    tech-radar:
+      enabled: true
+      schedule: "*/2 * * * *"
+      config:
+        data:
+          radar.yaml: |+
+            schema_version: 1
+            radar:
+              id: acme-ai
+              title: Acme Insurance AI Radar
+              edition: 2026-11
+              owner: ai-board
+            quadrants:
+              - id: models
+                name: Models
+              - id: agentic
+                name: Agentic Patterns
+              - id: knowledge
+                name: Knowledge and Data
+              - id: platform
+                name: Platform
+            rings:
+              - id: adopt
+                name: Adopt
+                description: Proven; default choice for new work.
+              - id: trial
+                name: Trial
+                description: Worth pursuing on projects that can absorb risk.
+              - id: assess
+                name: Assess
+                description: Explore to understand impact.
+              - id: hold
+                name: Hold
+                description: Do not start new work with this.
+            entries:
+              # Models
+              - id: claude-sonnet
+                name: Claude Sonnet
+                quadrant: models
+                ring: adopt
+                owner: ai-board
+                rationale: >
+                  Default chat model for claims handling. Served through the LiteLLM
+                  gateway in eu-central-1 and us-east-1.
+                catalog_refs:
+                  - match: claude-sonnet
+                    kinds: [model, inference_endpoint]
+              - id: text-embedding-3-small
+                name: text-embedding-3-small
+                quadrant: models
+                ring: adopt
+                owner: ai-board
+                rationale: >
+                  Default embedding model for the claims knowledge base.
+                catalog_refs:
+                  - match: embedding
+                    kinds: [model, inference_endpoint]
+              - id: gemini-flash
+                name: Gemini Flash
+                quadrant: models
+                ring: trial
+                moved: in
+                owner: ai-board
+                rationale: >
+                  Cheaper option for high-volume classification; trial on claims triage.
+                catalog_refs:
+                  - match: gemini-flash
+                    kinds: [model, inference_endpoint]
+              - id: mistral-small
+                name: Mistral Small (EU provider)
+                quadrant: models
+                ring: trial
+                owner: ai-board
+                rationale: >
+                  EU-hosted alternative for workloads with data residency requirements.
+                  Exposed on the gateway as chat-small.
+                catalog_refs:
+                  - match: chat-small
+                    kinds: [model, inference_endpoint]
+              - id: self-hosted-qwen
+                name: Self-hosted Qwen 2.5
+                quadrant: models
+                ring: assess
+                moved: in
+                owner: platform-team
+                rationale: >
+                  Runs on our own cluster with llama.cpp. Candidate for PII redaction,
+                  where claim data must not leave the cluster.
+                catalog_refs:
+                  - match: qwen
+                    kinds: [model, inference_endpoint]
+              - id: gpt-35-turbo
+                name: GPT-3.5 Turbo via OpenRouter
+                quadrant: models
+                ring: hold
+                moved: out
+                owner: ai-board
+                rationale: >
+                  Outdated and routed through a third-party aggregator without a data
+                  processing agreement. Migrate remaining consumers to Claude Sonnet.
+                catalog_refs:
+                  - match: gpt-3.5
+                    kinds: [model, inference_endpoint]
+              # Agentic patterns
+              - id: mcp-tool-servers
+                name: MCP tool servers
+                quadrant: agentic
+                ring: trial
+                owner: ai-board
+                rationale: >
+                  Standard way to give agents access to internal systems. Register every
+                  server so its tools are visible.
+                catalog_refs:
+                  - plugins: [mcp-servers, litellm]
+                    kinds: [mcp_server]
+              - id: destructive-mcp-tools
+                name: Destructive MCP tools without approval
+                quadrant: agentic
+                ring: hold
+                moved: in
+                owner: ai-board
+                rationale: >
+                  Tools that delete or change records need a human approval step before
+                  an agent may call them.
+                catalog_refs:
+                  - match: delete_records
+                    kinds: [mcp_tool]
+              - id: react-agents
+                name: ReAct agents
+                quadrant: agentic
+                ring: trial
+                owner: claims-ai
+                rationale: >
+                  Used by the claims assistant for tool-using workflows; evaluate on
+                  internal projects first.
+              # Knowledge and data
+              - id: data-lineage
+                name: Data lineage in OpenMetadata
+                quadrant: knowledge
+                ring: adopt
+                owner: data-office
+                rationale: >
+                  Every training dataset needs documented lineage back to its source
+                  tables, including PII classification.
+                catalog_refs:
+                  - plugins: [openmetadata]
+                    kinds: [dataset]
+              - id: mlflow-registry
+                name: MLflow model registry
+                quadrant: knowledge
+                ring: adopt
+                owner: claims-ai
+                rationale: >
+                  Every in-house model is registered with the datasets it was trained on.
+                catalog_refs:
+                  - plugins: [mlflow]
+                    kinds: [model, dataset]
+              - id: hybrid-retrieval
+                name: Hybrid retrieval
+                quadrant: knowledge
+                ring: assess
+                moved: in
+                owner: ai-board
+                rationale: >
+                  Combines dense and sparse retrieval; explore impact on answer quality
+                  for policy documents.
+              - id: naive-rag
+                name: Naive RAG
+                quadrant: knowledge
+                ring: hold
+                moved: out
+                owner: ai-board
+                rationale: >
+                  Superseded by hybrid retrieval; migrate existing pipelines.
+              # Platform
+              - id: litellm-gateway
+                name: LiteLLM as central AI gateway
+                quadrant: platform
+                ring: adopt
+                owner: platform-team
+                rationale: >
+                  All model access goes through the gateway with per-application virtual
+                  keys, so usage and cost are attributable.
+                catalog_refs:
+                  - plugins: [litellm]
+                    kinds: [inference_endpoint, application]
+              - id: gitops-flux
+                name: GitOps with Flux
+                quadrant: platform
+                ring: adopt
+                owner: platform-team
+                rationale: >
+                  AI workloads are deployed from Git only. A workload without a Flux
+                  source is a finding.
+                catalog_refs:
+                  - plugins: [fluxcd]
+                    kinds: [Kustomization.fluxcd, HelmChart.fluxcd]
+              - id: provider-keys-in-apps
+                name: Provider API keys in applications
+                quadrant: platform
+                ring: hold
+                owner: platform-team
+                rationale: >
+                  Applications never hold provider keys. They get a scoped gateway key
+                  instead.

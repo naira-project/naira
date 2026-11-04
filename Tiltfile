@@ -4,6 +4,11 @@
 #
 #   tilt up -- --deps-repo=<path>
 #
+# The demo story (deploy/demo/README.md) adds sample workloads, story data and
+# OpenMetadata; with GITHUB_TOKEN set it also enables the github plugin:
+#
+#   tilt up -- --demo
+#
 # Developer tasks (lint, tests, proto) are in the Taskfile: they don't need Tilt.
 
 NAMESPACE = 'idp-system'  # test-dependencies reaches PostgreSQL at postgres.idp-system
@@ -15,8 +20,11 @@ DEPS_OCI = 'oci://ghcr.io/naira-project/charts/test-dependencies'
 DEPS_VERSION = '0.1.0'
 
 config.define_string('deps-repo', usage='Path to a naira-project/test-dependencies checkout')
+config.define_bool('demo', usage='Add the demo story from deploy/demo')
 cfg = config.parse()
 DEPS_REPO = cfg.get('deps-repo', '')
+DEMO = cfg.get('demo', False)
+DEMO_DIR = 'deploy/demo'
 if DEPS_REPO:
     DEPS_CHART = os.path.abspath(DEPS_REPO) + '/charts/test-dependencies'
     if not os.path.exists(DEPS_CHART + '/Chart.yaml'):
@@ -47,11 +55,19 @@ if os.path.exists(CHART + '/Chart.lock'):
             local('helm dependency build ' + CHART)
             break
 
+NAIRA_VALUES = [CHART + '/values-dev.yaml']
+NAIRA_SET = []
+if DEMO:
+    NAIRA_VALUES.append(DEMO_DIR + '/values-naira.yaml')
+    if os.getenv('GITHUB_TOKEN', ''):
+        NAIRA_SET = ['catalog.plugins.github.enabled=true',
+                     'catalog.secret.data.GITHUB_TOKEN=' + os.getenv('GITHUB_TOKEN')]
 yaml = helm(
     CHART,
     name='naira',
     namespace=NAMESPACE,
-    values=[CHART + '/values-dev.yaml'],
+    values=NAIRA_VALUES,
+    set=NAIRA_SET,
 )
 namespace_yaml = blob('apiVersion: v1\nkind: Namespace\nmetadata:\n  name: %s\n' % NAMESPACE)
 k8s_yaml([namespace_yaml, yaml])
@@ -92,14 +108,8 @@ if DEPS_REPO:
     )
     DEPS_AFTER = DEPS_AFTER + ['test-dependencies-subcharts']
 DEPS_VALUES = [DEPS_CHART + '/values.yaml', DEPS_CHART + '/values-dev.yaml']
-helm_resource(
-    'test-dependencies', DEPS_CHART,
-    namespace=DEPS_NAMESPACE,
-    flags=['--create-namespace', '--values=' + DEPS_VALUES[1]],
-    deps=DEPS_VALUES + [DEPS_CHART + '/templates'],
-    resource_deps=DEPS_AFTER,
-    labels=['test-dependencies'],
-)
+if DEMO:
+    DEPS_VALUES.append(os.path.abspath(DEMO_DIR + '/values-test-dependencies.yaml'))
 
 # Top-level keys merge like helm does for the keys read here (tags, llamacpp.models).
 deps_values = {}
@@ -107,6 +117,28 @@ for f in DEPS_VALUES:
     for k, v in (read_yaml(f) or {}).items():
         deps_values[k] = dict(deps_values.get(k, {}), **v) if type(v) == 'dict' else v
 tags = deps_values.get('tags', {})
+
+# Helm installs subchart CRDs only on first install, so turning monitoring on
+# for an existing release fails without the Prometheus Operator CRDs. Only the
+# published chart has them unpacked; a checkout keeps its subcharts as .tgz.
+MONITORING_CRDS = DEPS_CHART + '/charts/kube-prometheus-stack/charts/crds/crds'
+if tags.get('monitoring') and os.path.exists(MONITORING_CRDS):
+    local_resource(
+        'monitoring-crds',
+        cmd='kubectl apply --server-side --force-conflicts -f ' + MONITORING_CRDS,
+        resource_deps=DEPS_AFTER,
+        labels=['test-dependencies'],
+    )
+    DEPS_AFTER = DEPS_AFTER + ['monitoring-crds']
+
+helm_resource(
+    'test-dependencies', DEPS_CHART,
+    namespace=DEPS_NAMESPACE,
+    flags=['--create-namespace'] + ['--values=' + f for f in DEPS_VALUES[1:]],
+    deps=DEPS_VALUES + [DEPS_CHART + '/templates'],
+    resource_deps=DEPS_AFTER,
+    labels=['test-dependencies'],
+)
 
 # One pod per release can't serve every Service, so forward them by name, only
 # for enabled tags. Keycloak's port matches the portal's OIDC URLs (keycloak.issuer).
@@ -189,3 +221,34 @@ k8s_resource(new_name='naira-config', objects=config_objects,
 k8s_resource('catalog', resource_deps=['naira-config'], port_forwards=['8090:8090'], labels=['naira'])
 k8s_resource('portal', resource_deps=['naira-config'], port_forwards=['3000:3000'], labels=['naira'])
 k8s_resource('ui', resource_deps=['naira-config'], port_forwards=['3001:80'], labels=['naira'])
+
+# --- Demo ---------------------------------------------------------------------
+# CRDs first, then their objects; workloads and seed Jobs become resources of
+# their own under the "demo" label.
+if DEMO:
+    watch_file(DEMO_DIR + '/seed')
+    seed_cm = local('kubectl create configmap demo-seed --namespace %s --from-file=%s/seed --dry-run=client -o yaml'
+                    % (DEPS_NAMESPACE, DEMO_DIR), quiet=True)
+    demo_files = ['crds', 'custom-resources', 'claims', 'seed']
+    demo_yaml = [read_file('%s/manifests/%s.yaml' % (DEMO_DIR, f)) for f in demo_files]
+    k8s_yaml(demo_yaml + [seed_cm])
+
+    def selectors(text):
+        sels = []
+        for o in decode_yaml_stream(text):
+            if o['kind'] in ('Deployment', 'Job', 'Service'):
+                continue
+            md = o['metadata']
+            sels.append('%s:%s' % (md['name'], o['kind'].lower()) + (':' + md['namespace'] if md.get('namespace') else ''))
+        return sels
+
+    k8s_resource(new_name='demo-crds', objects=selectors(demo_yaml[0]), labels=['demo'])
+    k8s_resource(new_name='demo-config', objects=selectors(demo_yaml[1]) + selectors(demo_yaml[2]),
+                 resource_deps=['demo-crds'], labels=['demo'])
+    for o in decode_yaml_stream(demo_yaml[2]):
+        if o['kind'] == 'Deployment':
+            k8s_resource(o['metadata']['name'], resource_deps=['demo-config'], labels=['demo'])
+    k8s_resource(new_name='demo-seed-config', objects=['demo-seed:configmap:' + DEPS_NAMESPACE],
+                 resource_deps=['test-dependencies'], labels=['demo'])
+    for job in ['seed-litellm-keys', 'seed-mlflow-models', 'seed-openmetadata-tables']:
+        k8s_resource(job, resource_deps=['demo-seed-config'], labels=['demo'])
