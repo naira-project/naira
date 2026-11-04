@@ -6,7 +6,7 @@ import { useOpenMFPContext } from './useOpenMFPContext';
 /** The deployment's runtime configuration; empty until loaded. */
 export function useRuntimeConfig(): RuntimeConfig {
   const { token } = useOpenMFPContext();
-  
+
   const { data = {} } = useQuery({
     queryKey: queryKeys.runtimeConfig(token),
     queryFn: () => fetchRuntimeConfig(token),
