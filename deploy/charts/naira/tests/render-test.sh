@@ -268,6 +268,25 @@ check "ui prometheus allowed methods joined with a space" \
   "GET HEAD" \
   "$(render --set 'ui.prometheus.allowedMethods[0]=GET' --set 'ui.prometheus.allowedMethods[1]=HEAD' \
     | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_METHODS\") | .value")"
+UI_DEPLOY='select(.kind == "Deployment" and .metadata.name == "ui")'
+check "ui config: no ConfigMap by default" \
+  "" \
+  "$(render | yq 'select(.kind == "ConfigMap" and .metadata.name == "ui-config") | .metadata.name')"
+check "ui config: no mount by default" \
+  "null" \
+  "$(render | yq "$UI | .volumeMounts")"
+check "ui config: rendered into config.json" \
+  "http://grafana:3000" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq 'select(.kind == "ConfigMap" and .metadata.name == "ui-config") | .data["config.json"] | from_json | .logs.explorerUrl')"
+check "ui config: mounted over the image's config.json" \
+  "/usr/share/nginx/html/config.json config.json" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq "$UI | .volumeMounts[0] | .mountPath + \" \" + .subPath")"
+check "ui config: pod restarts when it changes" \
+  "true" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq "$UI_DEPLOY | .spec.template.metadata.annotations | has(\"checksum/config\")")"
 check "ui image" \
   "ghcr.io/naira-project/naira-ui:${APP_VERSION}" \
   "$(render | yq "$UI | .image")"
