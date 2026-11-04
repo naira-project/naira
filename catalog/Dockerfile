@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # --- Stage 1: Build ---
-FROM golang:1.26.9-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS builder
+FROM golang:1.27.3-alpine@sha256:d200d2dd76b03a99b52651fd1325aff7dcd35422c35c01bac56571b0507f3deb AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 go build -trimpath -o /out/catalog ./catalog/cmd/catalog
 
 # --- Stage 2: Final ---
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329
 
 COPY --from=builder /out/catalog /catalog
 
