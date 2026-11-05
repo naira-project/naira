@@ -439,8 +439,8 @@ check "bedrock off by default" \
 check "bedrock AWS credentials from the catalog Secret" \
   "catalog-secrets/BEDROCK_AWS_ACCESS_KEY_ID catalog-secrets/BEDROCK_AWS_SECRET_ACCESS_KEY" \
   "$(render "${BEDROCK[@]}" \
-    | yq "$BEDROCK_SIDECAR | [.env[] | select(.name == \"AWS_ACCESS_KEY_ID\" or .name == \"AWS_SECRET_ACCESS_KEY\")
-          | .valueFrom.secretKeyRef | .name + \"/\" + .key] | join(\" \")")"
+    | yq "$BEDROCK_SIDECAR | .env[] | select(.name == \"AWS_ACCESS_KEY_ID\" or .name == \"AWS_SECRET_ACCESS_KEY\")
+          | .valueFrom.secretKeyRef | .name + \"/\" + .key" | paste -sd' ' -)"
 check "bedrock registered in plugins.yaml" \
   "localhost:50060" \
   "$(render "${BEDROCK[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.bedrock.address')"
