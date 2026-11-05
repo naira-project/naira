@@ -1,6 +1,5 @@
 # Node kinds and relation shapes emitted by Naira plugins.
 # Add each node kind and relation under every plugin that can emit it.
-# Relation endpoints are node kinds; direction is from -> to.
 plugins:
   - plugin: argocd
     nodes:
