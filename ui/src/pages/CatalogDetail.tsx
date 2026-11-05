@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ScrollText } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import PluginPropertiesPanels from '../components/PluginPropertiesPanels';
@@ -9,6 +9,8 @@ import { Button } from '../components/ui/button';
 import { relatedNodesConfigForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
+import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
+import { endpointLogsUrl } from '../lib/endpointLogs';
 import { cn } from '../lib/utils';
 import CatalogGraph from './CatalogGraph';
 
@@ -31,6 +33,8 @@ export default function CatalogDetail() {
   const backPath = findViewpointForKind(decodedKind)?.path;
 
   const relatedConfig = relatedNodesConfigForKind(decodedKind);
+  const { logs } = useRuntimeConfig();
+  const logsUrl = node ? endpointLogsUrl(node, logs) : undefined;
   const landingTab = GRAPH_TAB;
   const [activeTab, setActiveTab] = useState<string>(landingTab);
 
@@ -70,6 +74,15 @@ export default function CatalogDetail() {
                 {node.name}
               </h1>
             </>
+          )}
+
+          {logsUrl && (
+            <Button asChild variant="outline" size="sm" className="ml-auto shrink-0">
+              <a href={logsUrl} target="_blank" rel="noopener noreferrer">
+                <ScrollText size={16} />
+                View Logs
+              </a>
+            </Button>
           )}
         </header>
 
@@ -117,7 +130,6 @@ export default function CatalogDetail() {
                     <PluginPropertiesPanels node={node} />
 
                     {relatedConfig && <RelatedNodes node={node} config={relatedConfig} />}
-
                     <PersesDashboard node={node} />
                   </div>
                 )}

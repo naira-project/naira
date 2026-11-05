@@ -228,7 +228,8 @@ ui:
   # Empty -> http://catalog.<release namespace>.svc.cluster.local:<catalog.port>
   catalogUpstream: ""
   # Prometheus-compatible API the UI proxies /prometheus/ to for the metric
-  # dashboards. Every empty value falls back to the image default.
+  # dashboards (see ui/README.md, "Monitoring"). Every empty value falls back to
+  # the image default (ui/monitoring-defaults.sh).
   prometheus:
     upstream: "http://prometheus-operated.naira-deps.svc.cluster.local:9090"
     # Regexes of API paths under /api/v1/ that are exposed (read-only; admin and
@@ -236,6 +237,19 @@ ui:
     allowedPaths: []
     # Empty -> [GET, POST]
     allowedMethods: []
+  # Served as /config.json (schema: ui/src/lib/runtimeConfig.ts). Empty -> no
+  # file is served and nothing is configured (no logs links).
+  # Served behind the same auth as /v1/.
+  # Example, "View Logs" links to Grafana Explore on a Loki datasource:
+  #   logs:
+  #     explorerUrl: https://grafana.example.com
+  #     datasource: {type: loki, uid: loki}
+  #     orgId: "1"                        # optional
+  #     timeRange: {from: now-1h, to: now}  # optional
+  #     defaultNamespace: my-namespace    # optional; for endpoints without one
+  #     serviceQuery: '{namespace="{{namespace}}", app="{{name}}"}'
+  #     proxyQuery: '{namespace="{{namespace}}", app=~"litellm.*"} |= {{model}}'
+  config: {}
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {cpu: 200m, memory: 128Mi}
