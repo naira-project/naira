@@ -41,6 +41,11 @@ server {
         return 403;
     }
 
+    location = /config.json {
+        auth_request /_auth;
+        add_header Cache-Control "no-store";
+    }
+
     location /assets/content-configuration.json {
         add_header Access-Control-Allow-Origin *;
         add_header Access-Control-Allow-Methods "GET, OPTIONS";
