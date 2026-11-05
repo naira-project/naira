@@ -1,12 +1,3 @@
-# Third-Party Notices
-
-## Lucide
-
-Used by the UI as the `lucide-react` dependency (`ui/package.json`).
-The SVG icons in `naira-openmfp-portal/frontend/src/assets/icons/` are
-derived from Lucide; see the notice served with them in
-[`LICENSE.md`](naira-openmfp-portal/frontend/src/assets/icons/LICENSE.md).
-
 ISC License
 
 Copyright (c) 2026 Lucide Icons and Contributors
