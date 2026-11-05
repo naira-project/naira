@@ -58,6 +58,20 @@ catalog:
                 owner: ml-platform
                 rationale: >
                   Default general-purpose model; served through the central gateway.
+                catalog_refs:            # optional; matched against catalog nodes
+                  - match: claude-sonnet
+                    kinds: [model, inference_endpoint]
+              - id: openrouter-gpt-3-5-turbo
+                name: OpenRouter GPT-3.5 Turbo
+                quadrant: models
+                ring: assess
+                moved: in
+                owner: ai-platform
+                rationale: >
+                  Fast, low-cost model for classification, routing, and high-volume tasks.
+                catalog_refs:
+                  - match: openrouter-gpt-3.5
+                    kinds: [model, inference_endpoint]
               - id: react-agents
                 name: ReAct Agents
                 quadrant: agentic
