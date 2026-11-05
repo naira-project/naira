@@ -14,6 +14,7 @@ import { useOpenMFPContext } from './useOpenMFPContext';
 const ACTIVE_POLL_MS = 2000;
 const IDLE_POLL_MS = 20_000;
 const STALE_AFTER_MS = 2 * 60 * 1000;
+const EMPTY_PLUGINS: PluginResource[] = [];
 const EMPTY_OPERATIONS: OperationResource[] = [];
 const RUN_MUTATION_KEY = ['plugins', 'run'] as const;
 
@@ -118,8 +119,6 @@ interface UsePluginsStatusResult {
   loading: boolean;
   /** Plugins with an unfinished operation or a run request in flight. */
   runningPlugins: Set<string>;
-  /** True while any plugin is running. */
-  runAllActive: boolean;
   runErrors: RunErrorEntry[];
   dismissError: (id: string) => void;
   refresh: () => Promise<void>;
@@ -156,7 +155,7 @@ export function usePluginsStatus(): UsePluginsStatusResult {
   });
   const operationsQuery = useOperationsSync();
 
-  const plugins = pluginsQuery.data ?? [];
+  const plugins = pluginsQuery.data ?? EMPTY_PLUGINS;
   const operations = operationsQuery.data ?? EMPTY_OPERATIONS;
 
   const runMutation = useMutation<RunResult, Error, RunTarget>({
@@ -245,7 +244,6 @@ export function usePluginsStatus(): UsePluginsStatusResult {
     operations,
     loading: pluginsQuery.isLoading || operationsQuery.isLoading,
     runningPlugins,
-    runAllActive: runningPlugins.size > 0,
     runErrors,
     dismissError,
     refresh,
