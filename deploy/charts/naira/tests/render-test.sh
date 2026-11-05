@@ -430,6 +430,29 @@ RENDER=render_raw must_fail "github on without a catalog Secret source" \
   --set portal.enabled=false --set catalog.plugins.github.enabled=true \
   --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
 
+BEDROCK=(--set catalog.plugins.bedrock.enabled=true)
+BEDROCK_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-bedrock\")"
+
+check "bedrock off by default" \
+  "" \
+  "$(render | yq "$BEDROCK_SIDECAR | .name")"
+check "bedrock AWS credentials from the catalog Secret" \
+  "catalog-secrets/BEDROCK_AWS_ACCESS_KEY_ID catalog-secrets/BEDROCK_AWS_SECRET_ACCESS_KEY" \
+  "$(render "${BEDROCK[@]}" \
+    | yq "$BEDROCK_SIDECAR | [.env[] | select(.name == \"AWS_ACCESS_KEY_ID\" or .name == \"AWS_SECRET_ACCESS_KEY\")
+          | .valueFrom.secretKeyRef | .name + \"/\" + .key] | join(\" \")")"
+check "bedrock registered in plugins.yaml" \
+  "localhost:50060" \
+  "$(render "${BEDROCK[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.bedrock.address')"
+check "bedrock needs no RBAC" \
+  "" \
+  "$(render "${BEDROCK[@]}" \
+    | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-bedrock") | .metadata.name')"
+RENDER=render_raw must_fail "bedrock on without a catalog Secret source" \
+  "catalog.plugins.bedrock reads AWS_ACCESS_KEY_ID from the catalog Secret" \
+  --set portal.enabled=false --set catalog.plugins.bedrock.enabled=true \
+  --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
+
 check "depl-uses-litellm off by default: no Secret read grant" \
   "0" \
   "$(render | yq ea '[select(.kind == "ClusterRole") | .rules[] | select(.resources[] == "secrets")] | length')"
