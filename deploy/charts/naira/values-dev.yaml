@@ -81,6 +81,10 @@ catalog:
                 owner: ai-board
                 rationale: >
                   Superseded by hybrid retrieval; migrate existing pipelines.
+    bedrock:
+      enabled: false
+      env:
+        REGIONS: "eu-central-1"    
 
 portal:
   oidc:

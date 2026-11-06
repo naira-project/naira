@@ -219,6 +219,20 @@ catalog:
           - apiGroups: ["apps"]
             resources: ["deployments"]
             verbs: ["get", "list"]
+    bedrock:
+      # Off by default: AWS credentials are required. Add them to the catalog
+      # Secret (keys BEDROCK_AWS_ACCESS_KEY_ID and
+      # BEDROCK_AWS_SECRET_ACCESS_KEY) before enabling.
+      enabled: false
+      image: {repository: naira-plugin-bedrock, tag: ""}
+      port: 50060
+      schedule: "0 0 * * *"
+      pathPrefix: bedrock
+      env:
+        REGIONS: "us-east-1 eu-central-1"
+        AWS_ACCESS_KEY_ID: {secretKeyRef: {key: BEDROCK_AWS_ACCESS_KEY_ID}}
+        AWS_SECRET_ACCESS_KEY: {secretKeyRef: {key: BEDROCK_AWS_SECRET_ACCESS_KEY}}
+        METRICS_LOOKBACK: "24h"
 
 ui:
   enabled: true
