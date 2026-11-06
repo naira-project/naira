@@ -223,6 +223,21 @@ catalog:
       # Off by default: AWS credentials are required. Add them to the catalog
       # Secret (keys BEDROCK_AWS_ACCESS_KEY_ID and
       # BEDROCK_AWS_SECRET_ACCESS_KEY) before enabling.
+      # Use a dedicated IAM user. Access needed is
+      # read-only: listing foundation models and reading CloudWatch metric data.
+      # Neither action supports resource-level restrictions, hence Resource "*".
+      #   {
+      #     "Version": "2012-10-17",
+      #     "Statement": [{
+      #       "Sid": "BedrockPluginRead",
+      #       "Effect": "Allow",
+      #       "Action": [
+      #         "bedrock:ListFoundationModels",
+      #         "cloudwatch:GetMetricData"
+      #       ],
+      #       "Resource": "*"
+      #     }]
+      #   }
       enabled: false
       image: {repository: naira-plugin-bedrock, tag: ""}
       port: 50060
