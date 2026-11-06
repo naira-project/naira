@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,21 +10,13 @@ import (
 
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
-
-//go:generate moq -out mocks/plugin_runner_mock.go -pkg mocks -skip-ensure . PluginRunner
-type PluginRunner interface {
-	RunPluginAsync(ctx context.Context, plugin string) (operations.Operation, error)
-	RunAllPluginsAsync(ctx context.Context) []operations.Operation
-	ListOperations(ctx context.Context, filter operations.Filter) ([]operations.Operation, error)
-	GetOperation(ctx context.Context, name string) (operations.Operation, error)
-}
 
 // NewRouter wires up the catalog HTTP API.
 // catalogReader serves read-only graph queries (nodes/relations);
 // runner drives and reports on asynchronous plugin runs (plugins/operations).
-func NewRouter(catalogReader catalog.Reader, runner PluginRunner, plugins catalog.PluginConfigsByName, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
+func NewRouter(catalogReader catalog.Reader, runner pluginrun.PluginRunner, plugins catalog.PluginConfigsByName, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
 	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
 	if err != nil {
 		return nil, fmt.Errorf("creating auth middleware: %w", err)

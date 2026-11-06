@@ -9,11 +9,11 @@ import (
 	"sync"
 )
 
-// PluginRunnerMock is a mock implementation of httpapi.PluginRunner.
+// PluginRunnerMock is a mock implementation of pluginrun.PluginRunner.
 //
 //	func TestSomethingThatUsesPluginRunner(t *testing.T) {
 //
-//		// make and configure a mocked httpapi.PluginRunner
+//		// make and configure a mocked pluginrun.PluginRunner
 //		mockedPluginRunner := &PluginRunnerMock{
 //			GetOperationFunc: func(ctx context.Context, name string) (operations.Operation, error) {
 //				panic("mock out the GetOperation method")
@@ -29,7 +29,7 @@ import (
 //			},
 //		}
 //
-//		// use mockedPluginRunner in code that requires httpapi.PluginRunner
+//		// use mockedPluginRunner in code that requires pluginrun.PluginRunner
 //		// and then make assertions.
 //
 //	}

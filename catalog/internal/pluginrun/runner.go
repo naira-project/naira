@@ -20,6 +20,13 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
+type PluginRunner interface {
+	RunPluginAsync(ctx context.Context, plugin string) (operations.Operation, error)
+	RunAllPluginsAsync(ctx context.Context) []operations.Operation
+	ListOperations(ctx context.Context, filter operations.Filter) ([]operations.Operation, error)
+	GetOperation(ctx context.Context, name string) (operations.Operation, error)
+}
+
 type Plugin = pluginapi.Plugin
 
 const operationUpdateTimeout = 5 * time.Second

@@ -16,7 +16,11 @@ import (
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/httpapi/mocks"
+	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
+
+//go:generate moq -out mocks/reader_mock.go -pkg mocks -skip-ensure ../catalog Reader:CatalogReaderMock
+//go:generate moq -out mocks/plugin_runner_mock.go -pkg mocks -skip-ensure ../pluginrun PluginRunner
 
 const testBearerToken = "test-token"
 const testIssuer = "http://localhost:8080/realms/naira"
@@ -43,7 +47,7 @@ func withAuth(req *http.Request, bearerToken string) *http.Request {
 
 type routerDeps struct {
 	reader  catalog.Reader
-	runner  PluginRunner
+	runner  pluginrun.PluginRunner
 	plugins catalog.PluginConfigsByName
 }
 
