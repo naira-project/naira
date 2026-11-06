@@ -16,6 +16,8 @@ var (
 )
 
 // Reader provides read-only access to the catalog graph.
+//
+//go:generate moq -out ../httpapi/mocks/reader_mock.go -pkg mocks -skip-ensure . Reader:CatalogReaderMock
 type Reader interface {
 	GetNode(ctx context.Context, id NodeID) (Node, error)
 	ListNodes(ctx context.Context) ([]Node, error)

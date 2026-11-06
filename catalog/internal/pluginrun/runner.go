@@ -166,8 +166,8 @@ func (r *Runner) Wait() {
 
 // executePluginRun runs a single plugin and updates the operation outcome.
 func (r *Runner) executePluginRun(operationName, pluginName string) {
-	updateCtx, updateCancel := context.WithTimeout(r.appCtx, operationUpdateTimeout)
-	defer updateCancel()
+	updateCtx, cancel := context.WithTimeout(r.appCtx, operationUpdateTimeout)
+	defer cancel()
 	if err := r.operations.UpdateState(updateCtx, operationName, operations.StateRunning, nil, 0, 0); err != nil {
 		r.logf("marking operation %q as running: %v", operationName, err)
 		return
@@ -197,8 +197,8 @@ func (r *Runner) executePluginRun(operationName, pluginName string) {
 
 	r.logf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
 
-	updateCtx, updateCancel = context.WithTimeout(r.appCtx, operationUpdateTimeout)
-	defer updateCancel()
+	updateCtx, cancel = context.WithTimeout(r.appCtx, operationUpdateTimeout)
+	defer cancel()
 	if err := r.operations.UpdateState(updateCtx, operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
 		r.logf("marking operation %q as succeeded: %v", operationName, err)
 	}
