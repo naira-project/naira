@@ -1,5 +1,5 @@
         - name: plugin-fluxcd
-          image: fluxcd:${TAG}
+          image: ${E2E_IMAGE}:fluxcd-${TAG}
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
           env:
