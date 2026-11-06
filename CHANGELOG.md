@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.2](https://github.com/naira-project/naira/compare/v0.1.2...v0.1.2) (2026-11-06)
+
+
+### Features
+
+* add catalog pgstore migrations ([#247](https://github.com/naira-project/naira/issues/247)) ([53fa491](https://github.com/naira-project/naira/commit/53fa491d75160943b426291ea9bfa627ea3bd6cf))
+* **helm:** add Bedrock plugin to Helm chart ([#332](https://github.com/naira-project/naira/issues/332)) ([6258658](https://github.com/naira-project/naira/commit/62586586ee5b12d0db0d692b34170e57c578ad62))
+* **ui:** add View Logs link for inference endpoints from LiteLLM ([#228](https://github.com/naira-project/naira/issues/228)) ([2e7242a](https://github.com/naira-project/naira/commit/2e7242acf00c4e16a1ec5c2fdb8485c1459870ad))
+
+
+### Bug Fixes
+
+* **ui:** update icons and sidebar spacing ([#331](https://github.com/naira-project/naira/issues/331)) ([2b6064a](https://github.com/naira-project/naira/commit/2b6064aabc44d50ce1fbccf2be212fcc25f52045))
+
 ## [0.1.2](https://github.com/naira-project/naira/compare/v0.1.1...v0.1.2) (2026-10-30)
 
 
