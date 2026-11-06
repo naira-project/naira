@@ -1,66 +1,22 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
-	"io"
-	"log"
 	"net/http"
-	"net/http/httptest"
 	"testing"
-	"time"
 
-	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
-	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/operations"
-	"github.com/naira-project/naira/catalog/internal/pluginrun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
-func newPluginsTestRouter(t *testing.T, configs catalog.PluginConfigsByName) http.Handler {
-	t.Helper()
-
-	plugins := make(map[string]pluginrun.Plugin, len(configs))
-	for name := range configs {
-		plugins[name] = stubPlugin{}
-	}
-
-	store := catalog.NewMemoryStore()
-	runner := pluginrun.NewRunner(
-		context.Background(),
-		store,
-		operations.NewMemoryStore(),
-		plugins,
-		5*time.Minute,
-		log.New(io.Discard, "", 0),
-	)
-	router, err := NewRouter(
-		catalog.NewService(store),
-		runner,
-		configs,
-		log.New(io.Discard, "", 0),
-		keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer},
-	)
-	require.NoError(t, err)
-	return router
-}
-
-func serveAuthenticatedRequest(t *testing.T, router http.Handler, method, path string) *httptest.ResponseRecorder {
-	t.Helper()
-
-	req := withAuth(httptest.NewRequest(method, path, nil), testBearerToken)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	return rec
-}
-
 func TestListPluginsEndpoint(t *testing.T) {
-	router := newPluginsTestRouter(t, catalog.PluginConfigsByName{
+	router := newTestRouter(t, routerDeps{plugins: catalog.PluginConfigsByName{
 		"zeta":   {Schedule: "0 0 * * *"},
 		"alpha":  {Schedule: "*/5 * * * *"},
 		"manual": {},
-	})
+	}})
 
 	tests := []struct {
 		name            string
@@ -87,7 +43,7 @@ func TestListPluginsEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rec := serveAuthenticatedRequest(t, router, http.MethodGet, tt.path)
+			rec := doRequest(t, router, http.MethodGet, tt.path)
 
 			require.Equal(t, http.StatusOK, rec.Code)
 			var payload ListPluginsResponse
@@ -104,9 +60,9 @@ func TestListPluginsEndpoint(t *testing.T) {
 }
 
 func TestGetPluginEndpoint(t *testing.T) {
-	router := newPluginsTestRouter(t, catalog.PluginConfigsByName{
+	router := newTestRouter(t, routerDeps{plugins: catalog.PluginConfigsByName{
 		"mlflow": {Schedule: "*/5 * * * *"},
-	})
+	}})
 
 	tests := []struct {
 		name           string
@@ -129,7 +85,8 @@ func TestGetPluginEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rec := serveAuthenticatedRequest(t, router, http.MethodGet, tt.path)
+			rec := doRequest(t, router, http.MethodGet, tt.path)
+
 			require.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.want.Name == "" {
 				return

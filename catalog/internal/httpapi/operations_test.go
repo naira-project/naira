@@ -4,106 +4,86 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"log"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"regexp"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
-	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/operations"
-	"github.com/naira-project/naira/catalog/internal/pluginrun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/naira-project/naira/catalog/internal/httpapi/mocks"
+	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
 
-func TestRunPluginFlowJSONContract(t *testing.T) {
-	// Names are server-generated (plugin-run-<uuid>)
-	opNamePattern := regexp.MustCompile(`^plugin-run-[0-9a-f-]{36}$`)
+var (
+	opCreatedAt = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	opStartTime = opCreatedAt.Add(time.Second)
+	opEndTime   = opCreatedAt.Add(2 * time.Second)
+)
 
-	tests := []struct {
-		name              string
-		pluginImpl        pluginrun.Plugin
-		waitForCompletion bool
-		wantInitialJSON   string
-		wantTerminalJSON  string
-	}{
-		{
-			name:       "pending immediately after trigger",
-			pluginImpl: stubPlugin{},
-			wantInitialJSON: `{
-				"name": "{{NAME}}",
-				"done": false,
-				"metadata": {
-					"plugin": "mlflow",
-					"startTime": "{{START}}", "createdAt": "{{CREATED}}"
-				}
-			}`,
-		},
-		{
-			name:              "succeeded after completion",
-			pluginImpl:        stubPlugin{},
-			waitForCompletion: true,
-			wantTerminalJSON: `{
-				"name": "{{NAME}}",
-				"done": true,
-				"metadata": {
-					"plugin": "mlflow",
-					"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
-				},
-				"response": {"nodesUpserted": 0, "relationsUpserted": 0}
-			}`,
-		},
-		{
-			name:              "failed after completion",
-			pluginImpl:        stubPlugin{err: errors.New("sync failed: database offline")},
-			waitForCompletion: true,
-			wantTerminalJSON: `{
-				"name": "{{NAME}}",
-				"done": true,
-				"metadata": {
-					"plugin": "mlflow",
-					"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
-				},
-				"error": {"message": "collecting response from plugin \"mlflow\": sync failed: database offline"}
-			}`,
-		},
-	}
+// --- fixtures ----------------------------------------------------------
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			opStore := operations.NewMemoryStore()
-			router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{
-				"mlflow": tt.pluginImpl,
-			})
-
-			rec := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
-			require.Equal(t, http.StatusAccepted, rec.Code)
-
-			var opRes OperationResource
-			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &opRes))
-			assert.Regexp(t, opNamePattern, opRes.Name)
-
-			if tt.wantInitialJSON != "" {
-				assertOperationJSON(t, tt.wantInitialJSON, rec.Body.Bytes())
-			}
-			if !tt.waitForCompletion {
-				return
-			}
-
-			completed := waitForTerminalState(t, opStore, opRes.Name)
-
-			getRec := doRequest(t, router, http.MethodGet, "/v1/operations/"+url.PathEscape(completed.Name))
-			require.Equal(t, http.StatusOK, getRec.Code)
-			assertOperationJSON(t, tt.wantTerminalJSON, getRec.Body.Bytes())
-		})
+func pendingOperation(name, plugin string) operations.Operation {
+	return operations.Operation{
+		Name:      name,
+		Plugin:    plugin,
+		State:     operations.StatePending,
+		CreatedAt: opCreatedAt,
 	}
 }
+
+func runningOperation(name, plugin string) operations.Operation {
+	return operations.Operation{
+		Name:      name,
+		Plugin:    plugin,
+		State:     operations.StateRunning,
+		StartTime: opStartTime,
+		CreatedAt: opCreatedAt,
+	}
+}
+
+func succeededOperation(name, plugin string, nodes, relations int) operations.Operation {
+	end := opEndTime
+	op := runningOperation(name, plugin)
+	op.State = operations.StateSucceeded
+	op.EndTime = &end
+	op.NodesUpserted = nodes
+	op.RelationsUpserted = relations
+	return op
+}
+
+func failedOperation(name, plugin, message string) operations.Operation {
+	end := opEndTime
+	op := runningOperation(name, plugin)
+	op.State = operations.StateFailed
+	op.EndTime = &end
+	op.Error = &operations.StatusError{Message: message}
+	return op
+}
+
+const (
+	pendingMlflowJSON = `{
+		"name": "plugin-run-1", "done": false,
+		"metadata": {"plugin": "mlflow", "startTime": "0001-01-01T00:00:00Z", "createdAt": "2026-01-02T03:04:05Z"}
+	}`
+	runningMlflowJSON = `{
+		"name": "plugin-run-1", "done": false,
+		"metadata": {"plugin": "mlflow", "startTime": "2026-01-02T03:04:06Z", "createdAt": "2026-01-02T03:04:05Z"}
+	}`
+	succeededMlflowJSON = `{
+		"name": "plugin-run-1", "done": true,
+		"metadata": {"plugin": "mlflow", "startTime": "2026-01-02T03:04:06Z", "endTime": "2026-01-02T03:04:07Z", "createdAt": "2026-01-02T03:04:05Z"},
+		"response": {"nodesUpserted": 3, "relationsUpserted": 2}
+	}`
+	failedMlflowJSON = `{
+		"name": "plugin-run-1", "done": true,
+		"metadata": {"plugin": "mlflow", "startTime": "2026-01-02T03:04:06Z", "endTime": "2026-01-02T03:04:07Z", "createdAt": "2026-01-02T03:04:05Z"},
+		"error": {"message": "sync failed: database offline"}
+	}`
+)
+
+// --- tests -------------------------------------------------------------
 
 func TestOperationFromCatalogOperationFailedWithoutError(t *testing.T) {
 	resource := operationFromCatalogOperation(operations.Operation{
@@ -117,134 +97,184 @@ func TestOperationFromCatalogOperationFailedWithoutError(t *testing.T) {
 	assert.Equal(t, "operation failed without an error", resource.Error.Message)
 }
 
-func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
-
-	rec := doRequest(t, router, http.MethodPost, "/v1/plugins/missing:run")
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestRunPluginAsyncEndpointConflict(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	block := make(chan struct{})
-	store := catalog.NewMemoryStore()
-	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, catalog.PluginConfigsByName{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
-	require.NoError(t, err)
-
-	rec1 := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
-	assert.Equal(t, http.StatusAccepted, rec1.Code)
-
-	var firstOp OperationResource
-	require.NoError(t, json.Unmarshal(rec1.Body.Bytes(), &firstOp))
-
-	waitForState(t, opStore, firstOp.Name, func(op operations.Operation) bool {
-		return op.State == operations.StateRunning
-	})
-
-	rec2 := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
-	assert.Equal(t, http.StatusConflict, rec2.Code)
-
-	close(block)
-	runner.Wait()
-}
-
-func TestGetOperationsEndpoint(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
-
-	// Trigger "seed" plugin flow
-	runRec := doRequest(t, router, http.MethodPost, "/v1/plugins:run")
-	require.Equal(t, http.StatusAccepted, runRec.Code)
-
-	var runResp RunPluginsResponse
-	require.NoError(t, json.Unmarshal(runRec.Body.Bytes(), &runResp))
-	require.Len(t, runResp.Operations, 1)
-
-	opName := runResp.Operations[0].Name
-	waitForTerminalState(t, opStore, opName)
-
-	// Fetch operations list
-	rec := doRequest(t, router, http.MethodGet, "/v1/operations")
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var listResp struct {
-		Operations []json.RawMessage `json:"operations"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listResp))
-	require.Len(t, listResp.Operations, 1)
-
-	wantJSON := `{
-		"name": "{{NAME}}",
-		"done": true,
-		"metadata": {
-			"plugin": "seed",
-			"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
+func TestRunPluginEndpoint(t *testing.T) {
+	tests := []struct {
+		name       string
+		runnerOp   operations.Operation
+		runnerErr  error
+		wantStatus int
+		wantJSON   string
+	}{
+		{
+			name:       "accepts and returns the pending operation",
+			runnerOp:   pendingOperation("plugin-run-1", "mlflow"),
+			wantStatus: http.StatusAccepted,
+			wantJSON:   pendingMlflowJSON,
 		},
-		"response": {"nodesUpserted": 0, "relationsUpserted": 0}
-	}`
-	assertOperationJSON(t, wantJSON, listResp.Operations[0])
+		{
+			name:       "unknown plugin is a bad request",
+			runnerErr:  pluginrun.ErrPluginNotFound,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "plugin already running is a conflict",
+			runnerErr:  pluginrun.ErrPluginAlreadyRunning,
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name:       "unexpected runner failure is an internal error",
+			runnerErr:  errors.New("boom"),
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &mocks.PluginRunnerMock{
+				RunPluginAsyncFunc: func(context.Context, string) (operations.Operation, error) {
+					return tt.runnerOp, tt.runnerErr
+				},
+			}
+			router := newTestRouter(t, routerDeps{runner: runner})
+
+			rec := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
+
+			require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
+			if tt.wantJSON != "" {
+				assert.JSONEq(t, tt.wantJSON, rec.Body.String())
+			}
+		})
+	}
 }
 
-// --- helpers -----------------------------------------------------------
+func TestRunAllPluginsEndpoint(t *testing.T) {
+	runner := &mocks.PluginRunnerMock{
+		RunAllPluginsAsyncFunc: func(context.Context) []operations.Operation {
+			return []operations.Operation{pendingOperation("plugin-run-1", "mlflow")}
+		},
+	}
+	router := newTestRouter(t, routerDeps{runner: runner})
 
-// doRequest executes an authenticated HTTP request against the provided router.
-func doRequest(t *testing.T, router http.Handler, method, path string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := withAuth(httptest.NewRequest(method, path, nil), testBearerToken)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	return rec
+	rec := doRequest(t, router, http.MethodPost, "/v1/plugins:run")
+
+	require.Equal(t, http.StatusAccepted, rec.Code)
+	assert.JSONEq(t, `{"operations": [`+pendingMlflowJSON+`]}`, rec.Body.String())
 }
 
-// waitForTerminalState polls until the operation reaches SUCCEEDED or FAILED.
-func waitForTerminalState(t *testing.T, opStore operations.Store, name string) operations.Operation {
-	t.Helper()
-	return waitForState(t, opStore, name, func(op operations.Operation) bool {
-		return op.State == operations.StateSucceeded || op.State == operations.StateFailed
-	})
+func TestGetOperationEndpoint(t *testing.T) {
+	tests := []struct {
+		name       string
+		runnerOp   operations.Operation
+		runnerErr  error
+		wantStatus int
+		wantJSON   string
+	}{
+		{
+			name:       "running operation",
+			runnerOp:   runningOperation("plugin-run-1", "mlflow"),
+			wantStatus: http.StatusOK,
+			wantJSON:   runningMlflowJSON,
+		},
+		{
+			name:       "succeeded operation carries the response",
+			runnerOp:   succeededOperation("plugin-run-1", "mlflow", 3, 2),
+			wantStatus: http.StatusOK,
+			wantJSON:   succeededMlflowJSON,
+		},
+		{
+			name:       "failed operation carries the error",
+			runnerOp:   failedOperation("plugin-run-1", "mlflow", "sync failed: database offline"),
+			wantStatus: http.StatusOK,
+			wantJSON:   failedMlflowJSON,
+		},
+		{
+			name:       "unknown operation is not found",
+			runnerErr:  operations.ErrNotFound,
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &mocks.PluginRunnerMock{
+				GetOperationFunc: func(context.Context, string) (operations.Operation, error) {
+					return tt.runnerOp, tt.runnerErr
+				},
+			}
+			router := newTestRouter(t, routerDeps{runner: runner})
+
+			rec := doRequest(t, router, http.MethodGet, "/v1/operations/plugin-run-1")
+
+			require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
+			if tt.wantJSON != "" {
+				assert.JSONEq(t, tt.wantJSON, rec.Body.String())
+			}
+		})
+	}
 }
 
-// waitForState polls until condition is met or times out.
-func waitForState(t *testing.T, opStore operations.Store, name string, condition func(operations.Operation) bool) operations.Operation {
-	t.Helper()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		op, err := opStore.Get(name)
-		if err == nil && condition(op) {
-			return op
+func TestListOperationsEndpoint(t *testing.T) {
+	newOperationsRouter := func(t *testing.T) (http.Handler, *mocks.PluginRunnerMock) {
+		t.Helper()
+		runner := &mocks.PluginRunnerMock{
+			ListOperationsFunc: func(context.Context, operations.Filter) ([]operations.Operation, error) {
+				return []operations.Operation{
+					succeededOperation("plugin-run-1", "seed", 0, 0),
+					runningOperation("plugin-run-2", "mlflow"),
+				}, nil
+			},
 		}
-		time.Sleep(10 * time.Millisecond)
+		return newTestRouter(t, routerDeps{runner: runner}), runner
 	}
 
-	op, err := opStore.Get(name)
-	require.NoError(t, err, "operation %q not found", name)
-	t.Fatalf("timed out waiting for operation %q; final state = %s", name, op.State)
-	return operations.Operation{}
-}
-
-// assertOperationJSON compares actual JSON against wantTemplate replacing dynamic placeholders.
-func assertOperationJSON(t *testing.T, wantTemplate string, actual []byte) {
-	t.Helper()
-
-	var got struct {
-		Name     string `json:"name"`
-		Metadata struct {
-			StartTime string `json:"startTime"`
-			EndTime   string `json:"endTime"`
-			CreatedAt string `json:"createdAt"`
-		} `json:"metadata"`
+	operationNames := func(t *testing.T, body []byte) []string {
+		t.Helper()
+		var payload ListOperationsResponse
+		require.NoError(t, json.Unmarshal(body, &payload))
+		names := make([]string, 0, len(payload.Operations))
+		for _, op := range payload.Operations {
+			names = append(names, op.Name)
+		}
+		return names
 	}
-	require.NoError(t, json.Unmarshal(actual, &got))
 
-	want := strings.NewReplacer(
-		"{{NAME}}", got.Name,
-		"{{START}}", got.Metadata.StartTime,
-		"{{END}}", got.Metadata.EndTime,
-		"{{CREATED}}", got.Metadata.CreatedAt,
-	).Replace(wantTemplate)
+	t.Run("lists all operations", func(t *testing.T) {
+		router, _ := newOperationsRouter(t)
 
-	assert.JSONEq(t, want, string(actual))
+		rec := doRequest(t, router, http.MethodGet, "/v1/operations")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, []string{"plugin-run-1", "plugin-run-2"}, operationNames(t, rec.Body.Bytes()))
+	})
+
+	t.Run("filters by plugin", func(t *testing.T) {
+		router, _ := newOperationsRouter(t)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/operations?filter=plugin=%22seed%22")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, []string{"plugin-run-1"}, operationNames(t, rec.Body.Bytes()))
+	})
+
+	t.Run("paginates", func(t *testing.T) {
+		router, _ := newOperationsRouter(t)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/operations?pageSize=1")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var payload ListOperationsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+		assert.Len(t, payload.Operations, 1)
+		assert.NotEmpty(t, payload.NextPageToken)
+		assert.Equal(t, int32(2), payload.TotalSize)
+	})
+
+	t.Run("rejects unsupported filter field", func(t *testing.T) {
+		router, runner := newOperationsRouter(t)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/operations?filter=state=%22running%22")
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Empty(t, runner.ListOperationsCalls())
+	})
 }

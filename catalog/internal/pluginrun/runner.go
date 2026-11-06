@@ -1,6 +1,6 @@
 // Package pluginrun orchestrates asynchronous plugin runs: it invokes
 // plugins, tracks their progress as operations, and writes their results
-// into the catalog graph
+// into the catalog graph.
 package pluginrun
 
 import (
@@ -20,7 +20,16 @@ import (
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
+type PluginRunner interface {
+	RunPluginAsync(ctx context.Context, plugin string) (operations.Operation, error)
+	RunAllPluginsAsync(ctx context.Context) []operations.Operation
+	ListOperations(ctx context.Context, filter operations.Filter) ([]operations.Operation, error)
+	GetOperation(ctx context.Context, name string) (operations.Operation, error)
+}
+
 type Plugin = pluginapi.Plugin
+
+const operationUpdateTimeout = 5 * time.Second
 
 var (
 	ErrInvalidPluginName    = errors.New("invalid plugin name")
@@ -73,7 +82,7 @@ func NewRunner(
 // are not atomic. This creates a possible race where two concurrent requests for
 // the same plugin could both pass the check before either creates the operation.
 // The ErrPluginAlreadyRunning error is therefore "best effort" rather than a strict guarantee.
-func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operations.Operation, error) {
+func (r *Runner) RunPluginAsync(ctx context.Context, pluginName string) (operations.Operation, error) {
 	pluginName = normalizePluginName(pluginName)
 	if pluginName == "" {
 		return operations.Operation{}, fmt.Errorf("normalize plugin name: %w", ErrInvalidPluginName)
@@ -83,7 +92,7 @@ func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operation
 		return operations.Operation{}, fmt.Errorf("looking up plugin %q: %w", pluginName, ErrPluginNotFound)
 	}
 
-	if r.hasActiveOperation(pluginName) {
+	if r.hasActiveOperation(ctx, pluginName) {
 		return operations.Operation{}, fmt.Errorf("plugin %q: %w", pluginName, ErrPluginAlreadyRunning)
 	}
 
@@ -93,7 +102,7 @@ func (r *Runner) RunPluginAsync(_ context.Context, pluginName string) (operation
 		State:     operations.StatePending,
 		CreatedAt: time.Now(),
 	}
-	if err := r.operations.Create(op); err != nil {
+	if err := r.operations.Create(ctx, op); err != nil {
 		return operations.Operation{}, fmt.Errorf("creating operation for plugin %q: %w", pluginName, err)
 	}
 
@@ -130,8 +139,8 @@ func (r *Runner) RunAllPluginsAsync(ctx context.Context) []operations.Operation 
 	return result
 }
 
-func (r *Runner) GetOperation(_ context.Context, name string) (operations.Operation, error) {
-	op, err := r.operations.Get(name)
+func (r *Runner) GetOperation(ctx context.Context, name string) (operations.Operation, error) {
+	op, err := r.operations.Get(ctx, name)
 	if err != nil {
 		return operations.Operation{}, fmt.Errorf("getting operation %q: %w", name, err)
 	}
@@ -149,8 +158,8 @@ func (r *Runner) ListPlugins() []string {
 
 // ListOperations returns all operations, optionally filtered by plugin and
 // state, ordered by creation time descending.
-func (r *Runner) ListOperations(_ context.Context, filter operations.Filter) ([]operations.Operation, error) {
-	result, err := r.operations.List(filter)
+func (r *Runner) ListOperations(ctx context.Context, filter operations.Filter) ([]operations.Operation, error) {
+	result, err := r.operations.List(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("listing operations: %w", err)
 	}
@@ -164,7 +173,9 @@ func (r *Runner) Wait() {
 
 // executePluginRun runs a single plugin and updates the operation outcome.
 func (r *Runner) executePluginRun(operationName, pluginName string) {
-	if err := r.operations.UpdateState(operationName, operations.StateRunning, nil, 0, 0); err != nil {
+	updateCtx, cancel := context.WithTimeout(r.appCtx, operationUpdateTimeout)
+	defer cancel()
+	if err := r.operations.UpdateState(updateCtx, operationName, operations.StateRunning, nil, 0, 0); err != nil {
 		r.logf("marking operation %q as running: %v", operationName, err)
 		return
 	}
@@ -185,7 +196,7 @@ func (r *Runner) executePluginRun(operationName, pluginName string) {
 	}
 
 	snapshotID := uuid.New()
-	upsertedNodes, upsertedRelations, err := r.store.ApplyPluginSnapshot(pluginName, snapshotID, response.Nodes, response.Relations)
+	upsertedNodes, upsertedRelations, err := r.store.ApplyPluginSnapshot(runCtx, pluginName, snapshotID, response.Nodes, response.Relations)
 	if err != nil {
 		r.failOperation(operationName, pluginName, fmt.Errorf("upserting graph from plugin %q: %w", pluginName, err))
 		return
@@ -193,7 +204,9 @@ func (r *Runner) executePluginRun(operationName, pluginName string) {
 
 	r.logf("plugin %q upserted %d nodes and %d relations", pluginName, upsertedNodes, upsertedRelations)
 
-	if err := r.operations.UpdateState(operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
+	updateCtx, cancel = context.WithTimeout(r.appCtx, operationUpdateTimeout)
+	defer cancel()
+	if err := r.operations.UpdateState(updateCtx, operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
 		r.logf("marking operation %q as succeeded: %v", operationName, err)
 	}
 }
@@ -203,13 +216,15 @@ func (r *Runner) failOperation(operationName, pluginName string, err error) {
 
 	r.logf("plugin %q run failed: %v", pluginName, err)
 
-	if updateErr := r.operations.UpdateState(operationName, operations.StateFailed, statusErr, 0, 0); updateErr != nil {
+	updateCtx, updateCancel := context.WithTimeout(r.appCtx, operationUpdateTimeout)
+	defer updateCancel()
+	if updateErr := r.operations.UpdateState(updateCtx, operationName, operations.StateFailed, statusErr, 0, 0); updateErr != nil {
 		r.logf("marking operation %q as failed: %v", operationName, updateErr)
 	}
 }
 
-func (r *Runner) hasActiveOperation(pluginName string) bool {
-	ops, err := r.operations.List(operations.Filter{Plugin: pluginName})
+func (r *Runner) hasActiveOperation(ctx context.Context, pluginName string) bool {
+	ops, err := r.operations.List(ctx, operations.Filter{Plugin: pluginName})
 	if err != nil {
 		r.logf("listing operations for plugin %q: %v", pluginName, err)
 		return false
