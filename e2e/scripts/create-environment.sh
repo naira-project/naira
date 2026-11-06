@@ -67,9 +67,9 @@ Flags:
                       naira-idp-e2e.
   --context NAME      kubectl context to deploy into. Defaults to
                       kind-<cluster-name>.
-  --registry          docker push linux/amd64 images to the registry in
-                      $E2E_IMAGE (required) instead of kind load. Registry
-                      login is the caller's job.
+  --registry          docker push images to the registry in $E2E_IMAGE
+                      (required) instead of kind load. Registry login is the
+                      caller's job.
 
 Environment:
   E2E_IMAGE           Image repository; images are <E2E_IMAGE>:<component>-<TAG>.
@@ -166,11 +166,10 @@ build_and_load() {
   local component="$1" dockerfile_dir="$2" build_root="${3:-$2}"
   local ref="${E2E_IMAGE}:${component}-${TAG}"
   echo "==> Building ${ref}"
+  docker build -t "${ref}" -f "${dockerfile_dir}/Dockerfile" "${build_root}"
   if [ "${REGISTRY}" -eq 1 ]; then
-    docker build --platform linux/amd64 -t "${ref}" -f "${dockerfile_dir}/Dockerfile" "${build_root}"
     docker push "${ref}"
   else
-    docker build -t "${ref}" -f "${dockerfile_dir}/Dockerfile" "${build_root}"
     kind load docker-image "${ref}" --name "${CLUSTER_NAME}"
   fi
 }
