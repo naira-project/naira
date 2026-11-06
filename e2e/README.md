@@ -31,8 +31,8 @@ vCluster instead.
 Images are published as `${E2E_IMAGE}:<component>-<tag>` — one repository,
 component in the tag. `E2E_IMAGE` defaults to `naira-e2e` (fine for
 `kind load`). By default the script loads images into kind; `--registry`
-pushes them instead (`linux/amd64`, `E2E_IMAGE` required, registry login is
-the caller's job). `--context <name>` deploys into any kube context instead of
+pushes them instead for the build host's architecture (`E2E_IMAGE` required,
+registry login is the caller's job). `--context <name>` deploys into any kube context instead of
 `kind-<cluster-name>`, e.g. a vCluster.
 
 Adding a new scenario means adding a new directory with those four things —
