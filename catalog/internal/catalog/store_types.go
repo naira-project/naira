@@ -2,6 +2,7 @@
 package catalog
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,6 +14,14 @@ var (
 	ErrInvalidIngestion = errors.New("invalid ingestion payload")
 	ErrNodeNotFound     = errors.New("node not found")
 )
+
+// Reader provides read-only access to the catalog graph.
+type Reader interface {
+	GetNode(ctx context.Context, id NodeID) (Node, error)
+	ListNodes(ctx context.Context) ([]Node, error)
+	ListRelations(ctx context.Context) ([]Relation, error)
+	ListKinds(ctx context.Context) ([]string, error)
+}
 
 type PluginClaim struct {
 	SnapshotID uuid.UUID
