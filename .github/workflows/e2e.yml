@@ -21,7 +21,6 @@ name: E2E
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - catalog/**
       - plugins/**
@@ -43,6 +42,9 @@ concurrency:
   # Per PR, so runs for different PRs don't cancel each other.
   group: ${{ github.workflow }}-${{ inputs.pr-number || github.event.pull_request.number }}
   cancel-in-progress: true
+
+env:
+  VCLUSTER_PROJECT: e2e
 
 jobs:
   # A skipped job can't print anything, so fork PRs get the notice here while
@@ -110,7 +112,6 @@ jobs:
   provision:
     name: Provision vCluster
     needs: authorize
-    if: ${{ needs.authorize.outputs.pr-number != '' }}
     runs-on: ubuntu-latest
     environment: e2e
     timeout-minutes: 15
@@ -122,7 +123,6 @@ jobs:
       provisioned-at: ${{ steps.provision.outputs.provisioned-at }}
     env:
       PR_NUMBER: ${{ needs.authorize.outputs.pr-number }}
-      VCLUSTER_PROJECT: e2e
       VCLUSTER_TEMPLATE: vcluster-e2e-template
       VCLUSTER_CI_USER: github-e2e
     steps:
@@ -291,7 +291,6 @@ jobs:
       PR_NUMBER: ${{ needs.authorize.outputs.pr-number }}
       ENV_ID: ${{ needs.provision.outputs.env-id }}
       E2E_IMAGE: ghcr.io/naira-project/naira-e2e
-      VCLUSTER_PROJECT: e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -380,15 +379,10 @@ jobs:
             --context "${ENV_ID}" \
             --registry
 
-      - name: Log out of GHCR
-        if: always()
-        run: docker logout ghcr.io
-
       # Goes through the platform proxy like every other kubectl call.
       - name: Port-forward catalog
         run: |
           kubectl -n "${ENV_ID}" port-forward svc/catalog 8090:8090 &
-          echo $! > "${RUNNER_TEMP}/catalog-port-forward.pid"
           # Retry for up to 30 seconds while the port-forward and readiness
           # probe settle.
           for _ in $(seq 1 30); do
@@ -406,7 +400,6 @@ jobs:
       - name: Port-forward keycloak
         run: |
           kubectl -n "${ENV_ID}" port-forward svc/keycloak 8080:8080 &
-          echo $! > "${RUNNER_TEMP}/keycloak-port-forward.pid"
           # The keycloak Service only exposes the http port (8080), not the
           # management/health port (9000) — check a realm endpoint instead of
           # /health/ready, which isn't reachable through this forward.
@@ -428,12 +421,6 @@ jobs:
           CATALOG_URL: http://localhost:8090
           KEYCLOAK_URL: http://localhost:8080
         run: go test -tags e2e -v -timeout=5m ./e2e/litellm_chatbot_to_catalog_api/assert/...
-
-      - name: Stop port-forwards
-        if: always()
-        run: |
-          kill "$(cat "${RUNNER_TEMP}/catalog-port-forward.pid")" || true
-          kill "$(cat "${RUNNER_TEMP}/keycloak-port-forward.pid")" || true
 
       - name: Collect diagnostics
         if: always()
