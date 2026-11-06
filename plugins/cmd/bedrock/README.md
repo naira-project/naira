@@ -16,7 +16,7 @@ Keep placeholder/empty values in the tracked manifest, and instead create the se
 
 Then:
 
- 4. Verify Bedrock model access in the configured regions (Bedrock -> Model catalog, matching BEDROCK\_REGIONS), and confirm you've invoked at least one model per region. CloudWatch only reports InputTokenCount, OutputTokenCount and Invocations for models that have received traffic. Otherwise the plugin just shows zero usage.
+ 4. Verify Bedrock model access in the configured regions (Bedrock -> Model catalog, matching REGIONS), and confirm you've invoked at least one model per region. CloudWatch only reports InputTokenCount, OutputTokenCount and Invocations for models that have received traffic. Otherwise the plugin just shows zero usage.
  5. No AWS\_REGION env var is needed in the initContainer, since the region is passed explicitly per call via awsconfig.WithRegion(region).
 
 ## Nodes and Relations
