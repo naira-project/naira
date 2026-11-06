@@ -1,6 +1,3 @@
-[tool_alias]
-goreadme = "go:github.com/posener/goreadme/cmd/goreadme"
-
 [tools]
 buf = "1.71" # lint and generate proto files
 go = "1.26"
