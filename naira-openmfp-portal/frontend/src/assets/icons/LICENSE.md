@@ -6,8 +6,7 @@ so these notices travel with it.
 
 | Icon | Source | License |
 | --- | --- | --- |
-| `dataset_catalog.svg`, `inference_endpoints_catalog.svg`, `mcp_catalog.svg`, `model_catalog.svg`, `overview.svg`, `plugins.svg`, `software_catalog.svg`, `tech_radar.svg`, `wiki.svg` | [Lucide](https://lucide.dev) | ISC (portions MIT) |
-| `more_coming_soon.svg` | [Material Icons](https://github.com/google/material-design-icons) (`more_horiz`) | Apache 2.0 |
+| `dataset_catalog.svg`, `inference_endpoints_catalog.svg`, `mcp_catalog.svg`, `model_catalog.svg`, `overview.svg`, `plugins.svg`, `software_catalog.svg`, `tech_radar.svg`, `wiki.svg`, `more_coming_soon.svg` | [Lucide](https://lucide.dev) | ISC (portions MIT) |
 
 ## Lucide
 
@@ -54,19 +53,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-## Material Icons
-
-Copyright Google LLC
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-<http://www.apache.org/licenses/LICENSE-2.0>
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
