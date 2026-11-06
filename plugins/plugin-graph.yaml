@@ -42,7 +42,6 @@ plugins:
       - kind: calls
         from: deployment
         to: service
-        note: Inferred from plaintext environment-variable values matching a Service hostname.
 
   - plugin: depl_uses_litellm
     nodes:
@@ -150,7 +149,6 @@ plugins:
       - kind: derived_from
         from: dataset
         to: dataset
-        note: Direction is downstream dataset to upstream dataset.
 
   - plugin: tech_radar
     nodes:
