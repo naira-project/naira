@@ -6,7 +6,7 @@
 # runs its assertions against it. Threat model and ownership: ADR-012 in
 # https://github.com/naira-project/architecture/tree/main/adr
 #
-# Opt-in: runs on PRs labeled `run-e2e` that touch what the scenario builds,
+# Runs on PRs that touch what the scenario builds, unless labeled `skip-e2e`,
 # and on manual dispatch. Only branches of this repo run; provision and e2e
 # each wait for approval via the `e2e` deployment environment.
 #
@@ -51,7 +51,7 @@ jobs:
     name: E2E skipped for fork PR
     runs-on: ubuntu-latest
     permissions: {}
-    if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e') && github.event.pull_request.head.repo.full_name != github.repository }}
+    if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'skip-e2e') && github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
       - run: echo "::notice::E2E runs only for branches of this repo."
 
@@ -64,7 +64,7 @@ jobs:
     # Fork PRs skip here, before e2e could request the deployment environment.
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||
-      (contains(github.event.pull_request.labels.*.name, 'run-e2e') &&
+      (!contains(github.event.pull_request.labels.*.name, 'skip-e2e') &&
       github.event.pull_request.head.repo.full_name == github.repository) }}
     outputs:
       pr-number: ${{ steps.check.outputs.pr-number }}
