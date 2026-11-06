@@ -23,6 +23,8 @@
 
 .fd-navigation__list {
   --fdNavigation_Item_Spacing: 10px;
+  /* Fundamental Styles clamps the icon box (min/max width and height) to this. */
+  --fdNavigation_Link_Icon_Size: 24px;
 }
 
 /* Items inside a group sit flush. */
@@ -30,14 +32,27 @@
   --fdNavigation_Item_Spacing: 0;
 }
 
-/* Collapsed: groups are hidden, so drop the spacing and the 10px separator
-   they leave behind. */
+.fd-navigation:not(.fd-navigation--snapped)
+  .fd-navigation__list-item.lui-nav-entry:has(
+    .fd-navigation__link[data-testid='coming-soon_morecomingsoon']
+  ) {
+  margin-top: 10px;
+}
+
+/* Collapsed: groups are hidden, so drop the 10px separator they leave behind
+   and space every entry evenly. */
 .fd-navigation--snapped {
   .fd-navigation__list {
-    --fdNavigation_Item_Spacing: 0;
+    --fdNavigation_Item_Spacing: 8px;
   }
 
   .fd-navigation__list-item--separator {
+    display: none;
+  }
+
+  .fd-navigation__list-item.lui-nav-entry:has(
+      .fd-navigation__link[data-testid='coming-soon_morecomingsoon']
+    ) {
     display: none;
   }
 
@@ -123,9 +138,12 @@
     align-items: center;
     justify-content: center;
 
+    /* Luigi caps nav icons at 18px; the design uses the full 24px. */
     img {
       width: 100%;
       height: 100%;
+      max-width: none;
+      max-height: none;
     }
   }
 
