@@ -21,7 +21,7 @@ Naira helps teams:
 - **Accelerate delivery** through reusable templates, golden paths, and ecosystem plugins  
 - **Avoid lock-in** by integrating existing best-of-breed tools instead of replacing them  
 
-Built with and for the cloud-native ecosystem, Naira is designed to integrate closely with technologies such as **PlatformMesh**, **OpenMFP/Luigi**, **KCP**, and other components of the NeoNephos stack.
+Built with and for the cloud-native ecosystem, Naira is designed to integrate closely with technologies such as **OpenMFP/Luigi** and other components of the NeoNephos stack.
 
 ## Preview
 
@@ -137,6 +137,6 @@ If you find any bug that may be a security problem, please follow our instructio
 
 ## Code of Conduct
 
-Please refer to our [Code of Conduct](https://github.com/naira-project/.github/blob/main/CODE_OF_CONDUCT.md) for information on the expected conduct for contributing to Platform Mesh.
+Please refer to our [Code of Conduct](https://github.com/naira-project/.github/blob/main/CODE_OF_CONDUCT.md) for information on the expected conduct for contributing to Naira.
 
 <p align="center"><img alt="Bundesministerium für Wirtschaft und Energie (BMWE)-EU funding logo" src="https://apeirora.eu/assets/img/BMWK-EU.png" width="400"/></p>
