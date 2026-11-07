@@ -127,7 +127,9 @@ starter are in [`wiki/starter/README.md`](../../../wiki/starter/README.md).
   `keycloak.baseUrl`). Keycloak and DNS are admitted on any address, because a
   policy cannot select a host name.
 - A wiki image needs a digest and a registry from `wikiGateway.allowedRegistries`,
-  so an image built into kind cannot be listed and `values-dev.yaml` lists no wiki.
+  so an image built into kind cannot be listed as it is. `values-dev.yaml` lists
+  the starter twice with a placeholder digest, and Tilt builds `wiki/starter` and
+  replaces the reference.
 
 ### Portal
 

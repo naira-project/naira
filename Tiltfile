@@ -177,6 +177,11 @@ for svc, ports in DEPS_FORWARDS.items():
 # names: naira-catalog, naira-ui, naira-portal, naira-plugin-<name>. Build
 # only the images the rendered chart uses, so enabling a plugin in values is
 # enough. Tilt loads the images into kind itself.
+#
+# The chart takes a wiki image only by digest from an allowed registry, so
+# values-dev.yaml names the starter as local/naira-wiki-starter@sha256:<placeholder>.
+# Tilt replaces that reference with the image it builds.
+WIKI_STARTER = 'local/naira-wiki-starter'
 images = []
 for o in objs:
     if o['kind'] != 'Deployment':
@@ -184,7 +189,10 @@ for o in objs:
     # Plugins are native sidecars, i.e. initContainers.
     pod = o['spec']['template']['spec']
     for c in pod.get('initContainers', []) + pod['containers']:
-        repo = c['image'].split(':')[0]
+        repo = c['image'].split('@')[0].split(':')[0]
+        # Any other image pinned by digest is pulled, not built: the wiki gateway's Envoy.
+        if '@' in c['image'] and repo != WIKI_STARTER:
+            continue
         if repo not in images:
             images.append(repo)
 
@@ -196,6 +204,8 @@ for repo in images:
         docker_build(repo, 'ui')
     elif repo == 'naira-portal':
         docker_build(repo, 'naira-openmfp-portal')
+    elif repo == WIKI_STARTER:
+        docker_build(repo, 'wiki/starter')
     elif repo.startswith('naira-plugin-'):
         dir = repo[len('naira-plugin-'):].replace('-', '_')
         docker_build(repo, '.', dockerfile='plugins/cmd/%s/Dockerfile' % dir,
@@ -252,3 +262,16 @@ if DEMO:
                  resource_deps=['test-dependencies'], labels=['demo'])
     for job in ['seed-litellm-keys', 'seed-mlflow-models', 'seed-openmetadata-tables']:
         k8s_resource(job, resource_deps=['demo-seed-config'], labels=['demo'])
+
+# The wiki gateway and the wikis, when values-dev.yaml lists any. The gateway is
+# forwarded to wikiGateway.port, which is the port in the wikis' addresses.
+WIKI_PORT = read_yaml(CHART + '/values-dev.yaml').get('wikiGateway', {}).get('port') or \
+    read_yaml(CHART + '/values.yaml')['wikiGateway']['port']
+for o in objs:
+    if o['kind'] != 'Deployment':
+        continue
+    name = o['metadata']['name']
+    if name == 'wiki-gateway':
+        k8s_resource(name, resource_deps=['naira-config'], port_forwards=['%d:8080' % WIKI_PORT], labels=['naira'])
+    elif o['metadata'].get('labels', {}).get('app.kubernetes.io/component') == 'wiki':
+        k8s_resource(name, resource_deps=['naira-config'], labels=['naira'])

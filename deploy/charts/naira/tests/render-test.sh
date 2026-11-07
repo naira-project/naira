@@ -1431,6 +1431,31 @@ check "portal: unrelated values do not restart the portal" "$PSUM2" \
   "$(render --set catalog.replicas=3 --set wikiGateway.replicas=2 --set portal.replicas=2 \
       --set-json "wikis=[$(wiki handbook),$(wiki other)]" | portal_sum)"
 
+# ── Wikis in the dev values ──────────────────────────────────────────────────
+# values-dev.yaml lists two starter wikis for Tilt, which builds wiki/starter and swaps the image.
+TILTFILE="$CHART/../../../Tiltfile"
+DEV_WIKI_DEPLOYMENT='select(.kind == "Deployment" and .metadata.labels["app.kubernetes.io/component"] == "wiki")'
+check "dev wikis: starter and starter-two, the primary first" "starter:true,starter-two:false" \
+  "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.id + \":\" + (.primary | tostring)) | join(\",\")")"
+check "dev wikis: addresses are on port 3003" \
+  "http://starter.wiki.localhost:3003/,http://starter-two.wiki.localhost:3003/" \
+  "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.url) | join(\",\")")"
+# Grafana is forwarded to 3002 and the UI's log links point there.
+check "dev wikis: the gateway port is not the one of the Grafana log links" "differ" \
+  "$([ "$(yq '.wikiGateway.port' "$CHART/values-dev.yaml")" != "$(yq '.ui.config.logs.explorerUrl' "$CHART/values-dev.yaml" | sed 's/.*://')" ] && echo differ)"
+check "dev wikis: the gateway port in wikis.json is not the Grafana port" "true" \
+  "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.url | test(\":3002/\") | not) | all | tostring")"
+# Tilt matches a docker_build to a Deployment by the image name.
+check "dev wikis: the image is the one the Tiltfile builds" \
+  "$(sed -n "s/^WIKI_STARTER = '\(.*\)'$/\1/p" "$TILTFILE")" \
+  "$(render_raw "${DEV[@]}" | yq ea "[$DEV_WIKI_DEPLOYMENT | .spec.template.spec.containers[0].image | sub(\"@.*\"; \"\")] | unique | join(\",\")")"
+check "dev wikis: the Tiltfile builds it from wiki/starter" "1" \
+  "$(grep -c "docker_build(repo, 'wiki/starter')" "$TILTFILE")"
+check "dev wikis: the gateway's Envoy is pinned by digest, which the Tiltfile pulls instead of building" "true" \
+  "$(render_raw "${DEV[@]}" | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-gateway") | .spec.template.spec.containers[0].image | test("@sha256:[0-9a-f]{64}$") | tostring')"
+check "dev wikis: render stays valid with the placeholder digest" "ok" \
+  "$(render_raw "${DEV[@]}" >/dev/null && echo ok)"
+
 ALL_FIELDS_GW=$(render_raw -f "$CHART/ci/all-fields-values.yaml")
 check "gateway: all-fields values set the image and replicas" \
   "reg.example.com/mirror/envoy@sha256:$(printf 'd%.0s' {1..64}) 2" \
