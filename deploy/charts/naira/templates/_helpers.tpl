@@ -108,3 +108,38 @@ affinity:
 {{- define "naira.dbSecretName" -}}
 {{- .db.secret.existingSecret | default (printf "%s-db" .name) -}}
 {{- end -}}
+
+{{/* "true" for a wiki entry that is enabled. A listed wiki is enabled unless it says false. */}}
+{{- define "naira.wikiEnabled" -}}
+{{- if or (not (hasKey . "enabled")) .enabled -}}true{{- end -}}
+{{- end -}}
+
+{{/* Non-empty when at least one wiki is enabled. */}}
+{{- define "naira.hasWikis" -}}
+{{- range .Values.wikis -}}
+{{- if include "naira.wikiEnabled" . -}}true{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{- define "naira.wikiGatewayName" -}}
+wiki-gateway
+{{- end -}}
+
+{{/* Usage: include "naira.wikiHost" (dict "root" $ "id" $id) */}}
+{{- define "naira.wikiHost" -}}
+{{- printf "%s.%s" .id .root.Values.wikiGateway.domain -}}
+{{- end -}}
+
+{{/*
+Browser-facing address of a wiki. The port is left out when it is the scheme's default.
+Usage: include "naira.wikiUrl" (dict "root" $ "id" $id)
+*/}}
+{{- define "naira.wikiUrl" -}}
+{{- $gw := .root.Values.wikiGateway -}}
+{{- $port := int $gw.port -}}
+{{- if eq $port (ternary 443 80 (eq $gw.scheme "https")) -}}
+{{- printf "%s://%s/" $gw.scheme (include "naira.wikiHost" .) -}}
+{{- else -}}
+{{- printf "%s://%s:%d/" $gw.scheme (include "naira.wikiHost" .) $port -}}
+{{- end -}}
+{{- end -}}

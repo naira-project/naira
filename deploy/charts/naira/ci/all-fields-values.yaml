@@ -37,3 +37,39 @@ database:
     catalog:
       secret:
         existingSecret: catalog-db
+wikiGateway:
+  domain: wiki.naira.example.com
+  scheme: https
+  port: 443
+  allowedRegistries: [ghcr.io/naira-project, reg.example.com/docs]
+wikiDefaults:
+  replicas: 2
+  priorityClassName: system-cluster-critical
+  nodeSelector: {kubernetes.io/os: linux}
+  tolerations:
+    - {key: dedicated, operator: Equal, value: naira, effect: NoSchedule}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - {key: kubernetes.io/arch, operator: In, values: [amd64, arm64]}
+  podSecurityContext: {fsGroup: 101}
+wikis:
+  - id: platform-handbook
+    enabled: true
+    contract: naira.wiki/v1alpha1
+    label: Platform Handbook
+    primary: true
+    order: 0
+    image: ghcr.io/naira-project/handbook@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    owner: team-platform
+    source: https://github.com/acme/platform-handbook
+  - id: runbooks
+    contract: naira.wiki/v1alpha1
+    order: 10
+    image: reg.example.com/docs/runbooks:1.4.0@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  - id: archive
+    enabled: false
+    contract: naira.wiki/v1alpha1
+    image: ghcr.io/naira-project/archive@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

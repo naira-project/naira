@@ -9,6 +9,7 @@
 #   - guards that must refuse to render (bad values, missing Secrets)
 #   - values-dev.yaml and the kind/CI setup
 #   - pod hardening, scheduling fields and the catalog NetworkPolicy
+#   - wiki workloads, the wikis ConfigMap, wiki guards and wiki NetworkPolicies
 # Requires helm and mikefarah yq v4 (both pinned in mise.toml).
 set -euo pipefail
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
@@ -637,6 +638,197 @@ check "db-init gets sslmode, retries and a deadline" "prefer 60 900" \
        | [(.spec.template.spec.containers[0].env[] | select(.name == "PGSSLMODE" or .name == "DB_WAIT_RETRIES") | .value),
           (.spec.activeDeadlineSeconds | tostring)] | join(" ")')"
 
+# ── Wikis ────────────────────────────────────────────────────────────────────
+DIGEST=$(printf 'a%.0s' {1..64})
+# wiki ID [EXTRA JSON FIELDS]: one wikis[] entry that is valid until EXTRA overrides
+# a field (the last duplicate key wins).
+wiki() {
+  local id=$1 extra=${2:+,$2}
+  printf '{"id":"%s","contract":"naira.wiki/v1alpha1","image":"ghcr.io/naira-project/%s@sha256:%s"%s}' \
+    "$id" "$id" "$DIGEST" "$extra"
+}
+# render_wikis ENTRY...: render with exactly these wikis.
+render_wikis() {
+  local entries
+  entries=$(IFS=,; echo "$*")
+  render --set-json "wikis=[$entries]"
+}
+WIKI_DEPLOYMENTS='select(.kind == "Deployment" and (.metadata.name | test("^wiki-"))) | .metadata.name'
+WIKI_SERVICES='select(.kind == "Service" and (.metadata.name | test("^wiki-"))) | .metadata.name'
+WIKIS_JSON='select(.kind == "ConfigMap" and .metadata.name == "wikis") | .data["wikis.json"] | from_json'
+WIKI_POD() { printf 'select(.kind == "Deployment" and .metadata.name == "wiki-%s") | .spec.template.spec' "$1"; }
+
+check "no wikis by default: no Deployment, no Service" \
+  "0 0" \
+  "$(o=$(render); echo "$(echo "$o" | yq ea "[$WIKI_DEPLOYMENTS] | length") $(echo "$o" | yq ea "[$WIKI_SERVICES] | length")")"
+check "no wikis by default: wikis ConfigMap holds an empty list" \
+  "[]" \
+  "$(render | yq "$WIKIS_JSON" -o=json -I=0)"
+check "wikis ConfigMap is in the release namespace" \
+  "naira" \
+  "$(render | yq 'select(.kind == "ConfigMap" and .metadata.name == "wikis") | .metadata.namespace')"
+
+check "wiki: Deployment and Service named wiki-<id>" \
+  "wiki-handbook wiki-handbook" \
+  "$(o=$(render_wikis "$(wiki handbook)")
+     echo "$(echo "$o" | yq "$WIKI_DEPLOYMENTS") $(echo "$o" | yq "$WIKI_SERVICES")")"
+check "wiki: image is used as given, by digest, not built from the chart's image values" \
+  "ghcr.io/naira-project/handbook@sha256:${DIGEST}" \
+  "$(render_wikis "$(wiki handbook)" | yq "$(WIKI_POD handbook) | .containers[0].image")"
+check "wiki: image ignores image.registry and image.tag" \
+  "ghcr.io/naira-project/handbook@sha256:${DIGEST}" \
+  "$(render --set image.registry=other.example --set image.tag=zz \
+      --set-json "wikis=[$(wiki handbook)]" \
+    | yq "$(WIKI_POD handbook) | .containers[0].image")"
+check "wiki: readiness on naira-wiki.json, port 8080" \
+  "/naira-wiki.json 8080" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq "$(WIKI_POD handbook) | .containers[0]
+          | .readinessProbe.httpGet.path + \" \" + (.ports[0].containerPort | tostring)")"
+check "wiki: restricted security context" \
+  "false true true ALL RuntimeDefault" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq "$(WIKI_POD handbook) | .containers[0].securityContext
+          | (.allowPrivilegeEscalation | tostring) + \" \" + (.readOnlyRootFilesystem | tostring) + \" \"
+            + (.runAsNonRoot | tostring) + \" \" + .capabilities.drop[0] + \" \" + .seccompProfile.type")"
+check "wiki: does not pin a uid, the image contract only says non-root" \
+  "null" \
+  "$(render_wikis "$(wiki handbook)" | yq "$(WIKI_POD handbook) | .containers[0].securityContext.runAsUser")"
+check "wiki: writable /tmp is a small emptyDir" \
+  "/tmp tmp true" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq "$(WIKI_POD handbook)
+          | .containers[0].volumeMounts[0].mountPath + \" \" + .volumes[0].name + \" \"
+            + (.volumes[0].emptyDir | has(\"sizeLimit\") | tostring)")"
+check "wiki: no API token and not the catalog ServiceAccount" \
+  "false null" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq "$(WIKI_POD handbook) | (.automountServiceAccountToken | tostring) + \" \" + (.serviceAccountName // \"null\")")"
+check "wiki: small resources" \
+  "100m 64Mi" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq "$(WIKI_POD handbook) | .containers[0].resources.limits | .cpu + \" \" + .memory")"
+check "wiki: Service on 8080 selects only that wiki's pods" \
+  "8080 wiki-handbook" \
+  "$(render_wikis "$(wiki handbook)" "$(wiki other)" \
+    | yq 'select(.kind == "Service" and .metadata.name == "wiki-handbook")
+          | (.spec.ports[0].port | tostring) + " " + .spec.selector["app.kubernetes.io/name"]')"
+check "wiki: pods carry the wiki component label" \
+  "wiki" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-handbook")
+          | .spec.template.metadata.labels["app.kubernetes.io/component"]')"
+check "wiki: component label is not part of the selector" \
+  "false" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-handbook")
+          | .spec.selector.matchLabels | has("app.kubernetes.io/component") | tostring')"
+check "wiki: replicas default to 1" \
+  "1" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-handbook") | .spec.replicas')"
+check "wiki: replicas from wikiDefaults" \
+  "2" \
+  "$(render --set wikiDefaults.replicas=2 --set-json "wikis=[$(wiki handbook)]" \
+    | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-handbook") | .spec.replicas')"
+check "wiki: imagePullSecrets apply" \
+  "regcred" \
+  "$(render --set 'imagePullSecrets[0].name=regcred' --set-json "wikis=[$(wiki handbook)]" \
+    | yq "$(WIKI_POD handbook) | .imagePullSecrets[0].name")"
+check "wiki: no scheduling fields by default" \
+  "false" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq "$(WIKI_POD handbook)
+          | (has(\"imagePullSecrets\") or has(\"nodeSelector\") or has(\"tolerations\")
+             or has(\"affinity\") or has(\"priorityClassName\") or has(\"securityContext\")) | tostring")"
+check "wiki: scheduling fields from wikiDefaults" \
+  "linux dedicated high 1000" \
+  "$(render --set wikiDefaults.nodeSelector.os=linux --set 'wikiDefaults.tolerations[0].key=dedicated' \
+      --set wikiDefaults.priorityClassName=high --set wikiDefaults.podSecurityContext.fsGroup=1000 \
+      --set-json "wikis=[$(wiki handbook)]" \
+    | yq "$(WIKI_POD handbook)
+          | .nodeSelector.os + \" \" + .tolerations[0].key + \" \" + .priorityClassName + \" \"
+            + (.securityContext.fsGroup | tostring)")"
+
+# ConfigMap: enabled wikis only, sorted primary first, then order, then id.
+check "wikis.json entry: id, label, url, primary, order" \
+  '{"id":"handbook","label":"Platform Handbook","order":3,"primary":true,"url":"http://handbook.wiki.localhost:3002/"}' \
+  "$(render_wikis "$(wiki handbook '"label":"Platform Handbook","primary":true,"order":3')" \
+    | yq "$WIKIS_JSON | .[0]" -o=json -I=0)"
+check "wikis.json: label defaults to the id, order to 0, primary to false" \
+  "handbook 0 false" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq "$WIKIS_JSON | .[0] | .label + \" \" + (.order | tostring) + \" \" + (.primary | tostring)")"
+check "wikis.json: owner and source appear when set" \
+  "team-platform https://example.com/hb" \
+  "$(render_wikis "$(wiki handbook '"owner":"team-platform","source":"https://example.com/hb"')" \
+    | yq "$WIKIS_JSON | .[0] | .owner + \" \" + .source")"
+check "wikis.json: no owner and source when unset" \
+  "false false" \
+  "$(render_wikis "$(wiki handbook)" \
+    | yq "$WIKIS_JSON | .[0] | (has(\"owner\") | tostring) + \" \" + (has(\"source\") | tostring)")"
+check "wikis.json: primary first, then order, then id" \
+  "primary-one,a-early,b-early,c-late" \
+  "$(render_wikis "$(wiki c-late '"order":5')" "$(wiki b-early '"order":1')" \
+      "$(wiki primary-one '"primary":true,"order":9')" "$(wiki a-early '"order":1')" \
+    | yq "$WIKIS_JSON | map(.id) | join(\",\")")"
+check "wikis.json: negative and missing order sort before positive" \
+  "neg,none,pos" \
+  "$(render_wikis "$(wiki pos '"order":2')" "$(wiki none)" "$(wiki neg '"order":-3')" \
+    | yq "$WIKIS_JSON | map(.id) | join(\",\")")"
+check "wikis.json: negative orders sort as numbers" \
+  "ten-down,three-down" \
+  "$(render_wikis "$(wiki three-down '"order":-3')" "$(wiki ten-down '"order":-10')" \
+    | yq "$WIKIS_JSON | map(.id) | join(\",\")")"
+check "wikis.json: ids sort as text, order as a number" \
+  "two,ten" \
+  "$(render_wikis "$(wiki ten '"order":10')" "$(wiki two '"order":2')" \
+    | yq "$WIKIS_JSON | map(.id) | join(\",\")")"
+
+# Address: <scheme>://<id>.<domain>[:port]/, the port left out when it is the scheme's default.
+wiki_url() { render --set-json "wikis=[$(wiki handbook)]" "$@" | yq "$WIKIS_JSON | .[0].url"; }
+check "wiki URL: kind defaults" \
+  "http://handbook.wiki.localhost:3002/" \
+  "$(wiki_url)"
+check "wiki URL: https on 443 has no port" \
+  "https://handbook.wiki.example.com/" \
+  "$(wiki_url --set wikiGateway.scheme=https --set wikiGateway.port=443 --set wikiGateway.domain=wiki.example.com)"
+check "wiki URL: http on 80 has no port" \
+  "http://handbook.wiki.example.com/" \
+  "$(wiki_url --set wikiGateway.port=80 --set wikiGateway.domain=wiki.example.com)"
+check "wiki URL: https on another port keeps it" \
+  "https://handbook.wiki.example.com:8443/" \
+  "$(wiki_url --set wikiGateway.scheme=https --set wikiGateway.port=8443 --set wikiGateway.domain=wiki.example.com)"
+check "wiki URL: 443 on http is not a default port" \
+  "http://handbook.wiki.example.com:443/" \
+  "$(wiki_url --set wikiGateway.port=443 --set wikiGateway.domain=wiki.example.com)"
+
+# Lifecycle: enabled false and removal take the wiki's objects and entry away, nothing else.
+check "disabled wiki: no Deployment, no Service, no entry" \
+  "wiki-other|wiki-other|other" \
+  "$(o=$(render_wikis "$(wiki handbook '"enabled":false')" "$(wiki other)")
+     echo "$(echo "$o" | yq "$WIKI_DEPLOYMENTS")|$(echo "$o" | yq "$WIKI_SERVICES")|$(echo "$o" | yq "$WIKIS_JSON | map(.id) | join(\",\")")")"
+check "wiki without enabled is enabled" \
+  "wiki-handbook" \
+  "$(render_wikis "$(wiki handbook)" | yq "$WIKI_DEPLOYMENTS")"
+check "all wikis disabled: back to an empty list" \
+  "0 []" \
+  "$(o=$(render_wikis "$(wiki handbook '"enabled":false')")
+     echo "$(echo "$o" | yq ea "[$WIKI_DEPLOYMENTS] | length") $(echo "$o" | yq "$WIKIS_JSON" -o=json -I=0)")"
+check "removed wiki: its objects are gone, the other stays" \
+  "wiki-other" \
+  "$(render_wikis "$(wiki other)" | yq "$WIKI_DEPLOYMENTS")"
+
+# Everything outside the wiki objects renders byte for byte the same with or without wikis.
+without_wiki_objects() {
+  yq 'select((.metadata.name == "wikis" or (.metadata.name | test("^wiki-"))) | not)'
+}
+if [ "$(render | without_wiki_objects | sha256sum)" = \
+     "$(render_wikis "$(wiki handbook)" "$(wiki other '"enabled":false')" | without_wiki_objects | sha256sum)" ]; then
+  echo "ok   catalog, ui, portal and database objects are untouched by wikis"
+else
+  echo "FAIL catalog, ui, portal and database objects are untouched by wikis"; fail=1
+fi
 check "all-fields values render" \
   "ok" \
   "$(render_raw -f "$CHART/ci/all-fields-values.yaml" >/dev/null && echo ok)"

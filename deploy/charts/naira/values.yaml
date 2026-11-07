@@ -312,6 +312,45 @@ portal:
     seccompProfile: {type: RuntimeDefault}
   startupProbe: {periodSeconds: 2, failureThreshold: 30}
 
+# Wikis: static sites, one Deployment each, listed in `wikis`. A wiki is served
+# at <scheme>://<id>.<domain>[:port]/, so the domain needs wildcard DNS and TLS.
+# The image contract is in wiki/starter/README.md.
+wikiGateway:
+  domain: wiki.localhost
+  scheme: http   # https outside kind
+  # Browser-facing. Left out of the address when it is the scheme's default.
+  port: 3002
+  # A wiki image must start with one of these. Empty allows no wiki.
+  allowedRegistries: [ghcr.io/naira-project]
+
+# Same keys as on catalog, ui and portal; applied to every wiki Deployment.
+wikiDefaults:
+  replicas: 1
+  resources:
+    requests: {cpu: 10m, memory: 16Mi}
+    limits: {cpu: 100m, memory: 64Mi}
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext: {}
+
+# A listed wiki is installed unless it sets enabled: false. Fields:
+#   id        DNS label, ^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$, unique. Names the
+#             Deployment wiki-<id> and the address.
+#   contract  naira.wiki/v1alpha1
+#   image     name@sha256:<digest>. Used as given, not built from image.registry
+#             or image.tag.
+#   label     Name in the sidebar. Default: id.
+#   primary   At most one enabled wiki; listed first.
+#   order     Whole number, ascending, then id. Default 0.
+#   owner, source   Optional; copied into wikis.json.
+# Example:
+#   - id: platform-handbook
+#     contract: naira.wiki/v1alpha1
+#     image: ghcr.io/naira-project/platform-handbook@sha256:<digest>
+wikis: []
+
 # PostgreSQL: the cloudpirates/postgres subchart. For an external server set
 # enabled=false and database.host.
 postgresql:
