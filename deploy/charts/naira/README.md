@@ -41,7 +41,7 @@ development Secrets from values.
 - One release per namespace: namespaced objects have fixed names (`catalog`,
   `ui`, `portal`, `catalog-plugin-config`, `plugin-<name>-config`,
   `catalog-secrets`, `portal-oidc`, `postgres`, `postgres-admin`, `db-init`,
-  `<name>-db`).
+  `<name>-db`, `wiki-<id>`, `wikis`, `wiki-ingress`, `wiki-gateway-egress`).
   Cluster-scoped RBAC is prefixed with the release name, so several releases
   per cluster are fine as long as their release names differ.
 - Migrating from the former `deploy/dev/stacks`: delete the
@@ -96,6 +96,38 @@ in a value fails the render.
 | github | 50059 | no | Secret key `GITHUB_TOKEN`; RBAC: namespaces, deployments |
 | bedrock | 50060 | no | Secret keys `BEDROCK_AWS_ACCESS_KEY_ID`, `BEDROCK_AWS_SECRET_ACCESS_KEY`; no RBAC |
 
+## Wikis
+
+Each enabled entry in `wikis` installs a Deployment and a Service `wiki-<id>`
+from a digest-pinned image and adds the wiki to `wikis.json` in ConfigMap
+`wikis`. The fields are documented in `values.yaml`; the image contract and a
+starter are in [`wiki/starter/README.md`](../../../wiki/starter/README.md).
+
+- A listed wiki is installed unless it sets `enabled: false`. Disabling or
+  removing it removes its Deployment, Service and `wikis.json` entry and
+  nothing else. Upgrading is a new digest.
+- `wikis.json` lists the enabled wikis, the primary one first, then by `order`,
+  then by `id`. Each entry has `id`, `label`, `url`, `primary` and `order`, and
+  `owner` and `source` when set. The ConfigMap is always rendered, as `[]` when
+  no wiki is enabled. The `url` is `<scheme>://<id>.<domain>[:port]/` from
+  `wikiGateway`, with the port left out when it is the scheme's default.
+- The domain needs wildcard DNS and TLS, and the wiki address has to be on the
+  same site as the portal, or the browser drops the session cookie (see the
+  starter README).
+- Wiki pods run non-root with a read-only root filesystem, a small `/tmp` and no
+  Kubernetes API token. They do not use the catalog's ServiceAccount.
+  `wikiDefaults` sets replicas, resources and the scheduling fields.
+- `wikiGateway.networkPolicy.enabled` renders `wiki-ingress` (wiki pods accept
+  traffic from the pods named `wiki-gateway` only) and `wiki-gateway-egress`
+  (those pods may reach DNS, the wiki pods and the Keycloak port of
+  `keycloak.baseUrl`). Keycloak and DNS are admitted on any address, because a
+  policy cannot select a host name.
+- A wiki image needs a digest and a registry from `wikiGateway.allowedRegistries`,
+  so an image built into kind cannot be listed and `values-dev.yaml` lists no wiki.
+
+This chart does not render the gateway yet and the portal does not read
+`wikis.json` yet, so the Services are reachable only inside the cluster.
+
 ## Scheduling and security
 
 Same keys on `catalog`, `ui` and `portal` unless noted; unset values render
@@ -135,7 +167,14 @@ missing without it; `postgresql.auth.existingSecret` differing from the
 `database.admin` Secret; a database name other than lowercase letters, digits and inner hyphens starting with a letter, or one of
 `postgres`, `template0`, `template1` and `database.admin.username`; and a
 `database.admin` or `database.databases.<name>` Secret without exactly one
-source.
+source; and, for `wikis`, an entry that is not a map or has a missing, invalid,
+reserved (`gateway`) or duplicate `id`. For an enabled wiki: a contract other
+than `naira.wiki/v1alpha1`, an `image` that is missing, not pinned as
+`name@sha256:<digest>` or outside `wikiGateway.allowedRegistries`, an `order`
+that is not a whole number, and a second `primary`. Once a wiki is enabled,
+a `wikiGateway.domain`, `scheme` or `port` that cannot form an address. The
+message names the wiki. A bad entry fails the whole render, so the previous
+release keeps running.
 
 ## Tests
 
