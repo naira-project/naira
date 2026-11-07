@@ -41,7 +41,8 @@ development Secrets from values.
 - One release per namespace: namespaced objects have fixed names (`catalog`,
   `ui`, `portal`, `catalog-plugin-config`, `plugin-<name>-config`,
   `catalog-secrets`, `portal-oidc`, `postgres`, `postgres-admin`, `db-init`,
-  `<name>-db`, `wiki-<id>`, `wikis`, `wiki-ingress`, `wiki-gateway-egress`).
+  `<name>-db`, `wiki-<id>`, `wikis`, `wiki-gateway`, `wiki-ingress`,
+  `wiki-gateway-egress`).
   Cluster-scoped RBAC is prefixed with the release name, so several releases
   per cluster are fine as long as their release names differ.
 - Migrating from the former `deploy/dev/stacks`: delete the
@@ -125,13 +126,46 @@ starter are in [`wiki/starter/README.md`](../../../wiki/starter/README.md).
 - A wiki image needs a digest and a registry from `wikiGateway.allowedRegistries`,
   so an image built into kind cannot be listed and `values-dev.yaml` lists no wiki.
 
-This chart does not render the gateway yet and the portal does not read
-`wikis.json` yet, so the Services are reachable only inside the cluster.
+The portal does not read `wikis.json` yet, so no wiki appears in the sidebar.
+
+### Gateway
+
+While at least one wiki is enabled, the chart renders one Envoy as Deployment,
+Service and ConfigMap `wiki-gateway`. It listens on 8080 over plain HTTP: expose
+the Service on `wikiGateway.port` and end TLS in front of it, with a wildcard
+certificate for `*.<wikiGateway.domain>`. The admin interface listens on
+loopback only.
+
+- A virtual host and a cluster per enabled wiki. A host that is no wiki's
+  address gets a 404.
+- Every request needs a Keycloak access token. Envoy checks it against
+  `keycloak.issuer` and the keys at `keycloak.baseUrl`, cached for 10 minutes
+  (an https Keycloak needs a certificate the system CAs trust). The token is read
+  from the `naira_wiki` cookie, never from `Authorization` or the query.
+  `/_naira/bootstrap.html` and `/_naira/assets/` are open, so a signed-out frame
+  can sign in.
+- The bootstrap page posts the token to `/_naira/session` in the header
+  `x-naira-token`. The answer sets `naira_wiki`: HttpOnly, SameSite=Lax and no
+  `Domain`, so each wiki address keeps its own cookie. It is `Secure` when
+  `wikiGateway.scheme` is `https`. The `Cookie` header is removed from requests
+  to the wiki pod.
+- Without a valid cookie the answer is a 401 page that sends the browser to the
+  bootstrap page and back.
+- Each wiki is health-checked on `/naira-wiki.json` every 5 seconds. A wiki that
+  is stopped, unreachable or failing its check gets a 503 page with its name,
+  owner and a link to its `source`, on its own address. Other wikis are not
+  affected.
+- Responses carry `Content-Security-Policy: frame-ancestors
+  <wikiGateway.portalOrigin>` and no `Server` or `x-envoy-*` header.
+- The gateway restarts when its Envoy config changes, not when a wiki's digest
+  does. The two pages are in `files/wiki-gateway/`.
 
 ## Scheduling and security
 
 Same keys on `catalog`, `ui` and `portal` unless noted; unset values render
-nothing. `imagePullSecrets` is top-level and applies to all three.
+nothing. `imagePullSecrets` is top-level and applies to all three. `wikiGateway`
+(the gateway) and `wikiDefaults` (the wiki pods) take the same keys, except
+`startupProbe`.
 
 | Key | Notes |
 |---|---|
@@ -145,7 +179,9 @@ no privilege escalation, all capabilities dropped and the `RuntimeDefault`
 seccomp profile, which meets Pod Security `restricted`. The `ui` (nginx) and
 `portal` (node) images have no `USER` and run as root, so they get only
 `allowPrivilegeEscalation: false` and seccomp; a `restricted` namespace needs
-non-root images for both first.
+non-root images for both first. The wiki gateway and the wiki pods run non-root
+with a read-only root filesystem and no capabilities, which also meets
+`restricted`.
 
 Not provided: ServiceMonitor/PodMonitor. No workload exposes a metrics
 endpoint yet.
@@ -172,10 +208,18 @@ reserved (`gateway`) or duplicate `id`. For an enabled wiki: a contract other
 than `naira.wiki/v1alpha1`, an `image` that is missing, not pinned as
 `name@sha256:<digest>` or outside `wikiGateway.allowedRegistries`, an `order`
 that is not a whole number, and a second `primary`. Once a wiki is enabled,
-a `wikiGateway.domain`, `scheme` or `port` that cannot form an address. The
-message names the wiki. A bad entry fails the whole render, so the previous
+a `wikiGateway.domain`, `scheme` or `port` that cannot form an address, a
+`wikiGateway.image` without a repository or a `sha256:` digest, a
+`wikiGateway.portalOrigin` that is not `scheme://host[:port]`, a
+`keycloak.baseUrl` that is not an http(s) URL with a host, and an empty
+`keycloak.issuer` or `keycloak.realm`. The message names the wiki or the value. A bad entry fails the whole render, so the previous
 release keeps running.
 
 ## Tests
 
 `deploy/charts/naira/tests/render-test.sh`
+
+The render tests read the Envoy config back from the ConfigMap but cannot tell
+whether Envoy accepts it. After changing `templates/wiki-gateway.yaml`, run
+`envoy --mode validate -c envoy.yaml` on the rendered `envoy.yaml` with the image
+from `wikiGateway.image`.
