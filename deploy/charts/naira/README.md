@@ -114,7 +114,10 @@ starter are in [`wiki/starter/README.md`](../../../wiki/starter/README.md).
   `wikiGateway`, with the port left out when it is the scheme's default.
 - The domain needs wildcard DNS and TLS, and the wiki address has to be on the
   same site as the portal, or the browser drops the session cookie (see the
-  starter README).
+  starter README). Chrome counts `localhost` and `wiki.localhost` as different
+  sites, so the default domain does not work with a portal on `localhost`: serve
+  the portal on `naira.localhost` and set `wikiGateway.domain` to
+  `naira.localhost`.
 - Wiki pods run non-root with a read-only root filesystem, a small `/tmp` and no
   Kubernetes API token. They do not use the catalog's ServiceAccount.
   `wikiDefaults` sets replicas, resources and the scheduling fields.
@@ -126,7 +129,22 @@ starter are in [`wiki/starter/README.md`](../../../wiki/starter/README.md).
 - A wiki image needs a digest and a registry from `wikiGateway.allowedRegistries`,
   so an image built into kind cannot be listed and `values-dev.yaml` lists no wiki.
 
-The portal does not read `wikis.json` yet, so no wiki appears in the sidebar.
+### Portal
+
+The portal Deployment mounts ConfigMap `wikis` read-only at `/etc/naira/wikis`
+and reads `NAIRA_WIKIS_FILE` (`/etc/naira/wikis/wikis.json`) once at start. Each
+wiki becomes a sidebar entry in the Docs group, after the last portal page: the
+primary wiki first, then by `order`, then by `id`. Its route is `/<id>`, and it
+opens in an iframe at the wiki's address. There is no Docs group while no wiki is
+enabled.
+
+- The portal restarts when `wikis.json` changes (annotation `checksum/wikis`)
+  and not when only a wiki's image digest does.
+- An unset `NAIRA_WIKIS_FILE` means no wikis. A file that cannot be read or does
+  not fit logs one error and shows no wiki; every other page stays. A wiki `id`
+  that is also a portal page, such as `plugins`, makes the file invalid.
+- Luigi drops a `#heading` from a deep link, so the iframe opens at the top of
+  the page.
 
 ### Gateway
 
