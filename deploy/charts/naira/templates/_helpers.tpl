@@ -109,9 +109,12 @@ affinity:
 {{- .db.secret.existingSecret | default (printf "%s-db" .name) -}}
 {{- end -}}
 
-{{/* "true" for a wiki entry that is enabled. A listed wiki is enabled unless it says false. */}}
+{{/*
+"true" for a wiki entry that is enabled. A listed wiki is enabled unless it says false.
+wikis.yaml renders before validate.yaml, so this must not fail on a malformed entry.
+*/}}
 {{- define "naira.wikiEnabled" -}}
-{{- if or (not (hasKey . "enabled")) .enabled -}}true{{- end -}}
+{{- if and (kindIs "map" .) (or (not (hasKey . "enabled")) .enabled) -}}true{{- end -}}
 {{- end -}}
 
 {{/* Non-empty when at least one wiki is enabled. */}}
@@ -137,7 +140,7 @@ Usage: include "naira.wikiUrl" (dict "root" $ "id" $id)
 {{- define "naira.wikiUrl" -}}
 {{- $gw := .root.Values.wikiGateway -}}
 {{- $port := int $gw.port -}}
-{{- if eq $port (ternary 443 80 (eq $gw.scheme "https")) -}}
+{{- if eq $port (ternary 443 80 (eq (toString $gw.scheme) "https")) -}}
 {{- printf "%s://%s/" $gw.scheme (include "naira.wikiHost" .) -}}
 {{- else -}}
 {{- printf "%s://%s:%d/" $gw.scheme (include "naira.wikiHost" .) $port -}}

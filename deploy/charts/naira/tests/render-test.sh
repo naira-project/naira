@@ -829,6 +829,106 @@ if [ "$(render | without_wiki_objects | sha256sum)" = \
 else
   echo "FAIL catalog, ui, portal and database objects are untouched by wikis"; fail=1
 fi
+# Wiki guards. A bad entry fails the whole render, and the message names the wiki.
+must_fail_wikis() {
+  local name=$1 want=$2 entries
+  shift 2
+  entries=$(IFS=,; echo "$*")
+  must_fail "$name" "$want" --set-json "wikis=[$entries]"
+}
+for bad in Bad -a a- a_b a.b "$(printf 'a%.0s' {1..43})"; do
+  must_fail_wikis "wiki id ${bad:0:12} is not a DNS label" "wikis[0]: invalid id \"$bad\"" \
+    "$(wiki x "\"id\":\"$bad\"")"
+done
+must_fail_wikis "wiki without id" "wikis[1]: id is required" \
+  "$(wiki ok)" '{"contract":"naira.wiki/v1alpha1"}'
+must_fail_wikis "wiki entry that is not a map" "wikis[0]: must be a map" '"handbook"'
+must_fail_wikis "duplicate wiki id" "wikis[handbook]: duplicate id (entries 0 and 2)" \
+  "$(wiki handbook)" "$(wiki other)" "$(wiki handbook)"
+must_fail_wikis "duplicate wiki id even when one is disabled" "wikis[handbook]: duplicate id" \
+  "$(wiki handbook)" "$(wiki handbook '"enabled":false')"
+must_fail_wikis "wiki id gateway collides with the gateway objects" "wikis[gateway]: id is reserved" \
+  "$(wiki gateway)"
+must_fail_wikis "two primary wikis" "wikis: more than one primary wiki (a, b)" \
+  "$(wiki a '"primary":true')" "$(wiki b '"primary":true')"
+check "a disabled primary does not count" \
+  "ok" \
+  "$(render_wikis "$(wiki a '"primary":true,"enabled":false')" "$(wiki b '"primary":true')" >/dev/null && echo ok)"
+must_fail_wikis "wiki without an image" "wikis[handbook]: image is required" \
+  "$(wiki handbook '"image":""')"
+must_fail_wikis "wiki image by tag only" "wikis[handbook]: image must be pinned by digest" \
+  "$(wiki handbook '"image":"ghcr.io/naira-project/handbook:1.0"')"
+must_fail_wikis "wiki image with a short digest" "wikis[handbook]: image must be pinned by digest" \
+  "$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha256:${DIGEST:1}\"")"
+must_fail_wikis "wiki image with an uppercase digest" "wikis[handbook]: image must be pinned by digest" \
+  "$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha256:${DIGEST//a/A}\"")"
+must_fail_wikis "wiki image with another digest algorithm" "wikis[handbook]: image must be pinned by digest" \
+  "$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha512:${DIGEST}\"")"
+check "a tag next to the digest is accepted" \
+  "ok" \
+  "$(render_wikis "$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook:1.0@sha256:${DIGEST}\"")" >/dev/null && echo ok)"
+must_fail_wikis "wiki image from another registry" \
+  "wikis[handbook]: image \"evil.example/handbook@sha256:${DIGEST}\" is not from an allowed registry" \
+  "$(wiki handbook "\"image\":\"evil.example/handbook@sha256:${DIGEST}\"")"
+must_fail_wikis "registry match stops at the path boundary" "wikis[handbook]: image" \
+  "$(wiki handbook "\"image\":\"ghcr.io/naira-project-evil/handbook@sha256:${DIGEST}\"")"
+must_fail_wikis "registry match is not a substring match" "wikis[handbook]: image" \
+  "$(wiki handbook "\"image\":\"evil.example/ghcr.io/naira-project/handbook@sha256:${DIGEST}\"")"
+check "an allowed registry written with a trailing slash matches" \
+  "ok" \
+  "$(render --set 'wikiGateway.allowedRegistries[0]=ghcr.io/naira-project/' \
+      --set-json "wikis=[$(wiki handbook)]" >/dev/null && echo ok)"
+check "a second allowed registry matches" \
+  "ok" \
+  "$(render --set 'wikiGateway.allowedRegistries[0]=ghcr.io/naira-project' \
+      --set 'wikiGateway.allowedRegistries[1]=reg.example.com/docs' \
+      --set-json "wikis=[$(wiki handbook "\"image\":\"reg.example.com/docs/handbook@sha256:${DIGEST}\"")]" \
+    >/dev/null && echo ok)"
+must_fail "no allowed registry allows no wiki" \
+  "wikis[handbook]: wikiGateway.allowedRegistries is empty" \
+  --set 'wikiGateway.allowedRegistries=null' --set-json "wikis=[$(wiki handbook)]"
+must_fail_wikis "unsupported wiki contract" \
+  'wikis[handbook]: unsupported contract "naira.wiki/v2"; supported: naira.wiki/v1alpha1' \
+  "$(wiki handbook '"contract":"naira.wiki/v2"')"
+must_fail_wikis "wiki contract missing" 'wikis[handbook]: unsupported contract ""' \
+  "$(wiki handbook '"contract":""')"
+must_fail_wikis "wiki order is not a number" "wikis[handbook]: order must be a whole number" \
+  "$(wiki handbook '"order":"two"')"
+must_fail_wikis "wiki order is not whole" "wikis[handbook]: order must be a whole number" \
+  "$(wiki handbook '"order":1.5')"
+must_fail_wikis "wiki order is out of range" "wikis[handbook]: order must be a whole number" \
+  "$(wiki handbook '"order":100001')"
+check "wiki order at the limits is accepted" \
+  "ok" \
+  "$(render_wikis "$(wiki a '"order":-100000')" "$(wiki b '"order":100000')" >/dev/null && echo ok)"
+check "a disabled wiki is only checked for its id" \
+  "ok" \
+  "$(render_wikis "$(wiki handbook '"enabled":false,"image":"nope","contract":"x","order":"y","primary":true')" \
+      "$(wiki other '"primary":true')" >/dev/null && echo ok)"
+must_fail "wiki address domain with a scheme" "wikiGateway.domain: \"https://wiki.example.com\"" \
+  --set wikiGateway.domain=https://wiki.example.com --set-json "wikis=[$(wiki handbook)]"
+must_fail "wiki address domain with a port" "wikiGateway.domain" \
+  --set wikiGateway.domain=wiki.example.com:3002 --set-json "wikis=[$(wiki handbook)]"
+must_fail "wiki address domain in uppercase" "wikiGateway.domain" \
+  --set wikiGateway.domain=Wiki.Example.com --set-json "wikis=[$(wiki handbook)]"
+must_fail "wiki address domain empty" "wikiGateway.domain" \
+  --set wikiGateway.domain= --set-json "wikis=[$(wiki handbook)]"
+must_fail "wiki address scheme" "wikiGateway.scheme: must be http or https, got \"ftp\"" \
+  --set wikiGateway.scheme=ftp --set-json "wikis=[$(wiki handbook)]"
+must_fail "wiki address scheme missing" "wikiGateway.scheme: must be http or https, got \"\"" \
+  --set wikiGateway.scheme=null --set-json "wikis=[$(wiki handbook)]"
+for port in 0 65536 abc 1.5; do
+  must_fail "wiki address port $port" "wikiGateway.port: must be a whole number from 1 to 65535" \
+    --set-string wikiGateway.port="$port" --set-json "wikis=[$(wiki handbook)]"
+done
+check "wiki address port as a number is accepted" \
+  "ok" \
+  "$(render --set wikiGateway.port=8443 --set-json "wikis=[$(wiki handbook)]" >/dev/null && echo ok)"
+check "gateway address is not checked while no wiki is enabled" \
+  "ok" \
+  "$(render --set wikiGateway.domain=https://x --set wikiGateway.scheme=ftp --set wikiGateway.port=0 \
+      --set 'wikiGateway.allowedRegistries=null' >/dev/null && echo ok)"
+
 check "all-fields values render" \
   "ok" \
   "$(render_raw -f "$CHART/ci/all-fields-values.yaml" >/dev/null && echo ok)"
