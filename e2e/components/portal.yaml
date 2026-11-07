@@ -35,6 +35,14 @@ spec:
               value: naira-portal
             - name: OIDC_CLIENT_SECRET_KEYCLOAK
               value: naira-e2e-test-secret
+            # The wikis ConfigMap comes from the wiki-sites component, which a
+            # scenario lists before the portal: the file is read once, at start.
+            - name: NAIRA_WIKIS_FILE
+              value: /etc/naira/wikis/wikis.json
+          volumeMounts:
+            - name: wikis
+              mountPath: /etc/naira/wikis
+              readOnly: true
           ports:
             - containerPort: 3000
               name: http
@@ -57,6 +65,11 @@ spec:
             limits:
               cpu: 500m
               memory: 256Mi
+      volumes:
+        - name: wikis
+          configMap:
+            name: wikis
+            optional: true
 ---
 apiVersion: v1
 kind: Service
