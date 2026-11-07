@@ -178,4 +178,25 @@ render, so the previous release keeps running.
 {{- if not (and (or (kindIs "float64" $p) (kindIs "int64" $p)) (eq (float64 $p) (floor (float64 $p))) (ge (float64 $p) 1.0) (le (float64 $p) 65535.0)) }}
 {{- fail (printf "wikiGateway.port: must be a whole number from 1 to 65535, got %v" $p) }}
 {{- end }}
+{{- /* The gateway's Envoy config is built from these. */}}
+{{- $img := $gw.image | default dict }}
+{{- if not $img.repository }}
+{{- fail "wikiGateway.image.repository is required" }}
+{{- end }}
+{{- if not (regexMatch "^sha256:[a-f0-9]{64}$" (toString (default "" $img.digest))) }}
+{{- fail (printf "wikiGateway.image.digest: must be sha256:<64 lowercase hex digits>, got %q" (toString (default "" $img.digest))) }}
+{{- end }}
+{{- /* The origin is written into a Content-Security-Policy header, so nothing else may ride along. */}}
+{{- if not (regexMatch "^https?://[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]{1,5})?$" (toString (default "" $gw.portalOrigin))) }}
+{{- fail (printf "wikiGateway.portalOrigin: must be an origin, scheme://host[:port], got %q" (toString (default "" $gw.portalOrigin))) }}
+{{- end }}
+{{- if not (include "naira.keycloakEndpoint" .) }}
+{{- fail (printf "keycloak.baseUrl: must be an http or https URL with a host, got %q" (toString (default "" .Values.keycloak.baseUrl))) }}
+{{- end }}
+{{- if not .Values.keycloak.issuer }}
+{{- fail "keycloak.issuer is required" }}
+{{- end }}
+{{- if not .Values.keycloak.realm }}
+{{- fail "keycloak.realm is required" }}
+{{- end }}
 {{- end }}

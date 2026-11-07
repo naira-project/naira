@@ -10,6 +10,7 @@
 #   - values-dev.yaml and the kind/CI setup
 #   - pod hardening, scheduling fields and the catalog NetworkPolicy
 #   - wiki workloads, the wikis ConfigMap, wiki guards and wiki NetworkPolicies
+#   - the wiki gateway: Envoy config, Deployment, rollout checksum and guards
 # Requires helm and mikefarah yq v4 (both pinned in mise.toml).
 set -euo pipefail
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
@@ -653,8 +654,9 @@ render_wikis() {
   entries=$(IFS=,; echo "$*")
   render --set-json "wikis=[$entries]"
 }
-WIKI_DEPLOYMENTS='select(.kind == "Deployment" and (.metadata.name | test("^wiki-"))) | .metadata.name'
-WIKI_SERVICES='select(.kind == "Service" and (.metadata.name | test("^wiki-"))) | .metadata.name'
+# The gateway is also named wiki-*, so wiki workloads are told apart by their component label.
+WIKI_DEPLOYMENTS='select(.kind == "Deployment" and .metadata.labels["app.kubernetes.io/component"] == "wiki") | .metadata.name'
+WIKI_SERVICES='select(.kind == "Service" and .metadata.labels["app.kubernetes.io/component"] == "wiki") | .metadata.name'
 WIKIS_JSON='select(.kind == "ConfigMap" and .metadata.name == "wikis") | .data["wikis.json"] | from_json'
 WIKI_POD() { printf 'select(.kind == "Deployment" and .metadata.name == "wiki-%s") | .spec.template.spec' "$1"; }
 
@@ -930,8 +932,7 @@ check "gateway address is not checked while no wiki is enabled" \
       --set 'wikiGateway.allowedRegistries=null' >/dev/null && echo ok)"
 
 # Wiki NetworkPolicies: ingress to the wiki pods from the gateway pods only, and an egress
-# allow-list for the gateway pods. The gateway Deployment itself is not rendered by this chart yet,
-# so wiki-gateway is the pod name its policies and the rest of the chart agree on.
+# allow-list for the gateway pods. The gateway Deployment is tested in its own section below.
 render_wiki_np() {
   render --set wikiGateway.networkPolicy.enabled=true --set-json "wikis=[$(wiki handbook)]" "$@"
 }
@@ -1008,6 +1009,383 @@ check "gateway egress: a malformed wiki entry fails on its own guard, not on the
   "$(out=$(render --set wikiGateway.networkPolicy.enabled=true --set-json 'wikis=["handbook"]' 2>&1) \
      || { [[ $out == *"wikis[0]: must be a map"* ]] && echo ok; })"
 
+# ── Wiki gateway ─────────────────────────────────────────────────────────────
+# envoy.yaml is a string in a ConfigMap; yq reads it back as YAML. That Envoy accepts it is
+# checked by running Envoy (`envoy --mode validate`), not here.
+GW_ENVOY='select(.kind == "ConfigMap" and .metadata.name == "wiki-gateway") | .data["envoy.yaml"] | from_yaml'
+# gwq EXPR: query the Envoy config of the rendered chart on stdin. Two passes, because yq
+# builds an empty array for every other document of the stream when EXPR collects.
+gwq() { yq "$GW_ENVOY" | yq "$1"; }
+GW_OBJECTS='[select(.metadata.name == "wiki-gateway") | .kind] | sort | join(",")'
+GW_DEPLOYMENT='select(.kind == "Deployment" and .metadata.name == "wiki-gateway")'
+GW_POD="$GW_DEPLOYMENT | .spec.template.spec"
+HCM='.static_resources.listeners[0].filter_chains[0].filters[0].typed_config'
+VHOSTS="${HCM}.route_config.virtual_hosts"
+JWT_PER_ROUTE='.typed_per_filter_config["envoy.filters.http.jwt_authn"]'
+gw_render() { render --set-json "wikis=[$(wiki handbook),$(wiki other)]" "$@"; }
+CFG=$(gw_render | yq "$GW_ENVOY")
+# cfg EXPR: query the Envoy config rendered for the wikis handbook and other.
+cfg() { echo "$CFG" | yq "$1"; }
+# vhost NAME: yq path to one virtual host.
+vhost() { printf '%s[] | select(.name == "%s")' "$VHOSTS" "$1"; }
+# jwt_summary VHOST: each route as path:requirement, "disabled" where no JWT is checked.
+jwt_summary() {
+  cfg "$(vhost "$1") | [.routes[] | (.match.path // .match.prefix) + \":\"
+    + (${JWT_PER_ROUTE} | (.requirement_name // (select(.disabled) | \"disabled\") // \"none\"))] | join(\" \")"
+}
+
+check "gateway: nothing is rendered without wikis" "" "$(render | yq ea "$GW_OBJECTS")"
+check "gateway: nothing is rendered while every wiki is disabled" "" \
+  "$(render_wikis "$(wiki handbook '"enabled":false')" | yq ea "$GW_OBJECTS")"
+check "gateway: Deployment, Service and ConfigMap wiki-gateway" "ConfigMap,Deployment,Service" \
+  "$(gw_render | yq ea "$GW_OBJECTS")"
+check "gateway: objects are in the release namespace" "naira naira naira" \
+  "$(gw_render | yq ea '[select(.metadata.name == "wiki-gateway") | .metadata.namespace] | join(" ")')"
+
+# Virtual hosts and clusters: one per enabled wiki, plus the default host and the JWKS cluster.
+check "gateway: one virtual host per enabled wiki, sorted by id, then the default" \
+  "wiki-alpha,wiki-zeta,default" \
+  "$(render_wikis "$(wiki zeta)" "$(wiki alpha)" "$(wiki off '"enabled":false')" \
+    | gwq "[${VHOSTS}[].name] | join(\",\")")"
+for n in 1 2 3; do
+  entries=()
+  for i in $(seq 1 "$n"); do entries+=("$(wiki "w$i")"); done
+  check "gateway: $n enabled wikis give $((n + 1)) virtual hosts and $((n + 1)) clusters" \
+    "$((n + 1)) $((n + 1))" \
+    "$(render_wikis "${entries[@]}" \
+      | gwq "([${VHOSTS}[]] | length | tostring) + \" \" + ([.static_resources.clusters[]] | length | tostring)")"
+done
+check "gateway: clusters are the JWKS cluster and one per wiki" \
+  "keycloak-jwks,wiki-handbook,wiki-other" \
+  "$(cfg '[.static_resources.clusters[].name] | sort | join(",")')"
+check "gateway: a disabled wiki has no virtual host and no cluster" \
+  "wiki-other|keycloak-jwks,wiki-other" \
+  "$(c=$(render_wikis "$(wiki handbook '"enabled":false')" "$(wiki other)" | yq "$GW_ENVOY")
+     echo "$(echo "$c" | yq "[${VHOSTS}[].name | select(. != \"default\")] | join(\",\")")|$(echo "$c" | yq '[.static_resources.clusters[].name] | sort | join(",")')")"
+check "gateway: a virtual host answers to <id>.<domain> with and without the port" \
+  "handbook.wiki.localhost,handbook.wiki.localhost:3002" \
+  "$(cfg "$(vhost wiki-handbook) | .domains | join(\",\")")"
+check "gateway: the domains follow wikiGateway.domain and port" \
+  "handbook.wiki.example.com,handbook.wiki.example.com:8443" \
+  "$(gw_render --set wikiGateway.domain=wiki.example.com --set wikiGateway.port=8443 --set wikiGateway.scheme=https \
+    | gwq "$(vhost wiki-handbook) | .domains | join(\",\")")"
+check "gateway: unknown hosts get a 404 without a JWT check" \
+  "* 404 true" \
+  "$(cfg "$(vhost default) | (.domains | join(\",\")) + \" \" + (.routes[0].direct_response.status | tostring)
+    + \" \" + (.routes[0]${JWT_PER_ROUTE}.disabled | tostring)")"
+check "gateway: the default host is the last one, so no wiki host is shadowed" \
+  "default" \
+  "$(cfg "[${VHOSTS}[].name] | .[-1]")"
+for id in handbook other; do
+  check "gateway: wiki $id routes only to its own cluster" \
+    "wiki-$id" \
+    "$(cfg "$(vhost "wiki-$id") | [.routes[].route.cluster | select(. != null)] | unique | join(\",\")")"
+  check "gateway: wiki $id cluster is its Service on 8080, health-checked on naira-wiki.json" \
+    "STRICT_DNS wiki-$id.naira.svc.cluster.local 8080 /naira-wiki.json" \
+    "$(cfg ".static_resources.clusters[] | select(.name == \"wiki-$id\")
+      | .type + \" \" + .load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address.address
+        + \" \" + (.load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address.port_value | tostring)
+        + \" \" + .health_checks[0].http_health_check.path")"
+  # A cluster that has carried no traffic is checked every no_traffic_interval, 60 s by default.
+  check "gateway: wiki $id cluster is checked every 5 s, also before its first request" \
+    "5s 5s 2s 2 1" \
+    "$(cfg ".static_resources.clusters[] | select(.name == \"wiki-$id\") | .health_checks[0]
+      | .interval + \" \" + .no_traffic_interval + \" \" + .timeout + \" \" + (.unhealthy_threshold | tostring)
+        + \" \" + (.healthy_threshold | tostring)")"
+  # With every host unhealthy Envoy otherwise routes to them anyway ("panic mode").
+  check "gateway: wiki $id cluster never panics into unhealthy hosts" \
+    "0" \
+    "$(cfg ".static_resources.clusters[] | select(.name == \"wiki-$id\") | .common_lb_config.healthy_panic_threshold.value | tostring")"
+done
+
+# Authentication: a JWT from Keycloak, read from a header on /_naira/session and from a cookie elsewhere.
+check "gateway: JWT issuer is keycloak.issuer" \
+  "http://localhost:8080/realms/naira http://localhost:8080/realms/naira" \
+  "$(cfg "${HCM}.http_filters[0].typed_config.providers | .keycloak_header.issuer + \" \" + .keycloak_cookie.issuer")"
+check "gateway: the keys come from keycloak.baseUrl, cached" \
+  "http://keycloak.naira-deps.svc.cluster.local:8080/realms/naira/protocol/openid-connect/certs keycloak-jwks 600s" \
+  "$(cfg "${HCM}.http_filters[0].typed_config.providers.keycloak_cookie.remote_jwks
+    | .http_uri.uri + \" \" + .http_uri.cluster + \" \" + .cache_duration")"
+check "gateway: both providers read the same keys" "true" \
+  "$(cfg "${HCM}.http_filters[0].typed_config.providers
+    | (.keycloak_header.remote_jwks.http_uri.uri == .keycloak_cookie.remote_jwks.http_uri.uri) | tostring")"
+check "gateway: the session provider reads only x-naira-token" "x-naira-token false false" \
+  "$(cfg "${HCM}.http_filters[0].typed_config.providers.keycloak_header
+    | (.from_headers | map(.name) | join(\",\")) + \" \" + (has(\"from_cookies\") | tostring) + \" \" + (has(\"from_params\") | tostring)")"
+check "gateway: the cookie provider reads only the naira_wiki cookie, not Authorization or a query parameter" \
+  "naira_wiki false false" \
+  "$(cfg "${HCM}.http_filters[0].typed_config.providers.keycloak_cookie
+    | (.from_cookies | join(\",\")) + \" \" + (has(\"from_headers\") | tostring) + \" \" + (has(\"from_params\") | tostring)")"
+# Without forward the header is gone before the Set-Cookie value is built from it.
+check "gateway: the session token header is kept for the Set-Cookie value" "true" \
+  "$(cfg "${HCM}.http_filters[0].typed_config.providers.keycloak_header.forward | tostring")"
+check "gateway: requirements map to the two providers" "keycloak_header keycloak_cookie" \
+  "$(cfg "${HCM}.http_filters[0].typed_config.requirement_map | .header.provider_name + \" \" + .cookie.provider_name")"
+check "gateway: JWT filter runs before the router" "envoy.filters.http.jwt_authn envoy.filters.http.router" \
+  "$(cfg "${HCM}.http_filters | map(.name) | join(\" \")")"
+check "gateway: JWT issuer and keys follow keycloak values" \
+  "https://auth.example.com/realms/prod https://kc.example.com/auth/realms/prod/protocol/openid-connect/certs" \
+  "$(gw_render --set keycloak.issuer=https://auth.example.com/realms/prod --set keycloak.realm=prod \
+      --set keycloak.baseUrl=https://kc.example.com/auth/ \
+    | gwq "${HCM}.http_filters[0].typed_config.providers.keycloak_cookie | .issuer + \" \" + .remote_jwks.http_uri.uri")"
+
+# Routes: exactly three paths skip the JWT check, and everything else needs the cookie.
+for id in handbook other; do
+  check "gateway: wiki $id routes and their JWT requirement" \
+    "/_naira/session:header /_naira/session:disabled /_naira/bootstrap.html:disabled /_naira/assets/:disabled /:cookie" \
+    "$(jwt_summary "wiki-$id")"
+done
+check "gateway: /_naira/session sets the cookie only on POST" ":method POST 204" \
+  "$(cfg "$(vhost wiki-handbook) | .routes[0] | .match.headers[0].name + \" \" + .match.headers[0].string_match.exact
+    + \" \" + (.direct_response.status | tostring)")"
+check "gateway: other methods on /_naira/session get 405 and an Allow header" "405 allow:POST" \
+  "$(cfg "$(vhost wiki-handbook) | .routes[1] | (.direct_response.status | tostring) + \" \" + .response_headers_to_add[0].header.key
+    + \":\" + .response_headers_to_add[0].header.value")"
+check "gateway: the cookie is HttpOnly, SameSite=Lax, host-only, and not Secure over http" \
+  "naira_wiki=%REQ(x-naira-token)%; HttpOnly; SameSite=Lax; Path=/" \
+  "$(cfg "$(vhost wiki-handbook) | .routes[0].response_headers_to_add[0].header | select(.key == \"set-cookie\") | .value")"
+check "gateway: the cookie is Secure over https" \
+  "naira_wiki=%REQ(x-naira-token)%; HttpOnly; Secure; SameSite=Lax; Path=/" \
+  "$(gw_render --set wikiGateway.scheme=https --set wikiGateway.port=443 \
+    | gwq "$(vhost wiki-handbook) | .routes[0].response_headers_to_add[0].header.value")"
+# A Domain attribute would send wiki A's cookie to wiki B.
+check "gateway: the cookie has no Domain and no expiry (a session cookie)" "false" \
+  "$(cfg "$(vhost wiki-handbook) | .routes[0].response_headers_to_add[0].header.value | test(\"Domain|Max-Age|Expires\") | tostring")"
+check "gateway: three routes per wiki reach the wiki and each drops the cookie header" "3 1" \
+  "$(cfg "$(vhost wiki-handbook) | ([.routes[] | select(.route)] | length | tostring) + \" \"
+    + ([.routes[] | select(.route) | ((.request_headers_to_remove // []) | map(select(. == \"cookie\")) | length)] | unique | join(\",\"))")"
+check "gateway: the session route reaches no upstream" "0" \
+  "$(cfg "$(vhost wiki-handbook) | [.routes[0:2][] | select(.route)] | length | tostring")"
+
+# Response headers.
+check "gateway: wikis can only be framed by the portal" \
+  "content-security-policy frame-ancestors http://localhost:3000" \
+  "$(cfg "$(vhost wiki-handbook) | .response_headers_to_add[0].header | .key + \" \" + .value")"
+check "gateway: the frame ancestor follows wikiGateway.portalOrigin" \
+  "frame-ancestors https://naira.example.com" \
+  "$(gw_render --set wikiGateway.portalOrigin=https://naira.example.com \
+    | gwq "$(vhost wiki-other) | .response_headers_to_add[0].header.value")"
+check "gateway: the CSP overwrites any header from the wiki" "OVERWRITE_IF_EXISTS_OR_ADD" \
+  "$(cfg "$(vhost wiki-handbook) | .response_headers_to_add[0].append_action")"
+check "gateway: the Server header is dropped, not replaced" "PASS_THROUGH server true" \
+  "$(cfg "${HCM}.server_header_transformation + \" \" + (${HCM}.route_config.response_headers_to_remove | join(\",\"))
+    + \" \" + (${HCM}.http_filters[1].typed_config.suppress_envoy_headers | tostring)")"
+# Authorization rules run on the normalized path, so /_naira/assets/../x cannot ride on the open prefix.
+check "gateway: paths are normalized before routing" "true true UNESCAPE_AND_REDIRECT" \
+  "$(cfg "(${HCM}.normalize_path | tostring) + \" \" + (${HCM}.merge_slashes | tostring) + \" \" + ${HCM}.path_with_escaped_slashes_action")"
+
+# Local replies: the files are used as they are, and Envoy reads every % as the start of an operator.
+UNAUTHORIZED="$CHART/files/wiki-gateway/unauthorized.html"
+UNAVAILABLE="$CHART/files/wiki-gateway/unavailable.html"
+LOCAL_REPLY="${HCM}.local_reply_config.mappers"
+check "gateway: a missing or invalid token gets the sign-in redirect page" \
+  "401 $(cat "$UNAUTHORIZED")" \
+  "$(cfg "(${LOCAL_REPLY}[0].filter.status_code_filter.comparison.value.default_value | tostring) + \" \"
+    + ${LOCAL_REPLY}[0].body_format_override.text_format_source.inline_string")"
+check "gateway: a wiki that cannot be reached gets the degraded page with status 503" \
+  "UH,UF,UC 503 $(cat "$UNAVAILABLE")" \
+  "$(cfg "(${LOCAL_REPLY}[1].filter.response_flag_filter.flags | join(\",\")) + \" \" + (${LOCAL_REPLY}[1].status_code | tostring) + \" \"
+    + ${LOCAL_REPLY}[1].body_format_override.text_format_source.inline_string")"
+check "gateway: local reply pages are HTML" "text/html; charset=utf-8,text/html; charset=utf-8" \
+  "$(cfg "[${LOCAL_REPLY}[].body_format_override.content_type] | join(\",\")")"
+for f in unauthorized unavailable; do
+  check "gateway: $f.html is under 4 KB" "ok" \
+    "$([ "$(wc -c <"$CHART/files/wiki-gateway/$f.html")" -lt 4096 ] && echo ok)"
+done
+check "gateway: unauthorized.html has no % for Envoy to read" "0" \
+  "$(grep -c '%' "$UNAUTHORIZED" || true)"
+check "gateway: unavailable.html uses only the two route metadata operators" "0" \
+  "$(sed -E 's/%METADATA\(ROUTE:naira\.wiki:(label|contact)\)%//g' "$UNAVAILABLE" | grep -c '%' || true)"
+check "gateway: unavailable.html shows the wiki name and its contact" "2" \
+  "$(grep -c -E '%METADATA\(ROUTE:naira\.wiki:(label|contact)\)%' "$UNAVAILABLE" || true)"
+
+# The degraded page reads the wiki's name and contact from route metadata, escaped for HTML.
+ROUTE_META='filter_metadata["naira.wiki"]'
+check "gateway: the three wiki routes carry the same label and contact" "1" \
+  "$(cfg "$(vhost wiki-handbook) | [.routes[] | select(.route) | .metadata.${ROUTE_META} | .label + \"|\" + .contact] | unique | length | tostring")"
+check "gateway: the label defaults to the id" "handbook" \
+  "$(cfg "$(vhost wiki-handbook) | .routes[-1].metadata.${ROUTE_META}.label")"
+check "gateway: the label is the wiki's label, escaped for HTML" \
+  '&lt;b&gt;Hand &amp; book&lt;/b&gt; &#34;one&#34;' \
+  "$(render_wikis "$(wiki handbook '"label":"<b>Hand & book</b> \"one\""')" \
+    | gwq "$(vhost wiki-handbook) | .routes[-1].metadata.${ROUTE_META}.label")"
+contact() {
+  render_wikis "$(wiki handbook "$1")" | gwq "$(vhost wiki-handbook) | .routes[-1].metadata.${ROUTE_META}.contact"
+}
+check "gateway: contact names the owner and links the source" \
+  'Owner: team-platform. <a href="https://github.com/acme/hb?a=1&amp;b=2">Source repository</a>.' \
+  "$(contact '"owner":"team-platform","source":"https://github.com/acme/hb?a=1&b=2"')"
+check "gateway: contact with an owner only" "Owner: team-platform." \
+  "$(contact '"owner":"team-platform"')"
+check "gateway: contact with a source only" '<a href="https://example.com/hb">Source repository</a>.' \
+  "$(contact '"source":"https://example.com/hb"')"
+check "gateway: contact falls back to a sentence when nothing is set" "Contact the owner of this wiki." \
+  "$(contact '"x":1')"
+check "gateway: the owner is escaped" "Owner: &lt;i&gt;x&lt;/i&gt;." \
+  "$(contact '"owner":"<i>x</i>"')"
+check "gateway: a source that is not http(s) is not linked" "Contact the owner of this wiki." \
+  "$(contact '"source":"javascript:alert(1)"')"
+check "gateway: a quote in the source cannot close the href attribute" \
+  '<a href="https://x.example/&#34;onmouseover=&#34;alert(1)">Source repository</a>.' \
+  "$(contact '"source":"https://x.example/\"onmouseover=\"alert(1)"')"
+check "gateway: a source with a space is not a URL and is not linked" "Contact the owner of this wiki." \
+  "$(contact '"source":"https://x.example/ onmouseover=alert(1)"')"
+check "gateway: a label with % renders into valid config" "100% sure" \
+  "$(render_wikis "$(wiki handbook '"label":"100% sure"')" \
+    | gwq "$(vhost wiki-handbook) | .routes[-1].metadata.${ROUTE_META}.label")"
+
+# Admin and listener.
+check "gateway: the admin interface listens on loopback only" "127.0.0.1" \
+  "$(cfg '.admin.address.socket_address.address')"
+check "gateway: one listener, on 8080" "1 8080" \
+  "$(cfg '([.static_resources.listeners[]] | length | tostring) + " " + (.static_resources.listeners[0].address.socket_address.port_value | tostring)')"
+
+# Keycloak endpoint: the JWKS cluster follows keycloak.baseUrl, with TLS for https.
+JWKS_CLUSTER='.static_resources.clusters[] | select(.name == "keycloak-jwks")'
+jwks_cluster() { gw_render --set keycloak.baseUrl="$1" | gwq "$JWKS_CLUSTER | $2"; }
+SOCKET='.load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address'
+check "gateway: JWKS cluster, http: address and port from keycloak.baseUrl, no TLS" \
+  "keycloak.naira-deps.svc.cluster.local 8080 false" \
+  "$(cfg "$JWKS_CLUSTER | ${SOCKET}.address + \" \" + (${SOCKET}.port_value | tostring) + \" \" + (has(\"transport_socket\") | tostring)")"
+check "gateway: JWKS cluster, https: port 443 by default, TLS with the host as SNI and the system CAs" \
+  "keycloak.example.com 443 keycloak.example.com /etc/ssl/certs/ca-certificates.crt" \
+  "$(jwks_cluster https://keycloak.example.com "${SOCKET}.address + \" \" + (${SOCKET}.port_value | tostring)
+    + \" \" + .transport_socket.typed_config.sni
+    + \" \" + .transport_socket.typed_config.common_tls_context.validation_context.trusted_ca.filename")"
+check "gateway: JWKS cluster checks the certificate against the host name" "DNS keycloak.example.com" \
+  "$(jwks_cluster https://keycloak.example.com \
+    ".transport_socket.typed_config.common_tls_context.validation_context.match_typed_subject_alt_names[0]
+      | .san_type + \" \" + .matcher.exact")"
+check "gateway: JWKS cluster, an explicit port wins and a path is ignored" "8443" \
+  "$(jwks_cluster https://keycloak.example.com:8443/auth "${SOCKET}.port_value")"
+check "gateway: JWKS cluster, http without a port means 80" "80" \
+  "$(jwks_cluster http://keycloak.example.com "${SOCKET}.port_value")"
+check "gateway: JWKS cluster, an IPv6 host loses its brackets" "fd00::1 8080" \
+  "$(jwks_cluster 'http://[fd00::1]:8080' "${SOCKET}.address + \" \" + (${SOCKET}.port_value | tostring)")"
+
+# Deployment and Service.
+check "gateway: image is pinned by digest and ignores image.registry and image.tag" \
+  "envoyproxy/envoy@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded" \
+  "$(gw_render --set image.registry=other.example --set image.tag=zz | yq "$GW_POD | .containers[0].image")"
+check "gateway: image repository and digest come from wikiGateway.image" \
+  "reg.example.com/envoy@sha256:$DIGEST" \
+  "$(gw_render --set wikiGateway.image.repository=reg.example.com/envoy --set wikiGateway.image.digest="sha256:$DIGEST" \
+    | yq "$GW_POD | .containers[0].image")"
+check "gateway: restricted security context" "false true true ALL RuntimeDefault 65532" \
+  "$(gw_render | yq "$GW_POD | .containers[0].securityContext
+    | (.allowPrivilegeEscalation | tostring) + \" \" + (.readOnlyRootFilesystem | tostring) + \" \" + (.runAsNonRoot | tostring)
+      + \" \" + .capabilities.drop[0] + \" \" + .seccompProfile.type + \" \" + (.runAsUser | tostring)")"
+check "gateway: no API token and not the catalog ServiceAccount" "false null" \
+  "$(gw_render | yq "$GW_POD | (.automountServiceAccountToken | tostring) + \" \" + (.serviceAccountName // \"null\")")"
+check "gateway: runs envoy.yaml from the wiki-gateway ConfigMap, mounted read-only" \
+  "/etc/envoy true wiki-gateway -c /etc/envoy/envoy.yaml --concurrency 2" \
+  "$(gw_render | yq "$GW_POD | .containers[0].volumeMounts[0].mountPath + \" \" + (.containers[0].volumeMounts[0].readOnly | tostring)
+    + \" \" + .volumes[0].configMap.name + \" \" + (.containers[0].args | join(\" \"))")"
+check "gateway: the listener is the only port, the admin port is not exposed" "http 8080 1" \
+  "$(gw_render | yq "$GW_POD | .containers[0].ports[0].name + \" \" + (.containers[0].ports[0].containerPort | tostring)
+    + \" \" + (.containers[0].ports | length | tostring)")"
+# The admin interface is on loopback, which kubelet probes (pod IP) cannot reach.
+check "gateway: probes check the listener" "http http" \
+  "$(gw_render | yq "$GW_POD | .containers[0] | .readinessProbe.tcpSocket.port + \" \" + .livenessProbe.tcpSocket.port")"
+check "gateway: Service on 8080 selects the gateway pods" "8080 wiki-gateway t" \
+  "$(gw_render | yq 'select(.kind == "Service" and .metadata.name == "wiki-gateway")
+    | (.spec.ports[0].port | tostring) + " " + .spec.selector["app.kubernetes.io/name"] + " " + .spec.selector["app.kubernetes.io/instance"]')"
+check "gateway: the Deployment's pods carry the labels the Service and the Deployment select" \
+  "wiki-gateway t wiki-gateway t" \
+  "$(gw_render | yq "$GW_DEPLOYMENT | .spec.template.metadata.labels[\"app.kubernetes.io/name\"] + \" \"
+    + .spec.template.metadata.labels[\"app.kubernetes.io/instance\"] + \" \" + .spec.selector.matchLabels[\"app.kubernetes.io/name\"]
+    + \" \" + .spec.selector.matchLabels[\"app.kubernetes.io/instance\"]")"
+# wiki-ingress selects component=wiki pods; the gateway has to stay out of it.
+check "gateway: pods do not carry the wiki component label" "false" \
+  "$(gw_render | yq "$GW_DEPLOYMENT | .spec.template.metadata.labels | has(\"app.kubernetes.io/component\") | tostring")"
+check "gateway: the NetworkPolicies select the pods the Deployment creates" "wiki-gateway wiki-gateway" \
+  "$(o=$(gw_render --set wikiGateway.networkPolicy.enabled=true)
+     echo "$(echo "$o" | yq 'select(.metadata.name == "wiki-gateway-egress") | .spec.podSelector.matchLabels["app.kubernetes.io/name"]') $(echo "$o" | yq "$GW_DEPLOYMENT | .spec.template.metadata.labels[\"app.kubernetes.io/name\"]")")"
+check "gateway: one replica by default" "1" "$(gw_render | yq "$GW_DEPLOYMENT | .spec.replicas")"
+check "gateway: replicas from wikiGateway.replicas" "2" \
+  "$(gw_render --set wikiGateway.replicas=2 | yq "$GW_DEPLOYMENT | .spec.replicas")"
+check "gateway: small resources" "500m 128Mi" \
+  "$(gw_render | yq "$GW_POD | .containers[0].resources.limits | .cpu + \" \" + .memory")"
+check "gateway: imagePullSecrets apply" "regcred" \
+  "$(gw_render --set 'imagePullSecrets[0].name=regcred' | yq "$GW_POD | .imagePullSecrets[0].name")"
+check "gateway: no scheduling fields by default" "false" \
+  "$(gw_render | yq "$GW_POD | (has(\"imagePullSecrets\") or has(\"nodeSelector\") or has(\"tolerations\")
+    or has(\"affinity\") or has(\"priorityClassName\") or has(\"securityContext\")) | tostring")"
+check "gateway: scheduling fields from wikiGateway" "linux dedicated high 1000" \
+  "$(gw_render --set wikiGateway.nodeSelector.os=linux --set 'wikiGateway.tolerations[0].key=dedicated' \
+      --set wikiGateway.priorityClassName=high --set wikiGateway.podSecurityContext.fsGroup=1000 \
+    | yq "$GW_POD | .nodeSelector.os + \" \" + .tolerations[0].key + \" \" + .priorityClassName
+      + \" \" + (.securityContext.fsGroup | tostring)")"
+check "gateway: podAnnotations are kept next to checksum/config" "v1 ok" \
+  "$(gw_render --set-string wikiGateway.podAnnotations.team=v1 \
+    | yq "$GW_DEPLOYMENT | .spec.template.metadata.annotations
+      | .team + \" \" + (select(has(\"checksum/config\")) | \"ok\")")"
+
+# Rollout: the pod restarts when, and only when, the Envoy config changes.
+gw_sum() { yq "$GW_DEPLOYMENT | .spec.template.metadata.annotations[\"checksum/config\"]"; }
+SUM=$(gw_render | gw_sum)
+check "gateway: checksum/config is a sha256" "ok" "$([[ $SUM =~ ^[0-9a-f]{64}$ ]] && echo ok)"
+check "gateway: same values, same checksum" "$SUM" "$(gw_render | gw_sum)"
+check "gateway: wikis listed in another order keep the checksum" "$SUM" \
+  "$(render --set-json "wikis=[$(wiki other),$(wiki handbook)]" | gw_sum)"
+check "gateway: a wiki's order and primary do not restart the gateway" "$SUM" \
+  "$(render --set-json "wikis=[$(wiki handbook '"order":4,"primary":true'),$(wiki other '"order":-1')]" | gw_sum)"
+check "gateway: a new wiki image digest does not restart the gateway" "$SUM" \
+  "$(render --set-json "wikis=[$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha256:${DIGEST//a/b}\""),$(wiki other)]" | gw_sum)"
+check "gateway: unrelated values do not restart the gateway" "$SUM" \
+  "$(gw_render --set catalog.replicas=3 --set wikiDefaults.replicas=2 | gw_sum)"
+for change in 'wikiGateway.domain=wiki.example.com' 'wikiGateway.port=8443' 'wikiGateway.scheme=https' \
+              'wikiGateway.portalOrigin=https://naira.example.com' 'keycloak.issuer=https://x.example/realms/naira' \
+              'keycloak.realm=other' 'keycloak.baseUrl=http://other.example:8080'; do
+  check "gateway: ${change%%=*} restarts the gateway" "changed" \
+    "$([ "$(gw_render --set "$change" | gw_sum)" != "$SUM" ] && echo changed)"
+done
+check "gateway: a new wiki restarts the gateway" "changed" \
+  "$([ "$(render --set-json "wikis=[$(wiki handbook),$(wiki other),$(wiki third)]" | gw_sum)" != "$SUM" ] && echo changed)"
+check "gateway: a new wiki label restarts the gateway" "changed" \
+  "$([ "$(render --set-json "wikis=[$(wiki handbook '"label":"New"'),$(wiki other)]" | gw_sum)" != "$SUM" ] && echo changed)"
+check "gateway: the ConfigMap itself is not annotated" "null" \
+  "$(gw_render | yq 'select(.kind == "ConfigMap" and .metadata.name == "wiki-gateway") | .metadata.annotations // "null"')"
+
+# Guards. They apply once a wiki is enabled, and every message names the value to fix.
+must_fail "gateway image digest missing" "wikiGateway.image.digest: must be sha256:<64 lowercase hex digits>" \
+  --set wikiGateway.image.digest= --set-json "wikis=[$(wiki handbook)]"
+must_fail "gateway image digest is a tag" "wikiGateway.image.digest: must be sha256:" \
+  --set wikiGateway.image.digest=distroless-v1.40.2 --set-json "wikis=[$(wiki handbook)]"
+must_fail "gateway image digest in uppercase" "wikiGateway.image.digest: must be sha256:" \
+  --set wikiGateway.image.digest="sha256:${DIGEST//a/A}" --set-json "wikis=[$(wiki handbook)]"
+must_fail "gateway image repository missing" "wikiGateway.image.repository is required" \
+  --set wikiGateway.image.repository= --set-json "wikis=[$(wiki handbook)]"
+for origin in "" naira.example.com ftp://naira.example.com http://naira.example.com/portal \
+              "http://naira.example.com;script-src *" "http://naira.example.com *" "http://naira .example.com" \
+              "http://naira.example.com?x" "http://user@naira.example.com" "http://naira.example.com:99999x"; do
+  must_fail "gateway portalOrigin \"$origin\"" 'wikiGateway.portalOrigin: must be an origin, scheme://host[:port]' \
+    --set-string wikiGateway.portalOrigin="$origin" --set-json "wikis=[$(wiki handbook)]"
+done
+check "gateway: portalOrigin with an https host and port is accepted" "ok" \
+  "$(gw_render --set wikiGateway.portalOrigin=https://naira.example.com:8443 >/dev/null && echo ok)"
+for base in "" keycloak:8080 ftp://keycloak.example.com http:// "http://keycloak example.com"; do
+  must_fail "gateway keycloak.baseUrl \"$base\"" "keycloak.baseUrl: must be an http or https URL with a host" \
+    --set-string keycloak.baseUrl="$base" --set-json "wikis=[$(wiki handbook)]"
+done
+must_fail "gateway keycloak.issuer missing" "keycloak.issuer is required" \
+  --set keycloak.issuer= --set-json "wikis=[$(wiki handbook)]"
+must_fail "gateway keycloak.realm missing" "keycloak.realm is required" \
+  --set keycloak.realm= --set-json "wikis=[$(wiki handbook)]"
+check "gateway: its values are not checked while no wiki is enabled" "ok" \
+  "$(render --set wikiGateway.image.digest= --set wikiGateway.portalOrigin=nope --set keycloak.baseUrl= \
+      --set keycloak.issuer= >/dev/null && echo ok)"
+
+ALL_FIELDS_GW=$(render_raw -f "$CHART/ci/all-fields-values.yaml")
+check "gateway: all-fields values set the image and replicas" \
+  "reg.example.com/mirror/envoy@sha256:$(printf 'd%.0s' {1..64}) 2" \
+  "$(echo "$ALL_FIELDS_GW" | yq "$GW_DEPLOYMENT | .spec.template.spec.containers[0].image + \" \" + (.spec.replicas | tostring)")"
+check "gateway: all-fields values set the scheduling fields" "system-cluster-critical linux dedicated" \
+  "$(echo "$ALL_FIELDS_GW" | yq "$GW_POD | .priorityClassName + \" \" + .nodeSelector[\"kubernetes.io/os\"] + \" \" + .tolerations[0].key")"
+check "gateway: all-fields values set the frame ancestor and make the cookie Secure" \
+  "frame-ancestors https://naira.example.com true" \
+  "$(echo "$ALL_FIELDS_GW" | gwq "$(vhost wiki-platform-handbook) | .response_headers_to_add[0].header.value + \" \"
+    + (.routes[0].response_headers_to_add[0].header.value | test(\"; Secure;\") | tostring)")"
 check "all-fields values render" \
   "ok" \
   "$(render_raw -f "$CHART/ci/all-fields-values.yaml" >/dev/null && echo ok)"

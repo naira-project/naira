@@ -146,3 +146,18 @@ Usage: include "naira.wikiUrl" (dict "root" $ "id" $id)
 {{- printf "%s://%s:%d/" $gw.scheme (include "naira.wikiHost" .) $port -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+keycloak.baseUrl as JSON {tls, host, port}; empty unless it is an http(s) URL with a host. The
+match comes first because urlParse panics on a malformed URL, and wiki-gateway.yaml renders
+before validate.yaml can reject it.
+*/}}
+{{- define "naira.keycloakEndpoint" -}}
+{{- $base := toString (default "" .Values.keycloak.baseUrl) -}}
+{{- if regexMatch "^https?://([a-zA-Z0-9]([-a-zA-Z0-9.]*[a-zA-Z0-9])?|\\[[0-9a-fA-F:.]+\\])(:[0-9]{1,5})?(/[^\\s?#]*)?$" $base -}}
+{{- $url := urlParse $base -}}
+{{- $tls := eq (get $url "scheme") "https" -}}
+{{- $port := regexFind ":[0-9]+$" (get $url "host") | trimPrefix ":" | default (ternary "443" "80" $tls) -}}
+{{- dict "tls" $tls "host" (get $url "hostname") "port" (int $port) | toJson -}}
+{{- end -}}
+{{- end -}}

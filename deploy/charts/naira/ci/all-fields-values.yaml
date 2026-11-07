@@ -41,7 +41,24 @@ wikiGateway:
   domain: wiki.naira.example.com
   scheme: https
   port: 443
+  portalOrigin: https://naira.example.com
   allowedRegistries: [ghcr.io/naira-project, reg.example.com/docs]
+  image:
+    repository: reg.example.com/mirror/envoy
+    digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+  replicas: 2
+  podAnnotations: {example.com/scrape: "false"}
+  priorityClassName: system-cluster-critical
+  nodeSelector: {kubernetes.io/os: linux}
+  tolerations:
+    - {key: dedicated, operator: Equal, value: naira, effect: NoSchedule}
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - {key: kubernetes.io/arch, operator: In, values: [amd64, arm64]}
+  podSecurityContext: {fsGroup: 65532}
   networkPolicy: {enabled: true}
 wikiDefaults:
   replicas: 2

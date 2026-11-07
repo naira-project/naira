@@ -315,13 +315,42 @@ portal:
 # Wikis: static sites, one Deployment each, listed in `wikis`. A wiki is served
 # at <scheme>://<id>.<domain>[:port]/, so the domain needs wildcard DNS and TLS.
 # The image contract is in wiki/starter/README.md.
+#
+# The gateway is one Envoy, rendered while at least one wiki is enabled. It
+# listens on 8080 over plain HTTP: expose the Service wiki-gateway on `port`,
+# with TLS ended in front of it. It checks the Keycloak token and routes by host.
 wikiGateway:
   domain: wiki.localhost
   scheme: http   # https outside kind
   # Browser-facing. Left out of the address when it is the scheme's default.
   port: 3002
+  # Browser-facing origin of the portal, scheme://host[:port]. The only page
+  # allowed to frame a wiki (CSP frame-ancestors).
+  portalOrigin: http://localhost:3000
   # A wiki image must start with one of these. Empty allows no wiki.
   allowedRegistries: [ghcr.io/naira-project]
+  # Used as given, not built from image.registry or image.tag. The tag is
+  # distroless-v1.40.2; the image runs as uid 65532.
+  image:
+    repository: envoyproxy/envoy
+    digest: sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded
+  replicas: 1
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 128Mi}
+  podAnnotations: {}
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities: {drop: [ALL]}
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65532
+    seccompProfile: {type: RuntimeDefault}
   # Admits ingress to the wiki pods from the pods named wiki-gateway only, and
   # limits egress from those pods to DNS, the wiki pods and the Keycloak port of
   # keycloak.baseUrl (any address: a policy cannot select a host name).
