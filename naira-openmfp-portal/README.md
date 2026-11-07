@@ -50,6 +50,7 @@ npm run build
 - `npm run start:server` - Start only backend
 - `npm run build:ui` - Build only frontend
 - `npm run build:server` - Build only backend
+- `cd backend && npm test` - Compile the backend and run its `node:test` specs
 
 ## kind Cluster Deployment
 

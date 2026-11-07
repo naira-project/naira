@@ -9,7 +9,8 @@
     "start:watch": "nest start --watch",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main"
+    "start:prod": "node dist/main",
+    "test": "tsc -p tsconfig.json --outDir dist/test --incremental false && node --test \"dist/test/**/*.spec.js\""
   },
   "dependencies": {
     "@nestjs/common": "^11.1.9",

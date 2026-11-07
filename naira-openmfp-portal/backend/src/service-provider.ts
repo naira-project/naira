@@ -1,8 +1,11 @@
-﻿import {
+﻿import { Logger } from '@nestjs/common';
+import {
+  LuigiNode,
   RawServiceProvider,
   ServiceProviderService,
   ServiceProviderResponse,
 } from '@openmfp/portal-server-lib';
+import { loadWikiNodes } from './wikis.js';
 
 const UI_BASE_URL = process.env.NAIRA_UI_BASE_URL;
 
@@ -23,7 +26,7 @@ export class ServiceProviderServiceImpl implements ServiceProviderService {
   }
 }
 
-export const SERVICE_PROVIDERS: RawServiceProvider[] = [
+export const serviceProviders = (wikiNodes: LuigiNode[]): RawServiceProvider[] => [
   {
     name: 'naira-catalog',
     displayName: 'Naira Catalog',
@@ -141,17 +144,7 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
                 url: `${UI_BASE_URL}/more_coming_soon`,
                 loadingIndicator: { enabled: false },
               },
-              {
-                pathSegment: 'wiki',
-                icon: 'assets/icons/wiki.svg',
-                label: 'Wiki',
-                order: 9,
-                category: DOCS_CATEGORY,
-                entityType: 'naira',
-                hideFromNav: false,
-                url: `${UI_BASE_URL}/wiki`,
-                loadingIndicator: { enabled: false },
-              },
+              ...wikiNodes,
             ],
           },
         },
@@ -159,3 +152,16 @@ export const SERVICE_PROVIDERS: RawServiceProvider[] = [
     ],
   },
 ];
+
+const portalNodes = serviceProviders([]).flatMap((provider) =>
+  provider.contentConfiguration.flatMap((content) => content.luigiConfigFragment.data.nodes),
+);
+
+export const SERVICE_PROVIDERS = serviceProviders(
+  loadWikiNodes(process.env.NAIRA_WIKIS_FILE, {
+    category: DOCS_CATEGORY,
+    firstOrder: Math.max(...portalNodes.map((node) => node.order ?? 0)) + 1,
+    reservedIds: new Set(portalNodes.map((node) => node.pathSegment)),
+    log: (message) => new Logger('Wikis').error(message),
+  }),
+);
