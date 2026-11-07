@@ -42,6 +42,7 @@ wikiGateway:
   scheme: https
   port: 443
   allowedRegistries: [ghcr.io/naira-project, reg.example.com/docs]
+  networkPolicy: {enabled: true}
 wikiDefaults:
   replicas: 2
   priorityClassName: system-cluster-critical

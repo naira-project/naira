@@ -929,6 +929,85 @@ check "gateway address is not checked while no wiki is enabled" \
   "$(render --set wikiGateway.domain=https://x --set wikiGateway.scheme=ftp --set wikiGateway.port=0 \
       --set 'wikiGateway.allowedRegistries=null' >/dev/null && echo ok)"
 
+# Wiki NetworkPolicies: ingress to the wiki pods from the gateway pods only, and an egress
+# allow-list for the gateway pods. The gateway Deployment itself is not rendered by this chart yet,
+# so wiki-gateway is the pod name its policies and the rest of the chart agree on.
+render_wiki_np() {
+  render --set wikiGateway.networkPolicy.enabled=true --set-json "wikis=[$(wiki handbook)]" "$@"
+}
+NP_NAMES='[select(.kind == "NetworkPolicy") | .metadata.name] | sort | join(",")'
+np() { printf 'select(.kind == "NetworkPolicy" and .metadata.name == "%s") | .spec' "$1"; }
+
+check "wiki NetworkPolicies are off by default" \
+  "" \
+  "$(render_wikis "$(wiki handbook)" | yq ea "$NP_NAMES")"
+check "wiki NetworkPolicies: none without an enabled wiki" \
+  "" \
+  "$(render --set wikiGateway.networkPolicy.enabled=true | yq ea "$NP_NAMES")"
+check "wiki NetworkPolicies: none when the only wiki is disabled" \
+  "" \
+  "$(render --set wikiGateway.networkPolicy.enabled=true \
+      --set-json "wikis=[$(wiki handbook '"enabled":false')]" | yq ea "$NP_NAMES")"
+check "wiki NetworkPolicies: ingress to the wikis and egress from the gateway" \
+  "wiki-gateway-egress,wiki-ingress" \
+  "$(render_wiki_np | yq ea "$NP_NAMES")"
+check "wiki NetworkPolicies sit next to the catalog's, which stays opt-in" \
+  "catalog,wiki-gateway-egress,wiki-ingress" \
+  "$(render_wiki_np --set catalog.networkPolicy.enabled=true | yq ea "$NP_NAMES")"
+check "wiki NetworkPolicies are in the release namespace" \
+  "naira" \
+  "$(render_wiki_np | yq 'select(.kind == "NetworkPolicy" and .metadata.name == "wiki-ingress") | .metadata.namespace')"
+
+check "wiki ingress: selects the wiki pods of this release, ingress only" \
+  "Ingress wiki t" \
+  "$(render_wiki_np | yq "$(np wiki-ingress)
+      | (.policyTypes | join(\",\")) + \" \" + .podSelector.matchLabels[\"app.kubernetes.io/component\"]
+        + \" \" + .podSelector.matchLabels[\"app.kubernetes.io/instance\"]")"
+check "wiki ingress: one rule, from the gateway pods of this release, TCP 8080" \
+  "1 wiki-gateway t TCP 8080" \
+  "$(render_wiki_np | yq "$(np wiki-ingress) | .ingress
+      | (length | tostring) + \" \" + .[0].from[0].podSelector.matchLabels[\"app.kubernetes.io/name\"]
+        + \" \" + .[0].from[0].podSelector.matchLabels[\"app.kubernetes.io/instance\"]
+        + \" \" + .[0].ports[0].protocol + \" \" + (.[0].ports[0].port | tostring)")"
+check "wiki ingress: the rule names one source, so nothing else is admitted" \
+  "1" \
+  "$(render_wiki_np | yq "$(np wiki-ingress) | .ingress[0].from | length")"
+
+check "gateway egress: selects the gateway pods of this release, egress only" \
+  "Egress wiki-gateway t" \
+  "$(render_wiki_np | yq "$(np wiki-gateway-egress)
+      | (.policyTypes | join(\",\")) + \" \" + .podSelector.matchLabels[\"app.kubernetes.io/name\"]
+        + \" \" + .podSelector.matchLabels[\"app.kubernetes.io/instance\"]")"
+check "gateway egress: three rules" \
+  "3" \
+  "$(render_wiki_np | yq "$(np wiki-gateway-egress) | .egress | length")"
+check "gateway egress: DNS on port 53, UDP and TCP, to any address" \
+  "false UDP/53,TCP/53" \
+  "$(render_wiki_np | yq "$(np wiki-gateway-egress) | .egress[0]
+      | (has(\"to\") | tostring) + \" \" + ([.ports[] | .protocol + \"/\" + (.port | tostring)] | join(\",\"))")"
+check "gateway egress: the wiki pods of this release on 8080" \
+  "wiki t TCP 8080" \
+  "$(render_wiki_np | yq "$(np wiki-gateway-egress) | .egress[1]
+      | .to[0].podSelector.matchLabels[\"app.kubernetes.io/component\"]
+        + \" \" + .to[0].podSelector.matchLabels[\"app.kubernetes.io/instance\"]
+        + \" \" + .ports[0].protocol + \" \" + (.ports[0].port | tostring)")"
+check "gateway egress: the Keycloak port from keycloak.baseUrl, to any address" \
+  "false TCP 8080" \
+  "$(render_wiki_np | yq "$(np wiki-gateway-egress) | .egress[2]
+      | (has(\"to\") | tostring) + \" \" + .ports[0].protocol + \" \" + (.ports[0].port | tostring)")"
+keycloak_port() {
+  render_wiki_np --set keycloak.baseUrl="$1" | yq "$(np wiki-gateway-egress) | .egress[2].ports[0].port"
+}
+check "gateway egress: https without a port means 443" "443" "$(keycloak_port https://keycloak.example.com)"
+check "gateway egress: http without a port means 80" "80" "$(keycloak_port http://keycloak.example.com)"
+check "gateway egress: an explicit port wins, a path is ignored" \
+  "8443" "$(keycloak_port https://keycloak.example.com:8443/auth)"
+check "gateway egress: an IPv6 host keeps its port" "8080" "$(keycloak_port 'http://[fd00::1]:8080')"
+check "gateway egress: a malformed wiki entry fails on its own guard, not on the policy" \
+  "ok" \
+  "$(out=$(render --set wikiGateway.networkPolicy.enabled=true --set-json 'wikis=["handbook"]' 2>&1) \
+     || { [[ $out == *"wikis[0]: must be a map"* ]] && echo ok; })"
+
 check "all-fields values render" \
   "ok" \
   "$(render_raw -f "$CHART/ci/all-fields-values.yaml" >/dev/null && echo ok)"

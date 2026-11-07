@@ -322,6 +322,10 @@ wikiGateway:
   port: 3002
   # A wiki image must start with one of these. Empty allows no wiki.
   allowedRegistries: [ghcr.io/naira-project]
+  # Admits ingress to the wiki pods from the pods named wiki-gateway only, and
+  # limits egress from those pods to DNS, the wiki pods and the Keycloak port of
+  # keycloak.baseUrl (any address: a policy cannot select a host name).
+  networkPolicy: {enabled: false}
 
 # Same keys as on catalog, ui and portal; applied to every wiki Deployment.
 wikiDefaults:
