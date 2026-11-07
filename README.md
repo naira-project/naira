@@ -78,8 +78,10 @@ cluster `naira-idp`. Tilt is installed by `mise install`.
 
 3. **Open the UI** — once the resources in the Tilt UI are green, go to:
    ```
-   http://localhost:3000
+   http://naira.localhost:3000
    ```
+   (`localhost:3000` signs in too, but the wikis in the Docs group open only on
+   `naira.localhost`, see [docs/wikis.md](docs/wikis.md#same-site))
    and login to Keycloak with the default credentials:
 
     - user: `testuser`

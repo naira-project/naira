@@ -1,7 +1,8 @@
 # Naira How-To
 
-Task guides for people who use and run Naira: run it locally, work with the catalog, install and
-configure it, and write a plugin. It is a wiki built from [`wiki/starter`](../starter/README.md).
+Task guides for people who use Naira: find your way around the portal, work with the catalog,
+maintain the tech radar, and write a plugin. Installing and running Naira is not covered. It is a wiki built from
+[`wiki/starter`](../starter/README.md).
 
 | Path | Purpose |
 |---|---|

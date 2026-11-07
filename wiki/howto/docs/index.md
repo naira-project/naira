@@ -3,21 +3,18 @@ layout: home
 hero:
   name: Naira How-To
   text: Task guides for Naira
-  tagline: Run Naira, find AI assets, follow how they connect, and extend it.
+  tagline: Find AI assets, follow how they connect, and extend Naira.
   actions:
     - theme: brand
-      text: Run Naira locally
-      link: /guide/run-naira-locally
-    - theme: alt
       text: Find your way around
       link: /guide/find-your-way-around
+    - theme: alt
+      text: Browse a catalog
+      link: /guide/browse-a-catalog
 features:
   - title: Use Naira
     details: Run plugins, browse models, MCP servers, datasets, inference endpoints and software, and follow the relations between them.
     link: /guide/run-plugins
-  - title: Run Naira
-    details: Install the Helm chart, configure plugins and add wikis like this one.
-    link: /operate/install-with-helm
   - title: Extend Naira
     details: Write a plugin that adds your own assets and relations to the catalog.
     link: /build/write-a-plugin

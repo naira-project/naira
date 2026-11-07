@@ -8,7 +8,7 @@ The words Naira uses, in the sense the code and the UI use them.
 | **Kind** | The type of a node, such as `model` or `deployment`. One path segment. |
 | **Path** | The rest of a node's identity. It may contain `/` and carries the hierarchy. |
 | **Relation** | A link between two nodes. It has a kind, such as `uses_model`, a `fromNode` and a `toNode`. |
-| **Plugin** | A program that reads one system and reports nodes and relations. It runs as a sidecar of the catalog. |
+| **Plugin** | A program that reads one system and reports nodes and relations. |
 | **Claim** | The properties one plugin reports for a node, kept under that plugin's name. See [Claim](#claim). |
 | **Snapshot** | One complete run of a plugin. It replaces what the same plugin reported before. |
 | **Operation** | The record of a plugin run: when it ran, how long it took, the result or the error. |

@@ -21,6 +21,15 @@ async function loadLuigiClient(): Promise<LuigiClientApi> {
   return module.default ?? module;
 }
 
+// The portal sends the token in the context. Luigi's own auth data has no `accessToken` there,
+// so getToken() stays empty and is only a fallback.
+function portalToken(client: LuigiClientApi): string | undefined {
+  for (const token of [client.getContext()?.token, client.getToken()] as unknown[]) {
+    if (typeof token === 'string' && token !== '') return token;
+  }
+  return undefined;
+}
+
 /**
  * Connects the site to the Naira portal when it runs in a Luigi iframe: in-site navigation is
  * mirrored into the portal URL, and the session cookie follows the access token. Does nothing
@@ -44,8 +53,8 @@ export async function setupLuigiBridge(router: Router): Promise<void> {
       }
     };
 
-    LuigiClient.addInitListener(() => syncToken(LuigiClient.getToken()));
-    LuigiClient.addContextUpdateListener(() => syncToken(LuigiClient.getToken()));
+    LuigiClient.addInitListener(() => syncToken(portalToken(LuigiClient)));
+    LuigiClient.addContextUpdateListener(() => syncToken(portalToken(LuigiClient)));
     // The client stores a refreshed token without telling its listeners, so watch the message.
     window.addEventListener('message', (event) => {
       if (event.source === window.parent && event.data?.msg === TOKEN_ISSUED) {

@@ -24,6 +24,17 @@ export function resolveReturnUrl(value, origin) {
   return url.href;
 }
 
+const textOrUndefined = (value) => (typeof value === 'string' && value !== '' ? value : undefined);
+
+/**
+ * Returns the token the portal hands to this frame, or undefined. The portal sends it in the
+ * context as `token`. Luigi's own auth data has no `accessToken` in the portal, so `getToken()`
+ * stays empty and is only a fallback.
+ */
+export function portalToken(luigi) {
+  return textOrUndefined(luigi.getContext?.()?.token) ?? textOrUndefined(luigi.getToken?.());
+}
+
 const ATTEMPTS_KEY = 'naira-wiki-sign-in-attempts';
 const MAX_ATTEMPTS = 3;
 const ATTEMPT_WINDOW_MS = 30000;
@@ -85,7 +96,7 @@ function run() {
   const timeout = setTimeout(() => show('Naira did not answer. Reload the page.'), INIT_TIMEOUT_MS);
   luigi.addInitListener(async () => {
     clearTimeout(timeout);
-    const token = luigi.getToken();
+    const token = portalToken(luigi);
     if (!token) return show('Naira did not provide a session. Sign in to Naira again.');
     try {
       await openSession(token);

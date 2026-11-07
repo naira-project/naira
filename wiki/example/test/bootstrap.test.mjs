@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { recordAttempt, resolveReturnUrl } from '../docs/public/_naira/assets/bootstrap.js';
+import {
+  portalToken,
+  recordAttempt,
+  resolveReturnUrl,
+} from '../docs/public/_naira/assets/bootstrap.js';
 
 const origin = 'https://platform-handbook.wiki.naira.example.com';
 const root = `${origin}/`;
@@ -84,4 +88,24 @@ test('ignores stored attempts that are not timestamps', () => {
     assert.equal(result.exhausted, false, String(stored));
     assert.deepEqual(result.attempts, [5]);
   }
+});
+
+test('reads the token the portal puts in the context', () => {
+  // The portal's Luigi auth data has no accessToken, so getToken() is undefined.
+  const luigi = { getContext: () => ({ token: 'from-context' }), getToken: () => undefined };
+  assert.equal(portalToken(luigi), 'from-context');
+});
+
+test('falls back to getToken() when the context has no token', () => {
+  assert.equal(portalToken({ getContext: () => ({}), getToken: () => 'from-auth' }), 'from-auth');
+  assert.equal(portalToken({ getToken: () => 'from-auth' }), 'from-auth');
+});
+
+test('returns undefined when the portal sends no usable token', () => {
+  // The portal puts {} in the context when it has no auth data.
+  for (const token of [undefined, null, '', {}, 42]) {
+    const luigi = { getContext: () => ({ token }), getToken: () => token };
+    assert.equal(portalToken(luigi), undefined, JSON.stringify(token));
+  }
+  assert.equal(portalToken({ getContext: () => undefined, getToken: () => undefined }), undefined);
 });

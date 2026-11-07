@@ -6,25 +6,20 @@ to feed another tool.
 ## Authenticate
 
 Every request under `/v1` needs a Keycloak access token in the `Authorization` header. The catalog
-accepts a token only if its issuer is the one the chart is configured with (`keycloak.issuer`).
+accepts a token only if its issuer is the one your Naira is configured with. A real installation
+signs users in through the portal and has its own client, so ask whoever runs your Naira for the
+catalog's address and for a token.
 
-In the local setup, fetch a token for the test user. Tilt forwards Keycloak to port 8080:
+The examples below read both from your shell:
 
 ```sh
-TOKEN=$(curl -s http://localhost:8080/realms/naira/protocol/openid-connect/token \
-  -d grant_type=password \
-  -d client_id=naira-portal -d client_secret=naira-local-dev-secret \
-  -d username=testuser -d password=testpass | jq -r .access_token)
+CATALOG_URL=<the catalog's address>
+TOKEN=<your access token>
 ```
-
-::: warning Local credentials
-The client secret and the user exist only in the local setup. A real installation signs users in
-through the portal and has its own client.
-:::
 
 ## Endpoints
 
-Tilt forwards the catalog to port 8090. All paths below are under `http://localhost:8090`.
+All paths below are under `$CATALOG_URL`.
 
 | Method and path | Returns |
 |---|---|
@@ -40,9 +35,9 @@ Tilt forwards the catalog to port 8090. All paths below are under `http://localh
 ## List and filter
 
 ```sh
-curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8090/v1/kinds
+curl -s -H "Authorization: Bearer $TOKEN" $CATALOG_URL/v1/kinds
 
-curl -s -G -H "Authorization: Bearer $TOKEN" http://localhost:8090/v1/nodes \
+curl -s -G -H "Authorization: Bearer $TOKEN" $CATALOG_URL/v1/nodes \
   --data-urlencode 'filter=kind="model"'
 ```
 
@@ -80,16 +75,16 @@ The catalog never merges two plugins' values. See [Glossary](/reference/glossary
 A relation has a `kind`, a `fromNode` and a `toNode`. To see which applications use which models:
 
 ```sh
-curl -s -G -H "Authorization: Bearer $TOKEN" http://localhost:8090/v1/relations \
+curl -s -G -H "Authorization: Bearer $TOKEN" $CATALOG_URL/v1/relations \
   --data-urlencode 'filter=kind="uses_model"'
 ```
 
 ## Run a plugin
 
 ```sh
-curl -s -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8090/v1/plugins/litellm:run
+curl -s -X POST -H "Authorization: Bearer $TOKEN" $CATALOG_URL/v1/plugins/litellm:run
 
-curl -s -G -H "Authorization: Bearer $TOKEN" http://localhost:8090/v1/operations \
+curl -s -G -H "Authorization: Bearer $TOKEN" $CATALOG_URL/v1/operations \
   --data-urlencode 'filter=plugin="litellm"'
 ```
 

@@ -98,9 +98,13 @@ portal:
 # replaces the reference (see the Tiltfile).
 # The gateway is on 3003 because Grafana is on 3002. A wiki's page opens in Chrome
 # only when its address is on the same site as the portal, which `localhost` and
-# `wiki.localhost` are not: see docs/wikis.md.
+# `wiki.localhost` are not. So open the portal at http://naira.localhost:3000 and the
+# wikis are at <id>.naira.localhost:3003. The Keycloak realm has to list that portal
+# address as a redirect URI: see docs/wikis.md.
 wikiGateway:
+  domain: naira.localhost
   port: 3003
+  portalOrigin: http://naira.localhost:3000
   allowedRegistries: [local]
 wikis:
   - id: howto

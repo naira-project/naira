@@ -1438,8 +1438,12 @@ DEV_WIKI_DEPLOYMENT='select(.kind == "Deployment" and .metadata.labels["app.kube
 check "dev wikis: the how-to first as primary, then the example" "howto:true,example:false" \
   "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.id + \":\" + (.primary | tostring)) | join(\",\")")"
 check "dev wikis: addresses are on port 3003" \
-  "http://howto.wiki.localhost:3003/,http://example.wiki.localhost:3003/" \
+  "http://howto.naira.localhost:3003/,http://example.naira.localhost:3003/" \
   "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.url) | join(\",\")")"
+# Chrome drops the gateway's SameSite=Lax cookie when the portal is on another site than the wikis.
+check "dev wikis: the portal host is the wiki domain, so both are on one site" \
+  "$(yq '.wikiGateway.domain' "$CHART/values-dev.yaml")" \
+  "$(yq '.wikiGateway.portalOrigin' "$CHART/values-dev.yaml" | sed -E 's#^[a-z]+://([^:/]+).*#\1#')"
 # Grafana is forwarded to 3002 and the UI's log links point there.
 check "dev wikis: the gateway port is not the one of the Grafana log links" "differ" \
   "$([ "$(yq '.wikiGateway.port' "$CHART/values-dev.yaml")" != "$(yq '.ui.config.logs.explorerUrl' "$CHART/values-dev.yaml" | sed 's/.*://')" ] && echo differ)"

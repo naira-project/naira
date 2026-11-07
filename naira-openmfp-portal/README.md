@@ -25,7 +25,7 @@ Start both frontend and backend in development mode:
 npm start
 ```
 
-- With `tilt up` running in the repo root, frontend will be available at `http://localhost:3000`.
+- With `tilt up` running in the repo root, frontend will be available at `http://naira.localhost:3000`.
 - Click on the button at the upper right part of the OpenMFP portal and go to `Settings`. There, toggle **Is Development Mode active?** and click on `Save`.
 
 ## Build

@@ -24,15 +24,14 @@ The table has these columns:
 | Action | **Run** starts that plugin now. It is disabled while the plugin runs. |
 
 ::: tip
-In the local setup some plugins can fail because the system they read is not part of the stack.
-That is expected. Open **Details** to see what the plugin could not reach.
+A plugin can fail when the system it reads is not reachable. Open **Details** to see what the
+plugin could not reach.
 :::
 
 ## Schedules
 
 A plugin with a `schedule` runs on its own, for example `litellm` on `0 0 * * *`, once a day. A
-plugin without one runs only when you start it. The schedule is part of the chart values, see
-[Configure plugins](/operate/configure-plugins).
+plugin without one runs only when you start it.
 
 ## What a run does to the data
 

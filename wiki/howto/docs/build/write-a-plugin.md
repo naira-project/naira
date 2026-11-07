@@ -48,7 +48,7 @@ plugin's name, in `pluginClaims`, and never mixes them. See [Glossary](/referenc
    named `naira-plugin-<name>`.
 2. Add an entry `catalog.plugins.<name>` to the chart values with the image, a port that no other
    plugin uses, and an optional `schedule` and `env`. The plugin then runs as a sidecar in the
-   catalog pod. See [Configure plugins](/operate/configure-plugins).
+   catalog pod.
 3. Say in the plugin's godoc what it reads and which environment variables it takes. The README is
    generated from the godoc, so change the comment and run `go generate`, not the README.
 

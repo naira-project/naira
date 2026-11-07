@@ -9,15 +9,14 @@ Choose **Tech Radar** in the **Explore** group of the sidebar, or the Tech Radar
 Overview. The page title is the title the administrator gave the radar.
 
 The radar comes from the `tech-radar` plugin, which is off by default. If the page shows no radar,
-ask whoever runs your Naira, and point them to
-[Configure plugins](/operate/configure-plugins#maintain-the-tech-radar).
+ask whoever runs your Naira to turn it on.
 
 ## Read the rings
 
 The radar has four quadrants and up to six rings. The rings run from the centre outwards, and the
-administrator names them. The local setup uses four:
+administrator names them. A radar can use four, for example:
 
-| Ring | Meaning in the local setup |
+| Ring | Example meaning |
 |---|---|
 | Adopt | Proven, the default choice for new work |
 | Trial | Worth pursuing on projects that can absorb risk |
@@ -40,4 +39,4 @@ jump from a technology to what the catalog knows about it.
 
 Not you, in the portal. The radar file is the only source. To change it, an administrator edits the
 file and the plugin picks the change up on its next run. See
-[Configure plugins](/operate/configure-plugins#maintain-the-tech-radar).
+[Update the tech radar](/guide/update-the-tech-radar).

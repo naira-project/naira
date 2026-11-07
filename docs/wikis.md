@@ -57,20 +57,26 @@ and the wiki's sign-in page then stops with "The browser did not keep the wiki
 session". A same-site cookie is first-party, which blocking of third-party
 cookies does not touch.
 
-For local development this means the default does not work in Chrome: `localhost`
-and `wiki.localhost` are different sites. Serve the portal on `naira.localhost`
-and set `wikiGateway.domain` to `naira.localhost` and `wikiGateway.portalOrigin`
-to the portal's origin. The dev Keycloak realm of `test-dependencies` allows
-redirects only from `http://localhost:3000/*` and `http://localhost:3001/*`, so
-a portal on `naira.localhost` cannot sign in until the realm lists
-`http://naira.localhost:3000/*` too. `tilt up` installs the how-to and the example wiki,
-which the portal lists in the Docs group, behind a gateway on port 3003.
+For local development this means the chart default does not work in Chrome:
+`localhost` and `wiki.localhost` are different sites. `values-dev.yaml` therefore
+sets `wikiGateway.domain` to `naira.localhost` and `wikiGateway.portalOrigin` to
+`http://naira.localhost:3000`. Open the portal at that address, not at
+`localhost:3000`. `tilt up` installs the how-to and the example wiki, which the
+portal lists in the Docs group, behind a gateway on port 3003, at
+`<id>.naira.localhost:3003`.
+
+The portal on `naira.localhost` signs in only when the client `naira-portal` of the
+dev Keycloak realm lists `http://naira.localhost:3000/*` as a redirect URI. The
+`test-dependencies` chart 0.1.0, which the Tiltfile pins, lists only
+`http://localhost:3000/*` and `http://localhost:3001/*`. Until the Tiltfile pins a
+release that lists it, add the URI in the Keycloak admin console (realm `naira`,
+Clients, `naira-portal`, Valid redirect URIs).
 
 ## What a wiki can do with a user's token
 
 Wiki code runs in the user's browser with the user's access token. The portal
-hands the token to every frame it shows, and a script in a wiki can call
-`LuigiClient.getToken()`. The catalog accepts any token of the configured
+hands the token to every frame it shows, and a script in a wiki can read it
+from `LuigiClient.getContext().token`. The catalog accepts any token of the configured
 issuer, so a wiki can call the catalog API as the user. VitePress sites ship
 JavaScript, and Markdown can embed Vue components.
 

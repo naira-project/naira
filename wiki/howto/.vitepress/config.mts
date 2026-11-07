@@ -6,6 +6,16 @@ import { defineConfig } from 'vitepress';
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 
+// The portal is light, so the wiki starts light and a visitor who picks a theme keeps it. VitePress
+// stores "auto" on the first visit, so the stored value alone cannot tell that nobody chose yet:
+// a marker records that the default was applied. It runs before VitePress reads the theme.
+const DEFAULT_LIGHT = `try {
+  if (!localStorage.getItem('naira-wiki-default-theme')) {
+    localStorage.setItem('naira-wiki-default-theme', 'light');
+    localStorage.setItem('vitepress-theme-appearance', 'light');
+  }
+} catch {}`;
+
 export default defineConfig({
   title: pkg.naira.title,
   description: pkg.description,
@@ -15,20 +25,17 @@ export default defineConfig({
   // Page URLs must stay the same across rebuilds and generator upgrades: keep base and cleanUrls.
   base: '/',
   cleanUrls: true,
+  head: [['script', {}, DEFAULT_LIGHT]],
   // ignoreDeadLinks stays at its default so a broken internal link fails the build.
   themeConfig: {
     nav: [
       { text: 'Use Naira', link: '/guide/run-plugins' },
-      { text: 'Run Naira', link: '/operate/install-with-helm' },
       { text: 'Extend Naira', link: '/build/write-a-plugin' },
     ],
     sidebar: [
       {
         text: 'Get started',
-        items: [
-          { text: 'Run Naira locally', link: '/guide/run-naira-locally' },
-          { text: 'Find your way around', link: '/guide/find-your-way-around' },
-        ],
+        items: [{ text: 'Find your way around', link: '/guide/find-your-way-around' }],
       },
       {
         text: 'Use Naira',
@@ -40,12 +47,8 @@ export default defineConfig({
         ],
       },
       {
-        text: 'Run Naira',
-        items: [
-          { text: 'Install with Helm', link: '/operate/install-with-helm' },
-          { text: 'Configure plugins', link: '/operate/configure-plugins' },
-          { text: 'Add a wiki', link: '/operate/add-a-wiki' },
-        ],
+        text: 'Maintain content',
+        items: [{ text: 'Update the tech radar', link: '/guide/update-the-tech-radar' }],
       },
       { text: 'Extend Naira', items: [{ text: 'Write a plugin', link: '/build/write-a-plugin' }] },
       { text: 'Reference', items: [{ text: 'Glossary', link: '/reference/glossary' }] },
