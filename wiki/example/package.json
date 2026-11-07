@@ -1,0 +1,36 @@
+{
+  "name": "example",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An example wiki: what a team handbook can look like in Naira.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/naira-project/naira.git",
+    "directory": "wiki/example"
+  },
+  "bugs": {
+    "url": "https://github.com/naira-project/naira/issues"
+  },
+  "naira": {
+    "title": "Example Platform Handbook",
+    "owner": "example-team"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build && node scripts/write-metadata.mjs",
+    "preview": "vitepress preview",
+    "typecheck": "tsc",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@luigi-project/client": "2.27.0",
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3",
+    "vitepress": "1.6.4",
+    "vue": "3.5.45"
+  }
+}
