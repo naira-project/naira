@@ -128,8 +128,8 @@ starter are in [`wiki/starter/README.md`](../../../wiki/starter/README.md).
   policy cannot select a host name.
 - A wiki image needs a digest and a registry from `wikiGateway.allowedRegistries`,
   so an image built into kind cannot be listed as it is. `values-dev.yaml` lists
-  the starter twice with a placeholder digest, and Tilt builds `wiki/starter` and
-  replaces the reference.
+  `howto` and `example` with a placeholder digest, and Tilt builds `wiki/howto` and
+  `wiki/example` and replaces the references.
 
 ### Portal
 

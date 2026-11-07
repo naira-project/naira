@@ -179,9 +179,12 @@ for svc, ports in DEPS_FORWARDS.items():
 # enough. Tilt loads the images into kind itself.
 #
 # The chart takes a wiki image only by digest from an allowed registry, so
-# values-dev.yaml names the starter as local/naira-wiki-starter@sha256:<placeholder>.
-# Tilt replaces that reference with the image it builds.
-WIKI_STARTER = 'local/naira-wiki-starter'
+# values-dev.yaml names the dev wikis as local/naira-wiki-<id>@sha256:<placeholder>.
+# Tilt replaces those references with the images it builds from wiki/<id>.
+WIKI_IMAGES = {
+    'local/naira-wiki-howto': 'wiki/howto',
+    'local/naira-wiki-example': 'wiki/example',
+}
 images = []
 for o in objs:
     if o['kind'] != 'Deployment':
@@ -191,7 +194,7 @@ for o in objs:
     for c in pod.get('initContainers', []) + pod['containers']:
         repo = c['image'].split('@')[0].split(':')[0]
         # Any other image pinned by digest is pulled, not built: the wiki gateway's Envoy.
-        if '@' in c['image'] and repo != WIKI_STARTER:
+        if '@' in c['image'] and repo not in WIKI_IMAGES:
             continue
         if repo not in images:
             images.append(repo)
@@ -204,8 +207,8 @@ for repo in images:
         docker_build(repo, 'ui')
     elif repo == 'naira-portal':
         docker_build(repo, 'naira-openmfp-portal')
-    elif repo == WIKI_STARTER:
-        docker_build(repo, 'wiki/starter')
+    elif repo in WIKI_IMAGES:
+        docker_build(repo, WIKI_IMAGES[repo])
     elif repo.startswith('naira-plugin-'):
         dir = repo[len('naira-plugin-'):].replace('-', '_')
         docker_build(repo, '.', dockerfile='plugins/cmd/%s/Dockerfile' % dir,

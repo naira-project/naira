@@ -1432,25 +1432,31 @@ check "portal: unrelated values do not restart the portal" "$PSUM2" \
       --set-json "wikis=[$(wiki handbook),$(wiki other)]" | portal_sum)"
 
 # ── Wikis in the dev values ──────────────────────────────────────────────────
-# values-dev.yaml lists two starter wikis for Tilt, which builds wiki/starter and swaps the image.
+# values-dev.yaml lists two wikis for Tilt, which builds wiki/<id> and swaps the image.
 TILTFILE="$CHART/../../../Tiltfile"
 DEV_WIKI_DEPLOYMENT='select(.kind == "Deployment" and .metadata.labels["app.kubernetes.io/component"] == "wiki")'
-check "dev wikis: starter and starter-two, the primary first" "starter:true,starter-two:false" \
+check "dev wikis: the how-to first as primary, then the example" "howto:true,example:false" \
   "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.id + \":\" + (.primary | tostring)) | join(\",\")")"
 check "dev wikis: addresses are on port 3003" \
-  "http://starter.wiki.localhost:3003/,http://starter-two.wiki.localhost:3003/" \
+  "http://howto.wiki.localhost:3003/,http://example.wiki.localhost:3003/" \
   "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.url) | join(\",\")")"
 # Grafana is forwarded to 3002 and the UI's log links point there.
 check "dev wikis: the gateway port is not the one of the Grafana log links" "differ" \
   "$([ "$(yq '.wikiGateway.port' "$CHART/values-dev.yaml")" != "$(yq '.ui.config.logs.explorerUrl' "$CHART/values-dev.yaml" | sed 's/.*://')" ] && echo differ)"
 check "dev wikis: the gateway port in wikis.json is not the Grafana port" "true" \
   "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.url | test(\":3002/\") | not) | all | tostring")"
-# Tilt matches a docker_build to a Deployment by the image name.
-check "dev wikis: the image is the one the Tiltfile builds" \
-  "$(sed -n "s/^WIKI_STARTER = '\(.*\)'$/\1/p" "$TILTFILE")" \
-  "$(render_raw "${DEV[@]}" | yq ea "[$DEV_WIKI_DEPLOYMENT | .spec.template.spec.containers[0].image | sub(\"@.*\"; \"\")] | unique | join(\",\")")"
-check "dev wikis: the Tiltfile builds it from wiki/starter" "1" \
-  "$(grep -c "docker_build(repo, 'wiki/starter')" "$TILTFILE")"
+# Tilt matches a docker_build to a Deployment by the image name, and builds it from a directory.
+DEV_WIKI_IMAGES=$(render_raw "${DEV[@]}" \
+  | yq "$DEV_WIKI_DEPLOYMENT | .metadata.name + \" \" + (.spec.template.spec.containers[0].image | sub(\"@.*\"; \"\"))" \
+  | sed -e '/^---$/d' -e 's/^wiki-//')
+check "dev wikis: each image is named after its wiki" "howto local/naira-wiki-howto example local/naira-wiki-example" \
+  "$(echo "$DEV_WIKI_IMAGES" | sort -r | tr '\n' ' ' | sed 's/ $//')"
+while read -r id image; do
+  check "dev wikis: the Tiltfile builds $image from wiki/$id" "1" \
+    "$(grep -c "'$image': 'wiki/$id'" "$TILTFILE")"
+  check "dev wikis: wiki/$id exists and is a wiki project" "ok" \
+    "$([ -f "$CHART/../../../wiki/$id/Dockerfile" ] && [ -f "$CHART/../../../wiki/$id/package.json" ] && echo ok)"
+done <<<"$DEV_WIKI_IMAGES"
 check "dev wikis: the gateway's Envoy is pinned by digest, which the Tiltfile pulls instead of building" "true" \
   "$(render_raw "${DEV[@]}" | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-gateway") | .spec.template.spec.containers[0].image | test("@sha256:[0-9a-f]{64}$") | tostring')"
 check "dev wikis: render stays valid with the placeholder digest" "ok" \

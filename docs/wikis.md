@@ -7,7 +7,8 @@ pages never become catalog properties.
 
 This page is for the operator who installs wikis. The author of a wiki starts
 from [`wiki/starter`](../wiki/starter/README.md), which also defines what a wiki
-image has to provide. What the chart renders and what each value does is in the
+image has to provide. [`wiki/howto`](../wiki/howto/README.md) and
+[`wiki/example`](../wiki/example/README.md) are two finished wikis built from it. What the chart renders and what each value does is in the
 [chart README](../deploy/charts/naira/README.md#wikis) and in
 [`values.yaml`](../deploy/charts/naira/values.yaml).
 
@@ -62,8 +63,8 @@ and set `wikiGateway.domain` to `naira.localhost` and `wikiGateway.portalOrigin`
 to the portal's origin. The dev Keycloak realm of `test-dependencies` allows
 redirects only from `http://localhost:3000/*` and `http://localhost:3001/*`, so
 a portal on `naira.localhost` cannot sign in until the realm lists
-`http://naira.localhost:3000/*` too. `tilt up` installs two starter wikis, which
-the portal lists in the Docs group, behind a gateway on port 3003.
+`http://naira.localhost:3000/*` too. `tilt up` installs the how-to and the example wiki,
+which the portal lists in the Docs group, behind a gateway on port 3003.
 
 ## What a wiki can do with a user's token
 
