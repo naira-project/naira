@@ -161,3 +161,31 @@ before validate.yaml can reject it.
 {{- dict "tls" $tls "host" (get $url "hostname") "port" (int $port) | toJson -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+wikis.json: the enabled wikis for the portal, as JSON.
+*/}}
+{{- define "naira.wikisJson" -}}
+{{- $enabled := list }}
+{{- range .Values.wikis }}
+{{- if include "naira.wikiEnabled" . }}
+{{- $enabled = append $enabled . }}
+{{- end }}
+{{- end }}
+{{- /* Primary first, then order, then id. The key sorts as text, so order is shifted and padded. */}}
+{{- $byKey := dict }}
+{{- range $enabled }}
+{{- $primary := eq (toString .primary) "true" }}
+{{- $_ := set $byKey (printf "%s|%07d|%s" (ternary "0" "1" $primary) (add 1000000 (int .order)) (toString .id)) . }}
+{{- end }}
+{{- $entries := list }}
+{{- range $key := keys $byKey | sortAlpha }}
+{{- $wiki := get $byKey $key }}
+{{- $id := toString $wiki.id }}
+{{- $entry := dict "id" $id "label" ($wiki.label | default $id) "primary" (eq (toString $wiki.primary) "true") "order" (int $wiki.order) "url" (include "naira.wikiUrl" (dict "root" $ "id" $id)) }}
+{{- with $wiki.owner }}{{ $_ := set $entry "owner" . }}{{ end }}
+{{- with $wiki.source }}{{ $_ := set $entry "source" . }}{{ end }}
+{{- $entries = append $entries $entry }}
+{{- end }}
+{{- toPrettyJson $entries -}}
+{{- end -}}

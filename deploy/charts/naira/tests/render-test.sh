@@ -822,8 +822,10 @@ check "removed wiki: its objects are gone, the other stays" \
   "$(render_wikis "$(wiki other)" | yq "$WIKI_DEPLOYMENTS")"
 
 # Everything outside the wiki objects renders byte for byte the same with or without wikis.
+# The portal Deployment carries a checksum of wikis.json, which is the one thing wikis may change in it.
 without_wiki_objects() {
-  yq 'select((.metadata.name == "wikis" or (.metadata.name | test("^wiki-"))) | not)'
+  yq 'select((.metadata.name == "wikis" or (.metadata.name | test("^wiki-"))) | not)
+      | (select(.kind == "Deployment" and .metadata.name == "portal") | .spec.template.metadata.annotations) |= del(.["checksum/wikis"])'
 }
 if [ "$(render | without_wiki_objects | sha256sum)" = \
      "$(render_wikis "$(wiki handbook)" "$(wiki other '"enabled":false')" | without_wiki_objects | sha256sum)" ]; then
@@ -1375,6 +1377,59 @@ must_fail "gateway keycloak.realm missing" "keycloak.realm is required" \
 check "gateway: its values are not checked while no wiki is enabled" "ok" \
   "$(render --set wikiGateway.image.digest= --set wikiGateway.portalOrigin=nope --set keycloak.baseUrl= \
       --set keycloak.issuer= >/dev/null && echo ok)"
+
+# ── Wikis in the portal ──────────────────────────────────────────────────────
+# The portal reads wikis.json from the mounted ConfigMap wikis and restarts when its content changes.
+PORTAL='select(.kind == "Deployment" and .metadata.name == "portal") | .spec.template'
+WIKIS_JSON_TEXT='select(.kind == "ConfigMap" and .metadata.name == "wikis") | .data["wikis.json"]'
+portal_sum() { yq "$PORTAL | .metadata.annotations[\"checksum/wikis\"]"; }
+
+check "portal: mounts the wikis ConfigMap read-only" "wikis wikis /etc/naira/wikis true" \
+  "$(render | yq "$PORTAL | .spec.volumes[0].name + \" \" + .spec.volumes[0].configMap.name + \" \"
+      + .spec.containers[0].volumeMounts[0].mountPath + \" \" + (.spec.containers[0].volumeMounts[0].readOnly | tostring)")"
+check "portal: the mount is named like the volume" "wikis" \
+  "$(render | yq "$PORTAL | .spec.containers[0].volumeMounts[0].name")"
+check "portal: NAIRA_WIKIS_FILE is wikis.json in that mount" "/etc/naira/wikis/wikis.json" \
+  "$(render | yq "$PORTAL | .spec.containers[0].env[] | select(.name == \"NAIRA_WIKIS_FILE\") | .value")"
+check "portal: the file name is the key of the wikis ConfigMap" "wikis.json" \
+  "$(o=$(render)
+     f=$(echo "$o" | yq "$PORTAL | .spec.containers[0].env[] | select(.name == \"NAIRA_WIKIS_FILE\") | .value | sub(\".*/\"; \"\")")
+     echo "$o" | yq "select(.kind == \"ConfigMap\" and .metadata.name == \"wikis\") | .data | keys | .[] | select(. == \"$f\")")"
+check "portal: the other env vars and the other volumes are unchanged" "PORT NAIRA_UI_BASE_URL IDP_NAMES BASE_DOMAINS_KEYCLOAK AUTH_SERVER_URL_KEYCLOAK TOKEN_URL_KEYCLOAK OIDC_CLIENT_ID_KEYCLOAK OIDC_CLIENT_SECRET_KEYCLOAK NAIRA_WIKIS_FILE 1" \
+  "$(render | yq "$PORTAL | ([.spec.containers[0].env[].name] | join(\" \")) + \" \" + (.spec.volumes | length | tostring)")"
+check "portal: also mounts the (empty) list when no wiki is enabled" "[]" \
+  "$(render | yq "$WIKIS_JSON_TEXT | from_json" -o=json -I=0)"
+check "portal: a podAnnotation stays next to checksum/wikis" "x ok" \
+  "$(render --set-string portal.podAnnotations.team=x \
+    | yq "$PORTAL | .metadata.annotations | .team + \" \" + (select(has(\"checksum/wikis\")) | \"ok\")")"
+
+PSUM=$(render | portal_sum)
+check "portal: checksum/wikis is a sha256" "ok" "$([[ $PSUM =~ ^[0-9a-f]{64}$ ]] && echo ok)"
+check "portal: checksum/wikis is the sha256 of wikis.json" \
+  "$(o=$(render_wikis "$(wiki handbook '"label":"Handbook"')"); printf '%s' "$(echo "$o" | yq "$WIKIS_JSON_TEXT")" | sha256sum | cut -d' ' -f1)" \
+  "$(render_wikis "$(wiki handbook '"label":"Handbook"')" | portal_sum)"
+check "portal: same values, same checksum" "$PSUM" "$(render | portal_sum)"
+PSUM2=$(render_wikis "$(wiki handbook)" "$(wiki other)" | portal_sum)
+check "portal: wikis listed in another order keep the checksum (the file is sorted)" "$PSUM2" \
+  "$(render_wikis "$(wiki other)" "$(wiki handbook)" | portal_sum)"
+for change in '"label":"New"' '"order":4' '"primary":true' '"owner":"team"' '"source":"https://example.com/hb"'; do
+  field=${change%%:*}
+  check "portal: a wiki's ${field//\"/} restarts the portal" "changed" \
+    "$([ "$(render_wikis "$(wiki handbook "$change")" "$(wiki other)" | portal_sum)" != "$PSUM2" ] && echo changed)"
+done
+check "portal: a new wiki restarts the portal" "changed" \
+  "$([ "$PSUM2" != "$PSUM" ] && echo changed)"
+check "portal: removing a wiki restarts the portal" "changed" \
+  "$([ "$(render_wikis "$(wiki handbook)" | portal_sum)" != "$PSUM2" ] && echo changed)"
+check "portal: another wiki domain restarts the portal (the urls change)" "changed" \
+  "$([ "$(render --set wikiGateway.domain=wiki.example.com --set-json "wikis=[$(wiki handbook),$(wiki other)]" | portal_sum)" != "$PSUM2" ] && echo changed)"
+check "portal: a new wiki image digest does not restart the portal" "$PSUM2" \
+  "$(render --set-json "wikis=[$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha256:${DIGEST//a/b}\""),$(wiki other)]" | portal_sum)"
+check "portal: a disabled wiki does not restart the portal" "$PSUM2" \
+  "$(render_wikis "$(wiki handbook)" "$(wiki other)" "$(wiki off '"enabled":false')" | portal_sum)"
+check "portal: unrelated values do not restart the portal" "$PSUM2" \
+  "$(render --set catalog.replicas=3 --set wikiGateway.replicas=2 --set portal.replicas=2 \
+      --set-json "wikis=[$(wiki handbook),$(wiki other)]" | portal_sum)"
 
 ALL_FIELDS_GW=$(render_raw -f "$CHART/ci/all-fields-values.yaml")
 check "gateway: all-fields values set the image and replicas" \
