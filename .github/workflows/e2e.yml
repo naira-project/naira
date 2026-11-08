@@ -6,7 +6,9 @@
 # cluster, and runs their assertions against it.
 #
 # Opt-in: runs on PRs labeled `run-e2e` that touch what the scenario builds,
-# and on manual dispatch; both wait for approval via the `e2e` environment.
+# after approval via the `e2e` environment. No manual dispatch: a dispatched
+# run executes PR code in the default branch context, where it could poison
+# the default branch's Actions cache.
 name: E2E
 
 on:
@@ -23,18 +25,13 @@ on:
       - go.sum
       - mise.toml
       - .github/workflows/e2e.yml
-  workflow_dispatch:
-    inputs:
-      pr-number:
-        description: "PR number to test against"
-        required: true
 
 permissions:
   contents: read
 
 concurrency:
   # Per PR, so runs for different PRs don't cancel each other.
-  group: ${{ github.workflow }}-${{ inputs.pr-number || github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
@@ -45,25 +42,12 @@ jobs:
     name: E2E · litellm_chatbot_to_catalog_api
     runs-on: ubuntu-latest
     # Evaluated before the environment gate, so a skipped job asks no one.
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
     # Requires reviewer approval before running PR code.
     environment: e2e
     steps:
-      - name: Determine PR number
-        id: pr
-        env:
-          PR_NUMBER: ${{ inputs.pr-number || github.event.pull_request.number }}
-        run: |
-          NUMBER="${PR_NUMBER}"
-          if [ -z "${NUMBER}" ]; then
-            echo "::error::pr-number input is required." >&2
-            exit 1
-          fi
-          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/pull/${{ steps.pr.outputs.number }}/merge
           persist-credentials: false
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -81,7 +65,9 @@ jobs:
       # script fails before it would derive an ID itself, the destroy step at
       # the bottom (if: always()) still knows what to tear down.
       - name: Compute environment ID
-        run: echo "ENV_ID=pr-${{ steps.pr.outputs.number }}-${{ github.run_id }}" >> "$GITHUB_ENV"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: echo "ENV_ID=pr-${PR_NUMBER}-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
 
       - name: Create kind cluster
         run: kind create cluster --config e2e/base/kind-config.yaml
@@ -165,25 +151,12 @@ jobs:
     name: E2E · wiki_sites
     runs-on: ubuntu-latest
     # Evaluated before the environment gate, so a skipped job asks no one.
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
     # Requires reviewer approval before running PR code.
     environment: e2e
     steps:
-      - name: Determine PR number
-        id: pr
-        env:
-          PR_NUMBER: ${{ inputs.pr-number || github.event.pull_request.number }}
-        run: |
-          NUMBER="${PR_NUMBER}"
-          if [ -z "${NUMBER}" ]; then
-            echo "::error::pr-number input is required." >&2
-            exit 1
-          fi
-          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/pull/${{ steps.pr.outputs.number }}/merge
           persist-credentials: false
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -196,7 +169,7 @@ jobs:
 
       - name: Compute environment ID
         env:
-          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: echo "ENV_ID=pr-${PR_NUMBER}-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
 
       - name: Create kind cluster
