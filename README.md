@@ -93,9 +93,11 @@ cluster `naira-idp`. Tilt is installed by `mise install`.
    (it's OK if some of them show "Failed"),
    then go to **"Catalogs"** and open the "Software Catalog".
 
-   The **"Docs"** group lists two handbooks behind a gateway on port 3003: the
-   [Naira How-To](handbook/howto) and an [example handbook](handbook/example). Their pages open in Chrome only when the portal
-   and the handbooks are on the same site; see [Handbooks](docs/handbooks.md#same-site).
+   The **"Docs"** group lists the [Naira How-To](handbook/howto), a handbook behind a
+   gateway on port 3003. Its pages open in Chrome only when the portal and the
+   handbooks are on the same site; see [Handbooks](docs/handbooks.md#same-site). The
+   [example handbook](https://github.com/naira-project/example-handbook) shows a
+   handbook built in its own repository.
 
 Developer tasks (lint, tests, proto, chart checks) are in the Taskfile, and
 do not need Tilt: `task --list`. `task check` verifies the tools.

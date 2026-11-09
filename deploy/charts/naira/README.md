@@ -128,8 +128,8 @@ starter are in [`handbook/starter/README.md`](../../../handbook/starter/README.m
   policy cannot select a host name.
 - A handbook image needs a digest and a registry from `handbookGateway.allowedRegistries`,
   so an image built into kind cannot be listed as it is. `values-dev.yaml` lists
-  `howto` and `example` with a placeholder digest, and Tilt builds `handbook/howto` and
-  `handbook/example` and replaces the references.
+  `howto` with a placeholder digest, and Tilt builds `handbook/howto` and replaces the
+  reference.
 
 ### Portal
 

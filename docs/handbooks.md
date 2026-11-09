@@ -7,10 +7,22 @@ pages never become catalog properties.
 
 This page is for the operator who installs handbooks. The author of a handbook starts
 from [`handbook/starter`](../handbook/starter/README.md), which also defines what a handbook
-image has to provide. [`handbook/howto`](../handbook/howto/README.md) and
-[`handbook/example`](../handbook/example/README.md) are two finished handbooks built from it. What the chart renders and what each value does is in the
-[chart README](../deploy/charts/naira/README.md#handbooks) and in
+image has to provide. Two finished handbooks are built from it:
+[`handbook/howto`](../handbook/howto/README.md), the Naira how-to, and
+[`naira-project/example-handbook`](https://github.com/naira-project/example-handbook), an
+example team handbook in a repository of its own. What the chart renders and what each
+value does is in the [chart README](../deploy/charts/naira/README.md#handbooks) and in
 [`values.yaml`](../deploy/charts/naira/values.yaml).
+
+## Publish a handbook from its own repository
+
+A handbook lives in its owner's repository, not in `naira`. The repository calls
+`reusable-handbook-build.yml` from
+[`naira-github-workflows`](https://github.com/naira-project/naira-github-workflows), which
+builds the image, signs it, attests its provenance, pushes it and checks its
+`naira-handbook.json`. The run summary names the image with its digest; that reference goes
+into `handbooks`. `naira-project/example-handbook` is a complete example: its README lists
+what a team changes to start its own handbook from it.
 
 ## Install a handbook
 
@@ -61,9 +73,26 @@ For local development this means the chart default does not work in Chrome:
 `localhost` and `handbook.localhost` are different sites. `values-dev.yaml` therefore
 sets `handbookGateway.domain` to `naira.localhost` and `handbookGateway.portalOrigin` to
 `http://naira.localhost:3000`. Open the portal at that address, not at
-`localhost:3000`. `tilt up` installs the how-to and the example handbook, which the
-portal lists in the Docs group, behind a gateway on port 3003, at
-`<id>.naira.localhost:3003`.
+`localhost:3000`. `tilt up` installs the how-to, which the portal lists in the Docs
+group, behind a gateway on port 3003, at `<id>.naira.localhost:3003`.
+
+### Add the example handbook
+
+To try more than one handbook, add the published example to `values-dev.yaml`. Take the
+digest from the latest run of its `Handbook Build` workflow. Tilt pulls an image that is
+pinned by digest instead of building it.
+
+```yaml
+handbookGateway:
+  allowedRegistries: [local, ghcr.io/naira-project]
+handbooks:
+  # after the how-to entry
+  - id: example
+    contract: naira.handbook/v1alpha1
+    label: Example Handbook
+    order: 1
+    image: ghcr.io/naira-project/example-handbook@sha256:<digest>
+```
 
 The portal on `naira.localhost` signs in only when the client `naira-portal` of the
 dev Keycloak realm lists `http://naira.localhost:3000/*` as a redirect URI. The

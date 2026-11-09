@@ -1435,10 +1435,10 @@ check "portal: unrelated values do not restart the portal" "$PSUM2" \
 # values-dev.yaml lists two handbooks for Tilt, which builds handbook/<id> and swaps the image.
 TILTFILE="$CHART/../../../Tiltfile"
 DEV_HANDBOOK_DEPLOYMENT='select(.kind == "Deployment" and .metadata.labels["app.kubernetes.io/component"] == "handbook")'
-check "dev handbooks: the how-to first as primary, then the example" "howto:true,example:false" \
+check "dev handbooks: the how-to is the primary handbook" "howto:true" \
   "$(render_raw "${DEV[@]}" | yq "$HANDBOOKS_JSON | map(.id + \":\" + (.primary | tostring)) | join(\",\")")"
 check "dev handbooks: addresses are on port 3003" \
-  "http://howto.naira.localhost:3003/,http://example.naira.localhost:3003/" \
+  "http://howto.naira.localhost:3003/" \
   "$(render_raw "${DEV[@]}" | yq "$HANDBOOKS_JSON | map(.url) | join(\",\")")"
 # Chrome drops the gateway's SameSite=Lax cookie when the portal is on another site than the handbooks.
 check "dev handbooks: the portal host is the handbook domain, so both are on one site" \
@@ -1453,7 +1453,7 @@ check "dev handbooks: the gateway port in handbooks.json is not the Grafana port
 DEV_HANDBOOK_IMAGES=$(render_raw "${DEV[@]}" \
   | yq "$DEV_HANDBOOK_DEPLOYMENT | .metadata.name + \" \" + (.spec.template.spec.containers[0].image | sub(\"@.*\"; \"\"))" \
   | sed -e '/^---$/d' -e 's/^handbook-//')
-check "dev handbooks: each image is named after its handbook" "howto local/naira-handbook-howto example local/naira-handbook-example" \
+check "dev handbooks: each image is named after its handbook" "howto local/naira-handbook-howto" \
   "$(echo "$DEV_HANDBOOK_IMAGES" | sort -r | tr '\n' ' ' | sed 's/ $//')"
 while read -r id image; do
   check "dev handbooks: the Tiltfile builds $image from handbook/$id" "1" \

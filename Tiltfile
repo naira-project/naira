@@ -183,7 +183,6 @@ for svc, ports in DEPS_FORWARDS.items():
 # Tilt replaces those references with the images it builds from handbook/<id>.
 HANDBOOK_IMAGES = {
     'local/naira-handbook-howto': 'handbook/howto',
-    'local/naira-handbook-example': 'handbook/example',
 }
 images = []
 for o in objs:
