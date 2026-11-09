@@ -178,12 +178,12 @@ for svc, ports in DEPS_FORWARDS.items():
 # only the images the rendered chart uses, so enabling a plugin in values is
 # enough. Tilt loads the images into kind itself.
 #
-# The chart takes a wiki image only by digest from an allowed registry, so
-# values-dev.yaml names the dev wikis as local/naira-wiki-<id>@sha256:<placeholder>.
-# Tilt replaces those references with the images it builds from wiki/<id>.
-WIKI_IMAGES = {
-    'local/naira-wiki-howto': 'wiki/howto',
-    'local/naira-wiki-example': 'wiki/example',
+# The chart takes a handbook image only by digest from an allowed registry, so
+# values-dev.yaml names the dev handbooks as local/naira-handbook-<id>@sha256:<placeholder>.
+# Tilt replaces those references with the images it builds from handbook/<id>.
+HANDBOOK_IMAGES = {
+    'local/naira-handbook-howto': 'handbook/howto',
+    'local/naira-handbook-example': 'handbook/example',
 }
 images = []
 for o in objs:
@@ -193,8 +193,8 @@ for o in objs:
     pod = o['spec']['template']['spec']
     for c in pod.get('initContainers', []) + pod['containers']:
         repo = c['image'].split('@')[0].split(':')[0]
-        # Any other image pinned by digest is pulled, not built: the wiki gateway's Envoy.
-        if '@' in c['image'] and repo not in WIKI_IMAGES:
+        # Any other image pinned by digest is pulled, not built: the handbook gateway's Envoy.
+        if '@' in c['image'] and repo not in HANDBOOK_IMAGES:
             continue
         if repo not in images:
             images.append(repo)
@@ -207,8 +207,8 @@ for repo in images:
         docker_build(repo, 'ui')
     elif repo == 'naira-portal':
         docker_build(repo, 'naira-openmfp-portal')
-    elif repo in WIKI_IMAGES:
-        docker_build(repo, WIKI_IMAGES[repo])
+    elif repo in HANDBOOK_IMAGES:
+        docker_build(repo, HANDBOOK_IMAGES[repo])
     elif repo.startswith('naira-plugin-'):
         dir = repo[len('naira-plugin-'):].replace('-', '_')
         docker_build(repo, '.', dockerfile='plugins/cmd/%s/Dockerfile' % dir,
@@ -266,15 +266,15 @@ if DEMO:
     for job in ['seed-litellm-keys', 'seed-mlflow-models', 'seed-openmetadata-tables']:
         k8s_resource(job, resource_deps=['demo-seed-config'], labels=['demo'])
 
-# The wiki gateway and the wikis, when values-dev.yaml lists any. The gateway is
-# forwarded to wikiGateway.port, which is the port in the wikis' addresses.
-WIKI_PORT = read_yaml(CHART + '/values-dev.yaml').get('wikiGateway', {}).get('port') or \
-    read_yaml(CHART + '/values.yaml')['wikiGateway']['port']
+# The handbook gateway and the handbooks, when values-dev.yaml lists any. The gateway is
+# forwarded to handbookGateway.port, which is the port in the handbooks' addresses.
+HANDBOOK_PORT = read_yaml(CHART + '/values-dev.yaml').get('handbookGateway', {}).get('port') or \
+    read_yaml(CHART + '/values.yaml')['handbookGateway']['port']
 for o in objs:
     if o['kind'] != 'Deployment':
         continue
     name = o['metadata']['name']
-    if name == 'wiki-gateway':
-        k8s_resource(name, resource_deps=['naira-config'], port_forwards=['%d:8080' % WIKI_PORT], labels=['naira'])
-    elif o['metadata'].get('labels', {}).get('app.kubernetes.io/component') == 'wiki':
+    if name == 'handbook-gateway':
+        k8s_resource(name, resource_deps=['naira-config'], port_forwards=['%d:8080' % HANDBOOK_PORT], labels=['naira'])
+    elif o['metadata'].get('labels', {}).get('app.kubernetes.io/component') == 'handbook':
         k8s_resource(name, resource_deps=['naira-config'], labels=['naira'])

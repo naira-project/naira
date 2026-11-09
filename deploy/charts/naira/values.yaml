@@ -312,22 +312,22 @@ portal:
     seccompProfile: {type: RuntimeDefault}
   startupProbe: {periodSeconds: 2, failureThreshold: 30}
 
-# Wikis: static sites, one Deployment each, listed in `wikis`. A wiki is served
+# Handbooks: static sites, one Deployment each, listed in `handbooks`. A handbook is served
 # at <scheme>://<id>.<domain>[:port]/, so the domain needs wildcard DNS and TLS.
-# The image contract is in wiki/starter/README.md.
+# The image contract is in handbook/starter/README.md.
 #
-# The gateway is one Envoy, rendered while at least one wiki is enabled. It
-# listens on 8080 over plain HTTP: expose the Service wiki-gateway on `port`,
+# The gateway is one Envoy, rendered while at least one handbook is enabled. It
+# listens on 8080 over plain HTTP: expose the Service handbook-gateway on `port`,
 # with TLS ended in front of it. It checks the Keycloak token and routes by host.
-wikiGateway:
-  domain: wiki.localhost
+handbookGateway:
+  domain: handbook.localhost
   scheme: http   # https outside kind
   # Browser-facing. Left out of the address when it is the scheme's default.
   port: 3002
   # Browser-facing origin of the portal, scheme://host[:port]. The only page
-  # allowed to frame a wiki (CSP frame-ancestors).
+  # allowed to frame a handbook (CSP frame-ancestors).
   portalOrigin: http://localhost:3000
-  # A wiki image must start with one of these. Empty allows no wiki.
+  # A handbook image must start with one of these. Empty allows no handbook.
   allowedRegistries: [ghcr.io/naira-project]
   # Used as given, not built from image.registry or image.tag. The tag is
   # distroless-v1.40.2; the image runs as uid 65532.
@@ -351,13 +351,13 @@ wikiGateway:
     runAsNonRoot: true
     runAsUser: 65532
     seccompProfile: {type: RuntimeDefault}
-  # Admits ingress to the wiki pods from the pods named wiki-gateway only, and
-  # limits egress from those pods to DNS, the wiki pods and the Keycloak port of
+  # Admits ingress to the handbook pods from the pods named handbook-gateway only, and
+  # limits egress from those pods to DNS, the handbook pods and the Keycloak port of
   # keycloak.baseUrl (any address: a policy cannot select a host name).
   networkPolicy: {enabled: false}
 
-# Same keys as on catalog, ui and portal; applied to every wiki Deployment.
-wikiDefaults:
+# Same keys as on catalog, ui and portal; applied to every handbook Deployment.
+handbookDefaults:
   replicas: 1
   resources:
     requests: {cpu: 10m, memory: 16Mi}
@@ -368,21 +368,21 @@ wikiDefaults:
   affinity: {}
   podSecurityContext: {}
 
-# A listed wiki is installed unless it sets enabled: false. Fields:
+# A listed handbook is installed unless it sets enabled: false. Fields:
 #   id        DNS label, ^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$, unique. Names the
-#             Deployment wiki-<id> and the address.
-#   contract  naira.wiki/v1alpha1
+#             Deployment handbook-<id> and the address.
+#   contract  naira.handbook/v1alpha1
 #   image     name@sha256:<digest>. Used as given, not built from image.registry
 #             or image.tag.
 #   label     Name in the sidebar. Default: id.
-#   primary   At most one enabled wiki; listed first.
+#   primary   At most one enabled handbook; listed first.
 #   order     Whole number, ascending, then id. Default 0.
-#   owner, source   Optional; copied into wikis.json.
+#   owner, source   Optional; copied into handbooks.json.
 # Example:
 #   - id: platform-handbook
-#     contract: naira.wiki/v1alpha1
+#     contract: naira.handbook/v1alpha1
 #     image: ghcr.io/naira-project/platform-handbook@sha256:<digest>
-wikis: []
+handbooks: []
 
 # PostgreSQL: the cloudpirates/postgres subchart. For an external server set
 # enabled=false and database.host.

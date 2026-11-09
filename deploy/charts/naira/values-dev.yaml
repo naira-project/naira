@@ -92,31 +92,31 @@ portal:
       create: true
       value: naira-local-dev-secret
 
-# Two wikis, to try more than one: the Naira how-to (wiki/howto) and an example
-# handbook (wiki/example). The chart takes a wiki image only by digest from an
-# allowed registry, so the digest is a placeholder: Tilt builds wiki/<id> and
+# Two handbooks, to try more than one: the Naira how-to (handbook/howto) and an example
+# handbook (handbook/example). The chart takes a handbook image only by digest from an
+# allowed registry, so the digest is a placeholder: Tilt builds handbook/<id> and
 # replaces the reference (see the Tiltfile).
-# The gateway is on 3003 because Grafana is on 3002. A wiki's page opens in Chrome
+# The gateway is on 3003 because Grafana is on 3002. A handbook's page opens in Chrome
 # only when its address is on the same site as the portal, which `localhost` and
-# `wiki.localhost` are not. So open the portal at http://naira.localhost:3000 and the
-# wikis are at <id>.naira.localhost:3003. The Keycloak realm has to list that portal
-# address as a redirect URI: see docs/wikis.md.
-wikiGateway:
+# `handbook.localhost` are not. So open the portal at http://naira.localhost:3000 and the
+# handbooks are at <id>.naira.localhost:3003. The Keycloak realm has to list that portal
+# address as a redirect URI: see docs/handbooks.md.
+handbookGateway:
   domain: naira.localhost
   port: 3003
   portalOrigin: http://naira.localhost:3000
   allowedRegistries: [local]
-wikis:
+handbooks:
   - id: howto
-    contract: naira.wiki/v1alpha1
+    contract: naira.handbook/v1alpha1
     label: Naira How-To
     primary: true
-    image: local/naira-wiki-howto@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: local/naira-handbook-howto@sha256:0000000000000000000000000000000000000000000000000000000000000000
   - id: example
-    contract: naira.wiki/v1alpha1
+    contract: naira.handbook/v1alpha1
     label: Example Handbook
     order: 1
-    image: local/naira-wiki-example@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    image: local/naira-handbook-example@sha256:0000000000000000000000000000000000000000000000000000000000000000
 
 ui:
   # Endpoint "View Logs" links: Grafana and Loki from test-dependencies

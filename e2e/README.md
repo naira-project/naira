@@ -4,8 +4,8 @@
 (always deployed, with a configurable set of plugin sidecars), `keycloak`
 (always deployed, for auth), and opt-in standalone components — `litellm`,
 `mlflow`, `llamacpp`, `openmetadata`, `postgres`, `ui`, `portal`, `chatbot1`,
-`wiki-sites`. `wiki-sites` is not a manifest: the script renders the wiki
-gateway and the wikis from the naira chart with `wiki-sites-values.yaml`, so the
+`handbook-sites`. `handbook-sites` is not a manifest: the script renders the handbook
+gateway and the handbooks from the naira chart with `handbook-sites-values.yaml`, so the
 scenario runs what the chart ships.
 
 Each scenario is a directory directly under `e2e/` (e.g.

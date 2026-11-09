@@ -6,7 +6,7 @@ so these notices travel with it.
 
 | Icon | Source | License |
 | --- | --- | --- |
-| `dataset_catalog.svg`, `inference_endpoints_catalog.svg`, `mcp_catalog.svg`, `model_catalog.svg`, `overview.svg`, `plugins.svg`, `software_catalog.svg`, `tech_radar.svg`, `wiki.svg`, `more_coming_soon.svg` | [Lucide](https://lucide.dev) | ISC (portions MIT) |
+| `dataset_catalog.svg`, `inference_endpoints_catalog.svg`, `mcp_catalog.svg`, `model_catalog.svg`, `overview.svg`, `plugins.svg`, `software_catalog.svg`, `tech_radar.svg`, `handbook.svg`, `more_coming_soon.svg` | [Lucide](https://lucide.dev) | ISC (portions MIT) |
 
 ## Lucide
 

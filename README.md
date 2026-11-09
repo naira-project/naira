@@ -80,8 +80,8 @@ cluster `naira-idp`. Tilt is installed by `mise install`.
    ```
    http://naira.localhost:3000
    ```
-   (`localhost:3000` signs in too, but the wikis in the Docs group open only on
-   `naira.localhost`, see [docs/wikis.md](docs/wikis.md#same-site))
+   (`localhost:3000` signs in too, but the handbooks in the Docs group open only on
+   `naira.localhost`, see [docs/handbooks.md](docs/handbooks.md#same-site))
    and login to Keycloak with the default credentials:
 
     - user: `testuser`
@@ -93,9 +93,9 @@ cluster `naira-idp`. Tilt is installed by `mise install`.
    (it's OK if some of them show "Failed"),
    then go to **"Catalogs"** and open the "Software Catalog".
 
-   The **"Docs"** group lists two wikis behind a gateway on port 3003: the
-   [Naira How-To](wiki/howto) and an [example handbook](wiki/example). Their pages open in Chrome only when the portal
-   and the wikis are on the same site; see [Wikis](docs/wikis.md#same-site).
+   The **"Docs"** group lists two handbooks behind a gateway on port 3003: the
+   [Naira How-To](handbook/howto) and an [example handbook](handbook/example). Their pages open in Chrome only when the portal
+   and the handbooks are on the same site; see [Handbooks](docs/handbooks.md#same-site).
 
 Developer tasks (lint, tests, proto, chart checks) are in the Taskfile, and
 do not need Tilt: `task --list`. `task check` verifies the tools.
@@ -108,7 +108,7 @@ do not need Tilt: `task --list`. `task check` verifies the tools.
 ├── ui/                   # React/TypeScript UI
 ├── naira-openmfp-portal/ # OpenMFP Portal (This is the backbone for future UI plugins)
 ├── deploy/charts/        # Helm chart
-├── wiki/                 # Wikis (VitePress sites as container images): the starter, the Naira how-to, an example
+├── handbook/                 # Handbooks (VitePress sites as container images): the starter, the Naira how-to, an example
 ├── docs/                 # Documentation
 ├── Tiltfile              # Local dev environment (kind)
 └── Taskfile.yml          # Developer tasks (lint, tests, proto, chart checks)

@@ -102,45 +102,45 @@ CreateContainerConfigError; fail here with the fix instead.
 {{- end }}
 {{- end }}
 {{- /*
-Wikis. An entry's id is checked whether or not it is enabled, the rest only for
+Handbooks. An entry's id is checked whether or not it is enabled, the rest only for
 enabled entries: a parked entry may be unfinished. Any failure stops the whole
 render, so the previous release keeps running.
 */}}
 {{- $ids := dict }}
 {{- $primaries := list }}
-{{- range $i, $w := .Values.wikis }}
+{{- range $i, $w := .Values.handbooks }}
 {{- if not (kindIs "map" $w) }}
-{{- fail (printf "wikis[%d]: must be a map" $i) }}
+{{- fail (printf "handbooks[%d]: must be a map" $i) }}
 {{- end }}
 {{- $id := toString (default "" $w.id) }}
 {{- if not $id }}
-{{- fail (printf "wikis[%d]: id is required" $i) }}
+{{- fail (printf "handbooks[%d]: id is required" $i) }}
 {{- end }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$" $id) }}
-{{- fail (printf "wikis[%d]: invalid id %q: use lowercase letters, digits and \"-\", at most 42 characters, not starting or ending with \"-\"" $i $id) }}
+{{- fail (printf "handbooks[%d]: invalid id %q: use lowercase letters, digits and \"-\", at most 42 characters, not starting or ending with \"-\"" $i $id) }}
 {{- end }}
 {{- if hasKey $ids $id }}
-{{- fail (printf "wikis[%s]: duplicate id (entries %d and %d)" $id (int (get $ids $id)) $i) }}
+{{- fail (printf "handbooks[%s]: duplicate id (entries %d and %d)" $id (int (get $ids $id)) $i) }}
 {{- end }}
 {{- $_ := set $ids $id $i }}
-{{- if eq (printf "wiki-%s" $id) (include "naira.wikiGatewayName" $) }}
-{{- fail (printf "wikis[%s]: id is reserved, it would name the same objects as the wiki gateway" $id) }}
+{{- if eq (printf "handbook-%s" $id) (include "naira.handbookGatewayName" $) }}
+{{- fail (printf "handbooks[%s]: id is reserved, it would name the same objects as the handbook gateway" $id) }}
 {{- end }}
-{{- if include "naira.wikiEnabled" $w }}
+{{- if include "naira.handbookEnabled" $w }}
 {{- $contract := toString (default "" $w.contract) }}
-{{- if ne $contract "naira.wiki/v1alpha1" }}
-{{- fail (printf "wikis[%s]: unsupported contract %q; supported: naira.wiki/v1alpha1" $id $contract) }}
+{{- if ne $contract "naira.handbook/v1alpha1" }}
+{{- fail (printf "handbooks[%s]: unsupported contract %q; supported: naira.handbook/v1alpha1" $id $contract) }}
 {{- end }}
 {{- $image := toString (default "" $w.image) }}
 {{- if not $image }}
-{{- fail (printf "wikis[%s]: image is required, as name@sha256:<digest>" $id) }}
+{{- fail (printf "handbooks[%s]: image is required, as name@sha256:<digest>" $id) }}
 {{- end }}
 {{- if not (regexMatch "^[^@[:space:]]+@sha256:[a-f0-9]{64}$" $image) }}
-{{- fail (printf "wikis[%s]: image must be pinned by digest, as name@sha256:<64 lowercase hex digits>, got %q" $id $image) }}
+{{- fail (printf "handbooks[%s]: image must be pinned by digest, as name@sha256:<64 lowercase hex digits>, got %q" $id $image) }}
 {{- end }}
-{{- $registries := default (list) $.Values.wikiGateway.allowedRegistries }}
+{{- $registries := default (list) $.Values.handbookGateway.allowedRegistries }}
 {{- if not $registries }}
-{{- fail (printf "wikis[%s]: wikiGateway.allowedRegistries is empty, so no wiki image is allowed" $id) }}
+{{- fail (printf "handbooks[%s]: handbookGateway.allowedRegistries is empty, so no handbook image is allowed" $id) }}
 {{- end }}
 {{- $allowed := false }}
 {{- range $registries }}
@@ -149,12 +149,12 @@ render, so the previous release keeps running.
 {{- end }}
 {{- end }}
 {{- if not $allowed }}
-{{- fail (printf "wikis[%s]: image %q is not from an allowed registry (wikiGateway.allowedRegistries: %s)" $id $image (join ", " $registries)) }}
+{{- fail (printf "handbooks[%s]: image %q is not from an allowed registry (handbookGateway.allowedRegistries: %s)" $id $image (join ", " $registries)) }}
 {{- end }}
 {{- if hasKey $w "order" }}
 {{- $o := $w.order }}
 {{- if not (and (or (kindIs "float64" $o) (kindIs "int64" $o)) (eq (float64 $o) (floor (float64 $o))) (ge (float64 $o) -100000.0) (le (float64 $o) 100000.0)) }}
-{{- fail (printf "wikis[%s]: order must be a whole number from -100000 to 100000, got %v" $id $o) }}
+{{- fail (printf "handbooks[%s]: order must be a whole number from -100000 to 100000, got %v" $id $o) }}
 {{- end }}
 {{- end }}
 {{- if eq (toString $w.primary) "true" }}
@@ -163,32 +163,32 @@ render, so the previous release keeps running.
 {{- end }}
 {{- end }}
 {{- if gt (len $primaries) 1 }}
-{{- fail (printf "wikis: more than one primary wiki (%s); set primary on one wiki only" (join ", " $primaries)) }}
+{{- fail (printf "handbooks: more than one primary handbook (%s); set primary on one handbook only" (join ", " $primaries)) }}
 {{- end }}
-{{- /* The address is built from these, so they are checked once a wiki is enabled. */}}
-{{- if include "naira.hasWikis" . }}
-{{- $gw := .Values.wikiGateway }}
+{{- /* The address is built from these, so they are checked once a handbook is enabled. */}}
+{{- if include "naira.hasHandbooks" . }}
+{{- $gw := .Values.handbookGateway }}
 {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)*$" (toString (default "" $gw.domain))) }}
-{{- fail (printf "wikiGateway.domain: %q is not a host name; use lowercase letters, digits, \"-\" and \".\", without scheme, port or path" (toString (default "" $gw.domain))) }}
+{{- fail (printf "handbookGateway.domain: %q is not a host name; use lowercase letters, digits, \"-\" and \".\", without scheme, port or path" (toString (default "" $gw.domain))) }}
 {{- end }}
 {{- if not (has (toString (default "" $gw.scheme)) (list "http" "https")) }}
-{{- fail (printf "wikiGateway.scheme: must be http or https, got %q" (toString (default "" $gw.scheme))) }}
+{{- fail (printf "handbookGateway.scheme: must be http or https, got %q" (toString (default "" $gw.scheme))) }}
 {{- end }}
 {{- $p := $gw.port }}
 {{- if not (and (or (kindIs "float64" $p) (kindIs "int64" $p)) (eq (float64 $p) (floor (float64 $p))) (ge (float64 $p) 1.0) (le (float64 $p) 65535.0)) }}
-{{- fail (printf "wikiGateway.port: must be a whole number from 1 to 65535, got %v" $p) }}
+{{- fail (printf "handbookGateway.port: must be a whole number from 1 to 65535, got %v" $p) }}
 {{- end }}
 {{- /* The gateway's Envoy config is built from these. */}}
 {{- $img := $gw.image | default dict }}
 {{- if not $img.repository }}
-{{- fail "wikiGateway.image.repository is required" }}
+{{- fail "handbookGateway.image.repository is required" }}
 {{- end }}
 {{- if not (regexMatch "^sha256:[a-f0-9]{64}$" (toString (default "" $img.digest))) }}
-{{- fail (printf "wikiGateway.image.digest: must be sha256:<64 lowercase hex digits>, got %q" (toString (default "" $img.digest))) }}
+{{- fail (printf "handbookGateway.image.digest: must be sha256:<64 lowercase hex digits>, got %q" (toString (default "" $img.digest))) }}
 {{- end }}
 {{- /* The origin is written into a Content-Security-Policy header, so nothing else may ride along. */}}
 {{- if not (regexMatch "^https?://[a-z0-9]([-a-z0-9.]*[a-z0-9])?(:[0-9]{1,5})?$" (toString (default "" $gw.portalOrigin))) }}
-{{- fail (printf "wikiGateway.portalOrigin: must be an origin, scheme://host[:port], got %q" (toString (default "" $gw.portalOrigin))) }}
+{{- fail (printf "handbookGateway.portalOrigin: must be an origin, scheme://host[:port], got %q" (toString (default "" $gw.portalOrigin))) }}
 {{- end }}
 {{- if not (include "naira.keycloakEndpoint" .) }}
 {{- fail (printf "keycloak.baseUrl: must be an http or https URL with a host, got %q" (toString (default "" .Values.keycloak.baseUrl))) }}

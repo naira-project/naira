@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Naira Project Contributors
 # SPDX-License-Identifier: Apache-2.0
 #
-# Deploys the litellm_chatbot_to_catalog_api and the wiki_sites scenarios (see
+# Deploys the litellm_chatbot_to_catalog_api and the handbook_sites scenarios (see
 # e2e/README.md), each into an isolated namespace on its own throwaway kind
 # cluster, and runs their assertions against it.
 #
@@ -19,7 +19,7 @@ on:
       - plugins/**
       - deploy/charts/**
       - naira-openmfp-portal/**
-      - wiki/**
+      - handbook/**
       - e2e/**
       - go.mod
       - go.sum
@@ -147,8 +147,8 @@ jobs:
             --env-id "${ENV_ID}" \
             --cluster-name "${CLUSTER_NAME}"
 
-  e2e-wiki-sites:
-    name: E2E · wiki_sites
+  e2e-handbook-sites:
+    name: E2E · handbook_sites
     runs-on: ubuntu-latest
     # Evaluated before the environment gate, so a skipped job asks no one.
     if: ${{ contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
@@ -178,7 +178,7 @@ jobs:
       - name: Create E2E environment
         run: |
           ./e2e/scripts/create-environment.sh \
-            --scenario wiki_sites \
+            --scenario handbook_sites \
             --env-id "${ENV_ID}" \
             --tag "${{ github.sha }}" \
             --cluster-name "${CLUSTER_NAME}"
@@ -187,14 +187,14 @@ jobs:
       # portal for its service-provider output.
       - name: Port-forward gateway, keycloak and portal
         run: |
-          kubectl -n "${ENV_ID}" port-forward svc/wiki-gateway 8083:8080 &
+          kubectl -n "${ENV_ID}" port-forward svc/handbook-gateway 8083:8080 &
           echo $! > /tmp/gateway-port-forward.pid
           kubectl -n "${ENV_ID}" port-forward svc/keycloak 8080:8080 &
           echo $! > /tmp/keycloak-port-forward.pid
           kubectl -n "${ENV_ID}" port-forward svc/portal 3000:3000 &
           echo $! > /tmp/portal-port-forward.pid
           # Retry for up to 30 seconds while the port-forwards settle. The
-          # gateway answers 404 to a host that is no wiki's.
+          # gateway answers 404 to a host that is no handbook's.
           for _ in $(seq 1 30); do
             if curl -s -o /dev/null -H 'Host: probe' http://localhost:8083/ \
               && curl -sf http://localhost:8080/realms/naira/.well-known/openid-configuration >/dev/null \
@@ -206,15 +206,15 @@ jobs:
           echo "::error::gateway, keycloak or portal not reachable via port-forward after 30s" >&2
           exit 1
 
-      # -timeout bounds the whole run: the stopped-wiki test waits for the
+      # -timeout bounds the whole run: the stopped-handbook test waits for the
       # gateway to notice, twice.
       - name: Run E2E tests
         env:
-          WIKI_GATEWAY_URL: http://localhost:8083
+          HANDBOOK_GATEWAY_URL: http://localhost:8083
           KEYCLOAK_URL: http://localhost:8080
           PORTAL_URL: http://localhost:3000
           E2E_NAMESPACE: ${{ env.ENV_ID }}
-        run: go test -tags e2e -v -timeout=10m ./e2e/wiki_sites/assert/...
+        run: go test -tags e2e -v -timeout=10m ./e2e/handbook_sites/assert/...
 
       - name: Stop port-forwards
         if: always()
@@ -227,7 +227,7 @@ jobs:
         if: always()
         run: |
           kubectl get pods,services -n "${ENV_ID}" -o wide || true
-          kubectl logs -n "${ENV_ID}" -l app.kubernetes.io/name=wiki-gateway --all-containers --tail=-1 --prefix=true || true
+          kubectl logs -n "${ENV_ID}" -l app.kubernetes.io/name=handbook-gateway --all-containers --tail=-1 --prefix=true || true
           kubectl logs -n "${ENV_ID}" -l app=portal --all-containers --tail=-1 --prefix=true || true
           kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
           kubectl describe pods -n "${ENV_ID}" || true

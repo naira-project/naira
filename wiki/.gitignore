@@ -1,4 +1,0 @@
-# Build output and dependencies of every wiki under wiki/.
-node_modules/
-dist/
-.vitepress/cache/

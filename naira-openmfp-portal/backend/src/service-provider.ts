@@ -5,7 +5,7 @@ import {
   ServiceProviderService,
   ServiceProviderResponse,
 } from '@openmfp/portal-server-lib';
-import { loadWikiNodes } from './wikis.js';
+import { loadHandbookNodes } from './handbooks.js';
 
 const UI_BASE_URL = process.env.NAIRA_UI_BASE_URL;
 
@@ -26,7 +26,7 @@ export class ServiceProviderServiceImpl implements ServiceProviderService {
   }
 }
 
-export const serviceProviders = (wikiNodes: LuigiNode[]): RawServiceProvider[] => [
+export const serviceProviders = (handbookNodes: LuigiNode[]): RawServiceProvider[] => [
   {
     name: 'naira-catalog',
     displayName: 'Naira Catalog',
@@ -144,7 +144,7 @@ export const serviceProviders = (wikiNodes: LuigiNode[]): RawServiceProvider[] =
                 url: `${UI_BASE_URL}/more_coming_soon`,
                 loadingIndicator: { enabled: false },
               },
-              ...wikiNodes,
+              ...handbookNodes,
             ],
           },
         },
@@ -158,10 +158,10 @@ const portalNodes = serviceProviders([]).flatMap((provider) =>
 );
 
 export const SERVICE_PROVIDERS = serviceProviders(
-  loadWikiNodes(process.env.NAIRA_WIKIS_FILE, {
+  loadHandbookNodes(process.env.NAIRA_HANDBOOKS_FILE, {
     category: DOCS_CATEGORY,
     firstOrder: Math.max(...portalNodes.map((node) => node.order ?? 0)) + 1,
     reservedIds: new Set(portalNodes.map((node) => node.pathSegment)),
-    log: (message) => new Logger('Wikis').error(message),
+    log: (message) => new Logger('Handbooks').error(message),
   }),
 );

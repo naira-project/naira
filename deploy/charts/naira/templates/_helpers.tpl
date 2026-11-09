@@ -110,46 +110,46 @@ affinity:
 {{- end -}}
 
 {{/*
-"true" for a wiki entry that is enabled. A listed wiki is enabled unless it says false.
-wikis.yaml renders before validate.yaml, so this must not fail on a malformed entry.
+"true" for a handbook entry that is enabled. A listed handbook is enabled unless it says false.
+handbooks.yaml renders before validate.yaml, so this must not fail on a malformed entry.
 */}}
-{{- define "naira.wikiEnabled" -}}
+{{- define "naira.handbookEnabled" -}}
 {{- if and (kindIs "map" .) (or (not (hasKey . "enabled")) .enabled) -}}true{{- end -}}
 {{- end -}}
 
-{{/* Non-empty when at least one wiki is enabled. */}}
-{{- define "naira.hasWikis" -}}
-{{- range .Values.wikis -}}
-{{- if include "naira.wikiEnabled" . -}}true{{- end -}}
+{{/* Non-empty when at least one handbook is enabled. */}}
+{{- define "naira.hasHandbooks" -}}
+{{- range .Values.handbooks -}}
+{{- if include "naira.handbookEnabled" . -}}true{{- end -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "naira.wikiGatewayName" -}}
-wiki-gateway
+{{- define "naira.handbookGatewayName" -}}
+handbook-gateway
 {{- end -}}
 
-{{/* Usage: include "naira.wikiHost" (dict "root" $ "id" $id) */}}
-{{- define "naira.wikiHost" -}}
-{{- printf "%s.%s" .id .root.Values.wikiGateway.domain -}}
+{{/* Usage: include "naira.handbookHost" (dict "root" $ "id" $id) */}}
+{{- define "naira.handbookHost" -}}
+{{- printf "%s.%s" .id .root.Values.handbookGateway.domain -}}
 {{- end -}}
 
 {{/*
-Browser-facing address of a wiki. The port is left out when it is the scheme's default.
-Usage: include "naira.wikiUrl" (dict "root" $ "id" $id)
+Browser-facing address of a handbook. The port is left out when it is the scheme's default.
+Usage: include "naira.handbookUrl" (dict "root" $ "id" $id)
 */}}
-{{- define "naira.wikiUrl" -}}
-{{- $gw := .root.Values.wikiGateway -}}
+{{- define "naira.handbookUrl" -}}
+{{- $gw := .root.Values.handbookGateway -}}
 {{- $port := int $gw.port -}}
 {{- if eq $port (ternary 443 80 (eq (toString $gw.scheme) "https")) -}}
-{{- printf "%s://%s/" $gw.scheme (include "naira.wikiHost" .) -}}
+{{- printf "%s://%s/" $gw.scheme (include "naira.handbookHost" .) -}}
 {{- else -}}
-{{- printf "%s://%s:%d/" $gw.scheme (include "naira.wikiHost" .) $port -}}
+{{- printf "%s://%s:%d/" $gw.scheme (include "naira.handbookHost" .) $port -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
 keycloak.baseUrl as JSON {tls, host, port}; empty unless it is an http(s) URL with a host. The
-match comes first because urlParse panics on a malformed URL, and wiki-gateway.yaml renders
+match comes first because urlParse panics on a malformed URL, and handbook-gateway.yaml renders
 before validate.yaml can reject it.
 */}}
 {{- define "naira.keycloakEndpoint" -}}
@@ -163,12 +163,12 @@ before validate.yaml can reject it.
 {{- end -}}
 
 {{/*
-wikis.json: the enabled wikis for the portal, as JSON.
+handbooks.json: the enabled handbooks for the portal, as JSON.
 */}}
-{{- define "naira.wikisJson" -}}
+{{- define "naira.handbooksJson" -}}
 {{- $enabled := list }}
-{{- range .Values.wikis }}
-{{- if include "naira.wikiEnabled" . }}
+{{- range .Values.handbooks }}
+{{- if include "naira.handbookEnabled" . }}
 {{- $enabled = append $enabled . }}
 {{- end }}
 {{- end }}
@@ -180,11 +180,11 @@ wikis.json: the enabled wikis for the portal, as JSON.
 {{- end }}
 {{- $entries := list }}
 {{- range $key := keys $byKey | sortAlpha }}
-{{- $wiki := get $byKey $key }}
-{{- $id := toString $wiki.id }}
-{{- $entry := dict "id" $id "label" ($wiki.label | default $id) "primary" (eq (toString $wiki.primary) "true") "order" (int $wiki.order) "url" (include "naira.wikiUrl" (dict "root" $ "id" $id)) }}
-{{- with $wiki.owner }}{{ $_ := set $entry "owner" . }}{{ end }}
-{{- with $wiki.source }}{{ $_ := set $entry "source" . }}{{ end }}
+{{- $handbook := get $byKey $key }}
+{{- $id := toString $handbook.id }}
+{{- $entry := dict "id" $id "label" ($handbook.label | default $id) "primary" (eq (toString $handbook.primary) "true") "order" (int $handbook.order) "url" (include "naira.handbookUrl" (dict "root" $ "id" $id)) }}
+{{- with $handbook.owner }}{{ $_ := set $entry "owner" . }}{{ end }}
+{{- with $handbook.source }}{{ $_ := set $entry "source" . }}{{ end }}
 {{- $entries = append $entries $entry }}
 {{- end }}
 {{- toPrettyJson $entries -}}

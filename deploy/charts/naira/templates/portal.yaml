@@ -19,7 +19,7 @@ spec:
         {{- include "naira.labels" . | nindent 8 }}
         {{- include "naira.selector" (dict "root" . "name" "portal") | nindent 8 }}
       annotations:
-        checksum/wikis: {{ include "naira.wikisJson" . | sha256sum }}
+        checksum/handbooks: {{ include "naira.handbooksJson" . | sha256sum }}
         {{- with .Values.portal.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -53,8 +53,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "naira.portalSecretName" . }}
                   key: {{ .Values.portal.oidc.secret.key }}
-            - name: NAIRA_WIKIS_FILE
-              value: /etc/naira/wikis/wikis.json
+            - name: NAIRA_HANDBOOKS_FILE
+              value: /etc/naira/handbooks/handbooks.json
           ports:
             - {name: http, containerPort: {{ .Values.portal.port }}}
           startupProbe:
@@ -71,10 +71,10 @@ spec:
           resources:
             {{- toYaml .Values.portal.resources | nindent 12 }}
           volumeMounts:
-            - {name: wikis, mountPath: /etc/naira/wikis, readOnly: true}
+            - {name: handbooks, mountPath: /etc/naira/handbooks, readOnly: true}
       volumes:
-        - name: wikis
-          configMap: {name: wikis}
+        - name: handbooks
+          configMap: {name: handbooks}
 ---
 apiVersion: v1
 kind: Service

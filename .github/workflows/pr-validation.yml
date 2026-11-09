@@ -229,14 +229,14 @@ jobs:
           kind load docker-image --name naira-ci "${images[@]}"
       - name: Install naira
         # First: LiteLLM's database is on this chart's PostgreSQL. Waited for below.
-        # Without the dev wikis: their images are digest placeholders that only Tilt
-        # replaces. The wiki_sites e2e scenario covers wikis and the gateway.
+        # Without the dev handbooks: their images are digest placeholders that only Tilt
+        # replaces. The handbook_sites e2e scenario covers handbooks and the gateway.
         run: |
           helm dependency build deploy/charts/naira
           helm install naira deploy/charts/naira \
             --namespace idp-system --create-namespace \
             -f deploy/charts/naira/values-dev.yaml \
-            --set-json 'wikis=[]'
+            --set-json 'handbooks=[]'
       - name: Install test-dependencies
         # No --wait: Helm fails the release once the LiteLLM migrations Job is
         # garbage-collected (after 120s).

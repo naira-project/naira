@@ -9,8 +9,8 @@
 #   - guards that must refuse to render (bad values, missing Secrets)
 #   - values-dev.yaml and the kind/CI setup
 #   - pod hardening, scheduling fields and the catalog NetworkPolicy
-#   - wiki workloads, the wikis ConfigMap, wiki guards and wiki NetworkPolicies
-#   - the wiki gateway: Envoy config, Deployment, rollout checksum and guards
+#   - handbook workloads, the handbooks ConfigMap, handbook guards and handbook NetworkPolicies
+#   - the handbook gateway: Envoy config, Deployment, rollout checksum and guards
 # Requires helm and mikefarah yq v4 (both pinned in mise.toml).
 set -euo pipefail
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
@@ -639,394 +639,394 @@ check "db-init gets sslmode, retries and a deadline" "prefer 60 900" \
        | [(.spec.template.spec.containers[0].env[] | select(.name == "PGSSLMODE" or .name == "DB_WAIT_RETRIES") | .value),
           (.spec.activeDeadlineSeconds | tostring)] | join(" ")')"
 
-# ── Wikis ────────────────────────────────────────────────────────────────────
+# ── Handbooks ────────────────────────────────────────────────────────────────────
 DIGEST=$(printf 'a%.0s' {1..64})
-# wiki ID [EXTRA JSON FIELDS]: one wikis[] entry that is valid until EXTRA overrides
+# handbook ID [EXTRA JSON FIELDS]: one handbooks[] entry that is valid until EXTRA overrides
 # a field (the last duplicate key wins).
-wiki() {
+handbook() {
   local id=$1 extra=${2:+,$2}
-  printf '{"id":"%s","contract":"naira.wiki/v1alpha1","image":"ghcr.io/naira-project/%s@sha256:%s"%s}' \
+  printf '{"id":"%s","contract":"naira.handbook/v1alpha1","image":"ghcr.io/naira-project/%s@sha256:%s"%s}' \
     "$id" "$id" "$DIGEST" "$extra"
 }
-# render_wikis ENTRY...: render with exactly these wikis.
-render_wikis() {
+# render_handbooks ENTRY...: render with exactly these handbooks.
+render_handbooks() {
   local entries
   entries=$(IFS=,; echo "$*")
-  render --set-json "wikis=[$entries]"
+  render --set-json "handbooks=[$entries]"
 }
-# The gateway is also named wiki-*, so wiki workloads are told apart by their component label.
-WIKI_DEPLOYMENTS='select(.kind == "Deployment" and .metadata.labels["app.kubernetes.io/component"] == "wiki") | .metadata.name'
-WIKI_SERVICES='select(.kind == "Service" and .metadata.labels["app.kubernetes.io/component"] == "wiki") | .metadata.name'
-WIKIS_JSON='select(.kind == "ConfigMap" and .metadata.name == "wikis") | .data["wikis.json"] | from_json'
-WIKI_POD() { printf 'select(.kind == "Deployment" and .metadata.name == "wiki-%s") | .spec.template.spec' "$1"; }
+# The gateway is also named handbook-*, so handbook workloads are told apart by their component label.
+HANDBOOK_DEPLOYMENTS='select(.kind == "Deployment" and .metadata.labels["app.kubernetes.io/component"] == "handbook") | .metadata.name'
+HANDBOOK_SERVICES='select(.kind == "Service" and .metadata.labels["app.kubernetes.io/component"] == "handbook") | .metadata.name'
+HANDBOOKS_JSON='select(.kind == "ConfigMap" and .metadata.name == "handbooks") | .data["handbooks.json"] | from_json'
+HANDBOOK_POD() { printf 'select(.kind == "Deployment" and .metadata.name == "handbook-%s") | .spec.template.spec' "$1"; }
 
-check "no wikis by default: no Deployment, no Service" \
+check "no handbooks by default: no Deployment, no Service" \
   "0 0" \
-  "$(o=$(render); echo "$(echo "$o" | yq ea "[$WIKI_DEPLOYMENTS] | length") $(echo "$o" | yq ea "[$WIKI_SERVICES] | length")")"
-check "no wikis by default: wikis ConfigMap holds an empty list" \
+  "$(o=$(render); echo "$(echo "$o" | yq ea "[$HANDBOOK_DEPLOYMENTS] | length") $(echo "$o" | yq ea "[$HANDBOOK_SERVICES] | length")")"
+check "no handbooks by default: handbooks ConfigMap holds an empty list" \
   "[]" \
-  "$(render | yq "$WIKIS_JSON" -o=json -I=0)"
-check "wikis ConfigMap is in the release namespace" \
+  "$(render | yq "$HANDBOOKS_JSON" -o=json -I=0)"
+check "handbooks ConfigMap is in the release namespace" \
   "naira" \
-  "$(render | yq 'select(.kind == "ConfigMap" and .metadata.name == "wikis") | .metadata.namespace')"
+  "$(render | yq 'select(.kind == "ConfigMap" and .metadata.name == "handbooks") | .metadata.namespace')"
 
-check "wiki: Deployment and Service named wiki-<id>" \
-  "wiki-handbook wiki-handbook" \
-  "$(o=$(render_wikis "$(wiki handbook)")
-     echo "$(echo "$o" | yq "$WIKI_DEPLOYMENTS") $(echo "$o" | yq "$WIKI_SERVICES")")"
-check "wiki: image is used as given, by digest, not built from the chart's image values" \
-  "ghcr.io/naira-project/handbook@sha256:${DIGEST}" \
-  "$(render_wikis "$(wiki handbook)" | yq "$(WIKI_POD handbook) | .containers[0].image")"
-check "wiki: image ignores image.registry and image.tag" \
-  "ghcr.io/naira-project/handbook@sha256:${DIGEST}" \
+check "handbook: Deployment and Service named handbook-<id>" \
+  "handbook-platform handbook-platform" \
+  "$(o=$(render_handbooks "$(handbook platform)")
+     echo "$(echo "$o" | yq "$HANDBOOK_DEPLOYMENTS") $(echo "$o" | yq "$HANDBOOK_SERVICES")")"
+check "handbook: image is used as given, by digest, not built from the chart's image values" \
+  "ghcr.io/naira-project/platform@sha256:${DIGEST}" \
+  "$(render_handbooks "$(handbook platform)" | yq "$(HANDBOOK_POD platform) | .containers[0].image")"
+check "handbook: image ignores image.registry and image.tag" \
+  "ghcr.io/naira-project/platform@sha256:${DIGEST}" \
   "$(render --set image.registry=other.example --set image.tag=zz \
-      --set-json "wikis=[$(wiki handbook)]" \
-    | yq "$(WIKI_POD handbook) | .containers[0].image")"
-check "wiki: readiness on naira-wiki.json, port 8080" \
-  "/naira-wiki.json 8080" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq "$(WIKI_POD handbook) | .containers[0]
+      --set-json "handbooks=[$(handbook platform)]" \
+    | yq "$(HANDBOOK_POD platform) | .containers[0].image")"
+check "handbook: readiness on naira-handbook.json, port 8080" \
+  "/naira-handbook.json 8080" \
+  "$(render_handbooks "$(handbook platform)" \
+    | yq "$(HANDBOOK_POD platform) | .containers[0]
           | .readinessProbe.httpGet.path + \" \" + (.ports[0].containerPort | tostring)")"
-check "wiki: restricted security context" \
+check "handbook: restricted security context" \
   "false true true ALL RuntimeDefault" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq "$(WIKI_POD handbook) | .containers[0].securityContext
+  "$(render_handbooks "$(handbook platform)" \
+    | yq "$(HANDBOOK_POD platform) | .containers[0].securityContext
           | (.allowPrivilegeEscalation | tostring) + \" \" + (.readOnlyRootFilesystem | tostring) + \" \"
             + (.runAsNonRoot | tostring) + \" \" + .capabilities.drop[0] + \" \" + .seccompProfile.type")"
-check "wiki: does not pin a uid, the image contract only says non-root" \
+check "handbook: does not pin a uid, the image contract only says non-root" \
   "null" \
-  "$(render_wikis "$(wiki handbook)" | yq "$(WIKI_POD handbook) | .containers[0].securityContext.runAsUser")"
-check "wiki: writable /tmp is a small emptyDir" \
+  "$(render_handbooks "$(handbook platform)" | yq "$(HANDBOOK_POD platform) | .containers[0].securityContext.runAsUser")"
+check "handbook: writable /tmp is a small emptyDir" \
   "/tmp tmp true" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq "$(WIKI_POD handbook)
+  "$(render_handbooks "$(handbook platform)" \
+    | yq "$(HANDBOOK_POD platform)
           | .containers[0].volumeMounts[0].mountPath + \" \" + .volumes[0].name + \" \"
             + (.volumes[0].emptyDir | has(\"sizeLimit\") | tostring)")"
-check "wiki: no API token and not the catalog ServiceAccount" \
+check "handbook: no API token and not the catalog ServiceAccount" \
   "false null" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq "$(WIKI_POD handbook) | (.automountServiceAccountToken | tostring) + \" \" + (.serviceAccountName // \"null\")")"
-check "wiki: small resources" \
+  "$(render_handbooks "$(handbook platform)" \
+    | yq "$(HANDBOOK_POD platform) | (.automountServiceAccountToken | tostring) + \" \" + (.serviceAccountName // \"null\")")"
+check "handbook: small resources" \
   "100m 64Mi" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq "$(WIKI_POD handbook) | .containers[0].resources.limits | .cpu + \" \" + .memory")"
-check "wiki: Service on 8080 selects only that wiki's pods" \
-  "8080 wiki-handbook" \
-  "$(render_wikis "$(wiki handbook)" "$(wiki other)" \
-    | yq 'select(.kind == "Service" and .metadata.name == "wiki-handbook")
+  "$(render_handbooks "$(handbook platform)" \
+    | yq "$(HANDBOOK_POD platform) | .containers[0].resources.limits | .cpu + \" \" + .memory")"
+check "handbook: Service on 8080 selects only that handbook's pods" \
+  "8080 handbook-platform" \
+  "$(render_handbooks "$(handbook platform)" "$(handbook other)" \
+    | yq 'select(.kind == "Service" and .metadata.name == "handbook-platform")
           | (.spec.ports[0].port | tostring) + " " + .spec.selector["app.kubernetes.io/name"]')"
-check "wiki: pods carry the wiki component label" \
-  "wiki" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-handbook")
+check "handbook: pods carry the handbook component label" \
+  "handbook" \
+  "$(render_handbooks "$(handbook platform)" \
+    | yq 'select(.kind == "Deployment" and .metadata.name == "handbook-platform")
           | .spec.template.metadata.labels["app.kubernetes.io/component"]')"
-check "wiki: component label is not part of the selector" \
+check "handbook: component label is not part of the selector" \
   "false" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-handbook")
+  "$(render_handbooks "$(handbook platform)" \
+    | yq 'select(.kind == "Deployment" and .metadata.name == "handbook-platform")
           | .spec.selector.matchLabels | has("app.kubernetes.io/component") | tostring')"
-check "wiki: replicas default to 1" \
+check "handbook: replicas default to 1" \
   "1" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-handbook") | .spec.replicas')"
-check "wiki: replicas from wikiDefaults" \
+  "$(render_handbooks "$(handbook platform)" \
+    | yq 'select(.kind == "Deployment" and .metadata.name == "handbook-platform") | .spec.replicas')"
+check "handbook: replicas from handbookDefaults" \
   "2" \
-  "$(render --set wikiDefaults.replicas=2 --set-json "wikis=[$(wiki handbook)]" \
-    | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-handbook") | .spec.replicas')"
-check "wiki: imagePullSecrets apply" \
+  "$(render --set handbookDefaults.replicas=2 --set-json "handbooks=[$(handbook platform)]" \
+    | yq 'select(.kind == "Deployment" and .metadata.name == "handbook-platform") | .spec.replicas')"
+check "handbook: imagePullSecrets apply" \
   "regcred" \
-  "$(render --set 'imagePullSecrets[0].name=regcred' --set-json "wikis=[$(wiki handbook)]" \
-    | yq "$(WIKI_POD handbook) | .imagePullSecrets[0].name")"
-check "wiki: no scheduling fields by default" \
+  "$(render --set 'imagePullSecrets[0].name=regcred' --set-json "handbooks=[$(handbook platform)]" \
+    | yq "$(HANDBOOK_POD platform) | .imagePullSecrets[0].name")"
+check "handbook: no scheduling fields by default" \
   "false" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq "$(WIKI_POD handbook)
+  "$(render_handbooks "$(handbook platform)" \
+    | yq "$(HANDBOOK_POD platform)
           | (has(\"imagePullSecrets\") or has(\"nodeSelector\") or has(\"tolerations\")
              or has(\"affinity\") or has(\"priorityClassName\") or has(\"securityContext\")) | tostring")"
-check "wiki: scheduling fields from wikiDefaults" \
+check "handbook: scheduling fields from handbookDefaults" \
   "linux dedicated high 1000" \
-  "$(render --set wikiDefaults.nodeSelector.os=linux --set 'wikiDefaults.tolerations[0].key=dedicated' \
-      --set wikiDefaults.priorityClassName=high --set wikiDefaults.podSecurityContext.fsGroup=1000 \
-      --set-json "wikis=[$(wiki handbook)]" \
-    | yq "$(WIKI_POD handbook)
+  "$(render --set handbookDefaults.nodeSelector.os=linux --set 'handbookDefaults.tolerations[0].key=dedicated' \
+      --set handbookDefaults.priorityClassName=high --set handbookDefaults.podSecurityContext.fsGroup=1000 \
+      --set-json "handbooks=[$(handbook platform)]" \
+    | yq "$(HANDBOOK_POD platform)
           | .nodeSelector.os + \" \" + .tolerations[0].key + \" \" + .priorityClassName + \" \"
             + (.securityContext.fsGroup | tostring)")"
 
-# ConfigMap: enabled wikis only, sorted primary first, then order, then id.
-check "wikis.json entry: id, label, url, primary, order" \
-  '{"id":"handbook","label":"Platform Handbook","order":3,"primary":true,"url":"http://handbook.wiki.localhost:3002/"}' \
-  "$(render_wikis "$(wiki handbook '"label":"Platform Handbook","primary":true,"order":3')" \
-    | yq "$WIKIS_JSON | .[0]" -o=json -I=0)"
-check "wikis.json: label defaults to the id, order to 0, primary to false" \
-  "handbook 0 false" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq "$WIKIS_JSON | .[0] | .label + \" \" + (.order | tostring) + \" \" + (.primary | tostring)")"
-check "wikis.json: owner and source appear when set" \
+# ConfigMap: enabled handbooks only, sorted primary first, then order, then id.
+check "handbooks.json entry: id, label, url, primary, order" \
+  '{"id":"platform","label":"Platform Handbook","order":3,"primary":true,"url":"http://platform.handbook.localhost:3002/"}' \
+  "$(render_handbooks "$(handbook platform '"label":"Platform Handbook","primary":true,"order":3')" \
+    | yq "$HANDBOOKS_JSON | .[0]" -o=json -I=0)"
+check "handbooks.json: label defaults to the id, order to 0, primary to false" \
+  "platform 0 false" \
+  "$(render_handbooks "$(handbook platform)" \
+    | yq "$HANDBOOKS_JSON | .[0] | .label + \" \" + (.order | tostring) + \" \" + (.primary | tostring)")"
+check "handbooks.json: owner and source appear when set" \
   "team-platform https://example.com/hb" \
-  "$(render_wikis "$(wiki handbook '"owner":"team-platform","source":"https://example.com/hb"')" \
-    | yq "$WIKIS_JSON | .[0] | .owner + \" \" + .source")"
-check "wikis.json: no owner and source when unset" \
+  "$(render_handbooks "$(handbook platform '"owner":"team-platform","source":"https://example.com/hb"')" \
+    | yq "$HANDBOOKS_JSON | .[0] | .owner + \" \" + .source")"
+check "handbooks.json: no owner and source when unset" \
   "false false" \
-  "$(render_wikis "$(wiki handbook)" \
-    | yq "$WIKIS_JSON | .[0] | (has(\"owner\") | tostring) + \" \" + (has(\"source\") | tostring)")"
-check "wikis.json: primary first, then order, then id" \
+  "$(render_handbooks "$(handbook platform)" \
+    | yq "$HANDBOOKS_JSON | .[0] | (has(\"owner\") | tostring) + \" \" + (has(\"source\") | tostring)")"
+check "handbooks.json: primary first, then order, then id" \
   "primary-one,a-early,b-early,c-late" \
-  "$(render_wikis "$(wiki c-late '"order":5')" "$(wiki b-early '"order":1')" \
-      "$(wiki primary-one '"primary":true,"order":9')" "$(wiki a-early '"order":1')" \
-    | yq "$WIKIS_JSON | map(.id) | join(\",\")")"
-check "wikis.json: negative and missing order sort before positive" \
+  "$(render_handbooks "$(handbook c-late '"order":5')" "$(handbook b-early '"order":1')" \
+      "$(handbook primary-one '"primary":true,"order":9')" "$(handbook a-early '"order":1')" \
+    | yq "$HANDBOOKS_JSON | map(.id) | join(\",\")")"
+check "handbooks.json: negative and missing order sort before positive" \
   "neg,none,pos" \
-  "$(render_wikis "$(wiki pos '"order":2')" "$(wiki none)" "$(wiki neg '"order":-3')" \
-    | yq "$WIKIS_JSON | map(.id) | join(\",\")")"
-check "wikis.json: negative orders sort as numbers" \
+  "$(render_handbooks "$(handbook pos '"order":2')" "$(handbook none)" "$(handbook neg '"order":-3')" \
+    | yq "$HANDBOOKS_JSON | map(.id) | join(\",\")")"
+check "handbooks.json: negative orders sort as numbers" \
   "ten-down,three-down" \
-  "$(render_wikis "$(wiki three-down '"order":-3')" "$(wiki ten-down '"order":-10')" \
-    | yq "$WIKIS_JSON | map(.id) | join(\",\")")"
-check "wikis.json: ids sort as text, order as a number" \
+  "$(render_handbooks "$(handbook three-down '"order":-3')" "$(handbook ten-down '"order":-10')" \
+    | yq "$HANDBOOKS_JSON | map(.id) | join(\",\")")"
+check "handbooks.json: ids sort as text, order as a number" \
   "two,ten" \
-  "$(render_wikis "$(wiki ten '"order":10')" "$(wiki two '"order":2')" \
-    | yq "$WIKIS_JSON | map(.id) | join(\",\")")"
+  "$(render_handbooks "$(handbook ten '"order":10')" "$(handbook two '"order":2')" \
+    | yq "$HANDBOOKS_JSON | map(.id) | join(\",\")")"
 
 # Address: <scheme>://<id>.<domain>[:port]/, the port left out when it is the scheme's default.
-wiki_url() { render --set-json "wikis=[$(wiki handbook)]" "$@" | yq "$WIKIS_JSON | .[0].url"; }
-check "wiki URL: kind defaults" \
-  "http://handbook.wiki.localhost:3002/" \
-  "$(wiki_url)"
-check "wiki URL: https on 443 has no port" \
-  "https://handbook.wiki.example.com/" \
-  "$(wiki_url --set wikiGateway.scheme=https --set wikiGateway.port=443 --set wikiGateway.domain=wiki.example.com)"
-check "wiki URL: http on 80 has no port" \
-  "http://handbook.wiki.example.com/" \
-  "$(wiki_url --set wikiGateway.port=80 --set wikiGateway.domain=wiki.example.com)"
-check "wiki URL: https on another port keeps it" \
-  "https://handbook.wiki.example.com:8443/" \
-  "$(wiki_url --set wikiGateway.scheme=https --set wikiGateway.port=8443 --set wikiGateway.domain=wiki.example.com)"
-check "wiki URL: 443 on http is not a default port" \
-  "http://handbook.wiki.example.com:443/" \
-  "$(wiki_url --set wikiGateway.port=443 --set wikiGateway.domain=wiki.example.com)"
+handbook_url() { render --set-json "handbooks=[$(handbook platform)]" "$@" | yq "$HANDBOOKS_JSON | .[0].url"; }
+check "handbook URL: kind defaults" \
+  "http://platform.handbook.localhost:3002/" \
+  "$(handbook_url)"
+check "handbook URL: https on 443 has no port" \
+  "https://platform.handbook.example.com/" \
+  "$(handbook_url --set handbookGateway.scheme=https --set handbookGateway.port=443 --set handbookGateway.domain=handbook.example.com)"
+check "handbook URL: http on 80 has no port" \
+  "http://platform.handbook.example.com/" \
+  "$(handbook_url --set handbookGateway.port=80 --set handbookGateway.domain=handbook.example.com)"
+check "handbook URL: https on another port keeps it" \
+  "https://platform.handbook.example.com:8443/" \
+  "$(handbook_url --set handbookGateway.scheme=https --set handbookGateway.port=8443 --set handbookGateway.domain=handbook.example.com)"
+check "handbook URL: 443 on http is not a default port" \
+  "http://platform.handbook.example.com:443/" \
+  "$(handbook_url --set handbookGateway.port=443 --set handbookGateway.domain=handbook.example.com)"
 
-# Lifecycle: enabled false and removal take the wiki's objects and entry away, nothing else.
-check "disabled wiki: no Deployment, no Service, no entry" \
-  "wiki-other|wiki-other|other" \
-  "$(o=$(render_wikis "$(wiki handbook '"enabled":false')" "$(wiki other)")
-     echo "$(echo "$o" | yq "$WIKI_DEPLOYMENTS")|$(echo "$o" | yq "$WIKI_SERVICES")|$(echo "$o" | yq "$WIKIS_JSON | map(.id) | join(\",\")")")"
-check "wiki without enabled is enabled" \
-  "wiki-handbook" \
-  "$(render_wikis "$(wiki handbook)" | yq "$WIKI_DEPLOYMENTS")"
-check "all wikis disabled: back to an empty list" \
+# Lifecycle: enabled false and removal take the handbook's objects and entry away, nothing else.
+check "disabled handbook: no Deployment, no Service, no entry" \
+  "handbook-other|handbook-other|other" \
+  "$(o=$(render_handbooks "$(handbook platform '"enabled":false')" "$(handbook other)")
+     echo "$(echo "$o" | yq "$HANDBOOK_DEPLOYMENTS")|$(echo "$o" | yq "$HANDBOOK_SERVICES")|$(echo "$o" | yq "$HANDBOOKS_JSON | map(.id) | join(\",\")")")"
+check "handbook without enabled is enabled" \
+  "handbook-platform" \
+  "$(render_handbooks "$(handbook platform)" | yq "$HANDBOOK_DEPLOYMENTS")"
+check "all handbooks disabled: back to an empty list" \
   "0 []" \
-  "$(o=$(render_wikis "$(wiki handbook '"enabled":false')")
-     echo "$(echo "$o" | yq ea "[$WIKI_DEPLOYMENTS] | length") $(echo "$o" | yq "$WIKIS_JSON" -o=json -I=0)")"
-check "removed wiki: its objects are gone, the other stays" \
-  "wiki-other" \
-  "$(render_wikis "$(wiki other)" | yq "$WIKI_DEPLOYMENTS")"
+  "$(o=$(render_handbooks "$(handbook platform '"enabled":false')")
+     echo "$(echo "$o" | yq ea "[$HANDBOOK_DEPLOYMENTS] | length") $(echo "$o" | yq "$HANDBOOKS_JSON" -o=json -I=0)")"
+check "removed handbook: its objects are gone, the other stays" \
+  "handbook-other" \
+  "$(render_handbooks "$(handbook other)" | yq "$HANDBOOK_DEPLOYMENTS")"
 
-# Everything outside the wiki objects renders byte for byte the same with or without wikis.
-# The portal Deployment carries a checksum of wikis.json, which is the one thing wikis may change in it.
-without_wiki_objects() {
-  yq 'select((.metadata.name == "wikis" or (.metadata.name | test("^wiki-"))) | not)
-      | (select(.kind == "Deployment" and .metadata.name == "portal") | .spec.template.metadata.annotations) |= del(.["checksum/wikis"])'
+# Everything outside the handbook objects renders byte for byte the same with or without handbooks.
+# The portal Deployment carries a checksum of handbooks.json, which is the one thing handbooks may change in it.
+without_handbook_objects() {
+  yq 'select((.metadata.name == "handbooks" or (.metadata.name | test("^handbook-"))) | not)
+      | (select(.kind == "Deployment" and .metadata.name == "portal") | .spec.template.metadata.annotations) |= del(.["checksum/handbooks"])'
 }
-if [ "$(render | without_wiki_objects | sha256sum)" = \
-     "$(render_wikis "$(wiki handbook)" "$(wiki other '"enabled":false')" | without_wiki_objects | sha256sum)" ]; then
-  echo "ok   catalog, ui, portal and database objects are untouched by wikis"
+if [ "$(render | without_handbook_objects | sha256sum)" = \
+     "$(render_handbooks "$(handbook platform)" "$(handbook other '"enabled":false')" | without_handbook_objects | sha256sum)" ]; then
+  echo "ok   catalog, ui, portal and database objects are untouched by handbooks"
 else
-  echo "FAIL catalog, ui, portal and database objects are untouched by wikis"; fail=1
+  echo "FAIL catalog, ui, portal and database objects are untouched by handbooks"; fail=1
 fi
-# Wiki guards. A bad entry fails the whole render, and the message names the wiki.
-must_fail_wikis() {
+# Handbook guards. A bad entry fails the whole render, and the message names the handbook.
+must_fail_handbooks() {
   local name=$1 want=$2 entries
   shift 2
   entries=$(IFS=,; echo "$*")
-  must_fail "$name" "$want" --set-json "wikis=[$entries]"
+  must_fail "$name" "$want" --set-json "handbooks=[$entries]"
 }
 for bad in Bad -a a- a_b a.b "$(printf 'a%.0s' {1..43})"; do
-  must_fail_wikis "wiki id ${bad:0:12} is not a DNS label" "wikis[0]: invalid id \"$bad\"" \
-    "$(wiki x "\"id\":\"$bad\"")"
+  must_fail_handbooks "handbook id ${bad:0:12} is not a DNS label" "handbooks[0]: invalid id \"$bad\"" \
+    "$(handbook x "\"id\":\"$bad\"")"
 done
-must_fail_wikis "wiki without id" "wikis[1]: id is required" \
-  "$(wiki ok)" '{"contract":"naira.wiki/v1alpha1"}'
-must_fail_wikis "wiki entry that is not a map" "wikis[0]: must be a map" '"handbook"'
-must_fail_wikis "duplicate wiki id" "wikis[handbook]: duplicate id (entries 0 and 2)" \
-  "$(wiki handbook)" "$(wiki other)" "$(wiki handbook)"
-must_fail_wikis "duplicate wiki id even when one is disabled" "wikis[handbook]: duplicate id" \
-  "$(wiki handbook)" "$(wiki handbook '"enabled":false')"
-must_fail_wikis "wiki id gateway collides with the gateway objects" "wikis[gateway]: id is reserved" \
-  "$(wiki gateway)"
-must_fail_wikis "two primary wikis" "wikis: more than one primary wiki (a, b)" \
-  "$(wiki a '"primary":true')" "$(wiki b '"primary":true')"
+must_fail_handbooks "handbook without id" "handbooks[1]: id is required" \
+  "$(handbook ok)" '{"contract":"naira.handbook/v1alpha1"}'
+must_fail_handbooks "handbook entry that is not a map" "handbooks[0]: must be a map" '"platform"'
+must_fail_handbooks "duplicate handbook id" "handbooks[platform]: duplicate id (entries 0 and 2)" \
+  "$(handbook platform)" "$(handbook other)" "$(handbook platform)"
+must_fail_handbooks "duplicate handbook id even when one is disabled" "handbooks[platform]: duplicate id" \
+  "$(handbook platform)" "$(handbook platform '"enabled":false')"
+must_fail_handbooks "handbook id gateway collides with the gateway objects" "handbooks[gateway]: id is reserved" \
+  "$(handbook gateway)"
+must_fail_handbooks "two primary handbooks" "handbooks: more than one primary handbook (a, b)" \
+  "$(handbook a '"primary":true')" "$(handbook b '"primary":true')"
 check "a disabled primary does not count" \
   "ok" \
-  "$(render_wikis "$(wiki a '"primary":true,"enabled":false')" "$(wiki b '"primary":true')" >/dev/null && echo ok)"
-must_fail_wikis "wiki without an image" "wikis[handbook]: image is required" \
-  "$(wiki handbook '"image":""')"
-must_fail_wikis "wiki image by tag only" "wikis[handbook]: image must be pinned by digest" \
-  "$(wiki handbook '"image":"ghcr.io/naira-project/handbook:1.0"')"
-must_fail_wikis "wiki image with a short digest" "wikis[handbook]: image must be pinned by digest" \
-  "$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha256:${DIGEST:1}\"")"
-must_fail_wikis "wiki image with an uppercase digest" "wikis[handbook]: image must be pinned by digest" \
-  "$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha256:${DIGEST//a/A}\"")"
-must_fail_wikis "wiki image with another digest algorithm" "wikis[handbook]: image must be pinned by digest" \
-  "$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha512:${DIGEST}\"")"
+  "$(render_handbooks "$(handbook a '"primary":true,"enabled":false')" "$(handbook b '"primary":true')" >/dev/null && echo ok)"
+must_fail_handbooks "handbook without an image" "handbooks[platform]: image is required" \
+  "$(handbook platform '"image":""')"
+must_fail_handbooks "handbook image by tag only" "handbooks[platform]: image must be pinned by digest" \
+  "$(handbook platform '"image":"ghcr.io/naira-project/platform:1.0"')"
+must_fail_handbooks "handbook image with a short digest" "handbooks[platform]: image must be pinned by digest" \
+  "$(handbook platform "\"image\":\"ghcr.io/naira-project/platform@sha256:${DIGEST:1}\"")"
+must_fail_handbooks "handbook image with an uppercase digest" "handbooks[platform]: image must be pinned by digest" \
+  "$(handbook platform "\"image\":\"ghcr.io/naira-project/platform@sha256:${DIGEST//a/A}\"")"
+must_fail_handbooks "handbook image with another digest algorithm" "handbooks[platform]: image must be pinned by digest" \
+  "$(handbook platform "\"image\":\"ghcr.io/naira-project/platform@sha512:${DIGEST}\"")"
 check "a tag next to the digest is accepted" \
   "ok" \
-  "$(render_wikis "$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook:1.0@sha256:${DIGEST}\"")" >/dev/null && echo ok)"
-must_fail_wikis "wiki image from another registry" \
-  "wikis[handbook]: image \"evil.example/handbook@sha256:${DIGEST}\" is not from an allowed registry" \
-  "$(wiki handbook "\"image\":\"evil.example/handbook@sha256:${DIGEST}\"")"
-must_fail_wikis "registry match stops at the path boundary" "wikis[handbook]: image" \
-  "$(wiki handbook "\"image\":\"ghcr.io/naira-project-evil/handbook@sha256:${DIGEST}\"")"
-must_fail_wikis "registry match is not a substring match" "wikis[handbook]: image" \
-  "$(wiki handbook "\"image\":\"evil.example/ghcr.io/naira-project/handbook@sha256:${DIGEST}\"")"
+  "$(render_handbooks "$(handbook platform "\"image\":\"ghcr.io/naira-project/platform:1.0@sha256:${DIGEST}\"")" >/dev/null && echo ok)"
+must_fail_handbooks "handbook image from another registry" \
+  "handbooks[platform]: image \"evil.example/platform@sha256:${DIGEST}\" is not from an allowed registry" \
+  "$(handbook platform "\"image\":\"evil.example/platform@sha256:${DIGEST}\"")"
+must_fail_handbooks "registry match stops at the path boundary" "handbooks[platform]: image" \
+  "$(handbook platform "\"image\":\"ghcr.io/naira-project-evil/platform@sha256:${DIGEST}\"")"
+must_fail_handbooks "registry match is not a substring match" "handbooks[platform]: image" \
+  "$(handbook platform "\"image\":\"evil.example/ghcr.io/naira-project/platform@sha256:${DIGEST}\"")"
 check "an allowed registry written with a trailing slash matches" \
   "ok" \
-  "$(render --set 'wikiGateway.allowedRegistries[0]=ghcr.io/naira-project/' \
-      --set-json "wikis=[$(wiki handbook)]" >/dev/null && echo ok)"
+  "$(render --set 'handbookGateway.allowedRegistries[0]=ghcr.io/naira-project/' \
+      --set-json "handbooks=[$(handbook platform)]" >/dev/null && echo ok)"
 check "a second allowed registry matches" \
   "ok" \
-  "$(render --set 'wikiGateway.allowedRegistries[0]=ghcr.io/naira-project' \
-      --set 'wikiGateway.allowedRegistries[1]=reg.example.com/docs' \
-      --set-json "wikis=[$(wiki handbook "\"image\":\"reg.example.com/docs/handbook@sha256:${DIGEST}\"")]" \
+  "$(render --set 'handbookGateway.allowedRegistries[0]=ghcr.io/naira-project' \
+      --set 'handbookGateway.allowedRegistries[1]=reg.example.com/docs' \
+      --set-json "handbooks=[$(handbook platform "\"image\":\"reg.example.com/docs/platform@sha256:${DIGEST}\"")]" \
     >/dev/null && echo ok)"
-must_fail "no allowed registry allows no wiki" \
-  "wikis[handbook]: wikiGateway.allowedRegistries is empty" \
-  --set 'wikiGateway.allowedRegistries=null' --set-json "wikis=[$(wiki handbook)]"
-must_fail_wikis "unsupported wiki contract" \
-  'wikis[handbook]: unsupported contract "naira.wiki/v2"; supported: naira.wiki/v1alpha1' \
-  "$(wiki handbook '"contract":"naira.wiki/v2"')"
-must_fail_wikis "wiki contract missing" 'wikis[handbook]: unsupported contract ""' \
-  "$(wiki handbook '"contract":""')"
-must_fail_wikis "wiki order is not a number" "wikis[handbook]: order must be a whole number" \
-  "$(wiki handbook '"order":"two"')"
-must_fail_wikis "wiki order is not whole" "wikis[handbook]: order must be a whole number" \
-  "$(wiki handbook '"order":1.5')"
-must_fail_wikis "wiki order is out of range" "wikis[handbook]: order must be a whole number" \
-  "$(wiki handbook '"order":100001')"
-check "wiki order at the limits is accepted" \
+must_fail "no allowed registry allows no handbook" \
+  "handbooks[platform]: handbookGateway.allowedRegistries is empty" \
+  --set 'handbookGateway.allowedRegistries=null' --set-json "handbooks=[$(handbook platform)]"
+must_fail_handbooks "unsupported handbook contract" \
+  'handbooks[platform]: unsupported contract "naira.handbook/v2"; supported: naira.handbook/v1alpha1' \
+  "$(handbook platform '"contract":"naira.handbook/v2"')"
+must_fail_handbooks "handbook contract missing" 'handbooks[platform]: unsupported contract ""' \
+  "$(handbook platform '"contract":""')"
+must_fail_handbooks "handbook order is not a number" "handbooks[platform]: order must be a whole number" \
+  "$(handbook platform '"order":"two"')"
+must_fail_handbooks "handbook order is not whole" "handbooks[platform]: order must be a whole number" \
+  "$(handbook platform '"order":1.5')"
+must_fail_handbooks "handbook order is out of range" "handbooks[platform]: order must be a whole number" \
+  "$(handbook platform '"order":100001')"
+check "handbook order at the limits is accepted" \
   "ok" \
-  "$(render_wikis "$(wiki a '"order":-100000')" "$(wiki b '"order":100000')" >/dev/null && echo ok)"
-check "a disabled wiki is only checked for its id" \
+  "$(render_handbooks "$(handbook a '"order":-100000')" "$(handbook b '"order":100000')" >/dev/null && echo ok)"
+check "a disabled handbook is only checked for its id" \
   "ok" \
-  "$(render_wikis "$(wiki handbook '"enabled":false,"image":"nope","contract":"x","order":"y","primary":true')" \
-      "$(wiki other '"primary":true')" >/dev/null && echo ok)"
-must_fail "wiki address domain with a scheme" "wikiGateway.domain: \"https://wiki.example.com\"" \
-  --set wikiGateway.domain=https://wiki.example.com --set-json "wikis=[$(wiki handbook)]"
-must_fail "wiki address domain with a port" "wikiGateway.domain" \
-  --set wikiGateway.domain=wiki.example.com:3002 --set-json "wikis=[$(wiki handbook)]"
-must_fail "wiki address domain in uppercase" "wikiGateway.domain" \
-  --set wikiGateway.domain=Wiki.Example.com --set-json "wikis=[$(wiki handbook)]"
-must_fail "wiki address domain empty" "wikiGateway.domain" \
-  --set wikiGateway.domain= --set-json "wikis=[$(wiki handbook)]"
-must_fail "wiki address scheme" "wikiGateway.scheme: must be http or https, got \"ftp\"" \
-  --set wikiGateway.scheme=ftp --set-json "wikis=[$(wiki handbook)]"
-must_fail "wiki address scheme missing" "wikiGateway.scheme: must be http or https, got \"\"" \
-  --set wikiGateway.scheme=null --set-json "wikis=[$(wiki handbook)]"
+  "$(render_handbooks "$(handbook platform '"enabled":false,"image":"nope","contract":"x","order":"y","primary":true')" \
+      "$(handbook other '"primary":true')" >/dev/null && echo ok)"
+must_fail "handbook address domain with a scheme" "handbookGateway.domain: \"https://handbook.example.com\"" \
+  --set handbookGateway.domain=https://handbook.example.com --set-json "handbooks=[$(handbook platform)]"
+must_fail "handbook address domain with a port" "handbookGateway.domain" \
+  --set handbookGateway.domain=handbook.example.com:3002 --set-json "handbooks=[$(handbook platform)]"
+must_fail "handbook address domain in uppercase" "handbookGateway.domain" \
+  --set handbookGateway.domain=Handbook.Example.com --set-json "handbooks=[$(handbook platform)]"
+must_fail "handbook address domain empty" "handbookGateway.domain" \
+  --set handbookGateway.domain= --set-json "handbooks=[$(handbook platform)]"
+must_fail "handbook address scheme" "handbookGateway.scheme: must be http or https, got \"ftp\"" \
+  --set handbookGateway.scheme=ftp --set-json "handbooks=[$(handbook platform)]"
+must_fail "handbook address scheme missing" "handbookGateway.scheme: must be http or https, got \"\"" \
+  --set handbookGateway.scheme=null --set-json "handbooks=[$(handbook platform)]"
 for port in 0 65536 abc 1.5; do
-  must_fail "wiki address port $port" "wikiGateway.port: must be a whole number from 1 to 65535" \
-    --set-string wikiGateway.port="$port" --set-json "wikis=[$(wiki handbook)]"
+  must_fail "handbook address port $port" "handbookGateway.port: must be a whole number from 1 to 65535" \
+    --set-string handbookGateway.port="$port" --set-json "handbooks=[$(handbook platform)]"
 done
-check "wiki address port as a number is accepted" \
+check "handbook address port as a number is accepted" \
   "ok" \
-  "$(render --set wikiGateway.port=8443 --set-json "wikis=[$(wiki handbook)]" >/dev/null && echo ok)"
-check "gateway address is not checked while no wiki is enabled" \
+  "$(render --set handbookGateway.port=8443 --set-json "handbooks=[$(handbook platform)]" >/dev/null && echo ok)"
+check "gateway address is not checked while no handbook is enabled" \
   "ok" \
-  "$(render --set wikiGateway.domain=https://x --set wikiGateway.scheme=ftp --set wikiGateway.port=0 \
-      --set 'wikiGateway.allowedRegistries=null' >/dev/null && echo ok)"
+  "$(render --set handbookGateway.domain=https://x --set handbookGateway.scheme=ftp --set handbookGateway.port=0 \
+      --set 'handbookGateway.allowedRegistries=null' >/dev/null && echo ok)"
 
-# Wiki NetworkPolicies: ingress to the wiki pods from the gateway pods only, and an egress
+# Handbook NetworkPolicies: ingress to the handbook pods from the gateway pods only, and an egress
 # allow-list for the gateway pods. The gateway Deployment is tested in its own section below.
-render_wiki_np() {
-  render --set wikiGateway.networkPolicy.enabled=true --set-json "wikis=[$(wiki handbook)]" "$@"
+render_handbook_np() {
+  render --set handbookGateway.networkPolicy.enabled=true --set-json "handbooks=[$(handbook platform)]" "$@"
 }
 NP_NAMES='[select(.kind == "NetworkPolicy") | .metadata.name] | sort | join(",")'
 np() { printf 'select(.kind == "NetworkPolicy" and .metadata.name == "%s") | .spec' "$1"; }
 
-check "wiki NetworkPolicies are off by default" \
+check "handbook NetworkPolicies are off by default" \
   "" \
-  "$(render_wikis "$(wiki handbook)" | yq ea "$NP_NAMES")"
-check "wiki NetworkPolicies: none without an enabled wiki" \
+  "$(render_handbooks "$(handbook platform)" | yq ea "$NP_NAMES")"
+check "handbook NetworkPolicies: none without an enabled handbook" \
   "" \
-  "$(render --set wikiGateway.networkPolicy.enabled=true | yq ea "$NP_NAMES")"
-check "wiki NetworkPolicies: none when the only wiki is disabled" \
+  "$(render --set handbookGateway.networkPolicy.enabled=true | yq ea "$NP_NAMES")"
+check "handbook NetworkPolicies: none when the only handbook is disabled" \
   "" \
-  "$(render --set wikiGateway.networkPolicy.enabled=true \
-      --set-json "wikis=[$(wiki handbook '"enabled":false')]" | yq ea "$NP_NAMES")"
-check "wiki NetworkPolicies: ingress to the wikis and egress from the gateway" \
-  "wiki-gateway-egress,wiki-ingress" \
-  "$(render_wiki_np | yq ea "$NP_NAMES")"
-check "wiki NetworkPolicies sit next to the catalog's, which stays opt-in" \
-  "catalog,wiki-gateway-egress,wiki-ingress" \
-  "$(render_wiki_np --set catalog.networkPolicy.enabled=true | yq ea "$NP_NAMES")"
-check "wiki NetworkPolicies are in the release namespace" \
+  "$(render --set handbookGateway.networkPolicy.enabled=true \
+      --set-json "handbooks=[$(handbook platform '"enabled":false')]" | yq ea "$NP_NAMES")"
+check "handbook NetworkPolicies: ingress to the handbooks and egress from the gateway" \
+  "handbook-gateway-egress,handbook-ingress" \
+  "$(render_handbook_np | yq ea "$NP_NAMES")"
+check "handbook NetworkPolicies sit next to the catalog's, which stays opt-in" \
+  "catalog,handbook-gateway-egress,handbook-ingress" \
+  "$(render_handbook_np --set catalog.networkPolicy.enabled=true | yq ea "$NP_NAMES")"
+check "handbook NetworkPolicies are in the release namespace" \
   "naira" \
-  "$(render_wiki_np | yq 'select(.kind == "NetworkPolicy" and .metadata.name == "wiki-ingress") | .metadata.namespace')"
+  "$(render_handbook_np | yq 'select(.kind == "NetworkPolicy" and .metadata.name == "handbook-ingress") | .metadata.namespace')"
 
-check "wiki ingress: selects the wiki pods of this release, ingress only" \
-  "Ingress wiki t" \
-  "$(render_wiki_np | yq "$(np wiki-ingress)
+check "handbook ingress: selects the handbook pods of this release, ingress only" \
+  "Ingress handbook t" \
+  "$(render_handbook_np | yq "$(np handbook-ingress)
       | (.policyTypes | join(\",\")) + \" \" + .podSelector.matchLabels[\"app.kubernetes.io/component\"]
         + \" \" + .podSelector.matchLabels[\"app.kubernetes.io/instance\"]")"
-check "wiki ingress: one rule, from the gateway pods of this release, TCP 8080" \
-  "1 wiki-gateway t TCP 8080" \
-  "$(render_wiki_np | yq "$(np wiki-ingress) | .ingress
+check "handbook ingress: one rule, from the gateway pods of this release, TCP 8080" \
+  "1 handbook-gateway t TCP 8080" \
+  "$(render_handbook_np | yq "$(np handbook-ingress) | .ingress
       | (length | tostring) + \" \" + .[0].from[0].podSelector.matchLabels[\"app.kubernetes.io/name\"]
         + \" \" + .[0].from[0].podSelector.matchLabels[\"app.kubernetes.io/instance\"]
         + \" \" + .[0].ports[0].protocol + \" \" + (.[0].ports[0].port | tostring)")"
-check "wiki ingress: the rule names one source, so nothing else is admitted" \
+check "handbook ingress: the rule names one source, so nothing else is admitted" \
   "1" \
-  "$(render_wiki_np | yq "$(np wiki-ingress) | .ingress[0].from | length")"
+  "$(render_handbook_np | yq "$(np handbook-ingress) | .ingress[0].from | length")"
 
 check "gateway egress: selects the gateway pods of this release, egress only" \
-  "Egress wiki-gateway t" \
-  "$(render_wiki_np | yq "$(np wiki-gateway-egress)
+  "Egress handbook-gateway t" \
+  "$(render_handbook_np | yq "$(np handbook-gateway-egress)
       | (.policyTypes | join(\",\")) + \" \" + .podSelector.matchLabels[\"app.kubernetes.io/name\"]
         + \" \" + .podSelector.matchLabels[\"app.kubernetes.io/instance\"]")"
 check "gateway egress: three rules" \
   "3" \
-  "$(render_wiki_np | yq "$(np wiki-gateway-egress) | .egress | length")"
+  "$(render_handbook_np | yq "$(np handbook-gateway-egress) | .egress | length")"
 check "gateway egress: DNS on port 53, UDP and TCP, to any address" \
   "false UDP/53,TCP/53" \
-  "$(render_wiki_np | yq "$(np wiki-gateway-egress) | .egress[0]
+  "$(render_handbook_np | yq "$(np handbook-gateway-egress) | .egress[0]
       | (has(\"to\") | tostring) + \" \" + ([.ports[] | .protocol + \"/\" + (.port | tostring)] | join(\",\"))")"
-check "gateway egress: the wiki pods of this release on 8080" \
-  "wiki t TCP 8080" \
-  "$(render_wiki_np | yq "$(np wiki-gateway-egress) | .egress[1]
+check "gateway egress: the handbook pods of this release on 8080" \
+  "handbook t TCP 8080" \
+  "$(render_handbook_np | yq "$(np handbook-gateway-egress) | .egress[1]
       | .to[0].podSelector.matchLabels[\"app.kubernetes.io/component\"]
         + \" \" + .to[0].podSelector.matchLabels[\"app.kubernetes.io/instance\"]
         + \" \" + .ports[0].protocol + \" \" + (.ports[0].port | tostring)")"
 check "gateway egress: the Keycloak port from keycloak.baseUrl, to any address" \
   "false TCP 8080" \
-  "$(render_wiki_np | yq "$(np wiki-gateway-egress) | .egress[2]
+  "$(render_handbook_np | yq "$(np handbook-gateway-egress) | .egress[2]
       | (has(\"to\") | tostring) + \" \" + .ports[0].protocol + \" \" + (.ports[0].port | tostring)")"
 keycloak_port() {
-  render_wiki_np --set keycloak.baseUrl="$1" | yq "$(np wiki-gateway-egress) | .egress[2].ports[0].port"
+  render_handbook_np --set keycloak.baseUrl="$1" | yq "$(np handbook-gateway-egress) | .egress[2].ports[0].port"
 }
 check "gateway egress: https without a port means 443" "443" "$(keycloak_port https://keycloak.example.com)"
 check "gateway egress: http without a port means 80" "80" "$(keycloak_port http://keycloak.example.com)"
 check "gateway egress: an explicit port wins, a path is ignored" \
   "8443" "$(keycloak_port https://keycloak.example.com:8443/auth)"
 check "gateway egress: an IPv6 host keeps its port" "8080" "$(keycloak_port 'http://[fd00::1]:8080')"
-check "gateway egress: a malformed wiki entry fails on its own guard, not on the policy" \
+check "gateway egress: a malformed handbook entry fails on its own guard, not on the policy" \
   "ok" \
-  "$(out=$(render --set wikiGateway.networkPolicy.enabled=true --set-json 'wikis=["handbook"]' 2>&1) \
-     || { [[ $out == *"wikis[0]: must be a map"* ]] && echo ok; })"
+  "$(out=$(render --set handbookGateway.networkPolicy.enabled=true --set-json 'handbooks=["platform"]' 2>&1) \
+     || { [[ $out == *"handbooks[0]: must be a map"* ]] && echo ok; })"
 
-# ── Wiki gateway ─────────────────────────────────────────────────────────────
+# ── Handbook gateway ─────────────────────────────────────────────────────────────
 # envoy.yaml is a string in a ConfigMap; yq reads it back as YAML. That Envoy accepts it is
 # checked by running Envoy (`envoy --mode validate`), not here.
-GW_ENVOY='select(.kind == "ConfigMap" and .metadata.name == "wiki-gateway") | .data["envoy.yaml"] | from_yaml'
+GW_ENVOY='select(.kind == "ConfigMap" and .metadata.name == "handbook-gateway") | .data["envoy.yaml"] | from_yaml'
 # gwq EXPR: query the Envoy config of the rendered chart on stdin. Two passes, because yq
 # builds an empty array for every other document of the stream when EXPR collects.
 gwq() { yq "$GW_ENVOY" | yq "$1"; }
-GW_OBJECTS='[select(.metadata.name == "wiki-gateway") | .kind] | sort | join(",")'
-GW_DEPLOYMENT='select(.kind == "Deployment" and .metadata.name == "wiki-gateway")'
+GW_OBJECTS='[select(.metadata.name == "handbook-gateway") | .kind] | sort | join(",")'
+GW_DEPLOYMENT='select(.kind == "Deployment" and .metadata.name == "handbook-gateway")'
 GW_POD="$GW_DEPLOYMENT | .spec.template.spec"
 HCM='.static_resources.listeners[0].filter_chains[0].filters[0].typed_config'
 VHOSTS="${HCM}.route_config.virtual_hosts"
 JWT_PER_ROUTE='.typed_per_filter_config["envoy.filters.http.jwt_authn"]'
-gw_render() { render --set-json "wikis=[$(wiki handbook),$(wiki other)]" "$@"; }
+gw_render() { render --set-json "handbooks=[$(handbook platform),$(handbook other)]" "$@"; }
 CFG=$(gw_render | yq "$GW_ENVOY")
-# cfg EXPR: query the Envoy config rendered for the wikis handbook and other.
+# cfg EXPR: query the Envoy config rendered for the handbooks platform and other.
 cfg() { echo "$CFG" | yq "$1"; }
 # vhost NAME: yq path to one virtual host.
 vhost() { printf '%s[] | select(.name == "%s")' "$VHOSTS" "$1"; }
@@ -1036,68 +1036,68 @@ jwt_summary() {
     + (${JWT_PER_ROUTE} | (.requirement_name // (select(.disabled) | \"disabled\") // \"none\"))] | join(\" \")"
 }
 
-check "gateway: nothing is rendered without wikis" "" "$(render | yq ea "$GW_OBJECTS")"
-check "gateway: nothing is rendered while every wiki is disabled" "" \
-  "$(render_wikis "$(wiki handbook '"enabled":false')" | yq ea "$GW_OBJECTS")"
-check "gateway: Deployment, Service and ConfigMap wiki-gateway" "ConfigMap,Deployment,Service" \
+check "gateway: nothing is rendered without handbooks" "" "$(render | yq ea "$GW_OBJECTS")"
+check "gateway: nothing is rendered while every handbook is disabled" "" \
+  "$(render_handbooks "$(handbook platform '"enabled":false')" | yq ea "$GW_OBJECTS")"
+check "gateway: Deployment, Service and ConfigMap handbook-gateway" "ConfigMap,Deployment,Service" \
   "$(gw_render | yq ea "$GW_OBJECTS")"
 check "gateway: objects are in the release namespace" "naira naira naira" \
-  "$(gw_render | yq ea '[select(.metadata.name == "wiki-gateway") | .metadata.namespace] | join(" ")')"
+  "$(gw_render | yq ea '[select(.metadata.name == "handbook-gateway") | .metadata.namespace] | join(" ")')"
 
-# Virtual hosts and clusters: one per enabled wiki, plus the default host and the JWKS cluster.
-check "gateway: one virtual host per enabled wiki, sorted by id, then the default" \
-  "wiki-alpha,wiki-zeta,default" \
-  "$(render_wikis "$(wiki zeta)" "$(wiki alpha)" "$(wiki off '"enabled":false')" \
+# Virtual hosts and clusters: one per enabled handbook, plus the default host and the JWKS cluster.
+check "gateway: one virtual host per enabled handbook, sorted by id, then the default" \
+  "handbook-alpha,handbook-zeta,default" \
+  "$(render_handbooks "$(handbook zeta)" "$(handbook alpha)" "$(handbook off '"enabled":false')" \
     | gwq "[${VHOSTS}[].name] | join(\",\")")"
 for n in 1 2 3; do
   entries=()
-  for i in $(seq 1 "$n"); do entries+=("$(wiki "w$i")"); done
-  check "gateway: $n enabled wikis give $((n + 1)) virtual hosts and $((n + 1)) clusters" \
+  for i in $(seq 1 "$n"); do entries+=("$(handbook "w$i")"); done
+  check "gateway: $n enabled handbooks give $((n + 1)) virtual hosts and $((n + 1)) clusters" \
     "$((n + 1)) $((n + 1))" \
-    "$(render_wikis "${entries[@]}" \
+    "$(render_handbooks "${entries[@]}" \
       | gwq "([${VHOSTS}[]] | length | tostring) + \" \" + ([.static_resources.clusters[]] | length | tostring)")"
 done
-check "gateway: clusters are the JWKS cluster and one per wiki" \
-  "keycloak-jwks,wiki-handbook,wiki-other" \
+check "gateway: clusters are the JWKS cluster and one per handbook" \
+  "handbook-other,handbook-platform,keycloak-jwks" \
   "$(cfg '[.static_resources.clusters[].name] | sort | join(",")')"
-check "gateway: a disabled wiki has no virtual host and no cluster" \
-  "wiki-other|keycloak-jwks,wiki-other" \
-  "$(c=$(render_wikis "$(wiki handbook '"enabled":false')" "$(wiki other)" | yq "$GW_ENVOY")
+check "gateway: a disabled handbook has no virtual host and no cluster" \
+  "handbook-other|handbook-other,keycloak-jwks" \
+  "$(c=$(render_handbooks "$(handbook platform '"enabled":false')" "$(handbook other)" | yq "$GW_ENVOY")
      echo "$(echo "$c" | yq "[${VHOSTS}[].name | select(. != \"default\")] | join(\",\")")|$(echo "$c" | yq '[.static_resources.clusters[].name] | sort | join(",")')")"
 check "gateway: a virtual host answers to <id>.<domain> with and without the port" \
-  "handbook.wiki.localhost,handbook.wiki.localhost:3002" \
-  "$(cfg "$(vhost wiki-handbook) | .domains | join(\",\")")"
-check "gateway: the domains follow wikiGateway.domain and port" \
-  "handbook.wiki.example.com,handbook.wiki.example.com:8443" \
-  "$(gw_render --set wikiGateway.domain=wiki.example.com --set wikiGateway.port=8443 --set wikiGateway.scheme=https \
-    | gwq "$(vhost wiki-handbook) | .domains | join(\",\")")"
+  "platform.handbook.localhost,platform.handbook.localhost:3002" \
+  "$(cfg "$(vhost handbook-platform) | .domains | join(\",\")")"
+check "gateway: the domains follow handbookGateway.domain and port" \
+  "platform.handbook.example.com,platform.handbook.example.com:8443" \
+  "$(gw_render --set handbookGateway.domain=handbook.example.com --set handbookGateway.port=8443 --set handbookGateway.scheme=https \
+    | gwq "$(vhost handbook-platform) | .domains | join(\",\")")"
 check "gateway: unknown hosts get a 404 without a JWT check" \
   "* 404 true" \
   "$(cfg "$(vhost default) | (.domains | join(\",\")) + \" \" + (.routes[0].direct_response.status | tostring)
     + \" \" + (.routes[0]${JWT_PER_ROUTE}.disabled | tostring)")"
-check "gateway: the default host is the last one, so no wiki host is shadowed" \
+check "gateway: the default host is the last one, so no handbook host is shadowed" \
   "default" \
   "$(cfg "[${VHOSTS}[].name] | .[-1]")"
-for id in handbook other; do
-  check "gateway: wiki $id routes only to its own cluster" \
-    "wiki-$id" \
-    "$(cfg "$(vhost "wiki-$id") | [.routes[].route.cluster | select(. != null)] | unique | join(\",\")")"
-  check "gateway: wiki $id cluster is its Service on 8080, health-checked on naira-wiki.json" \
-    "STRICT_DNS wiki-$id.naira.svc.cluster.local 8080 /naira-wiki.json" \
-    "$(cfg ".static_resources.clusters[] | select(.name == \"wiki-$id\")
+for id in platform other; do
+  check "gateway: handbook $id routes only to its own cluster" \
+    "handbook-$id" \
+    "$(cfg "$(vhost "handbook-$id") | [.routes[].route.cluster | select(. != null)] | unique | join(\",\")")"
+  check "gateway: handbook $id cluster is its Service on 8080, health-checked on naira-handbook.json" \
+    "STRICT_DNS handbook-$id.naira.svc.cluster.local 8080 /naira-handbook.json" \
+    "$(cfg ".static_resources.clusters[] | select(.name == \"handbook-$id\")
       | .type + \" \" + .load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address.address
         + \" \" + (.load_assignment.endpoints[0].lb_endpoints[0].endpoint.address.socket_address.port_value | tostring)
         + \" \" + .health_checks[0].http_health_check.path")"
   # A cluster that has carried no traffic is checked every no_traffic_interval, 60 s by default.
-  check "gateway: wiki $id cluster is checked every 5 s, also before its first request" \
+  check "gateway: handbook $id cluster is checked every 5 s, also before its first request" \
     "5s 5s 2s 2 1" \
-    "$(cfg ".static_resources.clusters[] | select(.name == \"wiki-$id\") | .health_checks[0]
+    "$(cfg ".static_resources.clusters[] | select(.name == \"handbook-$id\") | .health_checks[0]
       | .interval + \" \" + .no_traffic_interval + \" \" + .timeout + \" \" + (.unhealthy_threshold | tostring)
         + \" \" + (.healthy_threshold | tostring)")"
   # With every host unhealthy Envoy otherwise routes to them anyway ("panic mode").
-  check "gateway: wiki $id cluster never panics into unhealthy hosts" \
+  check "gateway: handbook $id cluster never panics into unhealthy hosts" \
     "0" \
-    "$(cfg ".static_resources.clusters[] | select(.name == \"wiki-$id\") | .common_lb_config.healthy_panic_threshold.value | tostring")"
+    "$(cfg ".static_resources.clusters[] | select(.name == \"handbook-$id\") | .common_lb_config.healthy_panic_threshold.value | tostring")"
 done
 
 # Authentication: a JWT from Keycloak, read from a header on /_naira/session and from a cookie elsewhere.
@@ -1114,8 +1114,8 @@ check "gateway: both providers read the same keys" "true" \
 check "gateway: the session provider reads only x-naira-token" "x-naira-token false false" \
   "$(cfg "${HCM}.http_filters[0].typed_config.providers.keycloak_header
     | (.from_headers | map(.name) | join(\",\")) + \" \" + (has(\"from_cookies\") | tostring) + \" \" + (has(\"from_params\") | tostring)")"
-check "gateway: the cookie provider reads only the naira_wiki cookie, not Authorization or a query parameter" \
-  "naira_wiki false false" \
+check "gateway: the cookie provider reads only the naira_handbook cookie, not Authorization or a query parameter" \
+  "naira_handbook false false" \
   "$(cfg "${HCM}.http_filters[0].typed_config.providers.keycloak_cookie
     | (.from_cookies | join(\",\")) + \" \" + (has(\"from_headers\") | tostring) + \" \" + (has(\"from_params\") | tostring)")"
 # Without forward the header is gone before the Set-Cookie value is built from it.
@@ -1132,43 +1132,43 @@ check "gateway: JWT issuer and keys follow keycloak values" \
     | gwq "${HCM}.http_filters[0].typed_config.providers.keycloak_cookie | .issuer + \" \" + .remote_jwks.http_uri.uri")"
 
 # Routes: exactly three paths skip the JWT check, and everything else needs the cookie.
-for id in handbook other; do
-  check "gateway: wiki $id routes and their JWT requirement" \
+for id in platform other; do
+  check "gateway: handbook $id routes and their JWT requirement" \
     "/_naira/session:header /_naira/session:disabled /_naira/bootstrap.html:disabled /_naira/assets/:disabled /:cookie" \
-    "$(jwt_summary "wiki-$id")"
+    "$(jwt_summary "handbook-$id")"
 done
 check "gateway: /_naira/session sets the cookie only on POST" ":method POST 204" \
-  "$(cfg "$(vhost wiki-handbook) | .routes[0] | .match.headers[0].name + \" \" + .match.headers[0].string_match.exact
+  "$(cfg "$(vhost handbook-platform) | .routes[0] | .match.headers[0].name + \" \" + .match.headers[0].string_match.exact
     + \" \" + (.direct_response.status | tostring)")"
 check "gateway: other methods on /_naira/session get 405 and an Allow header" "405 allow:POST" \
-  "$(cfg "$(vhost wiki-handbook) | .routes[1] | (.direct_response.status | tostring) + \" \" + .response_headers_to_add[0].header.key
+  "$(cfg "$(vhost handbook-platform) | .routes[1] | (.direct_response.status | tostring) + \" \" + .response_headers_to_add[0].header.key
     + \":\" + .response_headers_to_add[0].header.value")"
 check "gateway: the cookie is HttpOnly, SameSite=Lax, host-only, and not Secure over http" \
-  "naira_wiki=%REQ(x-naira-token)%; HttpOnly; SameSite=Lax; Path=/" \
-  "$(cfg "$(vhost wiki-handbook) | .routes[0].response_headers_to_add[0].header | select(.key == \"set-cookie\") | .value")"
+  "naira_handbook=%REQ(x-naira-token)%; HttpOnly; SameSite=Lax; Path=/" \
+  "$(cfg "$(vhost handbook-platform) | .routes[0].response_headers_to_add[0].header | select(.key == \"set-cookie\") | .value")"
 check "gateway: the cookie is Secure over https" \
-  "naira_wiki=%REQ(x-naira-token)%; HttpOnly; Secure; SameSite=Lax; Path=/" \
-  "$(gw_render --set wikiGateway.scheme=https --set wikiGateway.port=443 \
-    | gwq "$(vhost wiki-handbook) | .routes[0].response_headers_to_add[0].header.value")"
-# A Domain attribute would send wiki A's cookie to wiki B.
+  "naira_handbook=%REQ(x-naira-token)%; HttpOnly; Secure; SameSite=Lax; Path=/" \
+  "$(gw_render --set handbookGateway.scheme=https --set handbookGateway.port=443 \
+    | gwq "$(vhost handbook-platform) | .routes[0].response_headers_to_add[0].header.value")"
+# A Domain attribute would send handbook A's cookie to handbook B.
 check "gateway: the cookie has no Domain and no expiry (a session cookie)" "false" \
-  "$(cfg "$(vhost wiki-handbook) | .routes[0].response_headers_to_add[0].header.value | test(\"Domain|Max-Age|Expires\") | tostring")"
-check "gateway: three routes per wiki reach the wiki and each drops the cookie header" "3 1" \
-  "$(cfg "$(vhost wiki-handbook) | ([.routes[] | select(.route)] | length | tostring) + \" \"
+  "$(cfg "$(vhost handbook-platform) | .routes[0].response_headers_to_add[0].header.value | test(\"Domain|Max-Age|Expires\") | tostring")"
+check "gateway: three routes per handbook reach the handbook and each drops the cookie header" "3 1" \
+  "$(cfg "$(vhost handbook-platform) | ([.routes[] | select(.route)] | length | tostring) + \" \"
     + ([.routes[] | select(.route) | ((.request_headers_to_remove // []) | map(select(. == \"cookie\")) | length)] | unique | join(\",\"))")"
 check "gateway: the session route reaches no upstream" "0" \
-  "$(cfg "$(vhost wiki-handbook) | [.routes[0:2][] | select(.route)] | length | tostring")"
+  "$(cfg "$(vhost handbook-platform) | [.routes[0:2][] | select(.route)] | length | tostring")"
 
 # Response headers.
-check "gateway: wikis can only be framed by the portal" \
+check "gateway: handbooks can only be framed by the portal" \
   "content-security-policy frame-ancestors http://localhost:3000" \
-  "$(cfg "$(vhost wiki-handbook) | .response_headers_to_add[0].header | .key + \" \" + .value")"
-check "gateway: the frame ancestor follows wikiGateway.portalOrigin" \
+  "$(cfg "$(vhost handbook-platform) | .response_headers_to_add[0].header | .key + \" \" + .value")"
+check "gateway: the frame ancestor follows handbookGateway.portalOrigin" \
   "frame-ancestors https://naira.example.com" \
-  "$(gw_render --set wikiGateway.portalOrigin=https://naira.example.com \
-    | gwq "$(vhost wiki-other) | .response_headers_to_add[0].header.value")"
-check "gateway: the CSP overwrites any header from the wiki" "OVERWRITE_IF_EXISTS_OR_ADD" \
-  "$(cfg "$(vhost wiki-handbook) | .response_headers_to_add[0].append_action")"
+  "$(gw_render --set handbookGateway.portalOrigin=https://naira.example.com \
+    | gwq "$(vhost handbook-other) | .response_headers_to_add[0].header.value")"
+check "gateway: the CSP overwrites any header from the handbook" "OVERWRITE_IF_EXISTS_OR_ADD" \
+  "$(cfg "$(vhost handbook-platform) | .response_headers_to_add[0].append_action")"
 check "gateway: the Server header is dropped, not replaced" "PASS_THROUGH server true" \
   "$(cfg "${HCM}.server_header_transformation + \" \" + (${HCM}.route_config.response_headers_to_remove | join(\",\"))
     + \" \" + (${HCM}.http_filters[1].typed_config.suppress_envoy_headers | tostring)")"
@@ -1177,14 +1177,14 @@ check "gateway: paths are normalized before routing" "true true UNESCAPE_AND_RED
   "$(cfg "(${HCM}.normalize_path | tostring) + \" \" + (${HCM}.merge_slashes | tostring) + \" \" + ${HCM}.path_with_escaped_slashes_action")"
 
 # Local replies: the files are used as they are, and Envoy reads every % as the start of an operator.
-UNAUTHORIZED="$CHART/files/wiki-gateway/unauthorized.html"
-UNAVAILABLE="$CHART/files/wiki-gateway/unavailable.html"
+UNAUTHORIZED="$CHART/files/handbook-gateway/unauthorized.html"
+UNAVAILABLE="$CHART/files/handbook-gateway/unavailable.html"
 LOCAL_REPLY="${HCM}.local_reply_config.mappers"
 check "gateway: a missing or invalid token gets the sign-in redirect page" \
   "401 $(cat "$UNAUTHORIZED")" \
   "$(cfg "(${LOCAL_REPLY}[0].filter.status_code_filter.comparison.value.default_value | tostring) + \" \"
     + ${LOCAL_REPLY}[0].body_format_override.text_format_source.inline_string")"
-check "gateway: a wiki that cannot be reached gets the degraded page with status 503" \
+check "gateway: a handbook that cannot be reached gets the degraded page with status 503" \
   "UH,UF,UC 503 $(cat "$UNAVAILABLE")" \
   "$(cfg "(${LOCAL_REPLY}[1].filter.response_flag_filter.flags | join(\",\")) + \" \" + (${LOCAL_REPLY}[1].status_code | tostring) + \" \"
     + ${LOCAL_REPLY}[1].body_format_override.text_format_source.inline_string")"
@@ -1192,27 +1192,27 @@ check "gateway: local reply pages are HTML" "text/html; charset=utf-8,text/html;
   "$(cfg "[${LOCAL_REPLY}[].body_format_override.content_type] | join(\",\")")"
 for f in unauthorized unavailable; do
   check "gateway: $f.html is under 4 KB" "ok" \
-    "$([ "$(wc -c <"$CHART/files/wiki-gateway/$f.html")" -lt 4096 ] && echo ok)"
+    "$([ "$(wc -c <"$CHART/files/handbook-gateway/$f.html")" -lt 4096 ] && echo ok)"
 done
 check "gateway: unauthorized.html has no % for Envoy to read" "0" \
   "$(grep -c '%' "$UNAUTHORIZED" || true)"
 check "gateway: unavailable.html uses only the two route metadata operators" "0" \
-  "$(sed -E 's/%METADATA\(ROUTE:naira\.wiki:(label|contact)\)%//g' "$UNAVAILABLE" | grep -c '%' || true)"
-check "gateway: unavailable.html shows the wiki name and its contact" "2" \
-  "$(grep -c -E '%METADATA\(ROUTE:naira\.wiki:(label|contact)\)%' "$UNAVAILABLE" || true)"
+  "$(sed -E 's/%METADATA\(ROUTE:naira\.handbook:(label|contact)\)%//g' "$UNAVAILABLE" | grep -c '%' || true)"
+check "gateway: unavailable.html shows the handbook name and its contact" "2" \
+  "$(grep -c -E '%METADATA\(ROUTE:naira\.handbook:(label|contact)\)%' "$UNAVAILABLE" || true)"
 
-# The degraded page reads the wiki's name and contact from route metadata, escaped for HTML.
-ROUTE_META='filter_metadata["naira.wiki"]'
-check "gateway: the three wiki routes carry the same label and contact" "1" \
-  "$(cfg "$(vhost wiki-handbook) | [.routes[] | select(.route) | .metadata.${ROUTE_META} | .label + \"|\" + .contact] | unique | length | tostring")"
-check "gateway: the label defaults to the id" "handbook" \
-  "$(cfg "$(vhost wiki-handbook) | .routes[-1].metadata.${ROUTE_META}.label")"
-check "gateway: the label is the wiki's label, escaped for HTML" \
+# The degraded page reads the handbook's name and contact from route metadata, escaped for HTML.
+ROUTE_META='filter_metadata["naira.handbook"]'
+check "gateway: the three handbook routes carry the same label and contact" "1" \
+  "$(cfg "$(vhost handbook-platform) | [.routes[] | select(.route) | .metadata.${ROUTE_META} | .label + \"|\" + .contact] | unique | length | tostring")"
+check "gateway: the label defaults to the id" "platform" \
+  "$(cfg "$(vhost handbook-platform) | .routes[-1].metadata.${ROUTE_META}.label")"
+check "gateway: the label is the handbook's label, escaped for HTML" \
   '&lt;b&gt;Hand &amp; book&lt;/b&gt; &#34;one&#34;' \
-  "$(render_wikis "$(wiki handbook '"label":"<b>Hand & book</b> \"one\""')" \
-    | gwq "$(vhost wiki-handbook) | .routes[-1].metadata.${ROUTE_META}.label")"
+  "$(render_handbooks "$(handbook platform '"label":"<b>Hand & book</b> \"one\""')" \
+    | gwq "$(vhost handbook-platform) | .routes[-1].metadata.${ROUTE_META}.label")"
 contact() {
-  render_wikis "$(wiki handbook "$1")" | gwq "$(vhost wiki-handbook) | .routes[-1].metadata.${ROUTE_META}.contact"
+  render_handbooks "$(handbook platform "$1")" | gwq "$(vhost handbook-platform) | .routes[-1].metadata.${ROUTE_META}.contact"
 }
 check "gateway: contact names the owner and links the source" \
   'Owner: team-platform. <a href="https://github.com/acme/hb?a=1&amp;b=2">Source repository</a>.' \
@@ -1221,20 +1221,20 @@ check "gateway: contact with an owner only" "Owner: team-platform." \
   "$(contact '"owner":"team-platform"')"
 check "gateway: contact with a source only" '<a href="https://example.com/hb">Source repository</a>.' \
   "$(contact '"source":"https://example.com/hb"')"
-check "gateway: contact falls back to a sentence when nothing is set" "Contact the owner of this wiki." \
+check "gateway: contact falls back to a sentence when nothing is set" "Contact the owner of this handbook." \
   "$(contact '"x":1')"
 check "gateway: the owner is escaped" "Owner: &lt;i&gt;x&lt;/i&gt;." \
   "$(contact '"owner":"<i>x</i>"')"
-check "gateway: a source that is not http(s) is not linked" "Contact the owner of this wiki." \
+check "gateway: a source that is not http(s) is not linked" "Contact the owner of this handbook." \
   "$(contact '"source":"javascript:alert(1)"')"
 check "gateway: a quote in the source cannot close the href attribute" \
   '<a href="https://x.example/&#34;onmouseover=&#34;alert(1)">Source repository</a>.' \
   "$(contact '"source":"https://x.example/\"onmouseover=\"alert(1)"')"
-check "gateway: a source with a space is not a URL and is not linked" "Contact the owner of this wiki." \
+check "gateway: a source with a space is not a URL and is not linked" "Contact the owner of this handbook." \
   "$(contact '"source":"https://x.example/ onmouseover=alert(1)"')"
 check "gateway: a label with % renders into valid config" "100% sure" \
-  "$(render_wikis "$(wiki handbook '"label":"100% sure"')" \
-    | gwq "$(vhost wiki-handbook) | .routes[-1].metadata.${ROUTE_META}.label")"
+  "$(render_handbooks "$(handbook platform '"label":"100% sure"')" \
+    | gwq "$(vhost handbook-platform) | .routes[-1].metadata.${ROUTE_META}.label")"
 
 # Admin and listener.
 check "gateway: the admin interface listens on loopback only" "127.0.0.1" \
@@ -1269,9 +1269,9 @@ check "gateway: JWKS cluster, an IPv6 host loses its brackets" "fd00::1 8080" \
 check "gateway: image is pinned by digest and ignores image.registry and image.tag" \
   "envoyproxy/envoy@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded" \
   "$(gw_render --set image.registry=other.example --set image.tag=zz | yq "$GW_POD | .containers[0].image")"
-check "gateway: image repository and digest come from wikiGateway.image" \
+check "gateway: image repository and digest come from handbookGateway.image" \
   "reg.example.com/envoy@sha256:$DIGEST" \
-  "$(gw_render --set wikiGateway.image.repository=reg.example.com/envoy --set wikiGateway.image.digest="sha256:$DIGEST" \
+  "$(gw_render --set handbookGateway.image.repository=reg.example.com/envoy --set handbookGateway.image.digest="sha256:$DIGEST" \
     | yq "$GW_POD | .containers[0].image")"
 check "gateway: restricted security context" "false true true ALL RuntimeDefault 65532" \
   "$(gw_render | yq "$GW_POD | .containers[0].securityContext
@@ -1279,8 +1279,8 @@ check "gateway: restricted security context" "false true true ALL RuntimeDefault
       + \" \" + .capabilities.drop[0] + \" \" + .seccompProfile.type + \" \" + (.runAsUser | tostring)")"
 check "gateway: no API token and not the catalog ServiceAccount" "false null" \
   "$(gw_render | yq "$GW_POD | (.automountServiceAccountToken | tostring) + \" \" + (.serviceAccountName // \"null\")")"
-check "gateway: runs envoy.yaml from the wiki-gateway ConfigMap, mounted read-only" \
-  "/etc/envoy true wiki-gateway -c /etc/envoy/envoy.yaml --concurrency 2" \
+check "gateway: runs envoy.yaml from the handbook-gateway ConfigMap, mounted read-only" \
+  "/etc/envoy true handbook-gateway -c /etc/envoy/envoy.yaml --concurrency 2" \
   "$(gw_render | yq "$GW_POD | .containers[0].volumeMounts[0].mountPath + \" \" + (.containers[0].volumeMounts[0].readOnly | tostring)
     + \" \" + .volumes[0].configMap.name + \" \" + (.containers[0].args | join(\" \"))")"
 check "gateway: the listener is the only port, the admin port is not exposed" "http 8080 1" \
@@ -1289,23 +1289,23 @@ check "gateway: the listener is the only port, the admin port is not exposed" "h
 # The admin interface is on loopback, which kubelet probes (pod IP) cannot reach.
 check "gateway: probes check the listener" "http http" \
   "$(gw_render | yq "$GW_POD | .containers[0] | .readinessProbe.tcpSocket.port + \" \" + .livenessProbe.tcpSocket.port")"
-check "gateway: Service on 8080 selects the gateway pods" "8080 wiki-gateway t" \
-  "$(gw_render | yq 'select(.kind == "Service" and .metadata.name == "wiki-gateway")
+check "gateway: Service on 8080 selects the gateway pods" "8080 handbook-gateway t" \
+  "$(gw_render | yq 'select(.kind == "Service" and .metadata.name == "handbook-gateway")
     | (.spec.ports[0].port | tostring) + " " + .spec.selector["app.kubernetes.io/name"] + " " + .spec.selector["app.kubernetes.io/instance"]')"
 check "gateway: the Deployment's pods carry the labels the Service and the Deployment select" \
-  "wiki-gateway t wiki-gateway t" \
+  "handbook-gateway t handbook-gateway t" \
   "$(gw_render | yq "$GW_DEPLOYMENT | .spec.template.metadata.labels[\"app.kubernetes.io/name\"] + \" \"
     + .spec.template.metadata.labels[\"app.kubernetes.io/instance\"] + \" \" + .spec.selector.matchLabels[\"app.kubernetes.io/name\"]
     + \" \" + .spec.selector.matchLabels[\"app.kubernetes.io/instance\"]")"
-# wiki-ingress selects component=wiki pods; the gateway has to stay out of it.
-check "gateway: pods do not carry the wiki component label" "false" \
+# handbook-ingress selects component=handbook pods; the gateway has to stay out of it.
+check "gateway: pods do not carry the handbook component label" "false" \
   "$(gw_render | yq "$GW_DEPLOYMENT | .spec.template.metadata.labels | has(\"app.kubernetes.io/component\") | tostring")"
-check "gateway: the NetworkPolicies select the pods the Deployment creates" "wiki-gateway wiki-gateway" \
-  "$(o=$(gw_render --set wikiGateway.networkPolicy.enabled=true)
-     echo "$(echo "$o" | yq 'select(.metadata.name == "wiki-gateway-egress") | .spec.podSelector.matchLabels["app.kubernetes.io/name"]') $(echo "$o" | yq "$GW_DEPLOYMENT | .spec.template.metadata.labels[\"app.kubernetes.io/name\"]")")"
+check "gateway: the NetworkPolicies select the pods the Deployment creates" "handbook-gateway handbook-gateway" \
+  "$(o=$(gw_render --set handbookGateway.networkPolicy.enabled=true)
+     echo "$(echo "$o" | yq 'select(.metadata.name == "handbook-gateway-egress") | .spec.podSelector.matchLabels["app.kubernetes.io/name"]') $(echo "$o" | yq "$GW_DEPLOYMENT | .spec.template.metadata.labels[\"app.kubernetes.io/name\"]")")"
 check "gateway: one replica by default" "1" "$(gw_render | yq "$GW_DEPLOYMENT | .spec.replicas")"
-check "gateway: replicas from wikiGateway.replicas" "2" \
-  "$(gw_render --set wikiGateway.replicas=2 | yq "$GW_DEPLOYMENT | .spec.replicas")"
+check "gateway: replicas from handbookGateway.replicas" "2" \
+  "$(gw_render --set handbookGateway.replicas=2 | yq "$GW_DEPLOYMENT | .spec.replicas")"
 check "gateway: small resources" "500m 128Mi" \
   "$(gw_render | yq "$GW_POD | .containers[0].resources.limits | .cpu + \" \" + .memory")"
 check "gateway: imagePullSecrets apply" "regcred" \
@@ -1313,13 +1313,13 @@ check "gateway: imagePullSecrets apply" "regcred" \
 check "gateway: no scheduling fields by default" "false" \
   "$(gw_render | yq "$GW_POD | (has(\"imagePullSecrets\") or has(\"nodeSelector\") or has(\"tolerations\")
     or has(\"affinity\") or has(\"priorityClassName\") or has(\"securityContext\")) | tostring")"
-check "gateway: scheduling fields from wikiGateway" "linux dedicated high 1000" \
-  "$(gw_render --set wikiGateway.nodeSelector.os=linux --set 'wikiGateway.tolerations[0].key=dedicated' \
-      --set wikiGateway.priorityClassName=high --set wikiGateway.podSecurityContext.fsGroup=1000 \
+check "gateway: scheduling fields from handbookGateway" "linux dedicated high 1000" \
+  "$(gw_render --set handbookGateway.nodeSelector.os=linux --set 'handbookGateway.tolerations[0].key=dedicated' \
+      --set handbookGateway.priorityClassName=high --set handbookGateway.podSecurityContext.fsGroup=1000 \
     | yq "$GW_POD | .nodeSelector.os + \" \" + .tolerations[0].key + \" \" + .priorityClassName
       + \" \" + (.securityContext.fsGroup | tostring)")"
 check "gateway: podAnnotations are kept next to checksum/config" "v1 ok" \
-  "$(gw_render --set-string wikiGateway.podAnnotations.team=v1 \
+  "$(gw_render --set-string handbookGateway.podAnnotations.team=v1 \
     | yq "$GW_DEPLOYMENT | .spec.template.metadata.annotations
       | .team + \" \" + (select(has(\"checksum/config\")) | \"ok\")")"
 
@@ -1328,142 +1328,142 @@ gw_sum() { yq "$GW_DEPLOYMENT | .spec.template.metadata.annotations[\"checksum/c
 SUM=$(gw_render | gw_sum)
 check "gateway: checksum/config is a sha256" "ok" "$([[ $SUM =~ ^[0-9a-f]{64}$ ]] && echo ok)"
 check "gateway: same values, same checksum" "$SUM" "$(gw_render | gw_sum)"
-check "gateway: wikis listed in another order keep the checksum" "$SUM" \
-  "$(render --set-json "wikis=[$(wiki other),$(wiki handbook)]" | gw_sum)"
-check "gateway: a wiki's order and primary do not restart the gateway" "$SUM" \
-  "$(render --set-json "wikis=[$(wiki handbook '"order":4,"primary":true'),$(wiki other '"order":-1')]" | gw_sum)"
-check "gateway: a new wiki image digest does not restart the gateway" "$SUM" \
-  "$(render --set-json "wikis=[$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha256:${DIGEST//a/b}\""),$(wiki other)]" | gw_sum)"
+check "gateway: handbooks listed in another order keep the checksum" "$SUM" \
+  "$(render --set-json "handbooks=[$(handbook other),$(handbook platform)]" | gw_sum)"
+check "gateway: a handbook's order and primary do not restart the gateway" "$SUM" \
+  "$(render --set-json "handbooks=[$(handbook platform '"order":4,"primary":true'),$(handbook other '"order":-1')]" | gw_sum)"
+check "gateway: a new handbook image digest does not restart the gateway" "$SUM" \
+  "$(render --set-json "handbooks=[$(handbook platform "\"image\":\"ghcr.io/naira-project/platform@sha256:${DIGEST//a/b}\""),$(handbook other)]" | gw_sum)"
 check "gateway: unrelated values do not restart the gateway" "$SUM" \
-  "$(gw_render --set catalog.replicas=3 --set wikiDefaults.replicas=2 | gw_sum)"
-for change in 'wikiGateway.domain=wiki.example.com' 'wikiGateway.port=8443' 'wikiGateway.scheme=https' \
-              'wikiGateway.portalOrigin=https://naira.example.com' 'keycloak.issuer=https://x.example/realms/naira' \
+  "$(gw_render --set catalog.replicas=3 --set handbookDefaults.replicas=2 | gw_sum)"
+for change in 'handbookGateway.domain=handbook.example.com' 'handbookGateway.port=8443' 'handbookGateway.scheme=https' \
+              'handbookGateway.portalOrigin=https://naira.example.com' 'keycloak.issuer=https://x.example/realms/naira' \
               'keycloak.realm=other' 'keycloak.baseUrl=http://other.example:8080'; do
   check "gateway: ${change%%=*} restarts the gateway" "changed" \
     "$([ "$(gw_render --set "$change" | gw_sum)" != "$SUM" ] && echo changed)"
 done
-check "gateway: a new wiki restarts the gateway" "changed" \
-  "$([ "$(render --set-json "wikis=[$(wiki handbook),$(wiki other),$(wiki third)]" | gw_sum)" != "$SUM" ] && echo changed)"
-check "gateway: a new wiki label restarts the gateway" "changed" \
-  "$([ "$(render --set-json "wikis=[$(wiki handbook '"label":"New"'),$(wiki other)]" | gw_sum)" != "$SUM" ] && echo changed)"
+check "gateway: a new handbook restarts the gateway" "changed" \
+  "$([ "$(render --set-json "handbooks=[$(handbook platform),$(handbook other),$(handbook third)]" | gw_sum)" != "$SUM" ] && echo changed)"
+check "gateway: a new handbook label restarts the gateway" "changed" \
+  "$([ "$(render --set-json "handbooks=[$(handbook platform '"label":"New"'),$(handbook other)]" | gw_sum)" != "$SUM" ] && echo changed)"
 check "gateway: the ConfigMap itself is not annotated" "null" \
-  "$(gw_render | yq 'select(.kind == "ConfigMap" and .metadata.name == "wiki-gateway") | .metadata.annotations // "null"')"
+  "$(gw_render | yq 'select(.kind == "ConfigMap" and .metadata.name == "handbook-gateway") | .metadata.annotations // "null"')"
 
-# Guards. They apply once a wiki is enabled, and every message names the value to fix.
-must_fail "gateway image digest missing" "wikiGateway.image.digest: must be sha256:<64 lowercase hex digits>" \
-  --set wikiGateway.image.digest= --set-json "wikis=[$(wiki handbook)]"
-must_fail "gateway image digest is a tag" "wikiGateway.image.digest: must be sha256:" \
-  --set wikiGateway.image.digest=distroless-v1.40.2 --set-json "wikis=[$(wiki handbook)]"
-must_fail "gateway image digest in uppercase" "wikiGateway.image.digest: must be sha256:" \
-  --set wikiGateway.image.digest="sha256:${DIGEST//a/A}" --set-json "wikis=[$(wiki handbook)]"
-must_fail "gateway image repository missing" "wikiGateway.image.repository is required" \
-  --set wikiGateway.image.repository= --set-json "wikis=[$(wiki handbook)]"
+# Guards. They apply once a handbook is enabled, and every message names the value to fix.
+must_fail "gateway image digest missing" "handbookGateway.image.digest: must be sha256:<64 lowercase hex digits>" \
+  --set handbookGateway.image.digest= --set-json "handbooks=[$(handbook platform)]"
+must_fail "gateway image digest is a tag" "handbookGateway.image.digest: must be sha256:" \
+  --set handbookGateway.image.digest=distroless-v1.40.2 --set-json "handbooks=[$(handbook platform)]"
+must_fail "gateway image digest in uppercase" "handbookGateway.image.digest: must be sha256:" \
+  --set handbookGateway.image.digest="sha256:${DIGEST//a/A}" --set-json "handbooks=[$(handbook platform)]"
+must_fail "gateway image repository missing" "handbookGateway.image.repository is required" \
+  --set handbookGateway.image.repository= --set-json "handbooks=[$(handbook platform)]"
 for origin in "" naira.example.com ftp://naira.example.com http://naira.example.com/portal \
               "http://naira.example.com;script-src *" "http://naira.example.com *" "http://naira .example.com" \
               "http://naira.example.com?x" "http://user@naira.example.com" "http://naira.example.com:99999x"; do
-  must_fail "gateway portalOrigin \"$origin\"" 'wikiGateway.portalOrigin: must be an origin, scheme://host[:port]' \
-    --set-string wikiGateway.portalOrigin="$origin" --set-json "wikis=[$(wiki handbook)]"
+  must_fail "gateway portalOrigin \"$origin\"" 'handbookGateway.portalOrigin: must be an origin, scheme://host[:port]' \
+    --set-string handbookGateway.portalOrigin="$origin" --set-json "handbooks=[$(handbook platform)]"
 done
 check "gateway: portalOrigin with an https host and port is accepted" "ok" \
-  "$(gw_render --set wikiGateway.portalOrigin=https://naira.example.com:8443 >/dev/null && echo ok)"
+  "$(gw_render --set handbookGateway.portalOrigin=https://naira.example.com:8443 >/dev/null && echo ok)"
 for base in "" keycloak:8080 ftp://keycloak.example.com http:// "http://keycloak example.com"; do
   must_fail "gateway keycloak.baseUrl \"$base\"" "keycloak.baseUrl: must be an http or https URL with a host" \
-    --set-string keycloak.baseUrl="$base" --set-json "wikis=[$(wiki handbook)]"
+    --set-string keycloak.baseUrl="$base" --set-json "handbooks=[$(handbook platform)]"
 done
 must_fail "gateway keycloak.issuer missing" "keycloak.issuer is required" \
-  --set keycloak.issuer= --set-json "wikis=[$(wiki handbook)]"
+  --set keycloak.issuer= --set-json "handbooks=[$(handbook platform)]"
 must_fail "gateway keycloak.realm missing" "keycloak.realm is required" \
-  --set keycloak.realm= --set-json "wikis=[$(wiki handbook)]"
-check "gateway: its values are not checked while no wiki is enabled" "ok" \
-  "$(render --set wikiGateway.image.digest= --set wikiGateway.portalOrigin=nope --set keycloak.baseUrl= \
+  --set keycloak.realm= --set-json "handbooks=[$(handbook platform)]"
+check "gateway: its values are not checked while no handbook is enabled" "ok" \
+  "$(render --set handbookGateway.image.digest= --set handbookGateway.portalOrigin=nope --set keycloak.baseUrl= \
       --set keycloak.issuer= >/dev/null && echo ok)"
 
-# ── Wikis in the portal ──────────────────────────────────────────────────────
-# The portal reads wikis.json from the mounted ConfigMap wikis and restarts when its content changes.
+# ── Handbooks in the portal ──────────────────────────────────────────────────────
+# The portal reads handbooks.json from the mounted ConfigMap handbooks and restarts when its content changes.
 PORTAL='select(.kind == "Deployment" and .metadata.name == "portal") | .spec.template'
-WIKIS_JSON_TEXT='select(.kind == "ConfigMap" and .metadata.name == "wikis") | .data["wikis.json"]'
-portal_sum() { yq "$PORTAL | .metadata.annotations[\"checksum/wikis\"]"; }
+HANDBOOKS_JSON_TEXT='select(.kind == "ConfigMap" and .metadata.name == "handbooks") | .data["handbooks.json"]'
+portal_sum() { yq "$PORTAL | .metadata.annotations[\"checksum/handbooks\"]"; }
 
-check "portal: mounts the wikis ConfigMap read-only" "wikis wikis /etc/naira/wikis true" \
+check "portal: mounts the handbooks ConfigMap read-only" "handbooks handbooks /etc/naira/handbooks true" \
   "$(render | yq "$PORTAL | .spec.volumes[0].name + \" \" + .spec.volumes[0].configMap.name + \" \"
       + .spec.containers[0].volumeMounts[0].mountPath + \" \" + (.spec.containers[0].volumeMounts[0].readOnly | tostring)")"
-check "portal: the mount is named like the volume" "wikis" \
+check "portal: the mount is named like the volume" "handbooks" \
   "$(render | yq "$PORTAL | .spec.containers[0].volumeMounts[0].name")"
-check "portal: NAIRA_WIKIS_FILE is wikis.json in that mount" "/etc/naira/wikis/wikis.json" \
-  "$(render | yq "$PORTAL | .spec.containers[0].env[] | select(.name == \"NAIRA_WIKIS_FILE\") | .value")"
-check "portal: the file name is the key of the wikis ConfigMap" "wikis.json" \
+check "portal: NAIRA_HANDBOOKS_FILE is handbooks.json in that mount" "/etc/naira/handbooks/handbooks.json" \
+  "$(render | yq "$PORTAL | .spec.containers[0].env[] | select(.name == \"NAIRA_HANDBOOKS_FILE\") | .value")"
+check "portal: the file name is the key of the handbooks ConfigMap" "handbooks.json" \
   "$(o=$(render)
-     f=$(echo "$o" | yq "$PORTAL | .spec.containers[0].env[] | select(.name == \"NAIRA_WIKIS_FILE\") | .value | sub(\".*/\"; \"\")")
-     echo "$o" | yq "select(.kind == \"ConfigMap\" and .metadata.name == \"wikis\") | .data | keys | .[] | select(. == \"$f\")")"
-check "portal: the other env vars and the other volumes are unchanged" "PORT NAIRA_UI_BASE_URL IDP_NAMES BASE_DOMAINS_KEYCLOAK AUTH_SERVER_URL_KEYCLOAK TOKEN_URL_KEYCLOAK OIDC_CLIENT_ID_KEYCLOAK OIDC_CLIENT_SECRET_KEYCLOAK NAIRA_WIKIS_FILE 1" \
+     f=$(echo "$o" | yq "$PORTAL | .spec.containers[0].env[] | select(.name == \"NAIRA_HANDBOOKS_FILE\") | .value | sub(\".*/\"; \"\")")
+     echo "$o" | yq "select(.kind == \"ConfigMap\" and .metadata.name == \"handbooks\") | .data | keys | .[] | select(. == \"$f\")")"
+check "portal: the other env vars and the other volumes are unchanged" "PORT NAIRA_UI_BASE_URL IDP_NAMES BASE_DOMAINS_KEYCLOAK AUTH_SERVER_URL_KEYCLOAK TOKEN_URL_KEYCLOAK OIDC_CLIENT_ID_KEYCLOAK OIDC_CLIENT_SECRET_KEYCLOAK NAIRA_HANDBOOKS_FILE 1" \
   "$(render | yq "$PORTAL | ([.spec.containers[0].env[].name] | join(\" \")) + \" \" + (.spec.volumes | length | tostring)")"
-check "portal: also mounts the (empty) list when no wiki is enabled" "[]" \
-  "$(render | yq "$WIKIS_JSON_TEXT | from_json" -o=json -I=0)"
-check "portal: a podAnnotation stays next to checksum/wikis" "x ok" \
+check "portal: also mounts the (empty) list when no handbook is enabled" "[]" \
+  "$(render | yq "$HANDBOOKS_JSON_TEXT | from_json" -o=json -I=0)"
+check "portal: a podAnnotation stays next to checksum/handbooks" "x ok" \
   "$(render --set-string portal.podAnnotations.team=x \
-    | yq "$PORTAL | .metadata.annotations | .team + \" \" + (select(has(\"checksum/wikis\")) | \"ok\")")"
+    | yq "$PORTAL | .metadata.annotations | .team + \" \" + (select(has(\"checksum/handbooks\")) | \"ok\")")"
 
 PSUM=$(render | portal_sum)
-check "portal: checksum/wikis is a sha256" "ok" "$([[ $PSUM =~ ^[0-9a-f]{64}$ ]] && echo ok)"
-check "portal: checksum/wikis is the sha256 of wikis.json" \
-  "$(o=$(render_wikis "$(wiki handbook '"label":"Handbook"')"); printf '%s' "$(echo "$o" | yq "$WIKIS_JSON_TEXT")" | sha256sum | cut -d' ' -f1)" \
-  "$(render_wikis "$(wiki handbook '"label":"Handbook"')" | portal_sum)"
+check "portal: checksum/handbooks is a sha256" "ok" "$([[ $PSUM =~ ^[0-9a-f]{64}$ ]] && echo ok)"
+check "portal: checksum/handbooks is the sha256 of handbooks.json" \
+  "$(o=$(render_handbooks "$(handbook platform '"label":"Handbook"')"); printf '%s' "$(echo "$o" | yq "$HANDBOOKS_JSON_TEXT")" | sha256sum | cut -d' ' -f1)" \
+  "$(render_handbooks "$(handbook platform '"label":"Handbook"')" | portal_sum)"
 check "portal: same values, same checksum" "$PSUM" "$(render | portal_sum)"
-PSUM2=$(render_wikis "$(wiki handbook)" "$(wiki other)" | portal_sum)
-check "portal: wikis listed in another order keep the checksum (the file is sorted)" "$PSUM2" \
-  "$(render_wikis "$(wiki other)" "$(wiki handbook)" | portal_sum)"
+PSUM2=$(render_handbooks "$(handbook platform)" "$(handbook other)" | portal_sum)
+check "portal: handbooks listed in another order keep the checksum (the file is sorted)" "$PSUM2" \
+  "$(render_handbooks "$(handbook other)" "$(handbook platform)" | portal_sum)"
 for change in '"label":"New"' '"order":4' '"primary":true' '"owner":"team"' '"source":"https://example.com/hb"'; do
   field=${change%%:*}
-  check "portal: a wiki's ${field//\"/} restarts the portal" "changed" \
-    "$([ "$(render_wikis "$(wiki handbook "$change")" "$(wiki other)" | portal_sum)" != "$PSUM2" ] && echo changed)"
+  check "portal: a handbook's ${field//\"/} restarts the portal" "changed" \
+    "$([ "$(render_handbooks "$(handbook platform "$change")" "$(handbook other)" | portal_sum)" != "$PSUM2" ] && echo changed)"
 done
-check "portal: a new wiki restarts the portal" "changed" \
+check "portal: a new handbook restarts the portal" "changed" \
   "$([ "$PSUM2" != "$PSUM" ] && echo changed)"
-check "portal: removing a wiki restarts the portal" "changed" \
-  "$([ "$(render_wikis "$(wiki handbook)" | portal_sum)" != "$PSUM2" ] && echo changed)"
-check "portal: another wiki domain restarts the portal (the urls change)" "changed" \
-  "$([ "$(render --set wikiGateway.domain=wiki.example.com --set-json "wikis=[$(wiki handbook),$(wiki other)]" | portal_sum)" != "$PSUM2" ] && echo changed)"
-check "portal: a new wiki image digest does not restart the portal" "$PSUM2" \
-  "$(render --set-json "wikis=[$(wiki handbook "\"image\":\"ghcr.io/naira-project/handbook@sha256:${DIGEST//a/b}\""),$(wiki other)]" | portal_sum)"
-check "portal: a disabled wiki does not restart the portal" "$PSUM2" \
-  "$(render_wikis "$(wiki handbook)" "$(wiki other)" "$(wiki off '"enabled":false')" | portal_sum)"
+check "portal: removing a handbook restarts the portal" "changed" \
+  "$([ "$(render_handbooks "$(handbook platform)" | portal_sum)" != "$PSUM2" ] && echo changed)"
+check "portal: another handbook domain restarts the portal (the urls change)" "changed" \
+  "$([ "$(render --set handbookGateway.domain=handbook.example.com --set-json "handbooks=[$(handbook platform),$(handbook other)]" | portal_sum)" != "$PSUM2" ] && echo changed)"
+check "portal: a new handbook image digest does not restart the portal" "$PSUM2" \
+  "$(render --set-json "handbooks=[$(handbook platform "\"image\":\"ghcr.io/naira-project/platform@sha256:${DIGEST//a/b}\""),$(handbook other)]" | portal_sum)"
+check "portal: a disabled handbook does not restart the portal" "$PSUM2" \
+  "$(render_handbooks "$(handbook platform)" "$(handbook other)" "$(handbook off '"enabled":false')" | portal_sum)"
 check "portal: unrelated values do not restart the portal" "$PSUM2" \
-  "$(render --set catalog.replicas=3 --set wikiGateway.replicas=2 --set portal.replicas=2 \
-      --set-json "wikis=[$(wiki handbook),$(wiki other)]" | portal_sum)"
+  "$(render --set catalog.replicas=3 --set handbookGateway.replicas=2 --set portal.replicas=2 \
+      --set-json "handbooks=[$(handbook platform),$(handbook other)]" | portal_sum)"
 
-# ── Wikis in the dev values ──────────────────────────────────────────────────
-# values-dev.yaml lists two wikis for Tilt, which builds wiki/<id> and swaps the image.
+# ── Handbooks in the dev values ──────────────────────────────────────────────────
+# values-dev.yaml lists two handbooks for Tilt, which builds handbook/<id> and swaps the image.
 TILTFILE="$CHART/../../../Tiltfile"
-DEV_WIKI_DEPLOYMENT='select(.kind == "Deployment" and .metadata.labels["app.kubernetes.io/component"] == "wiki")'
-check "dev wikis: the how-to first as primary, then the example" "howto:true,example:false" \
-  "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.id + \":\" + (.primary | tostring)) | join(\",\")")"
-check "dev wikis: addresses are on port 3003" \
+DEV_HANDBOOK_DEPLOYMENT='select(.kind == "Deployment" and .metadata.labels["app.kubernetes.io/component"] == "handbook")'
+check "dev handbooks: the how-to first as primary, then the example" "howto:true,example:false" \
+  "$(render_raw "${DEV[@]}" | yq "$HANDBOOKS_JSON | map(.id + \":\" + (.primary | tostring)) | join(\",\")")"
+check "dev handbooks: addresses are on port 3003" \
   "http://howto.naira.localhost:3003/,http://example.naira.localhost:3003/" \
-  "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.url) | join(\",\")")"
-# Chrome drops the gateway's SameSite=Lax cookie when the portal is on another site than the wikis.
-check "dev wikis: the portal host is the wiki domain, so both are on one site" \
-  "$(yq '.wikiGateway.domain' "$CHART/values-dev.yaml")" \
-  "$(yq '.wikiGateway.portalOrigin' "$CHART/values-dev.yaml" | sed -E 's#^[a-z]+://([^:/]+).*#\1#')"
+  "$(render_raw "${DEV[@]}" | yq "$HANDBOOKS_JSON | map(.url) | join(\",\")")"
+# Chrome drops the gateway's SameSite=Lax cookie when the portal is on another site than the handbooks.
+check "dev handbooks: the portal host is the handbook domain, so both are on one site" \
+  "$(yq '.handbookGateway.domain' "$CHART/values-dev.yaml")" \
+  "$(yq '.handbookGateway.portalOrigin' "$CHART/values-dev.yaml" | sed -E 's#^[a-z]+://([^:/]+).*#\1#')"
 # Grafana is forwarded to 3002 and the UI's log links point there.
-check "dev wikis: the gateway port is not the one of the Grafana log links" "differ" \
-  "$([ "$(yq '.wikiGateway.port' "$CHART/values-dev.yaml")" != "$(yq '.ui.config.logs.explorerUrl' "$CHART/values-dev.yaml" | sed 's/.*://')" ] && echo differ)"
-check "dev wikis: the gateway port in wikis.json is not the Grafana port" "true" \
-  "$(render_raw "${DEV[@]}" | yq "$WIKIS_JSON | map(.url | test(\":3002/\") | not) | all | tostring")"
+check "dev handbooks: the gateway port is not the one of the Grafana log links" "differ" \
+  "$([ "$(yq '.handbookGateway.port' "$CHART/values-dev.yaml")" != "$(yq '.ui.config.logs.explorerUrl' "$CHART/values-dev.yaml" | sed 's/.*://')" ] && echo differ)"
+check "dev handbooks: the gateway port in handbooks.json is not the Grafana port" "true" \
+  "$(render_raw "${DEV[@]}" | yq "$HANDBOOKS_JSON | map(.url | test(\":3002/\") | not) | all | tostring")"
 # Tilt matches a docker_build to a Deployment by the image name, and builds it from a directory.
-DEV_WIKI_IMAGES=$(render_raw "${DEV[@]}" \
-  | yq "$DEV_WIKI_DEPLOYMENT | .metadata.name + \" \" + (.spec.template.spec.containers[0].image | sub(\"@.*\"; \"\"))" \
-  | sed -e '/^---$/d' -e 's/^wiki-//')
-check "dev wikis: each image is named after its wiki" "howto local/naira-wiki-howto example local/naira-wiki-example" \
-  "$(echo "$DEV_WIKI_IMAGES" | sort -r | tr '\n' ' ' | sed 's/ $//')"
+DEV_HANDBOOK_IMAGES=$(render_raw "${DEV[@]}" \
+  | yq "$DEV_HANDBOOK_DEPLOYMENT | .metadata.name + \" \" + (.spec.template.spec.containers[0].image | sub(\"@.*\"; \"\"))" \
+  | sed -e '/^---$/d' -e 's/^handbook-//')
+check "dev handbooks: each image is named after its handbook" "howto local/naira-handbook-howto example local/naira-handbook-example" \
+  "$(echo "$DEV_HANDBOOK_IMAGES" | sort -r | tr '\n' ' ' | sed 's/ $//')"
 while read -r id image; do
-  check "dev wikis: the Tiltfile builds $image from wiki/$id" "1" \
-    "$(grep -c "'$image': 'wiki/$id'" "$TILTFILE")"
-  check "dev wikis: wiki/$id exists and is a wiki project" "ok" \
-    "$([ -f "$CHART/../../../wiki/$id/Dockerfile" ] && [ -f "$CHART/../../../wiki/$id/package.json" ] && echo ok)"
-done <<<"$DEV_WIKI_IMAGES"
-check "dev wikis: the gateway's Envoy is pinned by digest, which the Tiltfile pulls instead of building" "true" \
-  "$(render_raw "${DEV[@]}" | yq 'select(.kind == "Deployment" and .metadata.name == "wiki-gateway") | .spec.template.spec.containers[0].image | test("@sha256:[0-9a-f]{64}$") | tostring')"
-check "dev wikis: render stays valid with the placeholder digest" "ok" \
+  check "dev handbooks: the Tiltfile builds $image from handbook/$id" "1" \
+    "$(grep -c "'$image': 'handbook/$id'" "$TILTFILE")"
+  check "dev handbooks: handbook/$id exists and is a handbook project" "ok" \
+    "$([ -f "$CHART/../../../handbook/$id/Dockerfile" ] && [ -f "$CHART/../../../handbook/$id/package.json" ] && echo ok)"
+done <<<"$DEV_HANDBOOK_IMAGES"
+check "dev handbooks: the gateway's Envoy is pinned by digest, which the Tiltfile pulls instead of building" "true" \
+  "$(render_raw "${DEV[@]}" | yq 'select(.kind == "Deployment" and .metadata.name == "handbook-gateway") | .spec.template.spec.containers[0].image | test("@sha256:[0-9a-f]{64}$") | tostring')"
+check "dev handbooks: render stays valid with the placeholder digest" "ok" \
   "$(render_raw "${DEV[@]}" >/dev/null && echo ok)"
 
 ALL_FIELDS_GW=$(render_raw -f "$CHART/ci/all-fields-values.yaml")
@@ -1474,7 +1474,7 @@ check "gateway: all-fields values set the scheduling fields" "system-cluster-cri
   "$(echo "$ALL_FIELDS_GW" | yq "$GW_POD | .priorityClassName + \" \" + .nodeSelector[\"kubernetes.io/os\"] + \" \" + .tolerations[0].key")"
 check "gateway: all-fields values set the frame ancestor and make the cookie Secure" \
   "frame-ancestors https://naira.example.com true" \
-  "$(echo "$ALL_FIELDS_GW" | gwq "$(vhost wiki-platform-handbook) | .response_headers_to_add[0].header.value + \" \"
+  "$(echo "$ALL_FIELDS_GW" | gwq "$(vhost handbook-platform-handbook) | .response_headers_to_add[0].header.value + \" \"
     + (.routes[0].response_headers_to_add[0].header.value | test(\"; Secure;\") | tostring)")"
 check "all-fields values render" \
   "ok" \

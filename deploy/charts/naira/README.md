@@ -41,8 +41,8 @@ development Secrets from values.
 - One release per namespace: namespaced objects have fixed names (`catalog`,
   `ui`, `portal`, `catalog-plugin-config`, `plugin-<name>-config`,
   `catalog-secrets`, `portal-oidc`, `postgres`, `postgres-admin`, `db-init`,
-  `<name>-db`, `wiki-<id>`, `wikis`, `wiki-gateway`, `wiki-ingress`,
-  `wiki-gateway-egress`).
+  `<name>-db`, `handbook-<id>`, `handbooks`, `handbook-gateway`, `handbook-ingress`,
+  `handbook-gateway-egress`).
   Cluster-scoped RBAC is prefixed with the release name, so several releases
   per cluster are fine as long as their release names differ.
 - Migrating from the former `deploy/dev/stacks`: delete the
@@ -97,94 +97,94 @@ in a value fails the render.
 | github | 50059 | no | Secret key `GITHUB_TOKEN`; RBAC: namespaces, deployments |
 | bedrock | 50060 | no | Secret keys `BEDROCK_AWS_ACCESS_KEY_ID`, `BEDROCK_AWS_SECRET_ACCESS_KEY`; no RBAC |
 
-## Wikis
+## Handbooks
 
-Each enabled entry in `wikis` installs a Deployment and a Service `wiki-<id>`
-from a digest-pinned image and adds the wiki to `wikis.json` in ConfigMap
-`wikis`. The fields are documented in `values.yaml`; the image contract and a
-starter are in [`wiki/starter/README.md`](../../../wiki/starter/README.md).
+Each enabled entry in `handbooks` installs a Deployment and a Service `handbook-<id>`
+from a digest-pinned image and adds the handbook to `handbooks.json` in ConfigMap
+`handbooks`. The fields are documented in `values.yaml`; the image contract and a
+starter are in [`handbook/starter/README.md`](../../../handbook/starter/README.md).
 
-- A listed wiki is installed unless it sets `enabled: false`. Disabling or
-  removing it removes its Deployment, Service and `wikis.json` entry and
+- A listed handbook is installed unless it sets `enabled: false`. Disabling or
+  removing it removes its Deployment, Service and `handbooks.json` entry and
   nothing else. Upgrading is a new digest.
-- `wikis.json` lists the enabled wikis, the primary one first, then by `order`,
+- `handbooks.json` lists the enabled handbooks, the primary one first, then by `order`,
   then by `id`. Each entry has `id`, `label`, `url`, `primary` and `order`, and
   `owner` and `source` when set. The ConfigMap is always rendered, as `[]` when
-  no wiki is enabled. The `url` is `<scheme>://<id>.<domain>[:port]/` from
-  `wikiGateway`, with the port left out when it is the scheme's default.
-- The domain needs wildcard DNS and TLS, and the wiki address has to be on the
+  no handbook is enabled. The `url` is `<scheme>://<id>.<domain>[:port]/` from
+  `handbookGateway`, with the port left out when it is the scheme's default.
+- The domain needs wildcard DNS and TLS, and the handbook address has to be on the
   same site as the portal, or the browser drops the session cookie (see the
-  starter README). Chrome counts `localhost` and `wiki.localhost` as different
+  starter README). Chrome counts `localhost` and `handbook.localhost` as different
   sites, so the default domain does not work with a portal on `localhost`: serve
-  the portal on `naira.localhost` and set `wikiGateway.domain` to
+  the portal on `naira.localhost` and set `handbookGateway.domain` to
   `naira.localhost`.
-- Wiki pods run non-root with a read-only root filesystem, a small `/tmp` and no
+- Handbook pods run non-root with a read-only root filesystem, a small `/tmp` and no
   Kubernetes API token. They do not use the catalog's ServiceAccount.
-  `wikiDefaults` sets replicas, resources and the scheduling fields.
-- `wikiGateway.networkPolicy.enabled` renders `wiki-ingress` (wiki pods accept
-  traffic from the pods named `wiki-gateway` only) and `wiki-gateway-egress`
-  (those pods may reach DNS, the wiki pods and the Keycloak port of
+  `handbookDefaults` sets replicas, resources and the scheduling fields.
+- `handbookGateway.networkPolicy.enabled` renders `handbook-ingress` (handbook pods accept
+  traffic from the pods named `handbook-gateway` only) and `handbook-gateway-egress`
+  (those pods may reach DNS, the handbook pods and the Keycloak port of
   `keycloak.baseUrl`). Keycloak and DNS are admitted on any address, because a
   policy cannot select a host name.
-- A wiki image needs a digest and a registry from `wikiGateway.allowedRegistries`,
+- A handbook image needs a digest and a registry from `handbookGateway.allowedRegistries`,
   so an image built into kind cannot be listed as it is. `values-dev.yaml` lists
-  `howto` and `example` with a placeholder digest, and Tilt builds `wiki/howto` and
-  `wiki/example` and replaces the references.
+  `howto` and `example` with a placeholder digest, and Tilt builds `handbook/howto` and
+  `handbook/example` and replaces the references.
 
 ### Portal
 
-The portal Deployment mounts ConfigMap `wikis` read-only at `/etc/naira/wikis`
-and reads `NAIRA_WIKIS_FILE` (`/etc/naira/wikis/wikis.json`) once at start. Each
-wiki becomes a sidebar entry in the Docs group, after the last portal page: the
-primary wiki first, then by `order`, then by `id`. Its route is `/<id>`, and it
-opens in an iframe at the wiki's address. There is no Docs group while no wiki is
+The portal Deployment mounts ConfigMap `handbooks` read-only at `/etc/naira/handbooks`
+and reads `NAIRA_HANDBOOKS_FILE` (`/etc/naira/handbooks/handbooks.json`) once at start. Each
+handbook becomes a sidebar entry in the Docs group, after the last portal page: the
+primary handbook first, then by `order`, then by `id`. Its route is `/<id>`, and it
+opens in an iframe at the handbook's address. There is no Docs group while no handbook is
 enabled.
 
-- The portal restarts when `wikis.json` changes (annotation `checksum/wikis`)
-  and not when only a wiki's image digest does.
-- An unset `NAIRA_WIKIS_FILE` means no wikis. A file that cannot be read or does
-  not fit logs one error and shows no wiki; every other page stays. A wiki `id`
+- The portal restarts when `handbooks.json` changes (annotation `checksum/handbooks`)
+  and not when only a handbook's image digest does.
+- An unset `NAIRA_HANDBOOKS_FILE` means no handbooks. A file that cannot be read or does
+  not fit logs one error and shows no handbook; every other page stays. A handbook `id`
   that is also a portal page, such as `plugins`, makes the file invalid.
 - Luigi drops a `#heading` from a deep link, so the iframe opens at the top of
   the page.
 
 ### Gateway
 
-While at least one wiki is enabled, the chart renders one Envoy as Deployment,
-Service and ConfigMap `wiki-gateway`. It listens on 8080 over plain HTTP: expose
-the Service on `wikiGateway.port` and end TLS in front of it, with a wildcard
-certificate for `*.<wikiGateway.domain>`. The admin interface listens on
+While at least one handbook is enabled, the chart renders one Envoy as Deployment,
+Service and ConfigMap `handbook-gateway`. It listens on 8080 over plain HTTP: expose
+the Service on `handbookGateway.port` and end TLS in front of it, with a wildcard
+certificate for `*.<handbookGateway.domain>`. The admin interface listens on
 loopback only.
 
-- A virtual host and a cluster per enabled wiki. A host that is no wiki's
+- A virtual host and a cluster per enabled handbook. A host that is no handbook's
   address gets a 404.
 - Every request needs a Keycloak access token. Envoy checks it against
   `keycloak.issuer` and the keys at `keycloak.baseUrl`, cached for 10 minutes
   (an https Keycloak needs a certificate the system CAs trust). The token is read
-  from the `naira_wiki` cookie, never from `Authorization` or the query.
+  from the `naira_handbook` cookie, never from `Authorization` or the query.
   `/_naira/bootstrap.html` and `/_naira/assets/` are open, so a signed-out frame
   can sign in.
 - The bootstrap page posts the token to `/_naira/session` in the header
-  `x-naira-token`. The answer sets `naira_wiki`: HttpOnly, SameSite=Lax and no
-  `Domain`, so each wiki address keeps its own cookie. It is `Secure` when
-  `wikiGateway.scheme` is `https`. The `Cookie` header is removed from requests
-  to the wiki pod.
+  `x-naira-token`. The answer sets `naira_handbook`: HttpOnly, SameSite=Lax and no
+  `Domain`, so each handbook address keeps its own cookie. It is `Secure` when
+  `handbookGateway.scheme` is `https`. The `Cookie` header is removed from requests
+  to the handbook pod.
 - Without a valid cookie the answer is a 401 page that sends the browser to the
   bootstrap page and back.
-- Each wiki is health-checked on `/naira-wiki.json` every 5 seconds. A wiki that
+- Each handbook is health-checked on `/naira-handbook.json` every 5 seconds. A handbook that
   is stopped, unreachable or failing its check gets a 503 page with its name,
-  owner and a link to its `source`, on its own address. Other wikis are not
+  owner and a link to its `source`, on its own address. Other handbooks are not
   affected.
 - Responses carry `Content-Security-Policy: frame-ancestors
-  <wikiGateway.portalOrigin>` and no `Server` or `x-envoy-*` header.
-- The gateway restarts when its Envoy config changes, not when a wiki's digest
-  does. The two pages are in `files/wiki-gateway/`.
+  <handbookGateway.portalOrigin>` and no `Server` or `x-envoy-*` header.
+- The gateway restarts when its Envoy config changes, not when a handbook's digest
+  does. The two pages are in `files/handbook-gateway/`.
 
 ## Scheduling and security
 
 Same keys on `catalog`, `ui` and `portal` unless noted; unset values render
-nothing. `imagePullSecrets` is top-level and applies to all three. `wikiGateway`
-(the gateway) and `wikiDefaults` (the wiki pods) take the same keys, except
+nothing. `imagePullSecrets` is top-level and applies to all three. `handbookGateway`
+(the gateway) and `handbookDefaults` (the handbook pods) take the same keys, except
 `startupProbe`.
 
 | Key | Notes |
@@ -199,7 +199,7 @@ no privilege escalation, all capabilities dropped and the `RuntimeDefault`
 seccomp profile, which meets Pod Security `restricted`. The `ui` (nginx) and
 `portal` (node) images have no `USER` and run as root, so they get only
 `allowPrivilegeEscalation: false` and seccomp; a `restricted` namespace needs
-non-root images for both first. The wiki gateway and the wiki pods run non-root
+non-root images for both first. The handbook gateway and the handbook pods run non-root
 with a read-only root filesystem and no capabilities, which also meets
 `restricted`.
 
@@ -223,16 +223,16 @@ missing without it; `postgresql.auth.existingSecret` differing from the
 `database.admin` Secret; a database name other than lowercase letters, digits and inner hyphens starting with a letter, or one of
 `postgres`, `template0`, `template1` and `database.admin.username`; and a
 `database.admin` or `database.databases.<name>` Secret without exactly one
-source; and, for `wikis`, an entry that is not a map or has a missing, invalid,
-reserved (`gateway`) or duplicate `id`. For an enabled wiki: a contract other
-than `naira.wiki/v1alpha1`, an `image` that is missing, not pinned as
-`name@sha256:<digest>` or outside `wikiGateway.allowedRegistries`, an `order`
-that is not a whole number, and a second `primary`. Once a wiki is enabled,
-a `wikiGateway.domain`, `scheme` or `port` that cannot form an address, a
-`wikiGateway.image` without a repository or a `sha256:` digest, a
-`wikiGateway.portalOrigin` that is not `scheme://host[:port]`, a
+source; and, for `handbooks`, an entry that is not a map or has a missing, invalid,
+reserved (`gateway`) or duplicate `id`. For an enabled handbook: a contract other
+than `naira.handbook/v1alpha1`, an `image` that is missing, not pinned as
+`name@sha256:<digest>` or outside `handbookGateway.allowedRegistries`, an `order`
+that is not a whole number, and a second `primary`. Once a handbook is enabled,
+a `handbookGateway.domain`, `scheme` or `port` that cannot form an address, a
+`handbookGateway.image` without a repository or a `sha256:` digest, a
+`handbookGateway.portalOrigin` that is not `scheme://host[:port]`, a
 `keycloak.baseUrl` that is not an http(s) URL with a host, and an empty
-`keycloak.issuer` or `keycloak.realm`. The message names the wiki or the value. A bad entry fails the whole render, so the previous
+`keycloak.issuer` or `keycloak.realm`. The message names the handbook or the value. A bad entry fails the whole render, so the previous
 release keeps running.
 
 ## Tests
@@ -240,6 +240,6 @@ release keeps running.
 `deploy/charts/naira/tests/render-test.sh`
 
 The render tests read the Envoy config back from the ConfigMap but cannot tell
-whether Envoy accepts it. After changing `templates/wiki-gateway.yaml`, run
+whether Envoy accepts it. After changing `templates/handbook-gateway.yaml`, run
 `envoy --mode validate -c envoy.yaml` on the rendered `envoy.yaml` with the image
-from `wikiGateway.image`.
+from `handbookGateway.image`.
