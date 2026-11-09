@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense } from 'react';
 import { Route, BrowserRouter as Router, Routes } from 'react-router';
 import { CATALOG_VIEWPOINTS } from './config/viewpoints';
+import { useOperationsSync } from './hooks/usePluginOperations';
 import { queryClient } from './lib/queryClient';
 
 const CatalogDetail = lazy(() => import('./pages/CatalogDetail'));
@@ -11,9 +12,15 @@ const PluginsPage = lazy(() => import('./pages/PluginsPage'));
 const TechRadar = lazy(() => import('./pages/TechRadar'));
 const TechRadarQuadrant = lazy(() => import('./pages/TechRadarQuadrant'));
 
+function OperationsSync() {
+  useOperationsSync();
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <OperationsSync />
       <Router>
         <Suspense fallback={<p>Loading…</p>}>
           <Routes>
