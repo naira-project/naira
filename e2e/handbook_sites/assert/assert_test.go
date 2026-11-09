@@ -38,9 +38,9 @@ const (
 	keycloakRealm        = "naira"
 
 	// Keep in sync with e2e/components/handbook-sites-values.yaml.
-	handbookDomain   = "handbook.localhost"
-	handbookPort     = "3003"
-	portalOrigin = "http://localhost:3000"
+	handbookDomain = "handbook.localhost"
+	handbookPort   = "3003"
+	portalOrigin   = "http://localhost:3000"
 
 	starterTitle = "Naira Handbook Starter"
 )
