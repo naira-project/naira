@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 export const CONTRACT = 'naira.handbook/v1alpha1';
 
 const ID_PATTERN = /^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$/;
+const BUILT_AT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
 const compact = (object) =>
   Object.fromEntries(Object.entries(object).filter(([, value]) => value !== undefined));
@@ -16,7 +17,9 @@ const repositoryUrl = (repository) =>
 
 /**
  * Returns the naira-handbook.json document. The id comes from NAIRA_HANDBOOK_ID, else the package name,
- * and must be a DNS label. Fields that are not known are omitted. Throws on an invalid id.
+ * and must be a DNS label. The build time comes from NAIRA_HANDBOOK_BUILT_AT, else now, so CI can give
+ * every build of one image the same value. Fields that are not known are omitted. Throws on an invalid
+ * id or build time.
  */
 export function buildMetadata({ env, pkg, generatorVersion, now }) {
   const id = env.NAIRA_HANDBOOK_ID || pkg.name;
@@ -24,6 +27,10 @@ export function buildMetadata({ env, pkg, generatorVersion, now }) {
     throw new Error(
       `invalid handbook id "${id}": use lowercase letters, digits and "-", at most 42 characters`,
     );
+  }
+  const builtAt = env.NAIRA_HANDBOOK_BUILT_AT || now.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  if (!BUILT_AT_PATTERN.test(builtAt)) {
+    throw new Error(`invalid build time "${builtAt}": use UTC as YYYY-MM-DDTHH:MM:SSZ`);
   }
   const source = compact({
     repository: repositoryUrl(pkg.repository),
@@ -37,7 +44,7 @@ export function buildMetadata({ env, pkg, generatorVersion, now }) {
     source: Object.keys(source).length > 0 ? source : undefined,
     support: typeof pkg.bugs === 'string' ? pkg.bugs : pkg.bugs?.url,
     version: pkg.version,
-    builtAt: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    builtAt,
     generator: { name: 'vitepress', version: generatorVersion },
   });
 }

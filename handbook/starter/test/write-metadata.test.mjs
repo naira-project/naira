@@ -36,6 +36,17 @@ test('takes the id from NAIRA_HANDBOOK_ID, then from the package name', () => {
   assert.equal(build().id, 'platform-handbook');
 });
 
+test('takes the build time from NAIRA_HANDBOOK_BUILT_AT, then from now', () => {
+  assert.equal(build({ env: { NAIRA_HANDBOOK_BUILT_AT: '2026-11-09T08:30:00Z' } }).builtAt, '2026-11-09T08:30:00Z');
+  assert.equal(build({ env: { NAIRA_HANDBOOK_BUILT_AT: '' } }).builtAt, '2026-11-07T10:00:00Z');
+});
+
+test('rejects a build time that is not UTC to the second', () => {
+  for (const value of ['2026-11-09', '2026-11-09T08:30:00.000Z', '2026-11-09T08:30:00+01:00']) {
+    assert.throws(() => build({ env: { NAIRA_HANDBOOK_BUILT_AT: value } }), /invalid build time/);
+  }
+});
+
 test('accepts ids that are valid DNS labels up to 42 characters', () => {
   for (const id of ['a', 'a1', 'a-b', '0-9', 'a'.repeat(42)]) {
     assert.equal(build({ env: { NAIRA_HANDBOOK_ID: id } }).id, id);

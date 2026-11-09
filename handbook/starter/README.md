@@ -36,6 +36,7 @@ This writes the site and `naira-handbook.json` to `dist/`. A broken internal lin
 ```sh
 docker build \
   --build-arg NAIRA_HANDBOOK_ID=platform-handbook \
+  --build-arg NAIRA_HANDBOOK_BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
   --build-arg GITHUB_SHA=$(git rev-parse HEAD) \
   -t platform-handbook .
 docker run --rm --read-only --tmpfs /tmp -p 8080:8080 platform-handbook
@@ -66,7 +67,7 @@ Fields without a value are left out.
 | `source.commit` | `GITHUB_SHA`. Omitted when unset. |
 | `support` | `bugs` in `package.json`. |
 | `version` | `version` in `package.json`. |
-| `builtAt` | Build time, UTC. |
+| `builtAt` | `NAIRA_HANDBOOK_BUILT_AT`, else the build time. UTC, `YYYY-MM-DDTHH:MM:SSZ`. |
 | `generator` | `vitepress` and its installed version. |
 
 The site footer shows owner, source, version and build time from this file.

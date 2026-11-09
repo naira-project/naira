@@ -5,6 +5,7 @@ RUN npm ci
 COPY . .
 # Written into naira-handbook.json; see scripts/write-metadata.mjs.
 ARG NAIRA_HANDBOOK_ID
+ARG NAIRA_HANDBOOK_BUILT_AT
 ARG GITHUB_SHA
 RUN npm run build
 
