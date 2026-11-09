@@ -21,9 +21,11 @@ DEPS_VERSION = '0.1.0'
 
 config.define_string('deps-repo', usage='Path to a naira-project/test-dependencies checkout')
 config.define_bool('demo', usage='Add the demo story from deploy/demo')
+config.define_string_list('handbook-repo', usage='Path to a handbook repository, such as ../example-handbook, to build and install next to the how-to. Repeatable.')
 cfg = config.parse()
 DEPS_REPO = cfg.get('deps-repo', '')
 DEMO = cfg.get('demo', False)
+HANDBOOK_REPOS = cfg.get('handbook-repo', [])
 DEMO_DIR = 'deploy/demo'
 if DEPS_REPO:
     DEPS_CHART = os.path.abspath(DEPS_REPO) + '/charts/test-dependencies'
@@ -62,6 +64,32 @@ if DEMO:
     if os.getenv('GITHUB_TOKEN', ''):
         NAIRA_SET = ['catalog.plugins.github.enabled=true',
                      'catalog.secret.data.GITHUB_TOKEN=' + os.getenv('GITHUB_TOKEN')]
+
+# Handbooks from --handbook-repo, after the ones in values-dev.yaml. Helm replaces a
+# list from --set instead of merging it, so the whole list goes into a generated
+# values file in the gitignored .local/. The id is the package name, as in the build.
+PLACEHOLDER_DIGEST = 'sha256:' + '0' * 64
+REPO_HANDBOOK_IMAGES = {}
+if HANDBOOK_REPOS:
+    handbooks = list(read_yaml(CHART + '/values-dev.yaml').get('handbooks', []))
+    for i, path in enumerate(HANDBOOK_REPOS):
+        path = os.path.abspath(path)
+        if not os.path.exists(path + '/Dockerfile') or not os.path.exists(path + '/package.json'):
+            fail('--handbook-repo %s: no Dockerfile and package.json there.' % path)
+        pkg = read_json(path + '/package.json')
+        image = 'local/naira-handbook-' + pkg['name']
+        REPO_HANDBOOK_IMAGES[image] = path
+        handbooks.append({
+            'id': pkg['name'],
+            'contract': 'naira.handbook/v1alpha1',
+            'label': pkg.get('naira', {}).get('title', pkg['name']),
+            'order': len(handbooks),
+            'image': image + '@' + PLACEHOLDER_DIGEST,
+        })
+    local('mkdir -p .local && cat > .local/handbook-repos-values.yaml',
+          stdin=str(encode_yaml({'handbooks': handbooks})), quiet=True, echo_off=True)
+    NAIRA_VALUES.append('.local/handbook-repos-values.yaml')
+
 yaml = helm(
     CHART,
     name='naira',
@@ -180,10 +208,11 @@ for svc, ports in DEPS_FORWARDS.items():
 #
 # The chart takes a handbook image only by digest from an allowed registry, so
 # values-dev.yaml names the dev handbooks as local/naira-handbook-<id>@sha256:<placeholder>.
-# Tilt replaces those references with the images it builds from handbook/<id>.
-HANDBOOK_IMAGES = {
+# Tilt replaces those references with the images it builds from handbook/<id>, and
+# for --handbook-repo from that repository.
+HANDBOOK_IMAGES = dict({
     'local/naira-handbook-howto': 'handbook/howto',
-}
+}, **REPO_HANDBOOK_IMAGES)
 images = []
 for o in objs:
     if o['kind'] != 'Deployment':

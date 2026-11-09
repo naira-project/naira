@@ -78,9 +78,23 @@ group, behind a gateway on port 3003, at `<id>.naira.localhost:3003`.
 
 ### Add the example handbook
 
-To try more than one handbook, add the published example to `values-dev.yaml`. Take the
-digest from the latest run of its `Handbook Build` workflow. Tilt pulls an image that is
-pinned by digest instead of building it.
+To try more than one handbook, or to try a handbook you are writing, let Tilt build it from
+a local clone:
+
+```sh
+git clone https://github.com/naira-project/example-handbook ../example-handbook
+tilt up -- --handbook-repo ../example-handbook
+# or, while Tilt runs:
+tilt args -- --handbook-repo ../example-handbook
+```
+
+`--handbook-repo` can be given more than once. The handbook's id is the `name` in its
+`package.json`, and it opens at `<id>.naira.localhost:3003`. Tilt rebuilds it when its files
+change.
+
+To install the published example instead, add it to `values-dev.yaml`. Take the digest
+from the latest run of its `Handbook Build` workflow. Tilt pulls an image that is pinned by
+digest instead of building it.
 
 ```yaml
 handbookGateway:
