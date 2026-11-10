@@ -4,8 +4,8 @@
 // # Setup
 //
 //  1. Create (or reuse) an IAM user with programmatic access, and attach a
-//     policy granting listing foundational models in Bedrock and getting
-//     metric data from CloudWatch. For the sake of testing, the
+//     policy granting listing foundational models in Bedrock and listing
+//     metrics and getting metric data from CloudWatch. For the sake of testing, the
 //     AdministratorAccess policy can be added for a specific IAM user via the
 //     root user, however a least-privilege policy is always recommended.
 //  2. Generate an access key for that user (IAM -> Users -> Security
@@ -45,15 +45,17 @@
 // status. The status is unhealthy if the model had any client errors, server
 // errors or throttles in the lookback window.
 //
+// # CloudWatch Cost
+//
+// CloudWatch bills GetMetricData per requested metric. To keep cost
+// proportional to actual traffic rather than to the size of the Bedrock
+// catalog, the plugin first lists the models that have published an
+// Invocations metric (ListMetrics) and requests usage only for those.
+//
 // # Known Issues
 //
-// Currently, AWS Bedrock model fetches all foundational models and their
-// inference endpoints available for a specific IAM user. However, this fetch
-// now results in ~140 available inference endpoints if the region is
-// selected as us-east-1, and ~40-50 available inference endpoints if the
-// selected region is eu-central-1. This fetch mechanism causes a small
-// delay on the fetch, but with more regions available for a specific IAM
-// user, this mechanism must be optimized.
+// CloudWatch lists metrics that had data in the last two weeks, so
+// METRICS_LOOKBACK values beyond that find no models.
 //
 // # Environment Variables
 //
@@ -131,7 +133,13 @@ type Plugin struct {
 	logger              *log.Logger
 	config              config
 	newBedrockClient    func(ctx context.Context, region string) (listFoundationModelsFunc, error)
-	newCloudWatchClient func(ctx context.Context, region string) (getMetricDataFunc, error)
+	newCloudWatchClient func(ctx context.Context, region string) (cloudWatchClient, error)
+}
+
+// cloudWatchClient is the subset of *cloudwatch.Client used by this plugin.
+type cloudWatchClient struct {
+	listMetrics   listMetricsFunc
+	getMetricData getMetricDataFunc
 }
 
 type foundationModel struct {
@@ -156,7 +164,8 @@ type modelUsage struct {
 // plugin, so tests can substitute a fake implementation.
 type listFoundationModelsFunc func(context.Context, *bedrock.ListFoundationModelsInput, ...func(*bedrock.Options)) (*bedrock.ListFoundationModelsOutput, error)
 
-// getMetricDataFunc is the subset of *cloudwatch.Client used by this plugin.
+type listMetricsFunc func(context.Context, *cloudwatch.ListMetricsInput, ...func(*cloudwatch.Options)) (*cloudwatch.ListMetricsOutput, error)
+
 type getMetricDataFunc func(context.Context, *cloudwatch.GetMetricDataInput, ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error)
 
 func New(cfg config, logger *log.Logger) *Plugin {
@@ -170,12 +179,16 @@ func New(cfg config, logger *log.Logger) *Plugin {
 			}
 			return bedrock.NewFromConfig(awsCfg).ListFoundationModels, nil
 		},
-		newCloudWatchClient: func(ctx context.Context, region string) (getMetricDataFunc, error) {
+		newCloudWatchClient: func(ctx context.Context, region string) (cloudWatchClient, error) {
 			awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 			if err != nil {
-				return nil, fmt.Errorf("loading AWS config for region %q: %w", region, err)
+				return cloudWatchClient{}, fmt.Errorf("loading AWS config for region %q: %w", region, err)
 			}
-			return cloudwatch.NewFromConfig(awsCfg).GetMetricData, nil
+			client := cloudwatch.NewFromConfig(awsCfg)
+			return cloudWatchClient{
+				listMetrics:   client.ListMetrics,
+				getMetricData: client.GetMetricData,
+			}, nil
 		},
 	}
 }
@@ -359,6 +372,9 @@ func (p *Plugin) listFoundationModels(ctx context.Context, region string) ([]fou
 // InvocationServerErrors and InvocationThrottles metrics, summed over the
 // configured lookback window, so usage and health can be compared across
 // regions and models.
+//
+// GetMetricData is billed per requested metric, so only models that
+// ListMetrics reports as having published data are queried.
 func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []foundationModel) (map[string]modelUsage, error) {
 	if len(models) == 0 {
 		return map[string]modelUsage{}, nil
@@ -369,6 +385,11 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 		return nil, fmt.Errorf("creating CloudWatch client for region %q: %w", region, err)
 	}
 
+	activeModelIDs, err := listActiveModelIDs(ctx, client.listMetrics)
+	if err != nil {
+		return nil, fmt.Errorf("listing active Bedrock models: %w", err)
+	}
+
 	// TODO: use dynamic time intervals in the UI, not just from METRICS_LOOKBACK
 	lookback := p.config.MetricsLookback
 	endTime := time.Now().UTC()
@@ -377,7 +398,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 	queries := make([]cwtypes.MetricDataQuery, 0, len(models)*6)
 	for i, model := range models {
 		modelID := strings.TrimSpace(model.ModelID)
-		if modelID == "" {
+		if _, active := activeModelIDs[modelID]; !active {
 			continue
 		}
 		dimensions := []cwtypes.Dimension{
@@ -404,7 +425,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 
 		var nextToken *string
 		for {
-			out, err := client(ctx, &cloudwatch.GetMetricDataInput{
+			out, err := client.getMetricData(ctx, &cloudwatch.GetMetricDataInput{
 				StartTime:         &startTime,
 				EndTime:           &endTime,
 				MetricDataQueries: batch,
@@ -442,6 +463,42 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 	}
 
 	return usage, nil
+}
+
+// listActiveModelIDs returns the ModelId dimension values of all AWS/Bedrock
+// Invocations series that CloudWatch holds data for. CloudWatch retains
+// metric listings for two weeks, so the result is a superset of the models
+// active within a shorter lookback window.
+func listActiveModelIDs(ctx context.Context, listMetrics listMetricsFunc) (map[string]struct{}, error) {
+	modelIDs := make(map[string]struct{})
+
+	var nextToken *string
+	for {
+		out, err := listMetrics(ctx, &cloudwatch.ListMetricsInput{
+			Namespace:  aws.String(metricNamespaceBedrock),
+			MetricName: aws.String("Invocations"),
+			Dimensions: []cwtypes.DimensionFilter{
+				{Name: aws.String(metricModelID)},
+			},
+			NextToken: nextToken,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("calling CloudWatch ListMetrics: %w", err)
+		}
+
+		for _, metric := range out.Metrics {
+			for _, dimension := range metric.Dimensions {
+				if derefString(dimension.Name) == metricModelID {
+					modelIDs[derefString(dimension.Value)] = struct{}{}
+				}
+			}
+		}
+
+		if derefString(out.NextToken) == "" {
+			return modelIDs, nil
+		}
+		nextToken = out.NextToken
+	}
 }
 
 func metricQuery(id, metricName string, dimensions []cwtypes.Dimension) cwtypes.MetricDataQuery {

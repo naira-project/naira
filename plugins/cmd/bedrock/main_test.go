@@ -37,7 +37,24 @@ func fakeCloudWatchClient(output *cloudwatch.GetMetricDataOutput, err error) get
 	}
 }
 
-func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDataFunc, cwErr error) *Plugin {
+// fakeListMetrics returns a single page of Invocations series, one per model ID.
+func fakeListMetrics(modelIDs ...string) listMetricsFunc {
+	return func(context.Context, *cloudwatch.ListMetricsInput, ...func(*cloudwatch.Options)) (*cloudwatch.ListMetricsOutput, error) {
+		out := &cloudwatch.ListMetricsOutput{}
+		for _, id := range modelIDs {
+			out.Metrics = append(out.Metrics, cwtypes.Metric{
+				Namespace:  aws.String("AWS/Bedrock"),
+				MetricName: aws.String("Invocations"),
+				Dimensions: []cwtypes.Dimension{
+					{Name: aws.String("ModelId"), Value: aws.String(id)},
+				},
+			})
+		}
+		return out, nil
+	}
+}
+
+func newTestPlugin(regions []string, bc listFoundationModelsFunc, lm listMetricsFunc, cw getMetricDataFunc, cwErr error) *Plugin {
 	return &Plugin{
 		logger: log.New(io.Discard, "", 0),
 		config: config{
@@ -47,11 +64,12 @@ func newTestPlugin(regions []string, bc listFoundationModelsFunc, cw getMetricDa
 		newBedrockClient: func(context.Context, string) (listFoundationModelsFunc, error) {
 			return bc, nil
 		},
-		newCloudWatchClient: func(context.Context, string) (getMetricDataFunc, error) {
+		newCloudWatchClient: func(context.Context, string) (cloudWatchClient, error) {
+			client := cloudWatchClient{listMetrics: lm, getMetricData: cw}
 			if cwErr != nil {
-				return cw, fmt.Errorf("CloudWatch client error: %w", cwErr)
+				return client, fmt.Errorf("CloudWatch client error: %w", cwErr)
 			}
-			return cw, nil
+			return client, nil
 		},
 	}
 }
@@ -105,6 +123,7 @@ func TestCollect(t *testing.T) {
 		name    string
 		regions []string
 		models  []bedrocktypes.FoundationModelSummary
+		active  []string
 		cw      *cloudwatch.GetMetricDataOutput
 		cwErr   error
 		want    pluginapi.CollectResponse
@@ -113,6 +132,7 @@ func TestCollect(t *testing.T) {
 			name:    "model and endpoint nodes carry properties, linked by serves_model",
 			regions: []string{"us-east-1"},
 			models:  []bedrocktypes.FoundationModelSummary{novaMicro},
+			active:  []string{"amazon.nova-micro-v1:0"},
 			cw:      usage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
@@ -167,7 +187,8 @@ func TestCollect(t *testing.T) {
 					ModelId: aws.String("amazon.titan-text-express-v1"),
 				},
 			},
-			cw: noUsage,
+			active: []string{"amazon.titan-text-express-v1"},
+			cw:     noUsage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{
@@ -216,7 +237,8 @@ func TestCollect(t *testing.T) {
 					ModelId: aws.String("amazon.titan-text-express-v1"),
 				},
 			},
-			cw: usageAtIndex1,
+			active: []string{"amazon.titan-text-express-v1"},
+			cw:     usageAtIndex1,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{
@@ -266,7 +288,8 @@ func TestCollect(t *testing.T) {
 					ModelId: aws.String("amazon.titan-text-express-v1"),
 				},
 			},
-			cw: usage,
+			active: []string{"amazon.titan-text-express-v1"},
+			cw:     usage,
 			want: pluginapi.CollectResponse{
 				Nodes: []pluginapi.NodeClaim{
 					{
@@ -341,7 +364,7 @@ func TestCollect(t *testing.T) {
 				ModelSummaries: tt.models,
 			}, nil)
 			cw := fakeCloudWatchClient(tt.cw, nil)
-			p := newTestPlugin(tt.regions, bc, cw, tt.cwErr)
+			p := newTestPlugin(tt.regions, bc, fakeListMetrics(tt.active...), cw, tt.cwErr)
 
 			got, err := p.Collect(context.Background())
 			require.NoError(t, err)
@@ -374,8 +397,11 @@ func TestCollect_ListFoundationModelsErrorIsReportedPerRegion(t *testing.T) {
 			}
 			return goodModels, nil
 		},
-		newCloudWatchClient: func(context.Context, string) (getMetricDataFunc, error) {
-			return fakeCloudWatchClient(&cloudwatch.GetMetricDataOutput{}, nil), nil
+		newCloudWatchClient: func(context.Context, string) (cloudWatchClient, error) {
+			return cloudWatchClient{
+				listMetrics:   fakeListMetrics(),
+				getMetricData: fakeCloudWatchClient(&cloudwatch.GetMetricDataOutput{}, nil),
+			}, nil
 		},
 	}
 
@@ -437,11 +463,32 @@ func TestCollect_BatchesAndPaginatesMetricQueries(t *testing.T) {
 			},
 		}, nil
 	}
-	p := newTestPlugin([]string{"us-east-1"}, bc, cw, nil)
+	// ListMetrics returns the models over two pages.
+	var listCalls int
+	lm := func(_ context.Context, in *cloudwatch.ListMetricsInput, _ ...func(*cloudwatch.Options)) (*cloudwatch.ListMetricsOutput, error) {
+		listCalls++
+		out := &cloudwatch.ListMetricsOutput{}
+		start, end := 0, modelCount/2
+		if in.NextToken != nil {
+			start, end = modelCount/2, modelCount
+		} else {
+			out.NextToken = aws.String("page-2")
+		}
+		for i := start; i < end; i++ {
+			out.Metrics = append(out.Metrics, cwtypes.Metric{
+				Dimensions: []cwtypes.Dimension{
+					{Name: aws.String("ModelId"), Value: aws.String(fmt.Sprintf("model-%d", i))},
+				},
+			})
+		}
+		return out, nil
+	}
+	p := newTestPlugin([]string{"us-east-1"}, bc, lm, cw, nil)
 
 	got, err := p.Collect(context.Background())
 	require.NoError(t, err)
 
+	assert.Equal(t, 2, listCalls)
 	assert.Equal(t, []int{500, 340}, batchSizes)
 	require.Len(t, got.Nodes, modelCount+1)
 	endpoint := got.Nodes[len(got.Nodes)-1]
@@ -512,7 +559,7 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 				},
 			}, nil)
 			cw := fakeCloudWatchClient(tt.cw, nil)
-			p := newTestPlugin([]string{"us-east-1"}, bc, cw, nil)
+			p := newTestPlugin([]string{"us-east-1"}, bc, fakeListMetrics("amazon.titan-text-express-v1"), cw, nil)
 
 			got, err := p.Collect(context.Background())
 			require.NoError(t, err)
@@ -521,4 +568,42 @@ func TestCollectMarksEndpointUnhealthyOnErrorsOrThrottles(t *testing.T) {
 			assert.Equal(t, "unhealthy", got.Nodes[1].Properties["status"])
 		})
 	}
+}
+
+func TestCollect_OnlyQueriesModelsListedByListMetrics(t *testing.T) {
+	bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
+		ModelSummaries: []bedrocktypes.FoundationModelSummary{
+			{ModelId: aws.String("stale-model")},
+			{ModelId: aws.String("active-model")},
+		},
+	}, nil)
+	var queriedIDs []string
+	cw := func(_ context.Context, in *cloudwatch.GetMetricDataInput, _ ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error) {
+		for _, q := range in.MetricDataQueries {
+			queriedIDs = append(queriedIDs, *q.Id)
+		}
+		return &cloudwatch.GetMetricDataOutput{}, nil
+	}
+	p := newTestPlugin([]string{"us-east-1"}, bc, fakeListMetrics("active-model"), cw, nil)
+
+	_, err := p.Collect(context.Background())
+	require.NoError(t, err)
+
+	assert.ElementsMatch(t, []string{"in1", "out1", "inv1", "cerr1", "serr1", "thr1"}, queriedIDs)
+}
+
+func TestCollect_NoActiveModelsSkipsGetMetricData(t *testing.T) {
+	bc := fakeBedrockClient(&bedrock.ListFoundationModelsOutput{
+		ModelSummaries: []bedrocktypes.FoundationModelSummary{
+			{ModelId: aws.String("stale-model")},
+		},
+	}, nil)
+	cw := func(context.Context, *cloudwatch.GetMetricDataInput, ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error) {
+		t.Error("GetMetricData must not be called when no model is active")
+		return &cloudwatch.GetMetricDataOutput{}, nil
+	}
+	p := newTestPlugin([]string{"us-east-1"}, bc, fakeListMetrics(), cw, nil)
+
+	_, err := p.Collect(t.Context())
+	require.NoError(t, err)
 }

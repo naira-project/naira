@@ -4,7 +4,7 @@ bedrock scans available foundational models and their inference endpoints for a 
 
 ## Setup
 
- 1. Create (or reuse) an IAM user with programmatic access, and attach a policy granting listing foundational models in Bedrock and getting metric data from CloudWatch. For the sake of testing, the AdministratorAccess policy can be added for a specific IAM user via the root user, however a least-privilege policy is always recommended.
+ 1. Create (or reuse) an IAM user with programmatic access, and attach a policy granting listing foundational models in Bedrock and listing metrics and getting metric data from CloudWatch. For the sake of testing, the AdministratorAccess policy can be added for a specific IAM user via the root user, however a least-privilege policy is always recommended.
  2. Generate an access key for that user (IAM -> Users -> Security credentials -> Create access key, "Local code" use case). Copy the secret immediately or download the .csv file which contains the credentials.
  3. Provide BEDROCK\_AWS\_ACCESS\_KEY\_ID and BEDROCK\_AWS\_SECRET\_ACCESS\_KEY to the plugin.
 
@@ -25,9 +25,13 @@ Every foundation model becomes a model node with the path \<prefix>/\<modelID>. 
 
 A model with recorded invocations in the CloudWatch lookback window also becomes an inference\_endpoint node with the path \<prefix>/\<region>/\<modelID>, one per region, connected to its model node by a serves\_model relation. Endpoint nodes carry the region, the model's name, lifecycle and modalities, the input/output token and invocation totals, and a healthy or unhealthy status. The status is unhealthy if the model had any client errors, server errors or throttles in the lookback window.
 
+## CloudWatch Cost
+
+CloudWatch bills GetMetricData per requested metric. To keep cost proportional to actual traffic rather than to the size of the Bedrock catalog, the plugin first lists the models that have published an Invocations metric (ListMetrics) and requests usage only for those.
+
 ## Known Issues
 
-Currently, AWS Bedrock model fetches all foundational models and their inference endpoints available for a specific IAM user. However, this fetch now results in ~140 available inference endpoints if the region is selected as us-east-1, and ~40-50 available inference endpoints if the selected region is eu-central-1. This fetch mechanism causes a small delay on the fetch, but with more regions available for a specific IAM user, this mechanism must be optimized.
+CloudWatch lists metrics that had data in the last two weeks, so METRICS\_LOOKBACK values beyond that find no models.
 
 ## Environment Variables
 
