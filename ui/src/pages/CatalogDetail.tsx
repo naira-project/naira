@@ -10,6 +10,7 @@ import { relatedNodesConfigForKind } from '../config/detailTabs';
 import { findViewpointForKind } from '../config/viewpoints';
 import { useCatalogDetail } from '../hooks/useCatalogDetail';
 import { useRuntimeConfig } from '../hooks/useRuntimeConfig';
+import { useSyncPortalNav } from '../hooks/useSyncPortalNav';
 import { endpointLogsUrl } from '../lib/endpointLogs';
 import { cn } from '../lib/utils';
 import CatalogGraph from './CatalogGraph';
@@ -31,6 +32,7 @@ export default function CatalogDetail() {
   const decodedPath = decodeURIComponent(path);
   const { node, loading, error } = useCatalogDetail(decodedKind, decodedPath);
   const backPath = findViewpointForKind(decodedKind)?.path;
+  useSyncPortalNav(backPath);
 
   const relatedConfig = relatedNodesConfigForKind(decodedKind);
   const { logs } = useRuntimeConfig();
