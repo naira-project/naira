@@ -3,7 +3,10 @@
 `e2e/components/` holds every piece any E2E scenario might deploy: `catalog`
 (always deployed, with a configurable set of plugin sidecars), `keycloak`
 (always deployed, for auth), and opt-in standalone components — `litellm`,
-`mlflow`, `llamacpp`, `openmetadata`, `postgres`, `ui`, `portal`, `chatbot1`.
+`mlflow`, `llamacpp`, `openmetadata`, `postgres`, `ui`, `portal`, `chatbot1`,
+`handbook-sites`. `handbook-sites` is not a manifest: the script renders the handbook
+gateway and the handbooks from the naira chart with `handbook-sites-values.yaml`, so the
+scenario runs what the chart ships.
 
 Each scenario is a directory directly under `e2e/` (e.g.
 [`litellm_chatbot_to_catalog_api/`](litellm_chatbot_to_catalog_api/README.md))

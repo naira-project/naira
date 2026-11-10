@@ -1,0 +1,261 @@
+# The claims workloads of the demo story (deploy/demo/README.md).
+#
+#   claims-portal     Abdel's app; calls claims-assistant, holds no model key
+#   claims-assistant  rAIner's agent; gateway key scoped to Claude Sonnet and
+#                     embeddings, uses the knowledge-base MCP server
+#   pii-redactor      gateway key scoped to the self-hosted Qwen model
+#   claims-faq-bot    legacy, not deployed by Flux, key scoped to GPT-3.5
+#
+# The gateway clients send one request per model every minute (send.sh), so
+# LiteLLM records usage: the litellm plugin only emits inference endpoints with
+# requests, and those carry the metric panels and logs links. Only Qwen
+# answers; the cloud models fail with the placeholder provider keys.
+# claims-portal only sleeps.
+#
+# The gateway keys match depl-uses-litellm's default ^sk-.{22}$ and are created
+# in LiteLLM by the seed-litellm-keys Job (seed/litellm_keys.py).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: claims
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: claims-assistant-gateway
+  namespace: claims
+stringData:
+  LITELLM_API_KEY: sk-claimsassistant2026nov
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pii-redactor-gateway
+  namespace: claims
+stringData:
+  LITELLM_API_KEY: sk-piiredactorgateway2026
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: claims-faq-bot-gateway
+  namespace: claims
+stringData:
+  OPENAI_API_KEY: sk-claimsfaqbotlegacy2024
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-traffic
+  namespace: claims
+data:
+  send.sh: |
+    #!/bin/sh
+    # Usage: send.sh <gateway base URL> <key> <model>...
+    base=$1 key=$2
+    shift 2
+    while true; do
+      for model in "$@"; do
+        case $model in
+          *embedding*)
+            path=embeddings
+            body="{\"model\":\"$model\",\"input\":\"Water damage in the kitchen after a pipe burst.\"}" ;;
+          *)
+            path=chat/completions
+            body="{\"model\":\"$model\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"Which team handles this claim: water damage in the kitchen after a pipe burst?\"}]}" ;;
+        esac
+        code=$(curl -s -o /dev/null -w '%{http_code}' -m 60 -H "Authorization: Bearer $key" \
+          -H 'Content-Type: application/json' -d "$body" "$base/v1/$path")
+        echo "model=$model status=$code"
+      done
+      sleep 60
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claims-portal
+  namespace: claims
+  labels:
+    app: claims-portal
+    team: claims-digital
+    kustomize.toolkit.fluxcd.io/name: claims-apps
+    kustomize.toolkit.fluxcd.io/namespace: flux-system
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: claims-portal}}
+  template:
+    metadata:
+      labels: {app: claims-portal}
+    spec:
+      containers:
+        - name: app
+          image: registry.k8s.io/pause:3.10
+          env:
+            - {name: CLAIMS_ASSISTANT_URL, value: http://claims-assistant.claims.svc.cluster.local:8080}
+          resources:
+            requests: {cpu: 1m, memory: 8Mi}
+            limits: {cpu: 10m, memory: 16Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: {type: RuntimeDefault}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claims-assistant
+  namespace: claims
+  labels:
+    app: claims-assistant
+    team: claims-ai
+    kustomize.toolkit.fluxcd.io/name: claims-apps
+    kustomize.toolkit.fluxcd.io/namespace: flux-system
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: claims-assistant}}
+  template:
+    metadata:
+      labels: {app: claims-assistant}
+    spec:
+      containers:
+        - name: app
+          image: curlimages/curl:8.11.1
+          command: [sh, /demo/send.sh, $(LITELLM_BASE_URL), $(LITELLM_API_KEY), $(CHAT_MODEL), $(EMBEDDING_MODEL)]
+          env:
+            - {name: LITELLM_BASE_URL, value: http://litellm.naira-deps.svc.cluster.local:4000}
+            - {name: CHAT_MODEL, value: idp-claude-sonnet}
+            - {name: EMBEDDING_MODEL, value: idp-embedding-small}
+            - {name: KNOWLEDGE_BASE_MCP_URL, value: http://mcp-mock.naira-deps.svc.cluster.local:8080/mcp}
+            - {name: PII_REDACTOR_URL, value: http://pii-redactor.claims.svc.cluster.local:8080}
+            - name: LITELLM_API_KEY
+              valueFrom: {secretKeyRef: {name: claims-assistant-gateway, key: LITELLM_API_KEY}}
+          resources:
+            requests: {cpu: 1m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: demo-traffic, mountPath: /demo}
+      volumes:
+        - {name: demo-traffic, configMap: {name: demo-traffic}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pii-redactor
+  namespace: claims
+  labels:
+    app: pii-redactor
+    team: claims-ai
+    helm.toolkit.fluxcd.io/name: pii-redactor
+    helm.toolkit.fluxcd.io/namespace: claims
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: pii-redactor}}
+  template:
+    metadata:
+      labels: {app: pii-redactor}
+    spec:
+      containers:
+        - name: app
+          image: curlimages/curl:8.11.1
+          command: [sh, /demo/send.sh, $(LITELLM_BASE_URL), $(LITELLM_API_KEY), $(REDACTION_MODEL)]
+          env:
+            - {name: LITELLM_BASE_URL, value: http://litellm.naira-deps.svc.cluster.local:4000}
+            - {name: REDACTION_MODEL, value: idp-llama-qwen25-05b}
+            - name: LITELLM_API_KEY
+              valueFrom: {secretKeyRef: {name: pii-redactor-gateway, key: LITELLM_API_KEY}}
+          resources:
+            requests: {cpu: 1m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: demo-traffic, mountPath: /demo}
+      volumes:
+        - {name: demo-traffic, configMap: {name: demo-traffic}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claims-faq-bot
+  namespace: claims
+  labels:
+    app: claims-faq-bot
+    team: claims-service
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: claims-faq-bot}}
+  template:
+    metadata:
+      labels: {app: claims-faq-bot}
+    spec:
+      containers:
+        - name: app
+          image: curlimages/curl:8.11.1
+          command: [sh, /demo/send.sh, $(OPENAI_API_BASE), $(OPENAI_API_KEY), $(OPENAI_MODEL)]
+          env:
+            - {name: OPENAI_API_BASE, value: http://litellm.naira-deps.svc.cluster.local:4000}
+            - {name: OPENAI_MODEL, value: openrouter-gpt-3.5-turbo}
+            - name: OPENAI_API_KEY
+              valueFrom: {secretKeyRef: {name: claims-faq-bot-gateway, key: OPENAI_API_KEY}}
+          resources:
+            requests: {cpu: 1m, memory: 8Mi}
+            limits: {cpu: 50m, memory: 32Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 65532
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: demo-traffic, mountPath: /demo}
+      volumes:
+        - {name: demo-traffic, configMap: {name: demo-traffic}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claims-portal
+  namespace: claims
+spec:
+  selector: {app: claims-portal}
+  ports: [{port: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claims-assistant
+  namespace: claims
+spec:
+  selector: {app: claims-assistant}
+  ports: [{port: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pii-redactor
+  namespace: claims
+spec:
+  selector: {app: pii-redactor}
+  ports: [{port: 8080}]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: claims-faq-bot
+  namespace: claims
+spec:
+  selector: {app: claims-faq-bot}
+  ports: [{port: 8080}]

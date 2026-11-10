@@ -1,0 +1,18 @@
+# Demo overlay for test-dependencies, over its values-dev.yaml (tilt up -- --demo).
+# OpenMetadata needs about 4 GiB more memory in the kind node, monitoring
+# about 2 GiB.
+
+tags:
+  openmetadata: true
+  # Prometheus and Grafana with Loki and Alloy: the metric panels and "View
+  # Logs" links on inference endpoints. The naira UI already points at them
+  # (ui.prometheus in values.yaml, ui.config.logs in values-dev.yaml).
+  monitoring: true
+
+# The demo seeds its own story data (deploy/demo/seed/) instead of the
+# generic samples.
+seed:
+  mlflow:
+    enabled: false
+  openmetadata:
+    enabled: false

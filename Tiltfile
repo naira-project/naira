@@ -4,6 +4,11 @@
 #
 #   tilt up -- --deps-repo=<path>
 #
+# The demo story (deploy/demo/README.md) adds sample workloads, story data and
+# OpenMetadata; with GITHUB_TOKEN set it also enables the github plugin:
+#
+#   tilt up -- --demo
+#
 # Developer tasks (lint, tests, proto) are in the Taskfile: they don't need Tilt.
 
 NAMESPACE = 'idp-system'  # test-dependencies reaches PostgreSQL at postgres.idp-system
@@ -15,8 +20,13 @@ DEPS_OCI = 'oci://ghcr.io/naira-project/charts/test-dependencies'
 DEPS_VERSION = '0.1.0'
 
 config.define_string('deps-repo', usage='Path to a naira-project/test-dependencies checkout')
+config.define_bool('demo', usage='Add the demo story from deploy/demo')
+config.define_string_list('handbook-repo', usage='Path to a handbook repository, such as ../example-handbook, to build and install next to the how-to. Repeatable.')
 cfg = config.parse()
 DEPS_REPO = cfg.get('deps-repo', '')
+DEMO = cfg.get('demo', False)
+HANDBOOK_REPOS = cfg.get('handbook-repo', [])
+DEMO_DIR = 'deploy/demo'
 if DEPS_REPO:
     DEPS_CHART = os.path.abspath(DEPS_REPO) + '/charts/test-dependencies'
     if not os.path.exists(DEPS_CHART + '/Chart.yaml'):
@@ -47,11 +57,45 @@ if os.path.exists(CHART + '/Chart.lock'):
             local('helm dependency build ' + CHART)
             break
 
+NAIRA_VALUES = [CHART + '/values-dev.yaml']
+NAIRA_SET = []
+if DEMO:
+    NAIRA_VALUES.append(DEMO_DIR + '/values-naira.yaml')
+    if os.getenv('GITHUB_TOKEN', ''):
+        NAIRA_SET = ['catalog.plugins.github.enabled=true',
+                     'catalog.secret.data.GITHUB_TOKEN=' + os.getenv('GITHUB_TOKEN')]
+
+# Handbooks from --handbook-repo, after the ones in values-dev.yaml. Helm replaces a
+# list from --set instead of merging it, so the whole list goes into a generated
+# values file in the gitignored .local/. The id is the package name, as in the build.
+PLACEHOLDER_DIGEST = 'sha256:' + '0' * 64
+REPO_HANDBOOK_IMAGES = {}
+if HANDBOOK_REPOS:
+    handbooks = list(read_yaml(CHART + '/values-dev.yaml').get('handbooks', []))
+    for i, path in enumerate(HANDBOOK_REPOS):
+        path = os.path.abspath(path)
+        if not os.path.exists(path + '/Dockerfile') or not os.path.exists(path + '/package.json'):
+            fail('--handbook-repo %s: no Dockerfile and package.json there.' % path)
+        pkg = read_json(path + '/package.json')
+        image = 'local/naira-handbook-' + pkg['name']
+        REPO_HANDBOOK_IMAGES[image] = path
+        handbooks.append({
+            'id': pkg['name'],
+            'contract': 'naira.handbook/v1alpha1',
+            'label': pkg.get('naira', {}).get('title', pkg['name']),
+            'order': len(handbooks),
+            'image': image + '@' + PLACEHOLDER_DIGEST,
+        })
+    local('mkdir -p .local && cat > .local/handbook-repos-values.yaml',
+          stdin=str(encode_yaml({'handbooks': handbooks})), quiet=True, echo_off=True)
+    NAIRA_VALUES.append('.local/handbook-repos-values.yaml')
+
 yaml = helm(
     CHART,
     name='naira',
     namespace=NAMESPACE,
-    values=[CHART + '/values-dev.yaml'],
+    values=NAIRA_VALUES,
+    set=NAIRA_SET,
 )
 namespace_yaml = blob('apiVersion: v1\nkind: Namespace\nmetadata:\n  name: %s\n' % NAMESPACE)
 k8s_yaml([namespace_yaml, yaml])
@@ -92,14 +136,8 @@ if DEPS_REPO:
     )
     DEPS_AFTER = DEPS_AFTER + ['test-dependencies-subcharts']
 DEPS_VALUES = [DEPS_CHART + '/values.yaml', DEPS_CHART + '/values-dev.yaml']
-helm_resource(
-    'test-dependencies', DEPS_CHART,
-    namespace=DEPS_NAMESPACE,
-    flags=['--create-namespace', '--values=' + DEPS_VALUES[1]],
-    deps=DEPS_VALUES + [DEPS_CHART + '/templates'],
-    resource_deps=DEPS_AFTER,
-    labels=['test-dependencies'],
-)
+if DEMO:
+    DEPS_VALUES.append(os.path.abspath(DEMO_DIR + '/values-test-dependencies.yaml'))
 
 # Top-level keys merge like helm does for the keys read here (tags, llamacpp.models).
 deps_values = {}
@@ -107,6 +145,28 @@ for f in DEPS_VALUES:
     for k, v in (read_yaml(f) or {}).items():
         deps_values[k] = dict(deps_values.get(k, {}), **v) if type(v) == 'dict' else v
 tags = deps_values.get('tags', {})
+
+# Helm installs subchart CRDs only on first install, so turning monitoring on
+# for an existing release fails without the Prometheus Operator CRDs. Only the
+# published chart has them unpacked; a checkout keeps its subcharts as .tgz.
+MONITORING_CRDS = DEPS_CHART + '/charts/kube-prometheus-stack/charts/crds/crds'
+if tags.get('monitoring') and os.path.exists(MONITORING_CRDS):
+    local_resource(
+        'monitoring-crds',
+        cmd='kubectl apply --server-side --force-conflicts -f ' + MONITORING_CRDS,
+        resource_deps=DEPS_AFTER,
+        labels=['test-dependencies'],
+    )
+    DEPS_AFTER = DEPS_AFTER + ['monitoring-crds']
+
+helm_resource(
+    'test-dependencies', DEPS_CHART,
+    namespace=DEPS_NAMESPACE,
+    flags=['--create-namespace'] + ['--values=' + f for f in DEPS_VALUES[1:]],
+    deps=DEPS_VALUES + [DEPS_CHART + '/templates'],
+    resource_deps=DEPS_AFTER,
+    labels=['test-dependencies'],
+)
 
 # One pod per release can't serve every Service, so forward them by name, only
 # for enabled tags. Keycloak's port matches the portal's OIDC URLs (keycloak.issuer).
@@ -145,6 +205,14 @@ for svc, ports in DEPS_FORWARDS.items():
 # names: naira-catalog, naira-ui, naira-portal, naira-plugin-<name>. Build
 # only the images the rendered chart uses, so enabling a plugin in values is
 # enough. Tilt loads the images into kind itself.
+#
+# The chart takes a handbook image only by digest from an allowed registry, so
+# values-dev.yaml names the dev handbooks as local/naira-handbook-<id>@sha256:<placeholder>.
+# Tilt replaces those references with the images it builds from handbook/<id>, and
+# for --handbook-repo from that repository.
+HANDBOOK_IMAGES = dict({
+    'local/naira-handbook-howto': 'handbook/howto',
+}, **REPO_HANDBOOK_IMAGES)
 images = []
 for o in objs:
     if o['kind'] != 'Deployment':
@@ -152,7 +220,10 @@ for o in objs:
     # Plugins are native sidecars, i.e. initContainers.
     pod = o['spec']['template']['spec']
     for c in pod.get('initContainers', []) + pod['containers']:
-        repo = c['image'].split(':')[0]
+        repo = c['image'].split('@')[0].split(':')[0]
+        # Any other image pinned by digest is pulled, not built: the handbook gateway's Envoy.
+        if '@' in c['image'] and repo not in HANDBOOK_IMAGES:
+            continue
         if repo not in images:
             images.append(repo)
 
@@ -164,6 +235,8 @@ for repo in images:
         docker_build(repo, 'ui')
     elif repo == 'naira-portal':
         docker_build(repo, 'naira-openmfp-portal')
+    elif repo in HANDBOOK_IMAGES:
+        docker_build(repo, HANDBOOK_IMAGES[repo])
     elif repo.startswith('naira-plugin-'):
         dir = repo[len('naira-plugin-'):].replace('-', '_')
         docker_build(repo, '.', dockerfile='plugins/cmd/%s/Dockerfile' % dir,
@@ -189,3 +262,47 @@ k8s_resource(new_name='naira-config', objects=config_objects,
 k8s_resource('catalog', resource_deps=['naira-config'], port_forwards=['8090:8090'], labels=['naira'])
 k8s_resource('portal', resource_deps=['naira-config'], port_forwards=['3000:3000'], labels=['naira'])
 k8s_resource('ui', resource_deps=['naira-config'], port_forwards=['3001:80'], labels=['naira'])
+
+# --- Demo ---------------------------------------------------------------------
+# CRDs first, then their objects; workloads and seed Jobs become resources of
+# their own under the "demo" label.
+if DEMO:
+    watch_file(DEMO_DIR + '/seed')
+    seed_cm = local('kubectl create configmap demo-seed --namespace %s --from-file=%s/seed --dry-run=client -o yaml'
+                    % (DEPS_NAMESPACE, DEMO_DIR), quiet=True)
+    demo_files = ['crds', 'custom-resources', 'claims', 'seed']
+    demo_yaml = [read_file('%s/manifests/%s.yaml' % (DEMO_DIR, f)) for f in demo_files]
+    k8s_yaml(demo_yaml + [seed_cm])
+
+    def selectors(text):
+        sels = []
+        for o in decode_yaml_stream(text):
+            if o['kind'] in ('Deployment', 'Job', 'Service'):
+                continue
+            md = o['metadata']
+            sels.append('%s:%s' % (md['name'], o['kind'].lower()) + (':' + md['namespace'] if md.get('namespace') else ''))
+        return sels
+
+    k8s_resource(new_name='demo-crds', objects=selectors(demo_yaml[0]), labels=['demo'])
+    k8s_resource(new_name='demo-config', objects=selectors(demo_yaml[1]) + selectors(demo_yaml[2]),
+                 resource_deps=['demo-crds'], labels=['demo'])
+    for o in decode_yaml_stream(demo_yaml[2]):
+        if o['kind'] == 'Deployment':
+            k8s_resource(o['metadata']['name'], resource_deps=['demo-config'], labels=['demo'])
+    k8s_resource(new_name='demo-seed-config', objects=['demo-seed:configmap:' + DEPS_NAMESPACE],
+                 resource_deps=['test-dependencies'], labels=['demo'])
+    for job in ['seed-litellm-keys', 'seed-mlflow-models', 'seed-openmetadata-tables']:
+        k8s_resource(job, resource_deps=['demo-seed-config'], labels=['demo'])
+
+# The handbook gateway and the handbooks, when values-dev.yaml lists any. The gateway is
+# forwarded to handbookGateway.port, which is the port in the handbooks' addresses.
+HANDBOOK_PORT = read_yaml(CHART + '/values-dev.yaml').get('handbookGateway', {}).get('port') or \
+    read_yaml(CHART + '/values.yaml')['handbookGateway']['port']
+for o in objs:
+    if o['kind'] != 'Deployment':
+        continue
+    name = o['metadata']['name']
+    if name == 'handbook-gateway':
+        k8s_resource(name, resource_deps=['naira-config'], port_forwards=['%d:8080' % HANDBOOK_PORT], labels=['naira'])
+    elif o['metadata'].get('labels', {}).get('app.kubernetes.io/component') == 'handbook':
+        k8s_resource(name, resource_deps=['naira-config'], labels=['naira'])

@@ -1,12 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Naira Project Contributors
 # SPDX-License-Identifier: Apache-2.0
 #
-# Deploys the litellm_chatbot_to_catalog_api scenario (see e2e/README.md)
-# into an isolated namespace on a throwaway kind cluster and runs its
-# assertions against it.
+# Deploys the litellm_chatbot_to_catalog_api and the handbook_sites scenarios (see
+# e2e/README.md), each into an isolated namespace on its own throwaway kind
+# cluster, and runs their assertions against it.
 #
 # Opt-in: runs on PRs labeled `run-e2e` that touch what the scenario builds,
-# and on manual dispatch; both wait for approval via the `e2e` environment.
+# after approval via the `e2e` environment. No manual dispatch: a dispatched
+# run executes PR code in the default branch context, where it could poison
+# the default branch's Actions cache.
 name: E2E
 
 on:
@@ -15,23 +17,21 @@ on:
     paths:
       - catalog/**
       - plugins/**
+      - deploy/charts/**
+      - naira-openmfp-portal/**
+      - handbook/**
       - e2e/**
       - go.mod
       - go.sum
       - mise.toml
       - .github/workflows/e2e.yml
-  workflow_dispatch:
-    inputs:
-      pr-number:
-        description: "PR number to test against"
-        required: true
 
 permissions:
   contents: read
 
 concurrency:
   # Per PR, so runs for different PRs don't cancel each other.
-  group: ${{ github.workflow }}-${{ inputs.pr-number || github.event.pull_request.number }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
@@ -42,25 +42,12 @@ jobs:
     name: E2E · litellm_chatbot_to_catalog_api
     runs-on: ubuntu-latest
     # Evaluated before the environment gate, so a skipped job asks no one.
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
     # Requires reviewer approval before running PR code.
     environment: e2e
     steps:
-      - name: Determine PR number
-        id: pr
-        env:
-          PR_NUMBER: ${{ inputs.pr-number || github.event.pull_request.number }}
-        run: |
-          NUMBER="${PR_NUMBER}"
-          if [ -z "${NUMBER}" ]; then
-            echo "::error::pr-number input is required." >&2
-            exit 1
-          fi
-          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/pull/${{ steps.pr.outputs.number }}/merge
           persist-credentials: false
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -78,7 +65,9 @@ jobs:
       # script fails before it would derive an ID itself, the destroy step at
       # the bottom (if: always()) still knows what to tear down.
       - name: Compute environment ID
-        run: echo "ENV_ID=pr-${{ steps.pr.outputs.number }}-${{ github.run_id }}" >> "$GITHUB_ENV"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: echo "ENV_ID=pr-${PR_NUMBER}-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
 
       - name: Create kind cluster
         run: kind create cluster --config e2e/base/kind-config.yaml
@@ -151,6 +140,98 @@ jobs:
 
       # Deletes the namespace and the cluster-scoped resources it leaves
       # behind. No Cleanup Job, no GC sweeper — nothing else outlives this.
+      - name: Destroy environment
+        if: always()
+        run: |
+          ./e2e/scripts/destroy-environment.sh \
+            --env-id "${ENV_ID}" \
+            --cluster-name "${CLUSTER_NAME}"
+
+  e2e-handbook-sites:
+    name: E2E · handbook_sites
+    runs-on: ubuntu-latest
+    # Evaluated before the environment gate, so a skipped job asks no one.
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
+    # Requires reviewer approval before running PR code.
+    environment: e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26"
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install_args: kind kubectl helm
+
+      - name: Compute environment ID
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: echo "ENV_ID=pr-${PR_NUMBER}-${GITHUB_RUN_ID}" >> "$GITHUB_ENV"
+
+      - name: Create kind cluster
+        run: kind create cluster --config e2e/base/kind-config.yaml
+
+      - name: Create E2E environment
+        run: |
+          ./e2e/scripts/create-environment.sh \
+            --scenario handbook_sites \
+            --env-id "${ENV_ID}" \
+            --tag "${{ github.sha }}" \
+            --cluster-name "${CLUSTER_NAME}"
+
+      # The tests reach the gateway by Host header, Keycloak for a token and the
+      # portal for its service-provider output.
+      - name: Port-forward gateway, keycloak and portal
+        run: |
+          kubectl -n "${ENV_ID}" port-forward svc/handbook-gateway 8083:8080 &
+          echo $! > /tmp/gateway-port-forward.pid
+          kubectl -n "${ENV_ID}" port-forward svc/keycloak 8080:8080 &
+          echo $! > /tmp/keycloak-port-forward.pid
+          kubectl -n "${ENV_ID}" port-forward svc/portal 3000:3000 &
+          echo $! > /tmp/portal-port-forward.pid
+          # Retry for up to 30 seconds while the port-forwards settle. The
+          # gateway answers 404 to a host that is no handbook's.
+          for _ in $(seq 1 30); do
+            if curl -s -o /dev/null -H 'Host: probe' http://localhost:8083/ \
+              && curl -sf http://localhost:8080/realms/naira/.well-known/openid-configuration >/dev/null \
+              && curl -sf http://localhost:3000/rest/health >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::gateway, keycloak or portal not reachable via port-forward after 30s" >&2
+          exit 1
+
+      # -timeout bounds the whole run: the stopped-handbook test waits for the
+      # gateway to notice, twice.
+      - name: Run E2E tests
+        env:
+          HANDBOOK_GATEWAY_URL: http://localhost:8083
+          KEYCLOAK_URL: http://localhost:8080
+          PORTAL_URL: http://localhost:3000
+          E2E_NAMESPACE: ${{ env.ENV_ID }}
+        run: go test -tags e2e -v -timeout=10m ./e2e/handbook_sites/assert/...
+
+      - name: Stop port-forwards
+        if: always()
+        run: |
+          kill "$(cat /tmp/gateway-port-forward.pid)" || true
+          kill "$(cat /tmp/keycloak-port-forward.pid)" || true
+          kill "$(cat /tmp/portal-port-forward.pid)" || true
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          kubectl get pods,services -n "${ENV_ID}" -o wide || true
+          kubectl logs -n "${ENV_ID}" -l app.kubernetes.io/name=handbook-gateway --all-containers --tail=-1 --prefix=true || true
+          kubectl logs -n "${ENV_ID}" -l app=portal --all-containers --tail=-1 --prefix=true || true
+          kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
+          kubectl describe pods -n "${ENV_ID}" || true
+
       - name: Destroy environment
         if: always()
         run: |

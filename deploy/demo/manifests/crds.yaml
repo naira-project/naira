@@ -1,0 +1,69 @@
+# Schema-less stand-ins for the Flux CRDs the fluxcd plugin reads, and the
+# AppIdentity CRD the litellm plugin reads. No Flux controllers run: the demo
+# only needs the objects to exist. For a real Flux, run `flux install` instead.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: gitrepositories.source.toolkit.fluxcd.io
+spec:
+  group: source.toolkit.fluxcd.io
+  names: {kind: GitRepository, listKind: GitRepositoryList, plural: gitrepositories, singular: gitrepository}
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kustomizations.kustomize.toolkit.fluxcd.io
+spec:
+  group: kustomize.toolkit.fluxcd.io
+  names: {kind: Kustomization, listKind: KustomizationList, plural: kustomizations, singular: kustomization}
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: helmreleases.helm.toolkit.fluxcd.io
+spec:
+  group: helm.toolkit.fluxcd.io
+  names: {kind: HelmRelease, listKind: HelmReleaseList, plural: helmreleases, singular: helmrelease}
+  scope: Namespaced
+  versions:
+    - name: v2
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema: {type: object, x-kubernetes-preserve-unknown-fields: true}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: appidentities.naira.io
+spec:
+  group: naira.io
+  names: {kind: AppIdentity, listKind: AppIdentityList, plural: appidentities, singular: appidentity}
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                team: {type: string}
+                litellmVirtualKey: {type: string}

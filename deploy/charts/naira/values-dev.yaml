@@ -92,6 +92,27 @@ portal:
       create: true
       value: naira-local-dev-secret
 
+# The Naira how-to (handbook/howto). The chart takes a handbook image only by digest
+# from an allowed registry, so the digest is a placeholder: Tilt builds handbook/<id>
+# and replaces the reference (see the Tiltfile). A second handbook, built in its own
+# repository, is in docs/handbooks.md ("Add the example handbook").
+# The gateway is on 3003 because Grafana is on 3002. A handbook's page opens in Chrome
+# only when its address is on the same site as the portal, which `localhost` and
+# `handbook.localhost` are not. So open the portal at http://naira.localhost:3000 and the
+# handbooks are at <id>.naira.localhost:3003. The Keycloak realm has to list that portal
+# address as a redirect URI: see docs/handbooks.md.
+handbookGateway:
+  domain: naira.localhost
+  port: 3003
+  portalOrigin: http://naira.localhost:3000
+  allowedRegistries: [local]
+handbooks:
+  - id: howto
+    contract: naira.handbook/v1alpha1
+    label: Naira How-To
+    primary: true
+    image: local/naira-handbook-howto@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
 ui:
   # Endpoint "View Logs" links: Grafana and Loki from test-dependencies
   # (Tiltfile forwards Grafana to localhost:3002). Schema: ui/src/lib/runtimeConfig.ts.

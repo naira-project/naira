@@ -1,0 +1,90 @@
+{{- /*
+One Deployment and Service per enabled entry of `handbooks`, and the ConfigMap the
+list is read from. validate.yaml runs first and rejects bad entries.
+*/}}
+{{- $enabled := list }}
+{{- range .Values.handbooks }}
+{{- if include "naira.handbookEnabled" . }}
+{{- $enabled = append $enabled . }}
+{{- end }}
+{{- end }}
+{{- range $handbook := $enabled }}
+{{- $name := printf "handbook-%s" (toString $handbook.id) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+    {{- include "naira.selector" (dict "root" $ "name" $name) | nindent 4 }}
+    app.kubernetes.io/component: handbook
+spec:
+  replicas: {{ $.Values.handbookDefaults.replicas }}
+  selector:
+    matchLabels:
+      {{- include "naira.selector" (dict "root" $ "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "naira.labels" $ | nindent 8 }}
+        {{- include "naira.selector" (dict "root" $ "name" $name) | nindent 8 }}
+        app.kubernetes.io/component: handbook
+    spec:
+      # Handbook code must not reach the Kubernetes API, and not as the catalog's ServiceAccount.
+      automountServiceAccountToken: false
+      {{- include "naira.podSpec" (dict "root" $ "name" $name "cfg" $.Values.handbookDefaults) | trim | nindent 6 }}
+      containers:
+        - name: handbook
+          # The digest-pinned reference as given; naira.image would build repo:tag.
+          image: {{ $handbook.image | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          # No runAsUser: the image contract says non-root, not which uid.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          # 8080 and /naira-handbook.json are part of the handbook image contract.
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            httpGet: {path: /naira-handbook.json, port: http}
+            periodSeconds: 10
+          resources:
+            {{- toYaml $.Values.handbookDefaults.resources | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 16Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "naira.labels" $ | nindent 4 }}
+    {{- include "naira.selector" (dict "root" $ "name" $name) | nindent 4 }}
+    app.kubernetes.io/component: handbook
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "naira.selector" (dict "root" $ "name" $name) | nindent 4 }}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: handbooks
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+data:
+  handbooks.json: |
+    {{- include "naira.handbooksJson" . | nindent 4 }}

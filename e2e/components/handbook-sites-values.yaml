@@ -1,0 +1,22 @@
+# Values for the handbook_sites scenario, layered over deploy/charts/naira/ci/default-values.yaml
+# by create-environment.sh, which renders only the handbooks and the handbook gateway from
+# the chart. The keycloak address depends on the namespace and is set there.
+#
+# The chart accepts only a digest-pinned image from an allowed registry. These
+# images are built and loaded into kind instead, so the script swaps the
+# reference for handbook-starter:${TAG} after rendering.
+handbookGateway:
+  domain: handbook.localhost
+  port: 3003
+  allowedRegistries: [local]
+handbooks:
+  - id: starter
+    contract: naira.handbook/v1alpha1
+    label: Handbook Starter
+    primary: true
+    image: local/handbook-starter@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  - id: starter-two
+    contract: naira.handbook/v1alpha1
+    label: Handbook Starter Two
+    order: 1
+    image: local/handbook-starter@sha256:0000000000000000000000000000000000000000000000000000000000000000

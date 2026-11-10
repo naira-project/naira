@@ -1,0 +1,4 @@
+# Build output and dependencies of every handbook under handbook/.
+node_modules/
+dist/
+.vitepress/cache/

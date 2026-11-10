@@ -1,0 +1,33 @@
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
+#
+# This scenario seeds no data. The Job waits until both handbooks answer behind the
+# gateway (see wait_for_handbooks.py), so the assert step finds them settled.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-${NAMESPACE}
+  namespace: ${NAMESPACE}
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: seed:${TAG}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KEYCLOAK_URL
+              value: http://keycloak.${NAMESPACE}.svc.cluster.local:8080
+            - name: GATEWAY_URL
+              value: http://handbook-gateway.${NAMESPACE}.svc.cluster.local:8080
+            # Keep in sync with e2e/components/handbook-sites-values.yaml.
+            - name: HANDBOOK_HOSTS
+              value: starter.handbook.localhost:3003,starter-two.handbook.localhost:3003
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

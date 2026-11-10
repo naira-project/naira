@@ -21,7 +21,7 @@ Naira helps teams:
 - **Accelerate delivery** through reusable templates, golden paths, and ecosystem plugins  
 - **Avoid lock-in** by integrating existing best-of-breed tools instead of replacing them  
 
-Built with and for the cloud-native ecosystem, Naira is designed to integrate closely with technologies such as **PlatformMesh**, **OpenMFP/Luigi**, **KCP**, and other components of the NeoNephos stack.
+Built with and for the cloud-native ecosystem, Naira is designed to integrate closely with technologies such as **OpenMFP/Luigi** and other components of the NeoNephos stack.
 
 ## Preview
 
@@ -78,8 +78,10 @@ cluster `naira-idp`. Tilt is installed by `mise install`.
 
 3. **Open the UI** — once the resources in the Tilt UI are green, go to:
    ```
-   http://localhost:3000
+   http://naira.localhost:3000
    ```
+   (`localhost:3000` signs in too, but the handbooks in the Docs group open only on
+   `naira.localhost`, see [docs/handbooks.md](docs/handbooks.md#same-site))
    and login to Keycloak with the default credentials:
 
     - user: `testuser`
@@ -90,6 +92,12 @@ cluster `naira-idp`. Tilt is installed by `mise install`.
    You can then for example go to **"Plugins"** and click **"Run All Plugins"**
    (it's OK if some of them show "Failed"),
    then go to **"Catalogs"** and open the "Software Catalog".
+
+   The **"Docs"** group lists the [Naira How-To](handbook/howto), a handbook behind a
+   gateway on port 3003. Its pages open in Chrome only when the portal and the
+   handbooks are on the same site; see [Handbooks](docs/handbooks.md#same-site). The
+   [example handbook](https://github.com/naira-project/example-handbook) shows a
+   handbook built in its own repository.
 
 Developer tasks (lint, tests, proto, chart checks) are in the Taskfile, and
 do not need Tilt: `task --list`. `task check` verifies the tools.
@@ -102,6 +110,7 @@ do not need Tilt: `task --list`. `task check` verifies the tools.
 ├── ui/                   # React/TypeScript UI
 ├── naira-openmfp-portal/ # OpenMFP Portal (This is the backbone for future UI plugins)
 ├── deploy/charts/        # Helm chart
+├── handbook/                 # Handbooks (VitePress sites as container images): the starter, the Naira how-to, an example
 ├── docs/                 # Documentation
 ├── Tiltfile              # Local dev environment (kind)
 └── Taskfile.yml          # Developer tasks (lint, tests, proto, chart checks)
@@ -132,6 +141,6 @@ If you find any bug that may be a security problem, please follow our instructio
 
 ## Code of Conduct
 
-Please refer to our [Code of Conduct](https://github.com/naira-project/.github/blob/main/CODE_OF_CONDUCT.md) for information on the expected conduct for contributing to Platform Mesh.
+Please refer to our [Code of Conduct](https://github.com/naira-project/.github/blob/main/CODE_OF_CONDUCT.md) for information on the expected conduct for contributing to Naira.
 
 <p align="center"><img alt="Bundesministerium für Wirtschaft und Energie (BMWE)-EU funding logo" src="https://apeirora.eu/assets/img/BMWK-EU.png" width="400"/></p>

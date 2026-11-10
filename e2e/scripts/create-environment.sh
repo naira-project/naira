@@ -7,7 +7,7 @@
 # e2e/components/ holds every piece any scenario might use (catalog is
 # always deployed with a configurable set of plugin sidecars; keycloak is
 # always deployed for auth; everything else — litellm, mlflow, llamacpp,
-# openmetadata, postgres, ui, portal, chatbot1 — is opt-in). Each scenario
+# openmetadata, postgres, ui, portal, chatbot1, handbook-sites — is opt-in). Each scenario
 # under e2e/<scenario>/ picks its subset via components.env (COMPONENTS,
 # PLUGINS) — see e2e/README.md for the full model.
 #
@@ -110,8 +110,18 @@ component_build_dir() {
     ui) echo "${REPO_ROOT}/ui-poc" ;;
     portal) echo "${REPO_ROOT}/naira-openmfp-portal" ;;
     chatbot1) echo "${E2E_DIR}/components/chatbot1" ;;
+    handbook-sites) echo "${REPO_ROOT}/handbook/starter" ;;
     litellm|mlflow|llamacpp|openmetadata|postgres) echo "" ;;
     *) echo "error: unknown component '$1'" >&2; exit 1 ;;
+  esac
+}
+
+# Name of the image a component's build produces, where it differs from the
+# component's own name.
+component_image() {
+  case "$1" in
+    handbook-sites) echo "handbook-starter" ;;
+    *) echo "$1" ;;
   esac
 }
 
@@ -153,7 +163,7 @@ done
 for component in ${COMPONENTS}; do
   build_dir="$(component_build_dir "${component}")"
   if [ -n "${build_dir}" ]; then
-    build_and_load "${component}" "${build_dir}"
+    build_and_load "$(component_image "${component}")" "${build_dir}"
   fi
 done
 
@@ -206,6 +216,25 @@ render_catalog() {
   } | kubectl apply -f -
 }
 
+# Renders the handbooks and the handbook gateway from the naira chart, so the scenario
+# exercises what the chart ships. The chart takes only a digest-pinned image from
+# an allowed registry; the image built above is loaded under a tag instead, so its
+# reference is swapped after rendering (see components/handbook-sites-values.yaml).
+render_handbook_sites() {
+  local chart="${REPO_ROOT}/deploy/charts/naira"
+  # helm template needs the PostgreSQL subchart in charts/, which is not vendored.
+  if ! ls "${chart}"/charts/*.tgz >/dev/null 2>&1; then
+    helm dependency build "${chart}" >&2
+  fi
+  helm template naira "${chart}" --namespace "${NAMESPACE}" \
+    -f "${chart}/ci/default-values.yaml" \
+    -f "${E2E_DIR}/components/handbook-sites-values.yaml" \
+    --set "keycloak.baseUrl=http://keycloak.${NAMESPACE}.svc.cluster.local:8080" \
+    --set "keycloak.issuer=http://keycloak.${NAMESPACE}.svc.cluster.local:8080/realms/naira" \
+    --show-only templates/handbook-gateway.yaml --show-only templates/handbooks.yaml \
+    | sed "s#local/handbook-starter@sha256:[0-9a-f]\{64\}#handbook-starter:${TAG}#"
+}
+
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 apply "${E2E_DIR}/base/quota.yaml"
 apply "${E2E_DIR}/components/keycloak.yaml"
@@ -223,6 +252,11 @@ for component in ${COMPONENTS}; do
       --version 1.13.5 --namespace "${NAMESPACE}" --values "${E2E_DIR}/components/openmetadata-values.yaml" --wait --timeout 15m
     continue
   fi
+  if [ "${component}" = "handbook-sites" ]; then
+    echo "==> Deploying the handbooks and the handbook gateway (rendered from the naira chart)"
+    render_handbook_sites | kubectl apply -f -
+    continue
+  fi
   apply "${E2E_DIR}/components/${component}.yaml"
 done
 
@@ -232,6 +266,14 @@ done
 # ---------------------------------------------------------------------------
 echo "==> Waiting for dependency rollouts"
 for component in keycloak ${COMPONENTS} catalog; do
+  if [ "${component}" = "handbook-sites" ]; then
+    # The Deployments are the gateway and one per handbook, named by the chart.
+    for deployment in deploy/handbook-gateway $(kubectl -n "${NAMESPACE}" get deploy -l app.kubernetes.io/component=handbook -o name); do
+      kubectl -n "${NAMESPACE}" rollout status "${deployment}" \
+        --timeout="$(component_wait_timeout "${component}")"
+    done
+    continue
+  fi
   kubectl -n "${NAMESPACE}" rollout status "deploy/${component}" \
     --timeout="$(component_wait_timeout "${component}")"
 done
