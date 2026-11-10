@@ -17,6 +17,53 @@
   display: none;
 }
 
+/*Doubled class beats Luigi's .fd-shellbar and responsive-padding rules. */
+.fd-shellbar.fd-shellbar {
+  padding: 4px 20px;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Sign-in / profile icon in the top bar. */
+.fd-shellbar__action[data-testid='luigi-topnav-profile'] {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  padding: 4px;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.fd-shellbar__action[data-testid='luigi-topnav-profile'] .fd-popover__control {
+  width: 32px;
+  height: 32px;
+
+  .fd-shellbar__button {
+    width: 32px;
+    height: 32px;
+    /* Fundamental Styles also caps the button with max-height. */
+    min-width: 0;
+    min-height: 32px;
+    max-height: 32px;
+  }
+}
+
+/* Replace Luigi's default font-glyph profile icon with the Naira vector. */
+.fd-shellbar__action[data-testid='luigi-topnav-profile']
+  .fd-shellbar__button
+  .sap-icon--customer {
+  display: block;
+  width: 16px;
+  height: 16px;
+  background: url('/assets/icons/profile.svg')
+    center / contain no-repeat;
+
+  &::before {
+    content: none;
+  }
+}
+
 .fd-navigation__container--top {
   padding-inline: 0;
 }

@@ -19,28 +19,28 @@ export interface CatalogViewpoint {
 export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
   {
     path: 'dataset',
-    heading: 'Dataset Catalog',
+    heading: 'Datasets & Sources',
     subheading: 'Datasets registered in the catalog.',
     kinds: ['dataset'],
     plugins: ['openmetadata'],
   },
   {
     path: 'software_catalog',
-    heading: 'Software Catalog',
+    heading: 'Software & Services',
     subheading: 'Deployments and services running in the cluster.',
     kinds: ['deployment', 'service'],
     plugins: ['depl-calls-svc', 'depl-uses-litellm', 'fluxcd'],
   },
   {
     path: 'model',
-    heading: 'Model Catalog',
+    heading: 'AI Models',
     subheading: 'Models registered in the catalog.',
     kinds: ['model'],
     plugins: ['litellm', 'mlflow', 'bedrock'],
   },
   {
     path: 'mcp',
-    heading: 'MCP Catalog',
+    heading: 'MCP Servers',
     subheading: 'MCP servers and the tools they expose.',
     kinds: ['mcp_server'],
     relatedKinds: ['mcp_tool'],
@@ -49,7 +49,7 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
   },
   {
     path: 'inference_endpoints',
-    heading: 'Inference Endpoints Catalog',
+    heading: 'Inference Endpoints',
     subheading: 'Inference endpoints served via different plugins.',
     kinds: ['inference_endpoint'],
     plugins: ['litellm', 'bedrock'],
@@ -58,7 +58,7 @@ export const CATALOG_VIEWPOINTS: CatalogViewpoint[] = [
 
 /**
  * Finds the viewpoint that owns a given node kind, e.g. "dataset" -> the
- * Dataset Catalog viewpoint. Used to route back to a node's parent catalog
+ * Datasets & Sources viewpoint. Used to route back to a node's parent catalog
  * page without relying on browser history.
  */
 export function findViewpointForKind(kind: string): CatalogViewpoint | undefined {
