@@ -4,6 +4,7 @@ import { Route, BrowserRouter as Router, Routes } from 'react-router';
 import { CATALOG_VIEWPOINTS } from './config/viewpoints';
 import { useOperationsSync } from './hooks/usePluginOperations';
 import { queryClient } from './lib/queryClient';
+import NewOverview from './pages/NewOverview';
 
 const CatalogDetail = lazy(() => import('./pages/CatalogDetail'));
 const CatalogView = lazy(() => import('./pages/CatalogView'));
@@ -24,8 +25,8 @@ function App() {
       <Router>
         <Suspense fallback={<p>Loading…</p>}>
           <Routes>
-            <Route path="/" element={<Overview />} />
-            <Route path="/catalog" element={<Overview />} />
+            <Route path="/" element={<NewOverview />} />
+            <Route path="/catalog" element={<NewOverview />} />
             <Route path="/plugins" element={<PluginsPage />} />
             <Route path="/tech-radar" element={<TechRadar />} />
             <Route path="/tech-radar/:quadrantId" element={<TechRadarQuadrant />} />
