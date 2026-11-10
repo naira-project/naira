@@ -25,7 +25,6 @@ export default function PluginsPage() {
     operations,
     loading,
     runningPlugins,
-    runAllActive,
     runErrors,
     dismissError,
     refresh,
@@ -36,14 +35,19 @@ export default function PluginsPage() {
   const visiblePlugins = allowedPlugins
     ? plugins.filter((plugin) => allowedPlugins.includes(plugin.name))
     : plugins;
+  const visibleRunActive = visiblePlugins.some((plugin) => runningPlugins.has(plugin.name));
 
   const [selectedError, setSelectedError] = useState<{
     plugin: string;
     error: ErrorResource;
   } | null>(null);
 
-  const handleRunVisible = async () => {
-    allowedPlugins ? runSubset(visiblePlugins.map((plugin) => plugin.name)) : runAll();
+  const handleRunVisible = () => {
+    if (allowedPlugins) {
+      void runSubset(visiblePlugins.map((plugin) => plugin.name));
+    } else {
+      void runAll();
+    }
   };
 
   return (
@@ -73,11 +77,15 @@ export default function PluginsPage() {
           <Button
             type="button"
             onClick={handleRunVisible}
-            disabled={runAllActive}
+            disabled={visibleRunActive || visiblePlugins.length === 0}
             className="bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary/80 disabled:opacity-60"
           >
-            <RefreshCw size={14} className={runAllActive ? 'animate-spin' : ''} />
-            {runAllActive ? 'Running…' : allowedPlugins ? 'Run Shown Plugins' : 'Run All Plugins'}
+            <RefreshCw size={14} className={visibleRunActive ? 'animate-spin' : ''} />
+            {visibleRunActive
+              ? 'Running…'
+              : allowedPlugins
+                ? 'Run Shown Plugins'
+                : 'Run All Plugins'}
           </Button>
         </header>
         <div className="flex-1 overflow-y-auto px-6 py-4">
