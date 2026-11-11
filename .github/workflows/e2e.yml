@@ -5,21 +5,23 @@
 # into an isolated namespace on a throwaway kind cluster and runs its
 # assertions against it.
 #
-# Opt-in: runs on PRs labeled `run-e2e` that touch what the scenario builds,
-# and on manual dispatch; both wait for approval via the `e2e` environment.
+# Opt-out: runs on every PR unless it is labeled `skip-e2e` or only touches
+# paths the scenario doesn't build, and on manual dispatch; all wait for
+# approval via the `e2e` environment.
 name: E2E
 
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled]
-    paths:
-      - catalog/**
-      - plugins/**
-      - e2e/**
-      - go.mod
-      - go.sum
-      - mise.toml
-      - .github/workflows/e2e.yml
+    # The scenario builds only catalog/ and plugins/ images; skip what it never reads.
+    paths-ignore:
+      - ui/**
+      - ui-poc/**
+      - naira-openmfp-portal/**
+      - deploy/**
+      - docs/**
+      - rules/**
+      - "**.md"
   workflow_dispatch:
     inputs:
       pr-number:
@@ -42,7 +44,7 @@ jobs:
     name: E2E · litellm_chatbot_to_catalog_api
     runs-on: ubuntu-latest
     # Evaluated before the environment gate, so a skipped job asks no one.
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.pull_request.labels.*.name, 'skip-e2e') }}
     # Requires reviewer approval before running PR code.
     environment: e2e
     steps:
