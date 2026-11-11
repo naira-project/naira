@@ -231,21 +231,28 @@ jobs:
             --config "${cfg}"
           kubectl config rename-context "$(kubectl config current-context)" "${ENV_ID}"
 
-          # loft-cli lets the CLI log in; the rule allows nothing but get and
-          # delete on this vCluster. Verified against vCluster Platform 4.12.
+          # Teardown key scope: loft-cli lets the CLI log in; the rules allow only
+          # what `platform delete vcluster --project` calls: get the project, and
+          # get/delete this vCluster. Minting it needs the CI key's
+          # ownedaccesskeys create rule (naira-playground docs/operations.md).
           # --raw: the scoped CI key can't use API discovery, which plain create needs.
           "${VCLUSTER_BIN}" platform connect management --print --config "${cfg}" > "${mgmt}"
           jq -n \
             --arg user "${VCLUSTER_CI_USER}" \
             --arg name "${ENV_ID}" \
             --arg ns "p-${VCLUSTER_PROJECT}" \
+            --arg project "${VCLUSTER_PROJECT}" \
             '{apiVersion: "management.loft.sh/v1", kind: "OwnedAccessKey",
               metadata: {generateName: "e2e-teardown-"},
               spec: {displayName: ("e2e teardown " + $name), type: "User", user: $user, ttl: 3600,
                 scope: {roles: [{role: "loft-cli"}],
-                  rules: [{verbs: ["get", "delete"], namespaces: [$ns],
-                    resources: [{group: "management.loft.sh",
-                      resources: ["virtualclusterinstances"], resourceNames: [$name]}]}]}}}' |
+                  rules: [
+                    {verbs: ["get"], namespaces: [""],
+                      resources: [{group: "management.loft.sh",
+                        resources: ["projects"], resourceNames: [$project]}]},
+                    {verbs: ["get", "delete"], namespaces: [$ns],
+                      resources: [{group: "management.loft.sh",
+                        resources: ["virtualclusterinstances"], resourceNames: [$name]}]}]}}}' |
             KUBECONFIG="${mgmt}" kubectl create --raw /apis/management.loft.sh/v1/ownedaccesskeys -f - |
             jq -er '.spec.key' > "${TEARDOWN_KEY_FILE}"
           echo "::add-mask::$(cat "${TEARDOWN_KEY_FILE}")"
@@ -459,16 +466,9 @@ jobs:
             --docker-login=false \
             --config "${cfg}"
 
-          # Error text from find.VClusterNotFoundError in vcluster 0.37.
-          if ! out="$(vcluster platform delete vcluster "${ENV_ID}" \
+          # No "already gone" exception: vcluster 0.37 also reports "couldn't
+          # find vcluster" when the key can't read it, which would hide a leak.
+          vcluster platform delete vcluster "${ENV_ID}" \
             --project "${VCLUSTER_PROJECT}" \
             --delete-context=false \
-            --config "${cfg}" 2>&1)"; then
-            echo "${out}"
-            if grep -qF "couldn't find vcluster ${ENV_ID}" <<<"${out}"; then
-              echo "vCluster ${ENV_ID} is already gone."
-              exit 0
-            fi
-            exit 1
-          fi
-          echo "${out}"
+            --config "${cfg}"
