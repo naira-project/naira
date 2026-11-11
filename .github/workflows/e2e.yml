@@ -233,6 +233,7 @@ jobs:
 
           # loft-cli lets the CLI log in; the rule allows nothing but get and
           # delete on this vCluster. Verified against vCluster Platform 4.12.
+          # --validate=false: the management API serves no OpenAPI to this key.
           "${VCLUSTER_BIN}" platform connect management --print --config "${cfg}" > "${mgmt}"
           jq -n \
             --arg user "${VCLUSTER_CI_USER}" \
@@ -245,7 +246,7 @@ jobs:
                   rules: [{verbs: ["get", "delete"], namespaces: [$ns],
                     resources: [{group: "management.loft.sh",
                       resources: ["virtualclusterinstances"], resourceNames: [$name]}]}]}}}' |
-            KUBECONFIG="${mgmt}" kubectl create -f - -o jsonpath='{.spec.key}' > "${TEARDOWN_KEY_FILE}"
+            KUBECONFIG="${mgmt}" kubectl create --validate=false -f - -o jsonpath='{.spec.key}' > "${TEARDOWN_KEY_FILE}"
           echo "::add-mask::$(cat "${TEARDOWN_KEY_FILE}")"
 
           for f in "${KUBECONFIG}" "${TEARDOWN_KEY_FILE}"; do
