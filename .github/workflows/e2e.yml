@@ -7,11 +7,16 @@
 # https://github.com/naira-project/architecture/tree/main/adr
 #
 # Runs on PRs that touch what the scenario builds, unless labeled `skip-e2e`,
-# and on manual dispatch. Only branches of this repo run; provision and e2e
-# each wait for approval via the `e2e` deployment environment.
+# and on manual dispatch. Only branches of this repo run. One approval, on
+# provision via the `e2e` deployment environment, gates the whole run: e2e
+# follows on its own in `e2e-run`, which has no reviewers. So approving starts
+# the PR code too.
 #
 # Accepted residual risks (approvers must review these paths):
 # - A same-repo PR that edits this file runs those edits with the `e2e` identity once approved.
+# - Anyone with write access can use `e2e-run` without approval: read
+#   E2E_CREDENTIALS_KEY and join the tailnet as tag:ci, which reaches only the
+#   vCluster Platform ingress.
 # - GITHUB_TOKEN has `packages: write` on `naira-e2e` for the whole e2e job.
 # - PR code can read E2E_CREDENTIALS_KEY and so decrypt other runs'
 #   e2e-credentials artifacts: kubeconfigs and teardown keys as below.
@@ -289,8 +294,9 @@ jobs:
     name: E2E · litellm_chatbot_to_catalog_api
     needs: [authorize, provision]
     runs-on: ubuntu-latest
-    # Requires reviewer approval before running PR code.
-    environment: e2e
+    # Gated by provision's approval; holds only E2E_CREDENTIALS_KEY and its
+    # own Tailscale identity, never the platform access key.
+    environment: e2e-run
     timeout-minutes: 45
     permissions:
       contents: read
@@ -362,15 +368,15 @@ jobs:
         with:
           install_args: kubectl helm vcluster
 
-      # Both credentials expire 1h after provisioning. 10 min of approval
-      # delay plus the 45 min timeout stays within that.
+      # Both credentials expire 1h after provisioning. 10 min of queueing
+      # plus the 45 min timeout stays within that. Matters for re-runs of e2e alone.
       - name: Check run credentials are fresh
         env:
           PROVISIONED_AT: ${{ needs.provision.outputs.provisioned-at }}
         run: |
           age=$(( $(date +%s) - PROVISIONED_AT ))
           if [ "${age}" -gt 600 ]; then
-            echo "::error::vCluster was provisioned ${age}s ago; its credentials would expire mid-run. Re-run all jobs and approve e2e within 10 minutes." >&2
+            echo "::error::vCluster was provisioned ${age}s ago; its credentials would expire mid-run. Re-run all jobs." >&2
             exit 1
           fi
 
@@ -446,7 +452,7 @@ jobs:
       # Deleting the vCluster removes the whole E2E environment. Uses the
       # teardown key from provision. Skipped without a teardown key; provision
       # deletes the vCluster itself if it fails. The template's inactivity
-      # auto-delete covers a delete that never runs (e.g. e2e not approved).
+      # auto-delete covers a delete that never runs (e.g. a cancelled run).
       - name: Delete vCluster
         if: always()
         env:
