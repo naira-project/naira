@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.2](https://github.com/naira-project/naira/compare/v0.1.2...v0.1.2) (2026-11-12)
+
+
+### Features
+
+* add catalog pgstore migrations ([#247](https://github.com/naira-project/naira/issues/247)) ([53fa491](https://github.com/naira-project/naira/commit/53fa491d75160943b426291ea9bfa627ea3bd6cf))
+* **helm:** add Bedrock plugin to Helm chart ([#332](https://github.com/naira-project/naira/issues/332)) ([6258658](https://github.com/naira-project/naira/commit/62586586ee5b12d0db0d692b34170e57c578ad62))
+* plugin schema created for catalog graph in docs ([#344](https://github.com/naira-project/naira/issues/344)) ([96578ea](https://github.com/naira-project/naira/commit/96578ea2d324b3be1d11446185bdb535be2ca7cf))
+* refresh UI data when plugin finished ([#317](https://github.com/naira-project/naira/issues/317)) ([d331af1](https://github.com/naira-project/naira/commit/d331af1a4d360df9503c601a6d51434b145be453))
+* **ui:** add View Logs link for inference endpoints from LiteLLM ([#228](https://github.com/naira-project/naira/issues/228)) ([2e7242a](https://github.com/naira-project/naira/commit/2e7242acf00c4e16a1ec5c2fdb8485c1459870ad))
+
+
+### Bug Fixes
+
+* **ui:** page refresh in left navigation bar with deep links ([#351](https://github.com/naira-project/naira/issues/351)) ([4f0a5a1](https://github.com/naira-project/naira/commit/4f0a5a1fa74b65e59ef9a6ce2d309c2a4cc0f469))
+* **ui:** rewrite catalog names and fix padding ([#353](https://github.com/naira-project/naira/issues/353)) ([c3d604f](https://github.com/naira-project/naira/commit/c3d604f72b9cdedcf00cdc4fcb7776da30fcd182))
+* **ui:** update icons and sidebar spacing ([#331](https://github.com/naira-project/naira/issues/331)) ([2b6064a](https://github.com/naira-project/naira/commit/2b6064aabc44d50ce1fbccf2be212fcc25f52045))
+
 ## [0.1.2](https://github.com/naira-project/naira/compare/v0.1.1...v0.1.2) (2026-10-30)
 
 
