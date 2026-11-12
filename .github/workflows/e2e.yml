@@ -2,16 +2,30 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Deploys the litellm_chatbot_to_catalog_api scenario (see e2e/README.md)
-# into an isolated namespace on a throwaway kind cluster and runs its
-# assertions against it.
+# into a throwaway vCluster on vCluster Platform, reached over Tailscale, and
+# runs its assertions against it. Threat model and ownership: ADR-012 in
+# https://github.com/naira-project/architecture/tree/main/adr
 #
-# Opt-in: runs on PRs labeled `run-e2e` that touch what the scenario builds,
-# and on manual dispatch; both wait for approval via the `e2e` environment.
+# Runs on PRs that touch what the scenario builds, unless labeled `skip-e2e`,
+# and on manual dispatch. Only branches of this repo run. One approval, on
+# provision via the `e2e` deployment environment, gates the whole run: e2e
+# follows on its own in `e2e-run`, which has no reviewers. So approving starts
+# the PR code too.
+#
+# Accepted residual risks (approvers must review these paths):
+# - A same-repo PR that edits this file runs those edits with the `e2e` identity once approved.
+# - Anyone with write access can use `e2e-run` without approval: read
+#   E2E_CREDENTIALS_KEY and join the tailnet as tag:ci, which reaches only the
+#   vCluster Platform ingress.
+# - GITHUB_TOKEN has `packages: write` on `naira-e2e` for the whole e2e job.
+# - PR code can read E2E_CREDENTIALS_KEY and so decrypt other runs'
+#   e2e-credentials artifacts: kubeconfigs and teardown keys as below.
+# - PR code can read this run's vCluster kubeconfig and teardown key. Both
+#   reach only this run's vCluster and expire after 1h.
 name: E2E
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
     paths:
       - catalog/**
       - plugins/**
@@ -35,66 +49,355 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CLUSTER_NAME: naira-idp-e2e
+  VCLUSTER_PROJECT: e2e
 
 jobs:
-  e2e:
-    name: E2E · litellm_chatbot_to_catalog_api
+  # A skipped job can't print anything, so fork PRs get the notice here while
+  # authorize and e2e show as skipped.
+  fork-notice:
+    name: E2E skipped for fork PR
     runs-on: ubuntu-latest
-    # Evaluated before the environment gate, so a skipped job asks no one.
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-e2e') }}
-    # Requires reviewer approval before running PR code.
-    environment: e2e
+    permissions: {}
+    if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'skip-e2e') && github.event.pull_request.head.repo.full_name != github.repository }}
     steps:
-      - name: Determine PR number
-        id: pr
+      - run: echo "::notice::E2E runs only for branches of this repo."
+
+  authorize:
+    name: Authorize
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read # read PR state and head repo
+    # Fork PRs skip here, before e2e could request the deployment environment.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+      (!contains(github.event.pull_request.labels.*.name, 'skip-e2e') &&
+      github.event.pull_request.head.repo.full_name == github.repository) }}
+    outputs:
+      pr-number: ${{ steps.check.outputs.pr-number }}
+      head-sha: ${{ steps.check.outputs.head-sha }}
+    steps:
+      # Checked through the API for dispatches too, which carry no PR payload.
+      # Inline on purpose: this is the gate, so it must not run PR-controlled
+      # code.
+      - name: Check PR is open and from this repo
+        id: check
         env:
+          GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ inputs.pr-number || github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
-          NUMBER="${PR_NUMBER}"
-          if [ -z "${NUMBER}" ]; then
-            echo "::error::pr-number input is required." >&2
+          set -euo pipefail
+          if ! [[ "${PR_NUMBER}" =~ ^[1-9][0-9]{0,9}$ ]]; then
+            echo "::error::pr-number must be a positive integer." >&2
             exit 1
           fi
-          echo "number=${NUMBER}" >> "$GITHUB_OUTPUT"
+          # A deleted head repo is null; the placeholder keeps the
+          # tab-separated fields aligned.
+          pr="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" \
+            --jq '[.state, (.head.repo.full_name // "-"), .head.sha] | @tsv')"
+          IFS=$'\t' read -r state head_repo head_sha <<<"${pr}"
+          if [ "${state}" != "open" ]; then
+            echo "::error::PR #${PR_NUMBER} is ${state}, not open." >&2
+            exit 1
+          fi
+          if [ "${head_repo}" != "${REPO}" ]; then
+            echo "::error::PR #${PR_NUMBER} is from a fork. E2E runs only for branches of this repo." >&2
+            exit 1
+          fi
+          {
+            echo "pr-number=${PR_NUMBER}"
+            echo "head-sha=${head_sha}"
+          } >> "$GITHUB_OUTPUT"
 
+  # Runs no PR code: GitHub loads a job's secrets into the runner process,
+  # where later PR code in the same job could read them (sudo). So the
+  # access key lives only in this job, and e2e gets only run-scoped
+  # credentials.
+  provision:
+    name: Provision vCluster
+    needs: authorize
+    runs-on: ubuntu-latest
+    environment: e2e
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # Tailscale join via GitHub OIDC
+    outputs:
+      env-id: ${{ steps.ids.outputs.env-id }}
+      provisioned-at: ${{ steps.provision.outputs.provisioned-at }}
+    env:
+      PR_NUMBER: ${{ needs.authorize.outputs.pr-number }}
+      VCLUSTER_TEMPLATE: vcluster-e2e-template
+      VCLUSTER_CI_USER: github-e2e
+    steps:
+      # ENV_ID names both the vCluster and the namespace, so it must stay
+      # DNS-1123; the run attempt keeps re-runs clear of a leftover vCluster.
+      - name: Compute identifiers
+        id: ids
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          env_id="pr-${PR_NUMBER}-${RUN_ID}-${RUN_ATTEMPT}"
+          echo "env-id=${env_id}" >> "$GITHUB_OUTPUT"
+          {
+            echo "ENV_ID=${env_id}"
+            echo "KUBECONFIG=${RUNNER_TEMP}/e2e-kubeconfig"
+            echo "PLATFORM_DIR=${RUNNER_TEMP}/vcluster-platform"
+            echo "TEARDOWN_KEY_FILE=${RUNNER_TEMP}/vcluster-teardown-key"
+            echo "VCLUSTER_BIN=${RUNNER_TEMP}/bin/vcluster"
+          } >> "$GITHUB_ENV"
+
+      # Pinned here, not taken from mise.toml, because this binary receives
+      # the access key. Keep the version in step with mise.toml.
+      - name: Install vcluster CLI
+        env:
+          VCLUSTER_VERSION: 0.37.5
+          VCLUSTER_SHA256: a6720986d05dd3af15d68689b5e19ed769b694bc25d79e3f626f97795c2c56ca
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "${VCLUSTER_BIN}")"
+          curl -fsSL -o "${VCLUSTER_BIN}" \
+            "https://github.com/loft-sh/vcluster/releases/download/v${VCLUSTER_VERSION}/vcluster-linux-amd64"
+          echo "${VCLUSTER_SHA256}  ${VCLUSTER_BIN}" | sha256sum -c -
+          chmod +x "${VCLUSTER_BIN}"
+
+      - name: Join tailnet
+        uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
+        with:
+          oauth-client-id: ${{ vars.TS_E2E_OAUTH_CLIENT_ID }}
+          audience: ${{ vars.TS_E2E_AUDIENCE }}
+          tags: tag:ci
+
+      # Leaves behind, for the e2e job:
+      #  - a kubeconfig with a 1h service account token for this vCluster;
+      #  - a teardown key that expires after 1h and may only get and delete
+      #    this vCluster (scope.rules), for "Delete vCluster".
+      # Flags:
+      #  - --docker-login=false: login would otherwise write registry
+      #    credentials to ~/.docker.
+      #  - --connect=false on create: its connect embeds the access key in
+      #    the kubeconfig. The explicit connect uses a service account token
+      #    instead (needs forwardTokenMode TokenReview on the template).
+      - name: Provision vCluster
+        id: provision
+        env:
+          VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
+          VCLUSTER_PLATFORM_ACCESS_KEY: ${{ secrets.VCLUSTER_PLATFORM_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # An empty key would make login fall back to an interactive flow.
+          if [ -z "${VCLUSTER_PLATFORM_URL}" ] || [ -z "${VCLUSTER_PLATFORM_ACCESS_KEY}" ]; then
+            echo "::error::VCLUSTER_PLATFORM_URL or VCLUSTER_PLATFORM_ACCESS_KEY is not set" >&2
+            exit 1
+          fi
+          echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
+
+          # The tailnet route can take a few seconds after joining.
+          for _ in $(seq 1 30); do
+            curl -s -o /dev/null --max-time 5 "${VCLUSTER_PLATFORM_URL}" && break
+            sleep 2
+          done
+
+          mkdir -p "${PLATFORM_DIR}"
+          cfg="${PLATFORM_DIR}/config.json"
+          mgmt="${PLATFORM_DIR}/management.kubeconfig"
+          created=false
+          provisioned=false
+          cleanup() {
+            # Without a teardown key, e2e can't delete the vCluster.
+            if [ "${created}" = true ] && [ "${provisioned}" != true ]; then
+              "${VCLUSTER_BIN}" platform delete vcluster "${ENV_ID}" \
+                --project "${VCLUSTER_PROJECT}" --delete-context=false --config "${cfg}" || true
+              rm -f "${KUBECONFIG}" "${TEARDOWN_KEY_FILE}"
+            fi
+          }
+          trap cleanup EXIT
+
+          "${VCLUSTER_BIN}" platform login "${VCLUSTER_PLATFORM_URL}" \
+            --access-key "${VCLUSTER_PLATFORM_ACCESS_KEY}" \
+            --docker-login=false \
+            --config "${cfg}"
+
+          created=true
+          "${VCLUSTER_BIN}" platform create vcluster "${ENV_ID}" \
+            --project "${VCLUSTER_PROJECT}" \
+            --template "${VCLUSTER_TEMPLATE}" \
+            --connect=false \
+            --config "${cfg}"
+
+          "${VCLUSTER_BIN}" platform connect vcluster "${ENV_ID}" \
+            --project "${VCLUSTER_PROJECT}" \
+            --service-account kube-system/naira-e2e \
+            --cluster-role cluster-admin \
+            --token-expiration 3600 \
+            --config "${cfg}"
+          kubectl config rename-context "$(kubectl config current-context)" "${ENV_ID}"
+
+          # Teardown key scope: loft-cli lets the CLI log in; the rules allow only
+          # what `platform delete vcluster --project` calls: get the project, and
+          # get/delete this vCluster. Minting it needs the CI key's
+          # ownedaccesskeys create rule (naira-playground docs/operations.md).
+          # --raw: the scoped CI key can't use API discovery, which plain create needs.
+          "${VCLUSTER_BIN}" platform connect management --print --config "${cfg}" > "${mgmt}"
+          jq -n \
+            --arg user "${VCLUSTER_CI_USER}" \
+            --arg name "${ENV_ID}" \
+            --arg ns "p-${VCLUSTER_PROJECT}" \
+            --arg project "${VCLUSTER_PROJECT}" \
+            '{apiVersion: "management.loft.sh/v1", kind: "OwnedAccessKey",
+              metadata: {generateName: "e2e-teardown-"},
+              spec: {displayName: ("e2e teardown " + $name), type: "User", user: $user, ttl: 3600,
+                scope: {roles: [{role: "loft-cli"}],
+                  rules: [
+                    {verbs: ["get"], namespaces: [""],
+                      resources: [{group: "management.loft.sh",
+                        resources: ["projects"], resourceNames: [$project]}]},
+                    {verbs: ["get", "delete"], namespaces: [$ns],
+                      resources: [{group: "management.loft.sh",
+                        resources: ["virtualclusterinstances"], resourceNames: [$name]}]}]}}}' |
+            KUBECONFIG="${mgmt}" kubectl create --raw /apis/management.loft.sh/v1/ownedaccesskeys -f - |
+            jq -er '.spec.key' > "${TEARDOWN_KEY_FILE}"
+          echo "::add-mask::$(cat "${TEARDOWN_KEY_FILE}")"
+
+          for f in "${KUBECONFIG}" "${TEARDOWN_KEY_FILE}"; do
+            if grep -qF "${VCLUSTER_PLATFORM_ACCESS_KEY}" "${f}"; then
+              echo "::error::${f} contains the platform access key" >&2
+              exit 1
+            fi
+          done
+          provisioned=true
+          echo "provisioned-at=$(date +%s)" >> "$GITHUB_OUTPUT"
+
+      # Artifacts are readable with repo read access, hence the encryption.
+      - name: Encrypt run credentials
+        env:
+          E2E_CREDENTIALS_KEY: ${{ secrets.E2E_CREDENTIALS_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          # An empty password would still encrypt, readable by anyone.
+          : "${E2E_CREDENTIALS_KEY:?E2E_CREDENTIALS_KEY is not set}"
+          tar -C "${RUNNER_TEMP}" -cf - e2e-kubeconfig vcluster-teardown-key |
+            openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:E2E_CREDENTIALS_KEY \
+              -out "${RUNNER_TEMP}/e2e-credentials.enc"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-credentials
+          path: ${{ runner.temp }}/e2e-credentials.enc
+          retention-days: 1
+
+  e2e:
+    name: E2E · litellm_chatbot_to_catalog_api
+    needs: [authorize, provision]
+    runs-on: ubuntu-latest
+    # Gated by provision's approval; holds only E2E_CREDENTIALS_KEY and its
+    # own Tailscale identity, never the platform access key.
+    environment: e2e-run
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write # push images to ghcr.io/naira-project/naira-e2e
+      id-token: write # Tailscale join via GitHub OIDC
+    env:
+      PR_NUMBER: ${{ needs.authorize.outputs.pr-number }}
+      ENV_ID: ${{ needs.provision.outputs.env-id }}
+      E2E_IMAGE: ghcr.io/naira-project/naira-e2e
+    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/pull/${{ steps.pr.outputs.number }}/merge
+          ref: refs/pull/${{ needs.authorize.outputs.pr-number }}/merge
+          fetch-depth: 2 # for HEAD^2
           persist-credentials: false
 
+      # The merge ref follows every push. Pinning to the head authorize saw
+      # keeps a push after approval from running unreviewed.
+      - name: Check merge ref is the authorized head
+        env:
+          HEAD_SHA: ${{ needs.authorize.outputs.head-sha }}
+        run: |
+          actual="$(git rev-parse HEAD^2)"
+          if [ "${actual}" != "${HEAD_SHA}" ]; then
+            echo "::error::PR head moved to ${actual} after authorization (${HEAD_SHA}). Re-run all jobs to test the new head." >&2
+            exit 1
+          fi
+
+      # TAG is the merge commit, not github.sha (main's SHA on dispatch), so
+      # images on cached EKS nodes are never shared between PRs.
+      - name: Compute identifiers
+        run: |
+          {
+            echo "TAG=$(git rev-parse HEAD)"
+            echo "KUBECONFIG=${RUNNER_TEMP}/e2e-kubeconfig"
+            echo "TEARDOWN_KEY_FILE=${RUNNER_TEMP}/vcluster-teardown-key"
+          } >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: e2e-credentials
+          path: ${{ runner.temp }}
+
+      - name: Decrypt run credentials
+        env:
+          E2E_CREDENTIALS_KEY: ${{ secrets.E2E_CREDENTIALS_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:E2E_CREDENTIALS_KEY \
+            -in "${RUNNER_TEMP}/e2e-credentials.enc" | tar -C "${RUNNER_TEMP}" -xf -
+          echo "::add-mask::$(cat "${TEARDOWN_KEY_FILE}")"
+
+      - name: Join tailnet
+        uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
+        with:
+          oauth-client-id: ${{ vars.TS_E2E_OAUTH_CLIENT_ID }}
+          audience: ${{ vars.TS_E2E_AUDIENCE }}
+          tags: tag:ci
+
+      # From here on, PR code runs.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26"
 
-      # kind/kubectl/helm versions come from mise.toml — the same source of
-      # truth used for local dev — instead of a second, separately hardcoded
-      # set of versions here that could drift from it.
+      # CLI versions come from mise.toml, the same source of truth as local
+      # dev, instead of a second set that could drift from it.
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          install_args: kind kubectl helm
+          install_args: kubectl helm vcluster
 
-      # Computed once, here, rather than inside create-environment.sh: if that
-      # script fails before it would derive an ID itself, the destroy step at
-      # the bottom (if: always()) still knows what to tear down.
-      - name: Compute environment ID
-        run: echo "ENV_ID=pr-${{ steps.pr.outputs.number }}-${{ github.run_id }}" >> "$GITHUB_ENV"
+      # Both credentials expire 1h after provisioning. 10 min of queueing
+      # plus the 45 min timeout stays within that. Matters for re-runs of e2e alone.
+      - name: Check run credentials are fresh
+        env:
+          PROVISIONED_AT: ${{ needs.provision.outputs.provisioned-at }}
+        run: |
+          age=$(( $(date +%s) - PROVISIONED_AT ))
+          if [ "${age}" -gt 600 ]; then
+            echo "::error::vCluster was provisioned ${age}s ago; its credentials would expire mid-run. Re-run all jobs." >&2
+            exit 1
+          fi
 
-      - name: Create kind cluster
-        run: kind create cluster --config e2e/base/kind-config.yaml
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
       - name: Create E2E environment
         run: |
           ./e2e/scripts/create-environment.sh \
             --scenario litellm_chatbot_to_catalog_api \
             --env-id "${ENV_ID}" \
-            --tag "${{ github.sha }}" \
-            --cluster-name "${CLUSTER_NAME}"
+            --tag "${TAG}" \
+            --context "${ENV_ID}" \
+            --registry
 
+      # Goes through the platform proxy like every other kubectl call.
       - name: Port-forward catalog
         run: |
           kubectl -n "${ENV_ID}" port-forward svc/catalog 8090:8090 &
-          echo $! > /tmp/catalog-port-forward.pid
           # Retry for up to 30 seconds while the port-forward and readiness
           # probe settle.
           for _ in $(seq 1 30); do
@@ -112,7 +415,6 @@ jobs:
       - name: Port-forward keycloak
         run: |
           kubectl -n "${ENV_ID}" port-forward svc/keycloak 8080:8080 &
-          echo $! > /tmp/keycloak-port-forward.pid
           # The keycloak Service only exposes the http port (8080), not the
           # management/health port (9000) — check a realm endpoint instead of
           # /health/ready, which isn't reachable through this forward.
@@ -135,25 +437,44 @@ jobs:
           KEYCLOAK_URL: http://localhost:8080
         run: go test -tags e2e -v -timeout=5m ./e2e/litellm_chatbot_to_catalog_api/assert/...
 
-      - name: Stop port-forwards
-        if: always()
-        run: |
-          kill "$(cat /tmp/catalog-port-forward.pid)" || true
-          kill "$(cat /tmp/keycloak-port-forward.pid)" || true
-
       - name: Collect diagnostics
         if: always()
         run: |
+          if [ ! -s "${KUBECONFIG}" ]; then
+            echo "No vCluster kubeconfig, nothing to collect."
+            exit 0
+          fi
           kubectl get pods,services -n "${ENV_ID}" -o wide || true
           kubectl logs -n "${ENV_ID}" -l app=catalog --all-containers --tail=-1 --prefix=true || true
           kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
           kubectl describe pods -n "${ENV_ID}" || true
 
-      # Deletes the namespace and the cluster-scoped resources it leaves
-      # behind. No Cleanup Job, no GC sweeper — nothing else outlives this.
-      - name: Destroy environment
+      # Deleting the vCluster removes the whole E2E environment. Uses the
+      # teardown key from provision. Skipped without a teardown key; provision
+      # deletes the vCluster itself if it fails. The template's inactivity
+      # auto-delete covers a delete that never runs (e.g. a cancelled run).
+      - name: Delete vCluster
         if: always()
+        env:
+          VCLUSTER_PLATFORM_URL: ${{ vars.VCLUSTER_PLATFORM_URL }}
         run: |
-          ./e2e/scripts/destroy-environment.sh \
-            --env-id "${ENV_ID}" \
-            --cluster-name "${CLUSTER_NAME}"
+          set -euo pipefail
+          umask 077
+          if [ ! -s "${TEARDOWN_KEY_FILE:-}" ]; then
+            echo "No teardown key, nothing to delete."
+            exit 0
+          fi
+          echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
+          cfg="$(mktemp -d)/config.json"
+          trap 'rm -rf "$(dirname "${cfg}")" "${TEARDOWN_KEY_FILE}"' EXIT
+          vcluster platform login "${VCLUSTER_PLATFORM_URL}" \
+            --access-key "$(cat "${TEARDOWN_KEY_FILE}")" \
+            --docker-login=false \
+            --config "${cfg}"
+
+          # No "already gone" exception: vcluster 0.37 also reports "couldn't
+          # find vcluster" when the key can't read it, which would hide a leak.
+          vcluster platform delete vcluster "${ENV_ID}" \
+            --project "${VCLUSTER_PROJECT}" \
+            --delete-context=false \
+            --config "${cfg}"
