@@ -1,8 +1,15 @@
 # depl_uses_thalamus plugin
 
-depl\_uses\_thalamus plugin discovers which Kubernetes Deployments consume the Thalamus gateway.
+depl\_uses\_thalamus plugin discovers which Kubernetes Deployments consume the Thalamus gateway ([https://github.com/cobaltcore-dev/thalamus](https://github.com/cobaltcore-dev/thalamus)).
 
 It lists models from Thalamus's OpenAI API-compatible "/v1/models" endpoint at THALAMUS\_BASE\_URL, then scans Deployments across all namespaces for a container env var whose name ends in "\_BASE\_URL" or "\_API\_BASE" and whose plaintext value starts with that same base URL. Each matching Deployment is linked to every model returned by Thalamus via a "uses\_model" relation.
+
+## Related Plugins
+
+This plugin is a part of a family of Thalamus-related plugins, including:
+
+  - thalamus - discovers Thalamus models and their properties from the Thalamus CRDs or OpenAI API-compatible endpoint.
+  - depl\_uses\_thalamus - discovers which Deployments consume the Thalamus gateway, linking them to the models they use.
 
 ## Known Issues
 
