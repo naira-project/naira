@@ -334,7 +334,7 @@ func TestGetOperationEndpoint(t *testing.T) {
 }
 
 func TestListOperationsEndpoint(t *testing.T) {
-	t.Run("lists names all operations", func(t *testing.T) {
+	t.Run("lists names of all operations", func(t *testing.T) {
 		runner := &mocks.PluginRunnerMock{
 			ListOperationsFunc: func(context.Context, operations.Filter) ([]operations.Operation, error) {
 				return []operations.Operation{
