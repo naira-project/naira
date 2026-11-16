@@ -1,5 +1,5 @@
         - name: plugin-openmetadata
-          image: openmetadata:${TAG}
+          image: ${E2E_IMAGE}:openmetadata-${TAG}
           restartPolicy: Always
           imagePullPolicy: IfNotPresent
           env:

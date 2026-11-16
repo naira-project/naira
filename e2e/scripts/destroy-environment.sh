@@ -5,20 +5,22 @@
 # cluster-scoped and survive namespace deletion, so they're removed
 # explicitly by the naira.io/env-id label.
 #
-# Usage: destroy-environment.sh --env-id <ID> [--cluster-name <NAME>]
+# Usage: destroy-environment.sh --env-id <ID> [--cluster-name <NAME>] [--context <NAME>]
 set -euo pipefail
 
 CLUSTER_NAME="naira-idp-e2e"
 ENV_ID=""
+CONTEXT=""
 
 usage() {
-  echo "Usage: $0 --env-id <ID> [--cluster-name <NAME>]" >&2
+  echo "Usage: $0 --env-id <ID> [--cluster-name <NAME>] [--context <NAME>]" >&2
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --env-id) ENV_ID="$2"; shift 2 ;;
     --cluster-name) CLUSTER_NAME="$2"; shift 2 ;;
+    --context) CONTEXT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -26,10 +28,12 @@ done
 
 if [ -z "${ENV_ID}" ]; then echo "error: --env-id is required" >&2; usage; exit 1; fi
 
+CONTEXT="${CONTEXT:-kind-${CLUSTER_NAME}}"
+
 # The cluster may already be gone (e.g. the "Create kind cluster" step never
 # ran) — tolerate that rather than failing an always()-run teardown step.
-if ! kubectl config use-context "kind-${CLUSTER_NAME}" 2>/dev/null; then
-  echo "==> kind-${CLUSTER_NAME} context not found, nothing to tear down"
+if ! kubectl config use-context "${CONTEXT}" 2>/dev/null; then
+  echo "==> ${CONTEXT} context not found, nothing to tear down"
   exit 0
 fi
 
