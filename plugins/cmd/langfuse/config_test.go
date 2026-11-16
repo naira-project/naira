@@ -30,10 +30,11 @@ func TestParseConfigAcceptsSample(t *testing.T) {
 	cfg, err := parseConfig([]byte(sampleConfig(t)))
 	require.NoError(t, err)
 
-	require.Len(t, cfg.Projects, 2)
-	assert.Equal(t, "triage-agent", cfg.Projects[0].ID)
+	require.Len(t, cfg.Projects, 1)
+	assert.Equal(t, "naira-demo", cfg.Projects[0].ID)
 	assert.Equal(t, 24*time.Hour, cfg.Projects[0].window)
-	assert.Equal(t, 168*time.Hour, cfg.Projects[1].window)
+	// Two bindings on the one project, each narrowed to its own trace name.
+	assert.Equal(t, []string{"triage-agent", "escalation-agent"}, cfg.Projects[0].scopes())
 }
 
 func TestParseConfigDefaultsWindow(t *testing.T) {

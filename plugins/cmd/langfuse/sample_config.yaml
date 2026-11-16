@@ -42,16 +42,19 @@
 
 schema_version: 1
 
-# Two projects of one Langfuse organization, one per application. Projects are
-# the unit API keys are scoped to, so each carries its own pair; organizations
-# never appear here, because the plugin addresses projects directly.
+# One Langfuse project reporting for two applications, told apart by the trace
+# name each of them emits. Every binding also rolls up into the project-wide
+# numbers, so this measures them together as well as apart.
 #
-# Give two applications one project and a trace_name each instead when you want
-# them aggregated together as well as apart.
+# Add a second entry under `projects` instead when the applications belong to
+# separate Langfuse projects. API keys are scoped to a project, so each entry
+# carries its own pair; organizations never appear here, because the plugin
+# addresses projects directly. Note that `window` and `score_name` are
+# per-project: applications needing different ones cannot share an entry.
 projects:
-  - id: triage-agent
+  - id: naira-demo
     host: https://langfuse.example.com
-    project_id: triage-agent
+    project_id: naira-demo
     public_key: pk-lf-00000000-0000-0000-0000-000000000000
     secret_key: sk-lf-00000000-0000-0000-0000-000000000000
     window: 24h
@@ -60,15 +63,8 @@ projects:
       - kind: deployment
         namespace: naira-deps
         name: triage-agent
-
-  - id: escalation-agent
-    host: https://langfuse.example.com
-    project_id: escalation-agent
-    public_key: pk-lf-11111111-1111-1111-1111-111111111111
-    secret_key: sk-lf-11111111-1111-1111-1111-111111111111
-    window: 168h # 7 days; Go duration syntax has no day unit
-    score_name: helpfulness
-    observes:
+        trace_name: triage-agent
       - kind: deployment
         namespace: naira-deps
         name: escalation-agent
+        trace_name: escalation-agent
