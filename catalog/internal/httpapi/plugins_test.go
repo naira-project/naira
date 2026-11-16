@@ -9,14 +9,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/httpapi/mocks"
 )
 
 func TestListPluginsEndpoint(t *testing.T) {
-	router := newTestRouter(t, routerDeps{plugins: catalog.PluginConfigsByName{
+	router, err := NewRouter(&mocks.CatalogReaderMock{}, &mocks.PluginRunnerMock{}, catalog.PluginConfigsByName{
 		"zeta":   {Schedule: "0 0 * * *"},
 		"alpha":  {Schedule: "*/5 * * * *"},
 		"manual": {},
-	}})
+	}, discardLogger, testKeycloak)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name            string
@@ -60,9 +62,10 @@ func TestListPluginsEndpoint(t *testing.T) {
 }
 
 func TestGetPluginEndpoint(t *testing.T) {
-	router := newTestRouter(t, routerDeps{plugins: catalog.PluginConfigsByName{
+	router, err := NewRouter(&mocks.CatalogReaderMock{}, &mocks.PluginRunnerMock{}, catalog.PluginConfigsByName{
 		"mlflow": {Schedule: "*/5 * * * *"},
-	}})
+	}, discardLogger, testKeycloak)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name           string
