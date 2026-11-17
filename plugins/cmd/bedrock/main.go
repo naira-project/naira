@@ -137,9 +137,9 @@ type Plugin struct {
 }
 
 // cloudWatchClient is the subset of *cloudwatch.Client used by this plugin.
-type cloudWatchClient struct {
-	listMetrics   listMetricsFunc
-	getMetricData getMetricDataFunc
+type cloudWatchClient interface {
+	ListMetrics(context.Context, *cloudwatch.ListMetricsInput, ...func(*cloudwatch.Options)) (*cloudwatch.ListMetricsOutput, error)
+	GetMetricData(context.Context, *cloudwatch.GetMetricDataInput, ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error)
 }
 
 type foundationModel struct {
@@ -164,10 +164,6 @@ type modelUsage struct {
 // plugin, so tests can substitute a fake implementation.
 type listFoundationModelsFunc func(context.Context, *bedrock.ListFoundationModelsInput, ...func(*bedrock.Options)) (*bedrock.ListFoundationModelsOutput, error)
 
-type listMetricsFunc func(context.Context, *cloudwatch.ListMetricsInput, ...func(*cloudwatch.Options)) (*cloudwatch.ListMetricsOutput, error)
-
-type getMetricDataFunc func(context.Context, *cloudwatch.GetMetricDataInput, ...func(*cloudwatch.Options)) (*cloudwatch.GetMetricDataOutput, error)
-
 func New(cfg config, logger *log.Logger) *Plugin {
 	return &Plugin{
 		logger: logger,
@@ -182,13 +178,9 @@ func New(cfg config, logger *log.Logger) *Plugin {
 		newCloudWatchClient: func(ctx context.Context, region string) (cloudWatchClient, error) {
 			awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region))
 			if err != nil {
-				return cloudWatchClient{}, fmt.Errorf("loading AWS config for region %q: %w", region, err)
+				return nil, fmt.Errorf("loading AWS config for region %q: %w", region, err)
 			}
-			client := cloudwatch.NewFromConfig(awsCfg)
-			return cloudWatchClient{
-				listMetrics:   client.ListMetrics,
-				getMetricData: client.GetMetricData,
-			}, nil
+			return cloudwatch.NewFromConfig(awsCfg), nil
 		},
 	}
 }
@@ -385,7 +377,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 		return nil, fmt.Errorf("creating CloudWatch client for region %q: %w", region, err)
 	}
 
-	activeModelIDs, err := listActiveModelIDs(ctx, client.listMetrics)
+	activeModelIDs, err := listActiveModelIDs(ctx, client)
 	if err != nil {
 		return nil, fmt.Errorf("listing active Bedrock models: %w", err)
 	}
@@ -425,7 +417,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 
 		var nextToken *string
 		for {
-			out, err := client.getMetricData(ctx, &cloudwatch.GetMetricDataInput{
+			out, err := client.GetMetricData(ctx, &cloudwatch.GetMetricDataInput{
 				StartTime:         &startTime,
 				EndTime:           &endTime,
 				MetricDataQueries: batch,
@@ -469,12 +461,12 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 // Invocations series that CloudWatch holds data for. CloudWatch retains
 // metric listings for two weeks, so the result is a superset of the models
 // active within a shorter lookback window.
-func listActiveModelIDs(ctx context.Context, listMetrics listMetricsFunc) (map[string]struct{}, error) {
+func listActiveModelIDs(ctx context.Context, client cloudWatchClient) (map[string]struct{}, error) {
 	modelIDs := make(map[string]struct{})
 
 	var nextToken *string
 	for {
-		out, err := listMetrics(ctx, &cloudwatch.ListMetricsInput{
+		out, err := client.ListMetrics(ctx, &cloudwatch.ListMetricsInput{
 			Namespace:  aws.String(metricNamespaceBedrock),
 			MetricName: aws.String("Invocations"),
 			Dimensions: []cwtypes.DimensionFilter{
