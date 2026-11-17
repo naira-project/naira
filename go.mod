@@ -22,6 +22,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/k3s v0.44.0
+	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	go-simpler.org/env v0.12.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/grpc v1.83.2
