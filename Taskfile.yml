@@ -57,6 +57,16 @@ tasks:
     cmds:
       - golangci-lint run
 
+  go:generate:
+    desc: Generate go files (e.g. mocks) - MAY TAKE LONG TIME (use go:generate:short for a faster subset)
+    cmds:
+      - go generate ./...
+
+  go:generate:short:
+    desc: Generate go files (e.g. mocks) - a faster subset of go:generate
+    cmds:
+      - go generate -tags short ./...
+
   chart:check:
     desc: Run the Helm chart checks CI runs (render tests, ct lint, kubeconform)
     cmds:
