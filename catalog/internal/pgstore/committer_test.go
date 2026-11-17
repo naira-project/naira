@@ -353,15 +353,13 @@ func TestSnapshotCommitter_ConcurrentPluginsSharingNodes(t *testing.T) {
 		var wg sync.WaitGroup
 		errs := make([]error, plugins)
 		for i := range plugins {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				claims := []catalog.NodeClaim{nodeClaim(shared, nil)}
 				if withOwnNode {
 					claims = append(claims, nodeClaim(nodeID("service", fmt.Sprintf("own-%d", i)), nil))
 				}
 				_, _, errs[i] = e.apply(t, fmt.Sprintf("plugin%d", i), uuid.New(), claims, nil)
-			}()
+			})
 		}
 		wg.Wait()
 		for i, err := range errs {

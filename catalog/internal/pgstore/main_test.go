@@ -94,7 +94,7 @@ func run(m *testing.M) int {
 	defer adminPool.Close()
 
 	// CREATE DATABASE ... TEMPLATE fails while anyone is connected to the
-	// template, and server-side sessions can outlive pool.Close() briefly.
+	// template, and server-side sessions can outlive templatePool.Close() briefly.
 	if err := waitForNoSessions(ctx, templateDB); err != nil {
 		fmt.Fprintf(os.Stderr, "waiting for template database to become idle: %v\n", err)
 		return 1
@@ -174,8 +174,7 @@ func newEnv(t *testing.T) *env {
 }
 
 // apply creates a pending operation and completes it with the given snapshot.
-// It reports errors instead of failing the test, so it is safe to call from
-// goroutines.
+// It reports errors instead of failing the test.
 func (e *env) apply(
 	t *testing.T,
 	plugin string,
@@ -199,7 +198,6 @@ func (e *env) apply(
 	return upsertedNodes, upsertedRelations, nil
 }
 
-// mustApply is apply for the main test goroutine.
 func (e *env) mustApply(
 	t *testing.T,
 	plugin string,
@@ -213,8 +211,6 @@ func (e *env) mustApply(
 	require.NoError(t, err)
 }
 
-// countRows is raw SQL on purpose: the stores cannot show whether orphaned
-// rows were really deleted.
 func (e *env) countRows(t *testing.T, table string) int {
 	t.Helper()
 
