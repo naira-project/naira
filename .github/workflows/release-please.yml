@@ -213,7 +213,12 @@ jobs:
         run: |
           helm dependency build deploy/charts/naira
           helm package deploy/charts/naira --version "${TAG#v}" --app-version "$TAG"
-          helm push "naira-${TAG#v}.tgz" "$CHART_REGISTRY"
+          # GHCR sometimes can't find a just-uploaded manifest yet when helm tags it.
+          for attempt in 1 2 3; do
+            helm push "naira-${TAG#v}.tgz" "$CHART_REGISTRY" && break
+            [ "$attempt" -eq 3 ] && exit 1
+            sleep $((attempt * 10))
+          done
       - name: Verify the pushed chart
         run: helm show chart "${CHART_REGISTRY}/naira" --version "${TAG#v}" | grep -E '^(version|appVersion):'
 
