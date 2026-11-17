@@ -14,9 +14,9 @@ import (
 )
 
 // NewRouter wires up the catalog HTTP API.
-// catalogService serves read-only graph queries (nodes/relations);
+// catalogReader serves read-only graph queries (nodes/relations);
 // runner drives and reports on asynchronous plugin runs (plugins/operations).
-func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugins catalog.PluginConfigsByName, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
+func NewRouter(catalogReader catalog.Reader, runner pluginrun.PluginRunner, plugins catalog.PluginConfigsByName, logger *log.Logger, kc keycloak.Config) (http.Handler, error) {
 	authMiddleware, err := keycloak.NewAuthMiddleware(kc)
 	if err != nil {
 		return nil, fmt.Errorf("creating auth middleware: %w", err)
@@ -48,11 +48,11 @@ func NewRouter(catalogService *catalog.Service, runner *pluginrun.Runner, plugin
 		r.Get("/operations", newListOperationsHandler(runner, logger))
 		r.Get("/operations/{operationId}", newGetOperationHandler(runner))
 
-		r.Get("/nodes", newListNodesHandler(catalogService, logger))
-		r.Get("/nodes/{kind}/*", newGetNodeHandler(catalogService))
+		r.Get("/nodes", newListNodesHandler(catalogReader, logger))
+		r.Get("/nodes/{kind}/*", newGetNodeHandler(catalogReader))
 
-		r.Get("/relations", newListRelationsHandler(catalogService, logger))
-		r.Get("/kinds", newListKindsHandler(catalogService, logger))
+		r.Get("/relations", newListRelationsHandler(catalogReader, logger))
+		r.Get("/kinds", newListKindsHandler(catalogReader, logger))
 	})
 
 	return router, nil

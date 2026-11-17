@@ -29,7 +29,7 @@ interface RunResult {
 function isStale(op: OperationResource) {
   if (op.done) return false;
 
-  const startTime = new Date(op.metadata.startTime).getTime();
+  const startTime = op.metadata.startTime ? new Date(op.metadata.startTime).getTime() : Number.NaN;
   const createdTime = new Date(op.metadata.createdAt).getTime();
   const referenceTime = Number.isFinite(startTime) && startTime > 0 ? startTime : createdTime;
 
