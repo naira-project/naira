@@ -17,11 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-//go:generate go run ./testdata/gen
-//go:generate go run ./testdata/gen -in testdata/app-of-apps/input.yaml -out testdata/app-of-apps
-//go:generate go run ./testdata/gen -in testdata/cluster-scoped/input.yaml -out testdata/cluster-scoped
-//go:generate go run ./testdata/gen -in testdata/oci/input.yaml -out testdata/oci
-
 const mockClusterID = "mock-cluster"
 
 // TestCollect runs the plugin on real Application objects scraped from the
