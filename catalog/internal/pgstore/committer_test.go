@@ -95,7 +95,7 @@ func TestSnapshotCommitter_NodeSurvivesWhileAnyPluginClaimsIt(t *testing.T) {
 	assert.Equal(t, 0, e.countRows(t, "relation_plugin_claims"))
 
 	// Step 4: docs moves on to c. Now nobody claims b, so it must disappear
-	// from the nodes table, not only from the API output.
+	// from the nodes table.
 	e.mustApply(t, "docs", snap4,
 		[]catalog.NodeClaim{
 			nodeClaim(c, nil),
@@ -319,7 +319,7 @@ func TestSnapshotCommitter_FailedSnapshotKeepsPreviousGraph(t *testing.T) {
 	a := nodeID("service", "a")
 	e.mustApply(t, "k8s", snap1, []catalog.NodeClaim{nodeClaim(a, map[string]string{"v": "1"})}, nil)
 
-	// Second snapshot is rejected after a would have been pruned and replaced.
+	// Second snapshot is rejected
 	_, _, err := e.apply(t, "k8s", snap2,
 		[]catalog.NodeClaim{nodeClaim(nodeID("service", "b"), nil)},
 		[]catalog.RelationClaim{relationClaim("calls", nodeID("service", "b"), nodeID("service", "ghost"), nil)},
