@@ -22,9 +22,9 @@ func TestMemoryStoreCreateAndGet(t *testing.T) {
 	store := NewMemoryStore()
 	op := newTestOperation("plugin-run-1", "mlflow", time.Now())
 
-	require.NoError(t, store.Create(op))
+	require.NoError(t, store.Create(t.Context(), op))
 
-	got, err := store.Get(op.Name)
+	got, err := store.Get(t.Context(), op.Name)
 	require.NoError(t, err)
 	assert.Equal(t, op, got)
 }
@@ -32,7 +32,7 @@ func TestMemoryStoreCreateAndGet(t *testing.T) {
 func TestMemoryStoreGetNotFound(t *testing.T) {
 	store := NewMemoryStore()
 
-	_, err := store.Get("plugin-run-missing")
+	_, err := store.Get(t.Context(), "plugin-run-missing")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrNotFound))
 }
@@ -41,8 +41,8 @@ func TestMemoryStoreCreateDuplicateName(t *testing.T) {
 	store := NewMemoryStore()
 	op := newTestOperation("plugin-run-1", "mlflow", time.Now())
 
-	require.NoError(t, store.Create(op))
-	err := store.Create(op)
+	require.NoError(t, store.Create(t.Context(), op))
+	err := store.Create(t.Context(), op)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrAlreadyExists))
 }
@@ -50,11 +50,11 @@ func TestMemoryStoreCreateDuplicateName(t *testing.T) {
 func TestMemoryStoreUpdateStateSetsRunningStartTime(t *testing.T) {
 	store := NewMemoryStore()
 	op := newTestOperation("plugin-run-1", "mlflow", time.Now())
-	require.NoError(t, store.Create(op))
+	require.NoError(t, store.Create(t.Context(), op))
 
-	require.NoError(t, store.UpdateState(op.Name, StateRunning, nil, 0, 0))
+	require.NoError(t, store.UpdateState(t.Context(), op.Name, StateRunning, nil, 0, 0))
 
-	got, err := store.Get(op.Name)
+	got, err := store.Get(t.Context(), op.Name)
 	require.NoError(t, err)
 	assert.Equal(t, StateRunning, got.State)
 	assert.False(t, got.StartTime.IsZero(), "start time should be set on RUNNING")
@@ -64,12 +64,12 @@ func TestMemoryStoreUpdateStateSetsRunningStartTime(t *testing.T) {
 func TestMemoryStoreUpdateStateSucceededSetsResult(t *testing.T) {
 	store := NewMemoryStore()
 	op := newTestOperation("plugin-run-1", "mlflow", time.Now())
-	require.NoError(t, store.Create(op))
+	require.NoError(t, store.Create(t.Context(), op))
 
-	require.NoError(t, store.UpdateState(op.Name, StateRunning, nil, 0, 0))
-	require.NoError(t, store.UpdateState(op.Name, StateSucceeded, nil, 3, 5))
+	require.NoError(t, store.UpdateState(t.Context(), op.Name, StateRunning, nil, 0, 0))
+	require.NoError(t, store.UpdateState(t.Context(), op.Name, StateSucceeded, nil, 3, 5))
 
-	got, err := store.Get(op.Name)
+	got, err := store.Get(t.Context(), op.Name)
 	require.NoError(t, err)
 	assert.Equal(t, StateSucceeded, got.State)
 	assert.NotNil(t, got.EndTime, "end time should be set on SUCCEEDED")
@@ -81,12 +81,12 @@ func TestMemoryStoreUpdateStateSucceededSetsResult(t *testing.T) {
 func TestMemoryStoreUpdateStateFailedSetsError(t *testing.T) {
 	store := NewMemoryStore()
 	op := newTestOperation("plugin-run-1", "mlflow", time.Now())
-	require.NoError(t, store.Create(op))
+	require.NoError(t, store.Create(t.Context(), op))
 
 	statusErr := &StatusError{Message: "boom"}
-	require.NoError(t, store.UpdateState(op.Name, StateFailed, statusErr, 0, 0))
+	require.NoError(t, store.UpdateState(t.Context(), op.Name, StateFailed, statusErr, 0, 0))
 
-	got, err := store.Get(op.Name)
+	got, err := store.Get(t.Context(), op.Name)
 	require.NoError(t, err)
 	assert.Equal(t, StateFailed, got.State)
 	assert.NotNil(t, got.EndTime)
@@ -96,7 +96,7 @@ func TestMemoryStoreUpdateStateFailedSetsError(t *testing.T) {
 func TestMemoryStoreUpdateStateNotFound(t *testing.T) {
 	store := NewMemoryStore()
 
-	err := store.UpdateState("missing", StateRunning, nil, 0, 0)
+	err := store.UpdateState(t.Context(), "missing", StateRunning, nil, 0, 0)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrNotFound))
 }
@@ -105,10 +105,10 @@ func TestMemoryStoreListFiltersByPlugin(t *testing.T) {
 	store := NewMemoryStore()
 	now := time.Now()
 
-	require.NoError(t, store.Create(newTestOperation("plugin-run-1", "mlflow", now)))
-	require.NoError(t, store.Create(newTestOperation("plugin-run-2", "litellm", now)))
+	require.NoError(t, store.Create(t.Context(), newTestOperation("plugin-run-1", "mlflow", now)))
+	require.NoError(t, store.Create(t.Context(), newTestOperation("plugin-run-2", "litellm", now)))
 
-	ops, err := store.List(Filter{Plugin: "mlflow"})
+	ops, err := store.List(t.Context(), Filter{Plugin: "mlflow"})
 	require.NoError(t, err)
 	require.Len(t, ops, 1)
 	assert.Equal(t, "mlflow", ops[0].Plugin)
@@ -119,13 +119,13 @@ func TestMemoryStoreListFiltersByState(t *testing.T) {
 	now := time.Now()
 
 	op1 := newTestOperation("plugin-run-1", "mlflow", now)
-	require.NoError(t, store.Create(op1))
-	require.NoError(t, store.UpdateState(op1.Name, StateSucceeded, nil, 1, 1))
+	require.NoError(t, store.Create(t.Context(), op1))
+	require.NoError(t, store.UpdateState(t.Context(), op1.Name, StateSucceeded, nil, 1, 1))
 
 	op2 := newTestOperation("plugin-run-2", "litellm", now)
-	require.NoError(t, store.Create(op2))
+	require.NoError(t, store.Create(t.Context(), op2))
 
-	ops, err := store.List(Filter{State: StateSucceeded})
+	ops, err := store.List(t.Context(), Filter{State: StateSucceeded})
 	require.NoError(t, err)
 	require.Len(t, ops, 1)
 	assert.Equal(t, "mlflow", ops[0].Plugin)
@@ -138,10 +138,10 @@ func TestMemoryStoreListOrdersMostRecentFirst(t *testing.T) {
 	oldOp := newTestOperation("plugin-run-old", "mlflow", base.Add(-2*time.Hour))
 	newOp := newTestOperation("plugin-run-new", "mlflow", base)
 
-	require.NoError(t, store.Create(oldOp))
-	require.NoError(t, store.Create(newOp))
+	require.NoError(t, store.Create(t.Context(), oldOp))
+	require.NoError(t, store.Create(t.Context(), newOp))
 
-	ops, err := store.List(Filter{})
+	ops, err := store.List(t.Context(), Filter{})
 	require.NoError(t, err)
 	require.Len(t, ops, 2)
 	assert.Equal(t, newOp.Name, ops[0].Name)
@@ -159,14 +159,14 @@ func TestMemoryStoreEvictsOldestPerPlugin(t *testing.T) {
 			"mlflow",
 			base.Add(time.Duration(i)*time.Minute),
 		)
-		require.NoError(t, store.Create(op))
+		require.NoError(t, store.Create(t.Context(), op))
 	}
 
-	ops, err := store.List(Filter{Plugin: "mlflow"})
+	ops, err := store.List(t.Context(), Filter{Plugin: "mlflow"})
 	require.NoError(t, err)
 	require.Len(t, ops, maxPerPlugin)
 
 	// The oldest operation ("plugin-run-a") must have been evicted.
-	_, err = store.Get("plugin-run-a")
+	_, err = store.Get(t.Context(), "plugin-run-a")
 	assert.True(t, errors.Is(err, ErrNotFound))
 }
