@@ -191,7 +191,7 @@ export interface ErrorResource {
 
 export interface OperationMetadataResource {
   plugin: string;
-  startTime: string;
+  startTime?: string;
   endTime?: string;
   createdAt: string;
 }
