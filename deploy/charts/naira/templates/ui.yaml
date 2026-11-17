@@ -17,9 +17,14 @@ spec:
       labels:
         {{- include "naira.labels" . | nindent 8 }}
         {{- include "naira.selector" (dict "root" . "name" "ui") | nindent 8 }}
-      {{- with .Values.ui.podAnnotations }}
+      {{- if or .Values.ui.podAnnotations .Values.ui.config }}
       annotations:
+        {{- with .Values.ui.config }}
+        checksum/config: {{ toJson . | sha256sum }}
+        {{- end }}
+        {{- with .Values.ui.podAnnotations }}
         {{- toYaml . | nindent 8 }}
+        {{- end }}
       {{- end }}
     spec:
       {{- include "naira.podSpec" (dict "root" $ "name" "ui" "cfg" .Values.ui) | trim | nindent 6 }}
@@ -46,6 +51,10 @@ spec:
             - name: PROMETHEUS_ALLOWED_METHODS
               value: {{ join " " . | quote }}
             {{- end }}
+          {{- if .Values.ui.config }}
+          volumeMounts:
+            - {name: config, mountPath: /usr/share/nginx/html/config.json, subPath: config.json, readOnly: true}
+          {{- end }}
           ports:
             - {name: http, containerPort: {{ .Values.ui.port }}}
           startupProbe:
@@ -61,6 +70,24 @@ spec:
             periodSeconds: 20
           resources:
             {{- toYaml .Values.ui.resources | nindent 12 }}
+      {{- if .Values.ui.config }}
+      volumes:
+        - name: config
+          configMap: {name: ui-config}
+      {{- end }}
+{{- if .Values.ui.config }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ui-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "naira.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {{- toPrettyJson .Values.ui.config | nindent 4 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

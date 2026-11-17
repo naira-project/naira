@@ -9,13 +9,11 @@ OpenMFP Portal
 
 ## Installation
 
-Install dependencies for the root, frontend, and backend:
-
 ```bash
 npm install
-cd frontend && npm install && cd ..
-cd backend && npm install && cd ..
 ```
+
+This will install dependencies for both frontend and backend.
 
 ## Development
 

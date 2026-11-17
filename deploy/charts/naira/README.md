@@ -94,7 +94,8 @@ in a value fails the render.
 | tech-radar | 50057 | no | Config file (`config.data` or `config.existingConfigMap`) |
 | mcp-servers | 50058 | yes | — |
 | github | 50059 | no | Secret key `GITHUB_TOKEN`; RBAC: namespaces, deployments |
-| argocd | 50060 | no | Secret key `ARGOCD_TOKEN`; Env `CLUSTER_ID` |
+| bedrock | 50060 | no | Secret keys `BEDROCK_AWS_ACCESS_KEY_ID`, `BEDROCK_AWS_SECRET_ACCESS_KEY`; no RBAC |
+| argocd | 50061 | no | Secret key `ARGOCD_TOKEN`; Env `CLUSTER_ID` |
 
 ## Scheduling and security
 

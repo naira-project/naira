@@ -268,6 +268,25 @@ check "ui prometheus allowed methods joined with a space" \
   "GET HEAD" \
   "$(render --set 'ui.prometheus.allowedMethods[0]=GET' --set 'ui.prometheus.allowedMethods[1]=HEAD' \
     | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_METHODS\") | .value")"
+UI_DEPLOY='select(.kind == "Deployment" and .metadata.name == "ui")'
+check "ui config: no ConfigMap by default" \
+  "" \
+  "$(render | yq 'select(.kind == "ConfigMap" and .metadata.name == "ui-config") | .metadata.name')"
+check "ui config: no mount by default" \
+  "null" \
+  "$(render | yq "$UI | .volumeMounts")"
+check "ui config: rendered into config.json" \
+  "http://grafana:3000" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq 'select(.kind == "ConfigMap" and .metadata.name == "ui-config") | .data["config.json"] | from_json | .logs.explorerUrl')"
+check "ui config: mounted over the image's config.json" \
+  "/usr/share/nginx/html/config.json config.json" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq "$UI | .volumeMounts[0] | .mountPath + \" \" + .subPath")"
+check "ui config: pod restarts when it changes" \
+  "true" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq "$UI_DEPLOY | .spec.template.metadata.annotations | has(\"checksum/config\")")"
 check "ui image" \
   "ghcr.io/naira-project/naira-ui:${APP_VERSION}" \
   "$(render | yq "$UI | .image")"
@@ -409,6 +428,29 @@ check "github RBAC when enabled" \
 RENDER=render_raw must_fail "github on without a catalog Secret source" \
   "catalog.plugins.github reads GITHUB_TOKEN from the catalog Secret" \
   --set portal.enabled=false --set catalog.plugins.github.enabled=true \
+  --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
+
+BEDROCK=(--set catalog.plugins.bedrock.enabled=true)
+BEDROCK_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-bedrock\")"
+
+check "bedrock off by default" \
+  "" \
+  "$(render | yq "$BEDROCK_SIDECAR | .name")"
+check "bedrock AWS credentials from the catalog Secret" \
+  "catalog-secrets/BEDROCK_AWS_ACCESS_KEY_ID catalog-secrets/BEDROCK_AWS_SECRET_ACCESS_KEY" \
+  "$(render "${BEDROCK[@]}" \
+    | yq "$BEDROCK_SIDECAR | .env[] | select(.name == \"AWS_ACCESS_KEY_ID\" or .name == \"AWS_SECRET_ACCESS_KEY\")
+          | .valueFrom.secretKeyRef | .name + \"/\" + .key" | paste -sd' ' -)"
+check "bedrock registered in plugins.yaml" \
+  "localhost:50060" \
+  "$(render "${BEDROCK[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.bedrock.address')"
+check "bedrock needs no RBAC" \
+  "" \
+  "$(render "${BEDROCK[@]}" \
+    | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-bedrock") | .metadata.name')"
+RENDER=render_raw must_fail "bedrock on without a catalog Secret source" \
+  "catalog.plugins.bedrock reads AWS_ACCESS_KEY_ID from the catalog Secret" \
+  --set portal.enabled=false --set catalog.plugins.bedrock.enabled=true \
   --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
 
 check "depl-uses-litellm off by default: no Secret read grant" \

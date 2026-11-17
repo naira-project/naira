@@ -1,0 +1,166 @@
+# Node kinds and relation shapes emitted by Naira plugins.
+# Add each node kind and relation under every plugin that can emit it.
+plugins:
+  - plugin: argocd
+    nodes:
+      - Application.argocd
+      - deployment
+      - service
+      - k8s_resource
+      - git_repository
+    relations:
+      - kind: sourced_from
+        from: Application.argocd
+        to: git_repository
+      - kind: describes
+        from: Application.argocd
+        to: deployment
+      - kind: deployed_from
+        from: deployment
+        to: git_repository
+      - kind: deployed_from
+        from: service
+        to: git_repository
+      - kind: deployed_from
+        from: k8s_resource
+        to: git_repository
+
+  - plugin: bedrock
+    nodes:
+      - model
+      - inference_endpoint
+    relations:
+      - kind: serves_model
+        from: inference_endpoint
+        to: model
+
+  - plugin: depl_calls_svc
+    nodes:
+      - deployment
+      - service
+    relations:
+      - kind: calls
+        from: deployment
+        to: service
+
+  - plugin: depl_uses_litellm
+    nodes:
+      - deployment
+      - model
+    relations:
+      - kind: uses_model
+        from: deployment
+        to: model
+
+  - plugin: depl_uses_thalamus
+    nodes:
+      - deployment
+      - model
+    relations:
+      - kind: uses_model
+        from: deployment
+        to: model
+
+  - plugin: fluxcd
+    nodes:
+      - Kustomization.fluxcd
+      - HelmChart.fluxcd
+      - GitRepository.fluxcd
+      - deployment
+      - git_repository
+    relations:
+      - kind: sourced_from
+        from: Kustomization.fluxcd
+        to: GitRepository.fluxcd
+      - kind: sourced_from
+        from: HelmChart.fluxcd
+        to: GitRepository.fluxcd
+      - kind: references
+        from: GitRepository.fluxcd
+        to: git_repository
+      - kind: describes
+        from: Kustomization.fluxcd
+        to: deployment
+      - kind: describes
+        from: HelmChart.fluxcd
+        to: deployment
+      - kind: deployed_from
+        from: deployment
+        to: git_repository
+
+  - plugin: github
+    nodes:
+      - deployment
+      - git_repository
+      - owner
+    relations:
+      - kind: built_from
+        from: deployment
+        to: git_repository
+      - kind: owned_by
+        from: git_repository
+        to: owner
+
+  - plugin: litellm
+    nodes:
+      - application
+      - mcp_server
+      - model
+      - inference_endpoint
+      - mcp_tool
+    relations:
+      - kind: uses_model
+        from: application
+        to: model
+      - kind: serves_model
+        from: inference_endpoint
+        to: model
+      - kind: exposes
+        from: mcp_server
+        to: mcp_tool
+
+  - plugin: mcp_servers
+    nodes:
+      - mcp_server
+      - mcp_tool
+    relations:
+      - kind: exposes
+        from: mcp_server
+        to: mcp_tool
+
+  - plugin: mlflow
+    nodes:
+      - model
+      - dataset
+    relations:
+      - kind: trained_on
+        from: model
+        to: dataset
+
+  - plugin: openai_api_models
+    nodes:
+      - model
+    relations: []
+
+  - plugin: openmetadata
+    nodes:
+      - dataset
+    relations:
+      - kind: derived_from
+        from: dataset
+        to: dataset
+
+  - plugin: tech_radar
+    nodes:
+      - tech_radar # The plugin does not emit relations to entries.
+      - tech_radar_entry
+    relations: []
+
+  - plugin: thalamus
+    nodes:
+      - model
+      - git_repository
+    relations:
+      - kind: sourced_from
+        from: model
+        to: git_repository

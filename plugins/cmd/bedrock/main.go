@@ -25,7 +25,7 @@
 // Then:
 //
 //  4. Verify Bedrock model access in the configured regions (Bedrock -> Model
-//     catalog, matching BEDROCK_REGIONS), and confirm you've invoked at least
+//     catalog, matching REGIONS), and confirm you've invoked at least
 //     one model per region. CloudWatch only reports InputTokenCount,
 //     OutputTokenCount and Invocations for models that have received
 //     traffic. Otherwise the plugin just shows zero usage.
@@ -369,7 +369,7 @@ func (p *Plugin) fetchTokenUsage(ctx context.Context, region string, models []fo
 		return nil, fmt.Errorf("creating CloudWatch client for region %q: %w", region, err)
 	}
 
-	// TODO: use dynamic time intervals in the UI, not just from BEDROCK_METRICS_LOOKBACK
+	// TODO: use dynamic time intervals in the UI, not just from METRICS_LOOKBACK
 	lookback := p.config.MetricsLookback
 	endTime := time.Now().UTC()
 	startTime := endTime.Add(-lookback)

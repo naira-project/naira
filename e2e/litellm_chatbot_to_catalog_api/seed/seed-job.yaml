@@ -1,4 +1,4 @@
-# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG} ${E2E_IMAGE}
 #
 # This scenario's litellm models come from litellm.yaml's static config, not
 # a seed script — this Job mints chatbot1 a model-scoped LiteLLM key (see
@@ -48,7 +48,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: seed
-          image: seed:${TAG}
+          image: ${E2E_IMAGE}:seed-${TAG}
           imagePullPolicy: IfNotPresent
           env:
             - name: CATALOG_URL

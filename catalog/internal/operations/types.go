@@ -2,7 +2,16 @@
 // long-running asynchronous work (AIP-151).
 package operations
 
-import "time"
+import (
+	"context"
+	"errors"
+	"time"
+)
+
+var (
+	ErrNotFound      = errors.New("operation not found")
+	ErrAlreadyExists = errors.New("operation already exists")
+)
 
 type State string
 
@@ -43,8 +52,8 @@ type Filter struct {
 }
 
 type Store interface {
-	Create(op Operation) error
-	Get(name string) (Operation, error)
-	List(filter Filter) ([]Operation, error)
-	UpdateState(name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error
+	Create(ctx context.Context, op Operation) error
+	Get(ctx context.Context, name string) (Operation, error)
+	List(ctx context.Context, filter Filter) ([]Operation, error)
+	UpdateState(ctx context.Context, name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error
 }

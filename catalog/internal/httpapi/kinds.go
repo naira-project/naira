@@ -22,9 +22,12 @@ var kindListOptionsSpec = listOptionsSpec{
 // Supported query params:
 // - pageSize
 // - pageToken
-func newListKindsHandler(service *catalog.Service, logger *log.Logger) http.HandlerFunc {
+func newListKindsHandler(reader catalog.Reader, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(kindListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
-		kinds := service.ListKinds(r.Context())
+		kinds, err := reader.ListKinds(r.Context())
+		if err != nil {
+			return fmt.Errorf("listing kinds: %w", err)
+		}
 
 		page, nextPageToken, totalSize, err := paginate(kinds, options.pageSize, options.offset, "kinds", logger)
 		if err != nil {
