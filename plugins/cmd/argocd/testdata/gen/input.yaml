@@ -1,0 +1,212 @@
+#WANT_OK: helm-guestbook, kustomize-guestbook, multi-source, multi-path, k8s-resource, namespaced-rbac
+#WANT_RUNNING: mid-sync
+#WANT_FAIL: remote-cluster
+# The gb-frontend image has no arm64 build, so its pods never start on arm64
+# hosts. Nginx is multi-arch and works good enough as a replacement.
+#REPLACE: gcr.io/google-samples/gb-frontend:v5=docker.io/library/nginx:1.27-alpine
+
+# The following manifests create a few Applications deploying from a pinned
+# revision of: https://github.com/argoproj/argocd-example-apps
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: ["*"]
+  destinations:
+  - {server: "*", namespace: "*"}
+  clusterResourceWhitelist:
+  - {group: "*", kind: "*"}
+---
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: helm-guestbook
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: helm-guestbook
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: helm-guestbook
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
+---
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kustomize-guestbook
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kustomize-guestbook
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: kustomize-guestbook
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
+---
+
+# Two spec.sources (same repo, but one used as helm chart template, another as
+# chart values) in one Application. The chart's default values.yaml is used,
+# because values-production.yaml makes the Service a LoadBalancer, which stays
+# Progressing in k3s without a load balancer.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: multi-source
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: multi-source
+  sources:
+  - repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: helm-guestbook
+    helm:
+      valueFiles:
+      - $values/helm-guestbook/values.yaml
+  - repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    ref: values
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
+---
+
+# Two sources from the same repository, with different paths.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: multi-path
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: multi-path
+  sources:
+  - repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: guestbook
+  - repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: kustomize-guestbook
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
+---
+
+# A resource other than Deployment and Service (a ConfigMap), which is emitted
+# as a k8s_resource Node.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: k8s-resource
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: k8s-resource-test
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: lightweight/app-a
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
+---
+
+# A sync that stays in progress: the PreSync hook Job of the "pre-post-sync"
+# example cannot be created, because the namespace quota forbids Jobs, so the
+# sync never leaves the Running phase.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mid-sync
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: no-jobs
+  namespace: mid-sync
+spec:
+  hard:
+    count/jobs.batch: "0"
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mid-sync
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mid-sync
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: pre-post-sync
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    retry: {limit: -1, backoff: {duration: 1h, maxDuration: 1h}}
+---
+
+# A sync that fails because the destination cluster is unreachable.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: remote-cluster
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://other.example.com
+    namespace: default
+  source:
+    repoURL: https://github.com/argoproj/argocd-example-apps
+    targetRevision: 8088f4c0d970abb09e250248cc97e35623447cb5
+    path: guestbook
+---
+
+# A Helm chart from a chart repository (not Git). It renders namespaced
+# resources of a non-core API group (Role, RoleBinding), and a namespaced one of
+# the core group (ServiceAccount).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: namespaced-rbac
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: namespaced-rbac
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-state-metrics
+    targetRevision: 8.8.0
+    helm:
+      valuesObject:
+        rbac:
+          useClusterRole: false
+        namespaces: namespaced-rbac
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]

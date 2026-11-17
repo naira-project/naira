@@ -9,6 +9,8 @@ const (
 	NodeKindFluxKustomization = "Kustomization.fluxcd"
 	NodeKindFluxHelmChart     = "HelmChart.fluxcd"
 	NodeKindFluxGitRepository = "GitRepository.fluxcd"
+	NodeKindArgoApplication   = "Application.argocd"
+	NodeKindK8sResource       = "k8s_resource"
 	NodeKindGitRepository     = "git_repository"
 	NodeKindOwner             = "owner"
 	NodeKindMCPServer         = "mcp_server"

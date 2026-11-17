@@ -234,6 +234,22 @@ catalog:
         AWS_SECRET_ACCESS_KEY: {secretKeyRef: {key: BEDROCK_AWS_SECRET_ACCESS_KEY}}
         METRICS_LOOKBACK: "24h"
 
+    argocd:
+      # Off by default: CLUSTER_ID is required, and argocd-server must be
+      # reachable (see the plugin README). Add the API token to the catalog
+      # Secret (key ARGOCD_TOKEN) before enabling.
+      enabled: false
+      image: {repository: naira-plugin-argocd, tag: ""}
+      port: 50061
+      schedule: "*/1 * * * *"
+      pathPrefix: argocd
+      env:
+        ARGOCD_BASE_URL: http://argocd-server.argocd.svc.cluster.local
+        # UID of the kube-system namespace of the cluster ArgoCD deploys to:
+        # kubectl get ns kube-system -o jsonpath='{.metadata.uid}'
+        CLUSTER_ID: ""
+        ARGOCD_TOKEN: {secretKeyRef: {key: ARGOCD_TOKEN}}
+
 ui:
   enabled: true
   replicas: 1
