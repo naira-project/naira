@@ -65,10 +65,14 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 		if strings.Contains(id.Kind, "/") {
 			return fmt.Errorf("%w: node kind %q contains reserved separator '/'", ErrInvalidIngestion, id.Kind)
 		}
+		if _, exists := availableNodes[id]; exists {
+			return fmt.Errorf("%w: duplicate node ID %q/%q", ErrInvalidIngestion, id.Kind, id.Path)
+		}
 
 		availableNodes[id] = struct{}{}
 	}
 
+	availableRelations := make(map[RelationID]struct{}, len(relations))
 	for _, relation := range relations {
 		fromID := relation.From
 		toID := relation.To
@@ -83,6 +87,14 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 		case strings.Contains(toID.Kind, "/"):
 			return fmt.Errorf("%w: target node kind %q contains reserved separator '/'", ErrInvalidIngestion, toID.Kind)
 		}
+
+		relationID := RelationID{Kind: relation.Kind, From: fromID, To: toID}
+		if _, exists := availableRelations[relationID]; exists {
+			return fmt.Errorf("%w: duplicate relation ID %q %q/%q -> %q/%q",
+				ErrInvalidIngestion, relation.Kind, fromID.Kind, fromID.Path, toID.Kind, toID.Path)
+		}
+		availableRelations[relationID] = struct{}{}
+
 		if _, ok := availableNodes[fromID]; !ok {
 			return fmt.Errorf("%w: source node %q/%q not found", ErrInvalidIngestion, fromID.Kind, fromID.Path)
 		}

@@ -186,36 +186,48 @@ func TestSnapshotCommitter_ReapplyKeepsRowIDsAndReplacesClaim(t *testing.T) {
 	}, got)
 }
 
-func TestSnapshotCommitter_DuplicateClaimsInOneSnapshotLastWins(t *testing.T) {
+func TestSnapshotCommitter_DuplicateIDsAreRejected(t *testing.T) {
 	t.Parallel()
-	e := newEnv(t)
+
 	a := nodeID("service", "a")
 	b := nodeID("service", "b")
+	validNodes := []catalog.NodeClaim{nodeClaim(a, nil), nodeClaim(b, nil)}
 
-	result, err := e.apply(t, "k8s", snap1,
-		[]catalog.NodeClaim{
-			nodeClaim(a, map[string]string{"v": "first"}),
-			nodeClaim(b, nil),
-			nodeClaim(a, map[string]string{"v": "last"}),
+	tests := []struct {
+		name      string
+		nodes     []catalog.NodeClaim
+		relations []catalog.RelationClaim
+	}{
+		{
+			name: "duplicate node ID",
+			nodes: []catalog.NodeClaim{
+				nodeClaim(a, map[string]string{"v": "first"}),
+				nodeClaim(a, map[string]string{"v": "second"}),
+			},
 		},
-		[]catalog.RelationClaim{
-			relationClaim("calls", a, b, map[string]string{"v": "first"}),
-			relationClaim("calls", a, b, map[string]string{"v": "last"}),
+		{
+			name:  "duplicate relation ID",
+			nodes: validNodes,
+			relations: []catalog.RelationClaim{
+				relationClaim("calls", a, b, map[string]string{"v": "first"}),
+				relationClaim("calls", a, b, map[string]string{"v": "second"}),
+			},
 		},
-	)
-	require.NoError(t, err)
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			e := newEnv(t)
 
-	assert.Equal(t, 2, result.NodesUpserted)
-	assert.Equal(t, 1, result.RelationsUpserted)
+			_, err := e.apply(t, "k8s", snap1, tt.nodes, tt.relations)
 
-	gotNode, err := e.graph.GetNode(t.Context(), a)
-	require.NoError(t, err)
-	assert.Equal(t, map[string]string{"v": "last"}, gotNode.PluginClaims["k8s"].Properties)
-
-	gotRelations, err := e.graph.ListRelations(t.Context())
-	require.NoError(t, err)
-	require.Len(t, gotRelations, 1)
-	assert.Equal(t, map[string]string{"v": "last"}, gotRelations[0].PluginClaims["k8s"].Properties)
+			require.ErrorIs(t, err, catalog.ErrInvalidIngestion)
+			assert.Equal(t, 0, e.countRows(t, "nodes"))
+			assert.Equal(t, 0, e.countRows(t, "node_plugin_claims"))
+			assert.Equal(t, 0, e.countRows(t, "relations"))
+			assert.Equal(t, 0, e.countRows(t, "relation_plugin_claims"))
+		})
+	}
 }
 
 func TestSnapshotCommitter_SameNodePathDifferentKindAreDistinct(t *testing.T) {

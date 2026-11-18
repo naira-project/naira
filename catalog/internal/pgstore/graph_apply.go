@@ -31,9 +31,6 @@ func applySnapshot(
 		return SnapshotResult{}, fmt.Errorf("acquiring snapshot lock: %w", err)
 	}
 
-	nodes = dedupeNodeClaims(nodes)
-	relations = dedupeRelationClaims(relations)
-
 	nodeIDs, err := upsertNodes(ctx, tx, pluginName, snapshotID, nodes)
 	if err != nil {
 		return SnapshotResult{}, fmt.Errorf("upserting snapshot nodes: %w", err)
@@ -251,39 +248,4 @@ func upsertRelations(
 	}
 
 	return nil
-}
-
-// dedupeNodeClaims collapses repeated node IDs within one snapshot, last
-// claim wins.
-func dedupeNodeClaims(nodes []catalog.NodeClaim) []catalog.NodeClaim {
-	index := make(map[catalog.NodeID]int, len(nodes))
-	out := make([]catalog.NodeClaim, 0, len(nodes))
-	for _, n := range nodes {
-		if i, ok := index[n.ID]; ok {
-			out[i] = n
-			continue
-		}
-		index[n.ID] = len(out)
-		out = append(out, n)
-	}
-	return out
-}
-
-func dedupeRelationClaims(relations []catalog.RelationClaim) []catalog.RelationClaim {
-	index := make(map[catalog.RelationID]int, len(relations))
-	out := make([]catalog.RelationClaim, 0, len(relations))
-	for _, r := range relations {
-		key := catalog.RelationID{
-			Kind: r.Kind,
-			From: r.From,
-			To:   r.To,
-		}
-		if i, ok := index[key]; ok {
-			out[i] = r
-			continue
-		}
-		index[key] = len(out)
-		out = append(out, r)
-	}
-	return out
 }
