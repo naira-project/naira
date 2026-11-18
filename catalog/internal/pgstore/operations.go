@@ -19,6 +19,9 @@ const selectOperationSQL = `
 	FROM operations
 `
 
+// Create inserts op and evicts the plugin's operations beyond the newest
+// [maxOperationsPerPlugin]. Ordering is by CreatedAt, so an op created with an
+// old CreatedAt may be evicted immediately.
 func (s *OperationStore) Create(ctx context.Context, op operations.Operation) error {
 	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `
@@ -38,7 +41,7 @@ func (s *OperationStore) Create(ctx context.Context, op operations.Operation) er
 			WHERE name IN (
 				SELECT name FROM operations
 				WHERE plugin = $1
-				ORDER BY created_at DESC
+				ORDER BY created_at DESC, name DESC
 				OFFSET $2
 			)
 		`, op.Plugin, maxOperationsPerPlugin); err != nil {
@@ -87,12 +90,15 @@ func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]
 	return result, nil
 }
 
+// UpdateState moves an operation to state. Operations that already succeeded
+// or failed are final: such updates return [operations.ErrInvalidTransition].
 func (s *OperationStore) UpdateState(ctx context.Context, name string, state operations.State, statusErr *operations.StatusError, nodesUpserted, relationsUpserted int) error {
 	return updateOperationState(ctx, s.pool, name, state, statusErr, nodesUpserted, relationsUpserted)
 }
 
 type operationQuerier interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 func updateOperationState(
@@ -114,27 +120,28 @@ func updateOperationState(
 		query string
 		args  []any
 	)
+	// Only non-final operations may be updated.
 	switch state {
 	case operations.StateRunning:
 		query = `
-            UPDATE operations
-            SET state = $1, error_message = $2, start_time = COALESCE(start_time, $3)
-            WHERE name = $4`
+	           UPDATE operations
+	           SET state = $1, error_message = $2, start_time = COALESCE(start_time, $3)
+	           WHERE name = $4 AND state IN ('PENDING', 'RUNNING')`
 		args = []any{state, errorMessage, now, name}
 
 	case operations.StateSucceeded:
 		query = `
-            UPDATE operations
-            SET state = $1, error_message = $2, end_time = $3,
-                nodes_upserted = $4, relations_upserted = $5
-            WHERE name = $6`
+	           UPDATE operations
+	           SET state = $1, error_message = $2, end_time = $3,
+	               nodes_upserted = $4, relations_upserted = $5
+	           WHERE name = $6 AND state IN ('PENDING', 'RUNNING')`
 		args = []any{state, errorMessage, now, nodesUpserted, relationsUpserted, name}
 
 	case operations.StateFailed:
 		query = `
-            UPDATE operations
-            SET state = $1, error_message = $2, end_time = $3
-            WHERE name = $4`
+	           UPDATE operations
+	           SET state = $1, error_message = $2, end_time = $3
+	           WHERE name = $4 AND state IN ('PENDING', 'RUNNING')`
 		args = []any{state, errorMessage, now, name}
 
 	default:
@@ -145,10 +152,19 @@ func updateOperationState(
 	if err != nil {
 		return fmt.Errorf("updating operation %q: %w", name, err)
 	}
-	if tag.RowsAffected() == 0 {
+	if tag.RowsAffected() > 0 {
+		return nil
+	}
+
+	var current operations.State
+	err = q.QueryRow(ctx, `SELECT state FROM operations WHERE name = $1`, name).Scan(&current)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("operation %q: %w", name, operations.ErrNotFound)
 	}
-	return nil
+	if err != nil {
+		return fmt.Errorf("reading state of operation %q: %w", name, err)
+	}
+	return fmt.Errorf("operation %q is %s, cannot move to %s: %w", name, current, state, operations.ErrInvalidTransition)
 }
 
 type rowScanner interface {

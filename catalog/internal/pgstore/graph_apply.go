@@ -10,6 +10,11 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
+// snapshotLockKey is the advisory lock key ("catalog") held while applying a
+// snapshot. The lock is global: snapshots of all plugins are serialized, which
+// trades throughput for race-free orphan cleanup.
+const snapshotLockKey int64 = 0x636174616c6f67
+
 // applySnapshot upserts pluginName's claims for nodes/relations, prunes
 // everything previously claimed by pluginName that isn't part of this
 // snapshot, and finally removes nodes/relations left with no claims from any
@@ -22,9 +27,7 @@ func applySnapshot(
 	nodes []catalog.NodeClaim,
 	relations []catalog.RelationClaim,
 ) (int, int, error) {
-	// Serialize snapshot application so orphan cleanup cannot race with another
-	// plugin claiming the same node.
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext('catalog.apply_snapshot'))`); err != nil {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, snapshotLockKey); err != nil {
 		return 0, 0, fmt.Errorf("acquiring snapshot lock: %w", err)
 	}
 

@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("operation not found")
-	ErrAlreadyExists = errors.New("operation already exists")
+	ErrNotFound          = errors.New("operation not found")
+	ErrAlreadyExists     = errors.New("operation already exists")
+	ErrInvalidTransition = errors.New("invalid operation state transition")
 )
 
 type State string
