@@ -50,3 +50,10 @@ CREATE TABLE operations (
     relations_upserted INT NOT NULL DEFAULT 0,
     created_at         TIMESTAMPTZ NOT NULL
 );
+
+-- These two indexes support pruning stale data.
+CREATE INDEX node_plugin_claims_plugin_snapshot_idx
+    ON node_plugin_claims (plugin_name, snapshot_id);
+
+CREATE INDEX relation_plugin_claims_plugin_snapshot_idx
+    ON relation_plugin_claims (plugin_name, snapshot_id);
