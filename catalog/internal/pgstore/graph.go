@@ -44,31 +44,22 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 		return nil, fmt.Errorf("querying nodes: %w", err)
 	}
 
-	byID := make(map[catalog.NodeID]*catalog.Node)
-	var order []catalog.NodeID
+	result := make([]catalog.Node, 0)
 
 	var id catalog.NodeID
 	var pluginName *string
 	var snapshotID *uuid.UUID
 	var propsRaw []byte
 
+	// Rows are ordered by the full node key, so one node's rows are adjacent.
 	_, err = pgx.ForEachRow(rows, []any{&id.Kind, &id.Path, &pluginName, &snapshotID, &propsRaw}, func() error {
-		node, ok := byID[id]
-		if !ok {
-			node = &catalog.Node{ID: id, PluginClaims: make(map[string]catalog.PluginClaim)}
-			byID[id] = node
-			order = append(order, id)
+		if len(result) == 0 || result[len(result)-1].ID != id {
+			result = append(result, catalog.Node{ID: id, PluginClaims: make(map[string]catalog.PluginClaim)})
 		}
+		node := &result[len(result)-1]
 
-		if pluginName != nil {
-			props, err := decodeProperties(propsRaw)
-			if err != nil {
-				return fmt.Errorf("decoding properties for node %q/%q plugin %q: %w", id.Kind, id.Path, *pluginName, err)
-			}
-			node.PluginClaims[*pluginName] = catalog.PluginClaim{
-				SnapshotID: *snapshotID,
-				Properties: props,
-			}
+		if err := addClaim(node.PluginClaims, pluginName, snapshotID, propsRaw); err != nil {
+			return fmt.Errorf("node %q/%q: %w", id.Kind, id.Path, err)
 		}
 		return nil
 	})
@@ -76,10 +67,6 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 		return nil, fmt.Errorf("reading nodes: %w", err)
 	}
 
-	result := make([]catalog.Node, 0, len(order))
-	for _, id := range order {
-		result = append(result, *byID[id])
-	}
 	return result, nil
 }
 
@@ -103,17 +90,7 @@ func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.No
 
 	_, err = pgx.ForEachRow(rows, []any{&pluginName, &snapshotID, &propsRaw}, func() error {
 		found = true
-		if pluginName != nil {
-			props, err := decodeProperties(propsRaw)
-			if err != nil {
-				return fmt.Errorf("decoding properties for node %q/%q plugin %q: %w", id.Kind, id.Path, *pluginName, err)
-			}
-			node.PluginClaims[*pluginName] = catalog.PluginClaim{
-				SnapshotID: *snapshotID,
-				Properties: props,
-			}
-		}
-		return nil
+		return addClaim(node.PluginClaims, pluginName, snapshotID, propsRaw)
 	})
 	if err != nil {
 		return catalog.Node{}, fmt.Errorf("reading node %q/%q: %w", id.Kind, id.Path, err)
@@ -139,39 +116,30 @@ func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, err
 		return nil, fmt.Errorf("querying relations: %w", err)
 	}
 
-	byID := make(map[catalog.RelationID]*catalog.Relation)
-	var order []catalog.RelationID
+	result := make([]catalog.Relation, 0)
 
 	var id catalog.RelationID
 	var pluginName *string
 	var snapshotID *uuid.UUID
 	var propsRaw []byte
 
+	// Rows are ordered by the full relation key, so one relation's rows are adjacent.
 	_, err = pgx.ForEachRow(rows, []any{
 		&id.Kind, &id.From.Kind, &id.From.Path, &id.To.Kind, &id.To.Path,
 		&pluginName, &snapshotID, &propsRaw,
 	}, func() error {
-		relation, ok := byID[id]
-		if !ok {
-			relation = &catalog.Relation{
+		if n := len(result); n == 0 || result[n-1].Kind != id.Kind || result[n-1].From != id.From || result[n-1].To != id.To {
+			result = append(result, catalog.Relation{
 				Kind:         id.Kind,
 				From:         id.From,
 				To:           id.To,
 				PluginClaims: make(map[string]catalog.PluginClaim),
-			}
-			byID[id] = relation
-			order = append(order, id)
+			})
 		}
+		relation := &result[len(result)-1]
 
-		if pluginName != nil {
-			props, err := decodeProperties(propsRaw)
-			if err != nil {
-				return fmt.Errorf("decoding properties for relation %q plugin %q: %w", id.Kind, *pluginName, err)
-			}
-			relation.PluginClaims[*pluginName] = catalog.PluginClaim{
-				SnapshotID: *snapshotID,
-				Properties: props,
-			}
+		if err := addClaim(relation.PluginClaims, pluginName, snapshotID, propsRaw); err != nil {
+			return fmt.Errorf("relation %q: %w", id.Kind, err)
 		}
 		return nil
 	})
@@ -179,9 +147,19 @@ func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, err
 		return nil, fmt.Errorf("reading relations: %w", err)
 	}
 
-	result := make([]catalog.Relation, 0, len(order))
-	for _, id := range order {
-		result = append(result, *byID[id])
-	}
 	return result, nil
+}
+
+// addClaim decodes raw and stores it in claims under name. A nil name
+// (LEFT JOIN without a claim) is a no-op.
+func addClaim(claims map[string]catalog.PluginClaim, name *string, snap *uuid.UUID, raw []byte) error {
+	if name == nil {
+		return nil
+	}
+	props, err := decodeProperties(raw)
+	if err != nil {
+		return fmt.Errorf("decoding properties for plugin %q: %w", *name, err)
+	}
+	claims[*name] = catalog.PluginClaim{SnapshotID: *snap, Properties: props}
+	return nil
 }

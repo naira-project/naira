@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
 	"github.com/naira-project/naira/catalog/internal/operations"
@@ -23,23 +24,21 @@ func (s *SnapshotCommitter) CompleteSnapshotOperation(
 		return 0, 0, fmt.Errorf("validate snapshot input: %w", err)
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	var upsertedNodes, upsertedRelations int
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		upsertedNodes, upsertedRelations, err = applySnapshot(ctx, tx, pluginName, snapshotID, nodes, relations)
+		if err != nil {
+			return fmt.Errorf("applying snapshot: %w", err)
+		}
+
+		if err := updateOperationState(ctx, tx, operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
+			return fmt.Errorf("marking operation %q succeeded: %w", operationName, err)
+		}
+		return nil
+	})
 	if err != nil {
-		return 0, 0, fmt.Errorf("beginning transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	upsertedNodes, upsertedRelations, err := applySnapshot(ctx, tx, pluginName, snapshotID, nodes, relations)
-	if err != nil {
-		return 0, 0, fmt.Errorf("applying snapshot: %w", err)
-	}
-
-	if err := updateOperationState(ctx, tx, operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
-		return 0, 0, fmt.Errorf("marking operation %q succeeded: %w", operationName, err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return 0, 0, fmt.Errorf("committing transaction: %w", err)
+		return 0, 0, err
 	}
 	return upsertedNodes, upsertedRelations, nil
 }

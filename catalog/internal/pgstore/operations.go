@@ -20,40 +20,32 @@ const selectOperationSQL = `
 `
 
 func (s *OperationStore) Create(ctx context.Context, op operations.Operation) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("beginning transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
+	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `
+			INSERT INTO operations (name, plugin, state, created_at)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (name) DO NOTHING
+		`, op.Name, op.Plugin, op.State, op.CreatedAt)
+		if err != nil {
+			return fmt.Errorf("inserting operation %q: %w", op.Name, err)
+		}
+		if tag.RowsAffected() == 0 {
+			return fmt.Errorf("operation %q: %w", op.Name, operations.ErrAlreadyExists)
+		}
 
-	tag, err := tx.Exec(ctx, `
-		INSERT INTO operations (name, plugin, state, created_at)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (name) DO NOTHING
-	`, op.Name, op.Plugin, op.State, op.CreatedAt)
-	if err != nil {
-		return fmt.Errorf("inserting operation %q: %w", op.Name, err)
-	}
-	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("operation %q: %w", op.Name, operations.ErrAlreadyExists)
-	}
-
-	if _, err := tx.Exec(ctx, `
-		DELETE FROM operations
-		WHERE name IN (
-			SELECT name FROM operations
-			WHERE plugin = $1
-			ORDER BY created_at DESC
-			OFFSET $2
-		)
-	`, op.Plugin, maxOperationsPerPlugin); err != nil {
-		return fmt.Errorf("evicting old operations for plugin %q: %w", op.Plugin, err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("committing transaction: %w", err)
-	}
-	return nil
+		if _, err := tx.Exec(ctx, `
+			DELETE FROM operations
+			WHERE name IN (
+				SELECT name FROM operations
+				WHERE plugin = $1
+				ORDER BY created_at DESC
+				OFFSET $2
+			)
+		`, op.Plugin, maxOperationsPerPlugin); err != nil {
+			return fmt.Errorf("evicting old operations for plugin %q: %w", op.Plugin, err)
+		}
+		return nil
+	})
 }
 
 func (s *OperationStore) Get(ctx context.Context, name string) (operations.Operation, error) {

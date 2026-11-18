@@ -40,17 +40,20 @@ func applySnapshot(
 		return 0, 0, err
 	}
 
-	// Order matters: relations reference nodes, and claims reference both.
-	statements := []struct{ what, sql string }{
-		{"stale relation claims", `DELETE FROM relation_plugin_claims WHERE plugin_name = $1 AND snapshot_id <> $2`},
-		{"stale node claims", `DELETE FROM node_plugin_claims WHERE plugin_name = $1 AND snapshot_id <> $2`},
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM relation_plugin_claims WHERE plugin_name = $1 AND snapshot_id <> $2`,
+		pluginName, snapshotID,
+	); err != nil {
+		return 0, 0, fmt.Errorf("pruning stale relation claims for plugin %q: %w", pluginName, err)
 	}
-	for _, st := range statements {
-		if _, err := tx.Exec(ctx, st.sql, pluginName, snapshotID); err != nil {
-			return 0, 0, fmt.Errorf("pruning %s for plugin %q: %w", st.what, pluginName, err)
-		}
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM node_plugin_claims WHERE plugin_name = $1 AND snapshot_id <> $2`,
+		pluginName, snapshotID,
+	); err != nil {
+		return 0, 0, fmt.Errorf("pruning stale node claims for plugin %q: %w", pluginName, err)
 	}
 
+	// Relations must go before nodes: they reference nodes.
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM relations r
 		WHERE NOT EXISTS (SELECT 1 FROM relation_plugin_claims c WHERE c.relation_id = r.id)
@@ -82,7 +85,7 @@ func upsertNodes(
 		return ids, nil
 	}
 
-	newIDs := make([]string, len(nodes))
+	newIDs := make([]uuid.UUID, len(nodes))
 	kinds := make([]string, len(nodes))
 	paths := make([]string, len(nodes))
 	props := make([]string, len(nodes))
@@ -95,13 +98,14 @@ func upsertNodes(
 		if err != nil {
 			return nil, fmt.Errorf("encoding properties for node %q/%q: %w", n.ID.Kind, n.ID.Path, err)
 		}
-		newIDs[i], kinds[i], paths[i], props[i] = id.String(), n.ID.Kind, n.ID.Path, string(raw)
+		newIDs[i], kinds[i], paths[i], props[i] = id, n.ID.Kind, n.ID.Path, string(raw)
 	}
 
 	// Existing nodes keep their id; generated IDs are only used for inserts.
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO nodes (id, kind, path)
-		SELECT * FROM unnest($1::uuid[], $2::text[], $3::text[])
+		SELECT t.id, t.kind, t.path
+		FROM unnest($1::uuid[], $2::text[], $3::text[]) AS t(id, kind, path)
 		ON CONFLICT (kind, path) DO NOTHING
 	`, newIDs, kinds, paths); err != nil {
 		return nil, fmt.Errorf("upserting nodes: %w", err)
@@ -116,26 +120,22 @@ func upsertNodes(
 	if err != nil {
 		return nil, fmt.Errorf("resolving node ids: %w", err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id uuid.UUID
-		var nodeID catalog.NodeID
-		if err := rows.Scan(&id, &nodeID.Kind, &nodeID.Path); err != nil {
-			return nil, fmt.Errorf("scanning node id: %w", err)
-		}
+	var id uuid.UUID
+	var nodeID catalog.NodeID
+	if _, err := pgx.ForEachRow(rows, []any{&id, &nodeID.Kind, &nodeID.Path}, func() error {
 		ids[nodeID] = id
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("resolving node ids: %w", err)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("reading node ids: %w", err)
 	}
 
-	claimNodeIDs := make([]string, len(nodes))
+	claimNodeIDs := make([]uuid.UUID, len(nodes))
 	for i, n := range nodes {
 		id, ok := ids[n.ID]
 		if !ok {
 			return nil, fmt.Errorf("node %q/%q missing after upsert", n.ID.Kind, n.ID.Path)
 		}
-		claimNodeIDs[i] = id.String()
+		claimNodeIDs[i] = id
 	}
 
 	if _, err := tx.Exec(ctx, `
@@ -164,10 +164,10 @@ func upsertRelations(
 		return nil
 	}
 
-	newIDs := make([]string, len(relations))
+	newIDs := make([]uuid.UUID, len(relations))
 	kinds := make([]string, len(relations))
-	fromIDs := make([]string, len(relations))
-	toIDs := make([]string, len(relations))
+	fromIDs := make([]uuid.UUID, len(relations))
+	toIDs := make([]uuid.UUID, len(relations))
 	props := make([]string, len(relations))
 	for i, r := range relations {
 		from, okFrom := nodeIDs[r.From]
@@ -184,12 +184,13 @@ func upsertRelations(
 		if err != nil {
 			return fmt.Errorf("encoding properties for relation %q: %w", r.Kind, err)
 		}
-		newIDs[i], kinds[i], fromIDs[i], toIDs[i], props[i] = id.String(), r.Kind, from.String(), to.String(), string(raw)
+		newIDs[i], kinds[i], fromIDs[i], toIDs[i], props[i] = id, r.Kind, from, to, string(raw)
 	}
 
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO relations (id, kind, from_node_id, to_node_id)
-		SELECT * FROM unnest($1::uuid[], $2::text[], $3::uuid[], $4::uuid[])
+		SELECT t.id, t.kind, t.from_id, t.to_id
+		FROM unnest($1::uuid[], $2::text[], $3::uuid[], $4::uuid[]) AS t(id, kind, from_id, to_id)
 		ON CONFLICT (kind, from_node_id, to_node_id) DO NOTHING
 	`, newIDs, kinds, fromIDs, toIDs); err != nil {
 		return fmt.Errorf("upserting relations: %w", err)
@@ -210,27 +211,23 @@ func upsertRelations(
 	if err != nil {
 		return fmt.Errorf("resolving relation ids: %w", err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id uuid.UUID
-		var key relationKey
-		if err := rows.Scan(&id, &key.kind, &key.from, &key.to); err != nil {
-			return fmt.Errorf("scanning relation id: %w", err)
-		}
+	var id uuid.UUID
+	var key relationKey
+	if _, err := pgx.ForEachRow(rows, []any{&id, &key.kind, &key.from, &key.to}, func() error {
 		resolved[key] = id
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("resolving relation ids: %w", err)
+		return nil
+	}); err != nil {
+		return fmt.Errorf("reading relation ids: %w", err)
 	}
 
-	claimRelationIDs := make([]string, len(relations))
+	claimRelationIDs := make([]uuid.UUID, len(relations))
 	for i, r := range relations {
 		key := relationKey{kind: r.Kind, from: nodeIDs[r.From], to: nodeIDs[r.To]}
 		id, ok := resolved[key]
 		if !ok {
 			return fmt.Errorf("relation %q missing after upsert", r.Kind)
 		}
-		claimRelationIDs[i] = id.String()
+		claimRelationIDs[i] = id
 	}
 
 	if _, err := tx.Exec(ctx, `
