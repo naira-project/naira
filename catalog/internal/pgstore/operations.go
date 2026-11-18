@@ -173,18 +173,13 @@ type rowScanner interface {
 
 func scanOperation(row rowScanner) (operations.Operation, error) {
 	var op operations.Operation
-	var startTime *time.Time
 	var errorMessage *string
 
 	if err := row.Scan(
-		&op.Name, &op.Plugin, &op.State, &startTime, &op.EndTime, &errorMessage,
+		&op.Name, &op.Plugin, &op.State, &op.StartTime, &op.EndTime, &errorMessage,
 		&op.NodesUpserted, &op.RelationsUpserted, &op.CreatedAt,
 	); err != nil {
 		return operations.Operation{}, err
-	}
-
-	if startTime != nil {
-		op.StartTime = *startTime
 	}
 	if errorMessage != nil {
 		op.Error = &operations.StatusError{Message: *errorMessage}

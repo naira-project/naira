@@ -17,8 +17,9 @@ var t0 = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 // compared with assert.Equal.
 func inUTC(op operations.Operation) operations.Operation {
 	op.CreatedAt = op.CreatedAt.UTC()
-	if !op.StartTime.IsZero() {
-		op.StartTime = op.StartTime.UTC()
+	if op.StartTime != nil {
+		start := op.StartTime.UTC()
+		op.StartTime = &start
 	}
 	if op.EndTime != nil {
 		end := op.EndTime.UTC()
@@ -235,9 +236,9 @@ func TestOperationStore_UpdateState(t *testing.T) {
 
 			// Start/end times come from time.Now(), so check presence and
 			// compare the rest as a whole value.
-			assert.Equal(t, tt.wantStartTime, !got.StartTime.IsZero(), "start time set")
+			assert.Equal(t, tt.wantStartTime, got.StartTime != nil, "start time set")
 			assert.Equal(t, tt.wantEndTime, got.EndTime != nil, "end time set")
-			got.StartTime = time.Time{}
+			got.StartTime = nil
 			got.EndTime = nil
 			assert.Equal(t, tt.want, inUTC(got))
 		})
@@ -252,14 +253,14 @@ func TestOperationStore_UpdateState_RunningKeepsFirstStartTime(t *testing.T) {
 	require.NoError(t, e.operations.UpdateState(t.Context(), "op-1", operations.StateRunning, nil, 0, 0))
 	first, err := e.operations.Get(t.Context(), "op-1")
 	require.NoError(t, err)
-	require.False(t, first.StartTime.IsZero())
+	require.NotNil(t, first.StartTime)
 
 	time.Sleep(10 * time.Millisecond)
 	require.NoError(t, e.operations.UpdateState(t.Context(), "op-1", operations.StateRunning, nil, 0, 0))
 	second, err := e.operations.Get(t.Context(), "op-1")
 	require.NoError(t, err)
 
-	assert.True(t, first.StartTime.Equal(second.StartTime), "start time changed from %v to %v", first.StartTime, second.StartTime)
+	assert.True(t, first.StartTime.Equal(*second.StartTime), "start time changed from %v to %v", first.StartTime, second.StartTime)
 }
 
 func TestOperationStore_UpdateState_UnsupportedState(t *testing.T) {

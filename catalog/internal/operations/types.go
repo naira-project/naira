@@ -23,26 +23,25 @@ const (
 	StateFailed    State = "FAILED"
 )
 
-// StatusError is an AIP-193 compliant error representation carried by
-// failed operations.
+// StatusError carries an error message for a failed operation.
 type StatusError struct {
-	Message string `json:"message"`
+	Message string
 }
 
-// Operation represents a single asynchronous unit of work
+// Operation represents a single asynchronous unit of work.
 type Operation struct {
-	Name      string     `json:"name"`
-	Plugin    string     `json:"plugin"`
-	State     State      `json:"state"`
-	StartTime time.Time  `json:"startTime"`
-	EndTime   *time.Time `json:"endTime,omitempty"`
+	Name      string
+	Plugin    string
+	State     State
+	StartTime *time.Time
+	EndTime   *time.Time
 
-	Error *StatusError `json:"error,omitempty"`
+	Error *StatusError
 
-	NodesUpserted     int `json:"nodesUpserted"`
-	RelationsUpserted int `json:"relationsUpserted"`
+	NodesUpserted     int
+	RelationsUpserted int
 
-	CreatedAt time.Time `json:"createdAt"`
+	CreatedAt time.Time
 }
 
 // Filter narrows List results by plugin name and/or state. Zero values are
