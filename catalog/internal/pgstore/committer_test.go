@@ -278,6 +278,7 @@ func TestSnapshotCommitter_FailureRollsBackEverything(t *testing.T) {
 			relations: []catalog.RelationClaim{
 				relationClaim("calls", a, notInSnapshot, nil),
 			},
+			wantErrIs: catalog.ErrInvalidIngestion,
 		},
 		{
 			name:          "operation does not exist",
@@ -297,10 +298,7 @@ func TestSnapshotCommitter_FailureRollsBackEverything(t *testing.T) {
 				tt.relations,
 			)
 
-			require.Error(t, err)
-			if tt.wantErrIs != nil {
-				assert.ErrorIs(t, err, tt.wantErrIs)
-			}
+			require.ErrorIs(t, err, tt.wantErrIs)
 			// Nothing from the snapshot may leak, and the operation must not
 			// be marked as finished.
 			assert.Equal(t, 0, e.countRows(t, "nodes"))
@@ -379,6 +377,64 @@ func TestSnapshotCommitter_ConcurrentPluginsSharingNodes(t *testing.T) {
 
 	assert.Equal(t, 1, e.countRows(t, "nodes"))
 	assert.Equal(t, plugins, e.countRows(t, "node_plugin_claims"))
+}
+
+func TestSnapshotCommitter_EmptySnapshotRemovesAllPluginClaims(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	a := nodeID("service", "a")
+	b := nodeID("service", "b")
+
+	e.mustApply(t, "k8s", snap1,
+		[]catalog.NodeClaim{nodeClaim(a, nil), nodeClaim(b, nil)},
+		[]catalog.RelationClaim{relationClaim("calls", a, b, nil)},
+	)
+	e.mustApply(t, "docs", snap2, []catalog.NodeClaim{nodeClaim(b, nil)}, nil)
+
+	// k8s reports nothing: its claims go away, b stays thanks to docs.
+	e.mustApply(t, "k8s", snap3, nil, nil)
+
+	nodes, err := e.graph.ListNodes(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, []catalog.Node{
+		{
+			ID: b,
+			PluginClaims: map[string]catalog.PluginClaim{
+				"docs": pluginClaim(snap2, map[string]string{}),
+			},
+		},
+	}, nodes)
+	assert.Equal(t, 0, e.countRows(t, "relations"))
+	assert.Equal(t, 0, e.countRows(t, "relation_plugin_claims"))
+}
+
+func TestSnapshotCommitter_FinishedOperationIsRejectedAndNothingApplied(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	a := nodeID("service", "a")
+	b := nodeID("service", "b")
+	require.NoError(t, e.operations.Create(t.Context(), pendingOperation("op-1", "k8s", t0)))
+
+	_, err := e.committer.CompleteSnapshotOperation(
+		t.Context(), "op-1", "k8s", snap1, []catalog.NodeClaim{nodeClaim(a, nil)}, nil,
+	)
+	require.NoError(t, err)
+
+	_, err = e.committer.CompleteSnapshotOperation(
+		t.Context(), "op-1", "k8s", snap2, []catalog.NodeClaim{nodeClaim(b, nil)}, nil,
+	)
+
+	require.ErrorIs(t, err, operations.ErrInvalidTransition)
+	nodes, err := e.graph.ListNodes(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, []catalog.Node{
+		{
+			ID: a,
+			PluginClaims: map[string]catalog.PluginClaim{
+				"k8s": pluginClaim(snap1, map[string]string{}),
+			},
+		},
+	}, nodes)
 }
 
 func TestSnapshotCommitter_CompleteDoesNotTouchOtherOperations(t *testing.T) {
