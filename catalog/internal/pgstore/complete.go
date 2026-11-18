@@ -11,6 +11,12 @@ import (
 	"github.com/naira-project/naira/catalog/internal/operations"
 )
 
+// SnapshotResult reports the number of graph objects upserted by a snapshot.
+type SnapshotResult struct {
+	NodesUpserted     int
+	RelationsUpserted int
+}
+
 // CompleteSnapshotOperation applies a plugin snapshot and marks the
 // corresponding operation as succeeded in one transaction.
 func (s *SnapshotCommitter) CompleteSnapshotOperation(
@@ -19,26 +25,26 @@ func (s *SnapshotCommitter) CompleteSnapshotOperation(
 	snapshotID uuid.UUID,
 	nodes []catalog.NodeClaim,
 	relations []catalog.RelationClaim,
-) (int, int, error) {
+) (SnapshotResult, error) {
 	if err := catalog.ValidateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
-		return 0, 0, fmt.Errorf("validate snapshot input: %w", err)
+		return SnapshotResult{}, fmt.Errorf("validate snapshot input: %w", err)
 	}
 
-	var upsertedNodes, upsertedRelations int
+	var result SnapshotResult
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var err error
-		upsertedNodes, upsertedRelations, err = applySnapshot(ctx, tx, pluginName, snapshotID, nodes, relations)
+		result, err = applySnapshot(ctx, tx, pluginName, snapshotID, nodes, relations)
 		if err != nil {
 			return fmt.Errorf("applying snapshot: %w", err)
 		}
 
-		if err := updateOperationState(ctx, tx, operationName, operations.StateSucceeded, nil, upsertedNodes, upsertedRelations); err != nil {
+		if err := updateOperationState(ctx, tx, operationName, operations.StateSucceeded, nil, result.NodesUpserted, result.RelationsUpserted); err != nil {
 			return fmt.Errorf("marking operation %q succeeded: %w", operationName, err)
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, 0, err
+		return SnapshotResult{}, err
 	}
-	return upsertedNodes, upsertedRelations, nil
+	return result, nil
 }

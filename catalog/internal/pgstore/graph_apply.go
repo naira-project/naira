@@ -26,9 +26,9 @@ func applySnapshot(
 	snapshotID uuid.UUID,
 	nodes []catalog.NodeClaim,
 	relations []catalog.RelationClaim,
-) (int, int, error) {
+) (SnapshotResult, error) {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, snapshotLockKey); err != nil {
-		return 0, 0, fmt.Errorf("acquiring snapshot lock: %w", err)
+		return SnapshotResult{}, fmt.Errorf("acquiring snapshot lock: %w", err)
 	}
 
 	nodes = dedupeNodeClaims(nodes)
@@ -36,24 +36,24 @@ func applySnapshot(
 
 	nodeIDs, err := upsertNodes(ctx, tx, pluginName, snapshotID, nodes)
 	if err != nil {
-		return 0, 0, err
+		return SnapshotResult{}, err
 	}
 
 	if err := upsertRelations(ctx, tx, pluginName, snapshotID, relations, nodeIDs); err != nil {
-		return 0, 0, err
+		return SnapshotResult{}, err
 	}
 
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM relation_plugin_claims WHERE plugin_name = $1 AND snapshot_id <> $2`,
 		pluginName, snapshotID,
 	); err != nil {
-		return 0, 0, fmt.Errorf("pruning stale relation claims for plugin %q: %w", pluginName, err)
+		return SnapshotResult{}, fmt.Errorf("pruning stale relation claims for plugin %q: %w", pluginName, err)
 	}
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM node_plugin_claims WHERE plugin_name = $1 AND snapshot_id <> $2`,
 		pluginName, snapshotID,
 	); err != nil {
-		return 0, 0, fmt.Errorf("pruning stale node claims for plugin %q: %w", pluginName, err)
+		return SnapshotResult{}, fmt.Errorf("pruning stale node claims for plugin %q: %w", pluginName, err)
 	}
 
 	// Relations must go before nodes: they reference nodes.
@@ -61,16 +61,16 @@ func applySnapshot(
 		DELETE FROM relations r
 		WHERE NOT EXISTS (SELECT 1 FROM relation_plugin_claims c WHERE c.relation_id = r.id)
 	`); err != nil {
-		return 0, 0, fmt.Errorf("pruning orphaned relations: %w", err)
+		return SnapshotResult{}, fmt.Errorf("pruning orphaned relations: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM nodes n
 		WHERE NOT EXISTS (SELECT 1 FROM node_plugin_claims c WHERE c.node_id = n.id)
 	`); err != nil {
-		return 0, 0, fmt.Errorf("pruning orphaned nodes: %w", err)
+		return SnapshotResult{}, fmt.Errorf("pruning orphaned nodes: %w", err)
 	}
 
-	return len(nodes), len(relations), nil
+	return SnapshotResult{NodesUpserted: len(nodes), RelationsUpserted: len(relations)}, nil
 }
 
 // upsertNodes makes sure every node exists (new rows get a fresh UUIDv7),

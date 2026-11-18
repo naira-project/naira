@@ -181,21 +181,21 @@ func (e *env) apply(
 	snapshotID uuid.UUID,
 	nodes []catalog.NodeClaim,
 	relations []catalog.RelationClaim,
-) (int, int, error) {
+) (pgstore.SnapshotResult, error) {
 	t.Helper()
 
 	name := fmt.Sprintf("op-%d", e.opSeq.Add(1))
 	if err := e.operations.Create(t.Context(), pendingOperation(name, plugin, time.Now())); err != nil {
-		return 0, 0, fmt.Errorf("creating operation %q: %w", name, err)
+		return pgstore.SnapshotResult{}, fmt.Errorf("creating operation %q: %w", name, err)
 	}
 
-	upsertedNodes, upsertedRelations, err := e.committer.CompleteSnapshotOperation(
+	result, err := e.committer.CompleteSnapshotOperation(
 		t.Context(), name, plugin, snapshotID, nodes, relations,
 	)
 	if err != nil {
-		return 0, 0, fmt.Errorf("completing snapshot operation %q: %w", name, err)
+		return pgstore.SnapshotResult{}, fmt.Errorf("completing snapshot operation %q: %w", name, err)
 	}
-	return upsertedNodes, upsertedRelations, nil
+	return result, nil
 }
 
 func (e *env) mustApply(
@@ -207,7 +207,7 @@ func (e *env) mustApply(
 ) {
 	t.Helper()
 
-	_, _, err := e.apply(t, plugin, snapshotID, nodes, relations)
+	_, err := e.apply(t, plugin, snapshotID, nodes, relations)
 	require.NoError(t, err)
 }
 

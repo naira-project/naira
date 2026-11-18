@@ -27,7 +27,7 @@ func TestSnapshotCommitter_NodeSurvivesWhileAnyPluginClaimsIt(t *testing.T) {
 	c := nodeID("service", "c")
 
 	// Step 1: k8s reports a and b, plus a relation between them.
-	upsertedNodes, upsertedRelations, err := e.apply(t, "k8s", snap1,
+	result, err := e.apply(t, "k8s", snap1,
 		[]catalog.NodeClaim{
 			nodeClaim(a, nil),
 			nodeClaim(b, map[string]string{"tier": "backend"}),
@@ -37,8 +37,8 @@ func TestSnapshotCommitter_NodeSurvivesWhileAnyPluginClaimsIt(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 2, upsertedNodes)
-	assert.Equal(t, 1, upsertedRelations)
+	assert.Equal(t, 2, result.NodesUpserted)
+	assert.Equal(t, 1, result.RelationsUpserted)
 
 	// Step 2: docs also claims b.
 	e.mustApply(t, "docs", snap2,
@@ -192,7 +192,7 @@ func TestSnapshotCommitter_DuplicateClaimsInOneSnapshotLastWins(t *testing.T) {
 	a := nodeID("service", "a")
 	b := nodeID("service", "b")
 
-	upsertedNodes, upsertedRelations, err := e.apply(t, "k8s", snap1,
+	result, err := e.apply(t, "k8s", snap1,
 		[]catalog.NodeClaim{
 			nodeClaim(a, map[string]string{"v": "first"}),
 			nodeClaim(b, nil),
@@ -205,8 +205,8 @@ func TestSnapshotCommitter_DuplicateClaimsInOneSnapshotLastWins(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Equal(t, 2, upsertedNodes)
-	assert.Equal(t, 1, upsertedRelations)
+	assert.Equal(t, 2, result.NodesUpserted)
+	assert.Equal(t, 1, result.RelationsUpserted)
 
 	gotNode, err := e.graph.GetNode(t.Context(), a)
 	require.NoError(t, err)
@@ -237,14 +237,14 @@ func TestSnapshotCommitter_CompleteMarksOperationSucceeded(t *testing.T) {
 	b := nodeID("service", "b")
 	require.NoError(t, e.operations.Create(t.Context(), pendingOperation("op-1", "k8s", t0)))
 
-	upsertedNodes, upsertedRelations, err := e.committer.CompleteSnapshotOperation(
+	result, err := e.committer.CompleteSnapshotOperation(
 		t.Context(), "op-1", "k8s", snap1,
 		[]catalog.NodeClaim{nodeClaim(a, nil), nodeClaim(b, nil)},
 		[]catalog.RelationClaim{relationClaim("calls", a, b, nil)},
 	)
 	require.NoError(t, err)
-	assert.Equal(t, 2, upsertedNodes)
-	assert.Equal(t, 1, upsertedRelations)
+	assert.Equal(t, 2, result.NodesUpserted)
+	assert.Equal(t, 1, result.RelationsUpserted)
 
 	got, err := e.operations.Get(t.Context(), "op-1")
 	require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestSnapshotCommitter_FailureRollsBackEverything(t *testing.T) {
 			e := newEnv(t)
 			require.NoError(t, e.operations.Create(t.Context(), pendingOperation("op-1", "k8s", t0)))
 
-			_, _, err := e.committer.CompleteSnapshotOperation(
+			_, err := e.committer.CompleteSnapshotOperation(
 				t.Context(), tt.operationName, "k8s", snap1,
 				[]catalog.NodeClaim{nodeClaim(a, nil)},
 				tt.relations,
@@ -320,7 +320,7 @@ func TestSnapshotCommitter_FailedSnapshotKeepsPreviousGraph(t *testing.T) {
 	e.mustApply(t, "k8s", snap1, []catalog.NodeClaim{nodeClaim(a, map[string]string{"v": "1"})}, nil)
 
 	// Second snapshot is rejected
-	_, _, err := e.apply(t, "k8s", snap2,
+	_, err := e.apply(t, "k8s", snap2,
 		[]catalog.NodeClaim{nodeClaim(nodeID("service", "b"), nil)},
 		[]catalog.RelationClaim{relationClaim("calls", nodeID("service", "b"), nodeID("service", "ghost"), nil)},
 	)
@@ -358,7 +358,7 @@ func TestSnapshotCommitter_ConcurrentPluginsSharingNodes(t *testing.T) {
 				if withOwnNode {
 					claims = append(claims, nodeClaim(nodeID("service", fmt.Sprintf("own-%d", i)), nil))
 				}
-				_, _, errs[i] = e.apply(t, fmt.Sprintf("plugin%d", i), uuid.New(), claims, nil)
+				_, errs[i] = e.apply(t, fmt.Sprintf("plugin%d", i), uuid.New(), claims, nil)
 			})
 		}
 		wg.Wait()
@@ -387,7 +387,7 @@ func TestSnapshotCommitter_CompleteDoesNotTouchOtherOperations(t *testing.T) {
 	require.NoError(t, e.operations.Create(t.Context(), pendingOperation("op-1", "k8s", t0)))
 	require.NoError(t, e.operations.Create(t.Context(), pendingOperation("op-2", "docs", t0.Add(time.Minute))))
 
-	_, _, err := e.committer.CompleteSnapshotOperation(
+	_, err := e.committer.CompleteSnapshotOperation(
 		t.Context(), "op-1", "k8s", snap1,
 		[]catalog.NodeClaim{nodeClaim(nodeID("service", "a"), nil)}, nil,
 	)
