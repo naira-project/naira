@@ -31,12 +31,11 @@ func applySnapshot(
 		return SnapshotResult{}, fmt.Errorf("acquiring snapshot lock: %w", err)
 	}
 
-	nodeIDs, err := upsertNodes(ctx, tx, pluginName, snapshotID, nodes)
-	if err != nil {
+	if err := upsertNodes(ctx, tx, pluginName, snapshotID, nodes); err != nil {
 		return SnapshotResult{}, fmt.Errorf("upserting snapshot nodes: %w", err)
 	}
 
-	if err := upsertRelations(ctx, tx, pluginName, snapshotID, relations, nodeIDs); err != nil {
+	if err := upsertRelations(ctx, tx, pluginName, snapshotID, relations); err != nil {
 		return SnapshotResult{}, fmt.Errorf("upserting snapshot relations: %w", err)
 	}
 
@@ -74,19 +73,17 @@ func applySnapshot(
 }
 
 // upsertNodes makes sure every node exists (new rows get a fresh UUIDv7),
-// then writes pluginName's claim for each. It returns the id of every node
-// in the snapshot. nodes must not contain duplicate IDs
-// (see [catalog.ValidateSnapshotInput]).
+// then writes pluginName's claim for each. nodes must be validated with
+// [catalog.ValidateSnapshotInput] first (no duplicate IDs).
 func upsertNodes(
 	ctx context.Context,
 	tx pgx.Tx,
 	pluginName string,
 	snapshotID uuid.UUID,
 	nodes []catalog.NodeClaim,
-) (map[catalog.NodeID]uuid.UUID, error) {
-	ids := make(map[catalog.NodeID]uuid.UUID, len(nodes))
+) error {
 	if len(nodes) == 0 {
-		return ids, nil
+		return nil
 	}
 
 	newIDs := make([]uuid.UUID, len(nodes))
@@ -96,11 +93,11 @@ func upsertNodes(
 	for i, n := range nodes {
 		id, err := uuid.NewV7()
 		if err != nil {
-			return nil, fmt.Errorf("generating id for node %q/%q: %w", n.ID.Kind, n.ID.Path, err)
+			return fmt.Errorf("generating id for node %q/%q: %w", n.ID.Kind, n.ID.Path, err)
 		}
 		raw, err := encodeProperties(n.Properties)
 		if err != nil {
-			return nil, fmt.Errorf("encoding properties for node %q/%q: %w", n.ID.Kind, n.ID.Path, err)
+			return fmt.Errorf("encoding properties for node %q/%q: %w", n.ID.Kind, n.ID.Path, err)
 		}
 		newIDs[i], kinds[i], paths[i], props[i] = id, n.ID.Kind, n.ID.Path, string(raw)
 	}
@@ -112,58 +109,36 @@ func upsertNodes(
 		FROM unnest($1::uuid[], $2::text[], $3::text[]) AS t(id, kind, path)
 		ON CONFLICT (kind, path) DO NOTHING
 	`, newIDs, kinds, paths); err != nil {
-		return nil, fmt.Errorf("upserting nodes: %w", err)
+		return fmt.Errorf("upserting nodes: %w", err)
 	}
 
-	rows, err := tx.Query(ctx, `
-		SELECT n.id, n.kind, n.path
-		FROM nodes n
-		JOIN unnest($1::text[], $2::text[]) AS t(kind, path)
-		  ON n.kind = t.kind AND n.path = t.path
-	`, kinds, paths)
-	if err != nil {
-		return nil, fmt.Errorf("resolving node ids: %w", err)
-	}
-	var id uuid.UUID
-	var nodeID catalog.NodeID
-	if _, err := pgx.ForEachRow(rows, []any{&id, &nodeID.Kind, &nodeID.Path}, func() error {
-		ids[nodeID] = id
-		return nil
-	}); err != nil {
-		return nil, fmt.Errorf("reading node ids: %w", err)
-	}
-
-	claimNodeIDs := make([]uuid.UUID, len(nodes))
-	for i, n := range nodes {
-		id, ok := ids[n.ID]
-		if !ok {
-			return nil, fmt.Errorf("node %q/%q missing after upsert", n.ID.Kind, n.ID.Path)
-		}
-		claimNodeIDs[i] = id
-	}
-
-	if _, err := tx.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 		INSERT INTO node_plugin_claims (node_id, plugin_name, snapshot_id, properties)
-		SELECT t.node_id, $2, $3, t.props::jsonb
-		FROM unnest($1::uuid[], $4::text[]) AS t(node_id, props)
+		SELECT n.id, $4::text, $5::uuid, t.props::jsonb
+		FROM unnest($1::text[], $2::text[], $3::text[]) AS t(kind, path, props)
+		JOIN nodes n ON n.kind = t.kind AND n.path = t.path
 		ON CONFLICT (node_id, plugin_name)
 		DO UPDATE SET snapshot_id = EXCLUDED.snapshot_id, properties = EXCLUDED.properties
-	`, claimNodeIDs, pluginName, snapshotID, props); err != nil {
-		return nil, fmt.Errorf("upserting node claims: %w", err)
+	`, kinds, paths, props, pluginName, snapshotID)
+	if err != nil {
+		return fmt.Errorf("upserting node claims: %w", err)
+	}
+	if got := tag.RowsAffected(); got != int64(len(nodes)) {
+		return fmt.Errorf("upserted %d node claims, want %d", got, len(nodes))
 	}
 
-	return ids, nil
+	return nil
 }
 
-// upsertRelations is the relation counterpart of [upsertNodes]: relations
-// must not contain duplicate IDs either.
+// upsertRelations is the relation counterpart of [upsertNodes]. Both
+// endpoints of every relation must already be upserted, and relations must
+// not contain duplicate IDs.
 func upsertRelations(
 	ctx context.Context,
 	tx pgx.Tx,
 	pluginName string,
 	snapshotID uuid.UUID,
 	relations []catalog.RelationClaim,
-	nodeIDs map[catalog.NodeID]uuid.UUID,
 ) error {
 	if len(relations) == 0 {
 		return nil
@@ -171,16 +146,12 @@ func upsertRelations(
 
 	newIDs := make([]uuid.UUID, len(relations))
 	kinds := make([]string, len(relations))
-	fromIDs := make([]uuid.UUID, len(relations))
-	toIDs := make([]uuid.UUID, len(relations))
+	fromKinds := make([]string, len(relations))
+	fromPaths := make([]string, len(relations))
+	toKinds := make([]string, len(relations))
+	toPaths := make([]string, len(relations))
 	props := make([]string, len(relations))
 	for i, r := range relations {
-		from, okFrom := nodeIDs[r.From]
-		to, okTo := nodeIDs[r.To]
-		if !okFrom || !okTo {
-			return fmt.Errorf("relation %q %q/%q -> %q/%q references a node outside the snapshot",
-				r.Kind, r.From.Kind, r.From.Path, r.To.Kind, r.To.Path)
-		}
 		id, err := uuid.NewV7()
 		if err != nil {
 			return fmt.Errorf("generating id for relation %q: %w", r.Kind, err)
@@ -189,64 +160,42 @@ func upsertRelations(
 		if err != nil {
 			return fmt.Errorf("encoding properties for relation %q: %w", r.Kind, err)
 		}
-		newIDs[i], kinds[i], fromIDs[i], toIDs[i], props[i] = id, r.Kind, from, to, string(raw)
+		newIDs[i], kinds[i] = id, r.Kind
+		fromKinds[i], fromPaths[i] = r.From.Kind, r.From.Path
+		toKinds[i], toPaths[i] = r.To.Kind, r.To.Path
+		props[i] = string(raw)
 	}
 
+	// Existing relations keep their id; generated IDs are only used for inserts.
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO relations (id, kind, from_node_id, to_node_id)
-		SELECT t.id, t.kind, t.from_id, t.to_id
-		FROM unnest($1::uuid[], $2::text[], $3::uuid[], $4::uuid[]) AS t(id, kind, from_id, to_id)
+		SELECT t.id, t.kind, f.id, tn.id
+		FROM unnest($1::uuid[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
+		  AS t(id, kind, from_kind, from_path, to_kind, to_path)
+		JOIN nodes f  ON f.kind = t.from_kind AND f.path = t.from_path
+		JOIN nodes tn ON tn.kind = t.to_kind AND tn.path = t.to_path
 		ON CONFLICT (kind, from_node_id, to_node_id) DO NOTHING
-	`, newIDs, kinds, fromIDs, toIDs); err != nil {
+	`, newIDs, kinds, fromKinds, fromPaths, toKinds, toPaths); err != nil {
 		return fmt.Errorf("upserting relations: %w", err)
 	}
 
-	type relationKey struct {
-		kind     string
-		from, to uuid.UUID
-	}
-	resolved := make(map[relationKey]uuid.UUID, len(relations))
-
-	rows, err := tx.Query(ctx, `
-		SELECT r.id, r.kind, r.from_node_id, r.to_node_id
-		FROM relations r
-		JOIN unnest($1::text[], $2::uuid[], $3::uuid[]) AS t(kind, from_id, to_id)
-		  ON r.kind = t.kind AND r.from_node_id = t.from_id AND r.to_node_id = t.to_id
-	`, kinds, fromIDs, toIDs)
-	if err != nil {
-		return fmt.Errorf("resolving relation ids: %w", err)
-	}
-	var id uuid.UUID
-	var key relationKey
-	if _, err := pgx.ForEachRow(rows, []any{&id, &key.kind, &key.from, &key.to}, func() error {
-		resolved[key] = id
-		return nil
-	}); err != nil {
-		return fmt.Errorf("reading relation ids: %w", err)
-	}
-
-	claimRelationIDs := make([]uuid.UUID, len(relations))
-	for i, r := range relations {
-		key := relationKey{
-			kind: r.Kind,
-			from: nodeIDs[r.From],
-			to:   nodeIDs[r.To],
-		}
-		id, ok := resolved[key]
-		if !ok {
-			return fmt.Errorf("relation %q missing after upsert", r.Kind)
-		}
-		claimRelationIDs[i] = id
-	}
-
-	if _, err := tx.Exec(ctx, `
+	tag, err := tx.Exec(ctx, `
 		INSERT INTO relation_plugin_claims (relation_id, plugin_name, snapshot_id, properties)
-		SELECT t.relation_id, $2, $3, t.props::jsonb
-		FROM unnest($1::uuid[], $4::text[]) AS t(relation_id, props)
+		SELECT r.id, $7::text, $8::uuid, t.props::jsonb
+		FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
+		  AS t(kind, from_kind, from_path, to_kind, to_path, props)
+		JOIN nodes f  ON f.kind = t.from_kind AND f.path = t.from_path
+		JOIN nodes tn ON tn.kind = t.to_kind AND tn.path = t.to_path
+		JOIN relations r
+		  ON r.kind = t.kind AND r.from_node_id = f.id AND r.to_node_id = tn.id
 		ON CONFLICT (relation_id, plugin_name)
 		DO UPDATE SET snapshot_id = EXCLUDED.snapshot_id, properties = EXCLUDED.properties
-	`, claimRelationIDs, pluginName, snapshotID, props); err != nil {
+	`, kinds, fromKinds, fromPaths, toKinds, toPaths, props, pluginName, snapshotID)
+	if err != nil {
 		return fmt.Errorf("upserting relation claims: %w", err)
+	}
+	if got := tag.RowsAffected(); got != int64(len(relations)) {
+		return fmt.Errorf("upserted %d relation claims, want %d", got, len(relations))
 	}
 
 	return nil
