@@ -75,7 +75,8 @@ func applySnapshot(
 
 // upsertNodes makes sure every node exists (new rows get a fresh UUIDv7),
 // then writes pluginName's claim for each. It returns the id of every node
-// in the snapshot.
+// in the snapshot. nodes must not contain duplicate IDs
+// (see [catalog.ValidateSnapshotInput]).
 func upsertNodes(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -154,7 +155,8 @@ func upsertNodes(
 	return ids, nil
 }
 
-// upsertRelations is the relation counterpart of [upsertNodes].
+// upsertRelations is the relation counterpart of [upsertNodes]: relations
+// must not contain duplicate IDs either.
 func upsertRelations(
 	ctx context.Context,
 	tx pgx.Tx,
