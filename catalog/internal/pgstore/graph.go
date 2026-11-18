@@ -160,6 +160,9 @@ func addClaim(claims map[string]catalog.PluginClaim, name *string, snap *uuid.UU
 	if err != nil {
 		return fmt.Errorf("decoding properties for plugin %q: %w", *name, err)
 	}
-	claims[*name] = catalog.PluginClaim{SnapshotID: *snap, Properties: props}
+	claims[*name] = catalog.PluginClaim{
+		SnapshotID: *snap,
+		Properties: props,
+	}
 	return nil
 }

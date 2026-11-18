@@ -147,9 +147,12 @@ func TestOperationStore_List(t *testing.T) {
 			want:   []string{"b-1", "a-1"},
 		},
 		{
-			name:   "by plugin and state",
-			filter: operations.Filter{Plugin: "a", State: operations.StatePending},
-			want:   []string{"a-1"},
+			name: "by plugin and state",
+			filter: operations.Filter{
+				Plugin: "a",
+				State:  operations.StatePending,
+			},
+			want: []string{"a-1"},
 		},
 		{
 			name:   "no match",

@@ -44,7 +44,7 @@ func (s *SnapshotCommitter) CompleteSnapshotOperation(
 		return nil
 	})
 	if err != nil {
-		return SnapshotResult{}, err
+		return SnapshotResult{}, fmt.Errorf("completing snapshot operation %q: %w", operationName, err)
 	}
 	return result, nil
 }

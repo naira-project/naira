@@ -36,11 +36,11 @@ func applySnapshot(
 
 	nodeIDs, err := upsertNodes(ctx, tx, pluginName, snapshotID, nodes)
 	if err != nil {
-		return SnapshotResult{}, err
+		return SnapshotResult{}, fmt.Errorf("upserting snapshot nodes: %w", err)
 	}
 
 	if err := upsertRelations(ctx, tx, pluginName, snapshotID, relations, nodeIDs); err != nil {
-		return SnapshotResult{}, err
+		return SnapshotResult{}, fmt.Errorf("upserting snapshot relations: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx,
@@ -70,7 +70,10 @@ func applySnapshot(
 		return SnapshotResult{}, fmt.Errorf("pruning orphaned nodes: %w", err)
 	}
 
-	return SnapshotResult{NodesUpserted: len(nodes), RelationsUpserted: len(relations)}, nil
+	return SnapshotResult{
+		NodesUpserted:     len(nodes),
+		RelationsUpserted: len(relations),
+	}, nil
 }
 
 // upsertNodes makes sure every node exists (new rows get a fresh UUIDv7),
@@ -225,7 +228,11 @@ func upsertRelations(
 
 	claimRelationIDs := make([]uuid.UUID, len(relations))
 	for i, r := range relations {
-		key := relationKey{kind: r.Kind, from: nodeIDs[r.From], to: nodeIDs[r.To]}
+		key := relationKey{
+			kind: r.Kind,
+			from: nodeIDs[r.From],
+			to:   nodeIDs[r.To],
+		}
 		id, ok := resolved[key]
 		if !ok {
 			return fmt.Errorf("relation %q missing after upsert", r.Kind)
@@ -266,7 +273,11 @@ func dedupeRelationClaims(relations []catalog.RelationClaim) []catalog.RelationC
 	index := make(map[catalog.RelationID]int, len(relations))
 	out := make([]catalog.RelationClaim, 0, len(relations))
 	for _, r := range relations {
-		key := catalog.RelationID{Kind: r.Kind, From: r.From, To: r.To}
+		key := catalog.RelationID{
+			Kind: r.Kind,
+			From: r.From,
+			To:   r.To,
+		}
 		if i, ok := index[key]; ok {
 			out[i] = r
 			continue

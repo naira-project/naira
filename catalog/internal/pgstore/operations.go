@@ -124,24 +124,24 @@ func updateOperationState(
 	switch state {
 	case operations.StateRunning:
 		query = `
-	           UPDATE operations
-	           SET state = $1, error_message = $2, start_time = COALESCE(start_time, $3)
-	           WHERE name = $4 AND state IN ('PENDING', 'RUNNING')`
+			UPDATE operations
+			SET state = $1, error_message = $2, start_time = COALESCE(start_time, $3)
+			WHERE name = $4 AND state IN ('PENDING', 'RUNNING')`
 		args = []any{state, errorMessage, now, name}
 
 	case operations.StateSucceeded:
 		query = `
-	           UPDATE operations
-	           SET state = $1, error_message = $2, end_time = $3,
-	               nodes_upserted = $4, relations_upserted = $5
-	           WHERE name = $6 AND state IN ('PENDING', 'RUNNING')`
+			UPDATE operations
+			SET state = $1, error_message = $2, end_time = $3,
+			    nodes_upserted = $4, relations_upserted = $5
+			WHERE name = $6 AND state IN ('PENDING', 'RUNNING')`
 		args = []any{state, errorMessage, now, nodesUpserted, relationsUpserted, name}
 
 	case operations.StateFailed:
 		query = `
-	           UPDATE operations
-	           SET state = $1, error_message = $2, end_time = $3
-	           WHERE name = $4 AND state IN ('PENDING', 'RUNNING')`
+			UPDATE operations
+			SET state = $1, error_message = $2, end_time = $3
+			WHERE name = $4 AND state IN ('PENDING', 'RUNNING')`
 		args = []any{state, errorMessage, now, name}
 
 	default:
@@ -167,11 +167,7 @@ func updateOperationState(
 	return fmt.Errorf("operation %q is %s, cannot move to %s: %w", name, current, state, operations.ErrInvalidTransition)
 }
 
-type rowScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanOperation(row rowScanner) (operations.Operation, error) {
+func scanOperation(row pgx.Row) (operations.Operation, error) {
 	var op operations.Operation
 	var errorMessage *string
 
@@ -179,7 +175,7 @@ func scanOperation(row rowScanner) (operations.Operation, error) {
 		&op.Name, &op.Plugin, &op.State, &op.StartTime, &op.EndTime, &errorMessage,
 		&op.NodesUpserted, &op.RelationsUpserted, &op.CreatedAt,
 	); err != nil {
-		return operations.Operation{}, err
+		return operations.Operation{}, fmt.Errorf("scanning operation row: %w", err)
 	}
 	if errorMessage != nil {
 		op.Error = &operations.StatusError{Message: *errorMessage}
