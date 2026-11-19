@@ -6,8 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
+)
+
+const (
+	maxIdentifierLength = 40
+	maxNodePathLength   = 300
 )
 
 var (
@@ -50,6 +56,9 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 	if pluginName == "" {
 		return fmt.Errorf("%w: plugin name is empty", ErrInvalidIngestion)
 	}
+	if runeLength := utf8.RuneCountInString(pluginName); runeLength > maxIdentifierLength {
+		return fmt.Errorf("%w: plugin name exceeds %d characters", ErrInvalidIngestion, maxIdentifierLength)
+	}
 
 	if snapshotID == uuid.Nil {
 		return fmt.Errorf("%w: snapshot ID is empty", ErrInvalidIngestion)
@@ -61,6 +70,12 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 		id := node.ID
 		if id.Kind == "" || id.Path == "" {
 			return fmt.Errorf("%w: node ID with empty kind or path", ErrInvalidIngestion)
+		}
+		if runeLength := utf8.RuneCountInString(id.Kind); runeLength > maxIdentifierLength {
+			return fmt.Errorf("%w: node kind exceeds %d characters", ErrInvalidIngestion, maxIdentifierLength)
+		}
+		if runeLength := utf8.RuneCountInString(id.Path); runeLength > maxNodePathLength {
+			return fmt.Errorf("%w: node path exceeds %d characters", ErrInvalidIngestion, maxNodePathLength)
 		}
 		if strings.Contains(id.Kind, "/") {
 			return fmt.Errorf("%w: node kind %q contains reserved separator '/'", ErrInvalidIngestion, id.Kind)
@@ -80,6 +95,8 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 		switch {
 		case relation.Kind == "" || fromID.Kind == "" || fromID.Path == "" || toID.Kind == "" || toID.Path == "":
 			return fmt.Errorf("%w: relation ID with empty kind, source, or target", ErrInvalidIngestion)
+		case utf8.RuneCountInString(relation.Kind) > maxIdentifierLength:
+			return fmt.Errorf("%w: relation kind exceeds %d characters", ErrInvalidIngestion, maxIdentifierLength)
 		case strings.Contains(relation.Kind, "/"):
 			return fmt.Errorf("%w: relation kind %q contains reserved separator '/'", ErrInvalidIngestion, relation.Kind)
 		case strings.Contains(fromID.Kind, "/"):
