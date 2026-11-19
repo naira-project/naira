@@ -99,6 +99,20 @@ func TestOperationStore_CreateEvictsOldestPerPlugin(t *testing.T) {
 	assert.Equal(t, []string{"b-0"}, operationNames(gotB))
 }
 
+func TestOperationStore_ListUsesNameAsWhenCreatedAtIsEqual(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+
+	createdAt := t0
+	for _, name := range []string{"op-a", "op-c", "op-b"} {
+		require.NoError(t, e.operations.Create(t.Context(), pendingOperation(name, "plugin", createdAt)))
+	}
+
+	got, err := e.operations.List(t.Context(), operations.Filter{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"op-c", "op-b", "op-a"}, operationNames(got))
+}
+
 func TestOperationStore_List(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)

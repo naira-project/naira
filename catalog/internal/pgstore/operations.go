@@ -75,7 +75,7 @@ func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]
 		args = append(args, filter.State)
 		query += fmt.Sprintf(" AND state = $%d", len(args))
 	}
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY created_at DESC, name DESC"
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
