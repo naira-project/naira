@@ -26,9 +26,13 @@ func TestConnect_IsIdempotent(t *testing.T) {
 
 	var tables int
 	err = second.QueryRow(t.Context(), `
-		SELECT count(*) FROM information_schema.tables
+		SELECT count(*)
+		FROM information_schema.tables
 		WHERE table_schema = 'public'
-		  AND table_name IN ('nodes', 'node_plugin_claims', 'relations', 'relation_plugin_claims', 'operations')
+		  AND table_name IN (
+			  'nodes', 'node_plugin_claims', 'relations',
+			  'relation_plugin_claims', 'operations'
+		  )
 	`).Scan(&tables)
 	require.NoError(t, err)
 	assert.Equal(t, 5, tables)

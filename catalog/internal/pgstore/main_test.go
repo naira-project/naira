@@ -175,7 +175,9 @@ func (e *env) countRows(t *testing.T, table string) int {
 	t.Helper()
 
 	var count int
-	err := e.pool.QueryRow(t.Context(), "SELECT count(*) FROM "+table).Scan(&count)
+	err := e.pool.QueryRow(t.Context(), `
+		SELECT count(*)
+		FROM `+table).Scan(&count)
 	require.NoError(t, err)
 	return count
 }
@@ -184,9 +186,12 @@ func (e *env) nodeRowID(t *testing.T, id catalog.NodeID) uuid.UUID {
 	t.Helper()
 
 	var rowID uuid.UUID
-	err := e.pool.QueryRow(t.Context(),
-		`SELECT id FROM nodes WHERE kind = $1 AND path = $2`, id.Kind, id.Path,
-	).Scan(&rowID)
+	err := e.pool.QueryRow(t.Context(), `
+		SELECT id
+		FROM nodes
+		WHERE kind = $1
+		  AND path = $2
+	`, id.Kind, id.Path).Scan(&rowID)
 	require.NoError(t, err)
 	return rowID
 }

@@ -15,7 +15,9 @@ import (
 const maxOperationsPerPlugin = 5
 
 const selectOperationSQL = `
-	SELECT name, plugin, state, start_time, end_time, error_message, nodes_upserted, relations_upserted, created_at
+	SELECT
+		name, plugin, state, start_time, end_time, error_message,
+		nodes_upserted, relations_upserted, created_at
 	FROM operations
 `
 
@@ -27,7 +29,8 @@ func (s *OperationStore) Create(ctx context.Context, op operations.Operation) er
 		tag, err := tx.Exec(ctx, `
 			INSERT INTO operations (name, plugin, state, created_at)
 			VALUES ($1, $2, $3, $4)
-			ON CONFLICT (name) DO NOTHING
+			ON CONFLICT (name)
+			DO NOTHING
 		`, op.Name, op.Plugin, op.State, op.CreatedAt)
 		if err != nil {
 			return fmt.Errorf("inserting operation %q: %w", op.Name, err)
@@ -39,7 +42,8 @@ func (s *OperationStore) Create(ctx context.Context, op operations.Operation) er
 		if _, err := tx.Exec(ctx, `
 			DELETE FROM operations
 			WHERE name IN (
-				SELECT name FROM operations
+				SELECT name
+				FROM operations
 				WHERE plugin = $1
 				ORDER BY created_at DESC, name DESC
 				OFFSET $2
@@ -53,7 +57,9 @@ func (s *OperationStore) Create(ctx context.Context, op operations.Operation) er
 
 // Get returns the operation with the given name, or an error if it does not exist.
 func (s *OperationStore) Get(ctx context.Context, name string) (operations.Operation, error) {
-	op, err := scanOperation(s.pool.QueryRow(ctx, selectOperationSQL+` WHERE name = $1`, name))
+	op, err := scanOperation(s.pool.QueryRow(ctx, selectOperationSQL+`
+		WHERE name = $1
+	`, name))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return operations.Operation{}, fmt.Errorf("operation %q: %w", name, operations.ErrNotFound)
@@ -65,7 +71,9 @@ func (s *OperationStore) Get(ctx context.Context, name string) (operations.Opera
 
 // List returns operations matching filter, ordered by creation time descending.
 func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]operations.Operation, error) {
-	query := selectOperationSQL + ` WHERE 1=1`
+	query := selectOperationSQL + `
+		WHERE 1 = 1
+	`
 	var args []any
 	if filter.Plugin != "" {
 		args = append(args, filter.Plugin)
@@ -75,7 +83,9 @@ func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]
 		args = append(args, filter.State)
 		query += fmt.Sprintf(" AND state = $%d", len(args))
 	}
-	query += " ORDER BY created_at DESC, name DESC"
+	query += `
+		ORDER BY created_at DESC, name DESC
+	`
 
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -127,23 +137,36 @@ func updateOperationState(
 	case operations.StateRunning:
 		query = `
 			UPDATE operations
-			SET state = $1, error_message = $2, start_time = COALESCE(start_time, $3)
-			WHERE name = $4 AND state IN ('PENDING', 'RUNNING')`
+			SET state = $1,
+			    error_message = $2,
+			    start_time = COALESCE(start_time, $3)
+			WHERE name = $4
+			  AND state IN ('PENDING', 'RUNNING')
+		`
 		args = []any{state, errorMessage, now, name}
 
 	case operations.StateSucceeded:
 		query = `
 			UPDATE operations
-			SET state = $1, error_message = $2, end_time = $3,
-			    nodes_upserted = $4, relations_upserted = $5
-			WHERE name = $6 AND state IN ('PENDING', 'RUNNING')`
+			SET state = $1,
+			    error_message = $2,
+			    end_time = $3,
+			    nodes_upserted = $4,
+			    relations_upserted = $5
+			WHERE name = $6
+			  AND state IN ('PENDING', 'RUNNING')
+		`
 		args = []any{state, errorMessage, now, nodesUpserted, relationsUpserted, name}
 
 	case operations.StateFailed:
 		query = `
 			UPDATE operations
-			SET state = $1, error_message = $2, end_time = $3
-			WHERE name = $4 AND state IN ('PENDING', 'RUNNING')`
+			SET state = $1,
+			    error_message = $2,
+			    end_time = $3
+			WHERE name = $4
+			  AND state IN ('PENDING', 'RUNNING')
+		`
 		args = []any{state, errorMessage, now, name}
 
 	default:
@@ -159,7 +182,11 @@ func updateOperationState(
 	}
 
 	var current operations.State
-	err = q.QueryRow(ctx, `SELECT state FROM operations WHERE name = $1`, name).Scan(&current)
+	err = q.QueryRow(ctx, `
+		SELECT state
+		FROM operations
+		WHERE name = $1
+	`, name).Scan(&current)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return fmt.Errorf("operation %q: %w", name, operations.ErrNotFound)
 	}

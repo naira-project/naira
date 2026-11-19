@@ -32,9 +32,11 @@ func (s *GraphStore) ListKinds(ctx context.Context) ([]string, error) {
 // ListNodes returns all nodes with their plugin claims.
 func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT n.kind, n.path, c.plugin_name, c.snapshot_id, c.properties
+		SELECT
+			n.kind, n.path, c.plugin_name, c.snapshot_id, c.properties
 		FROM nodes n
-		LEFT JOIN node_plugin_claims c ON c.node_id = n.id
+		LEFT JOIN node_plugin_claims c
+			ON c.node_id = n.id
 		ORDER BY n.kind, n.path
 	`)
 	if err != nil {
@@ -70,10 +72,13 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 // GetNode returns the node identified by id, or an error if it does not exist.
 func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.Node, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT c.plugin_name, c.snapshot_id, c.properties
+		SELECT
+			c.plugin_name, c.snapshot_id, c.properties
 		FROM nodes n
-		LEFT JOIN node_plugin_claims c ON c.node_id = n.id
-		WHERE n.kind = $1 AND n.path = $2
+		LEFT JOIN node_plugin_claims c
+			ON c.node_id = n.id
+		WHERE n.kind = $1
+		  AND n.path = $2
 	`, id.Kind, id.Path)
 	if err != nil {
 		return catalog.Node{}, fmt.Errorf("querying node %q/%q: %w", id.Kind, id.Path, err)
@@ -103,12 +108,16 @@ func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.No
 // ListRelations returns all relations with their plugin claims.
 func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT r.kind, f.kind, f.path, t.kind, t.path,
-		       c.plugin_name, c.snapshot_id, c.properties
+		SELECT
+			r.kind, f.kind, f.path, t.kind, t.path,
+			c.plugin_name, c.snapshot_id, c.properties
 		FROM relations r
-		JOIN nodes f ON f.id = r.from_node_id
-		JOIN nodes t ON t.id = r.to_node_id
-		LEFT JOIN relation_plugin_claims c ON c.relation_id = r.id
+		JOIN nodes f
+			ON f.id = r.from_node_id
+		JOIN nodes t
+			ON t.id = r.to_node_id
+		LEFT JOIN relation_plugin_claims c
+			ON c.relation_id = r.id
 		ORDER BY r.kind, f.kind, f.path, t.kind, t.path
 	`)
 	if err != nil {

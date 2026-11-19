@@ -215,10 +215,8 @@ func TestSnapshotCommitter_CompleteMarksOperationSucceeded(t *testing.T) {
 	}, inUTC(got))
 }
 
-// Snapshot application is serialized with an advisory lock so that orphan
-// cleanup cannot race with another plugin claiming the same node. Without it
-// concurrent runs can delete a node another transaction just claimed (or hit
-// foreign-key errors).
+// Concurrent plugins can claim the same node. This test verifies that nodes claimed
+// by only one plugin are removed after every plugin drops them in a later snapshot
 func TestSnapshotCommitter_ConcurrentPluginsSharingNodes(t *testing.T) {
 	t.Parallel()
 	e := newEnv(t)

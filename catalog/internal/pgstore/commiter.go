@@ -60,7 +60,9 @@ func applySnapshot(
 	nodes []catalog.NodeClaim,
 	relations []catalog.RelationClaim,
 ) (SnapshotResult, error) {
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, snapshotLockKey); err != nil {
+	if _, err := tx.Exec(ctx, `
+		SELECT pg_advisory_xact_lock($1)
+	`, snapshotLockKey); err != nil {
 		return SnapshotResult{}, fmt.Errorf("acquiring snapshot lock: %w", err)
 	}
 
@@ -72,29 +74,39 @@ func applySnapshot(
 		return SnapshotResult{}, fmt.Errorf("upserting snapshot relations: %w", err)
 	}
 
-	if _, err := tx.Exec(ctx,
-		`DELETE FROM relation_plugin_claims WHERE plugin_name = $1 AND snapshot_id <> $2`,
-		pluginName, snapshotID,
-	); err != nil {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM relation_plugin_claims
+		WHERE plugin_name = $1
+		  AND snapshot_id <> $2
+	`, pluginName, snapshotID); err != nil {
 		return SnapshotResult{}, fmt.Errorf("pruning stale relation claims for plugin %q: %w", pluginName, err)
 	}
-	if _, err := tx.Exec(ctx,
-		`DELETE FROM node_plugin_claims WHERE plugin_name = $1 AND snapshot_id <> $2`,
-		pluginName, snapshotID,
-	); err != nil {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM node_plugin_claims
+		WHERE plugin_name = $1
+		  AND snapshot_id <> $2
+	`, pluginName, snapshotID); err != nil {
 		return SnapshotResult{}, fmt.Errorf("pruning stale node claims for plugin %q: %w", pluginName, err)
 	}
 
 	// Relations must go before nodes: they reference nodes.
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM relations r
-		WHERE NOT EXISTS (SELECT 1 FROM relation_plugin_claims c WHERE c.relation_id = r.id)
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM relation_plugin_claims c
+			WHERE c.relation_id = r.id
+		)
 	`); err != nil {
 		return SnapshotResult{}, fmt.Errorf("pruning orphaned relations: %w", err)
 	}
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM nodes n
-		WHERE NOT EXISTS (SELECT 1 FROM node_plugin_claims c WHERE c.node_id = n.id)
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM node_plugin_claims c
+			WHERE c.node_id = n.id
+		)
 	`); err != nil {
 		return SnapshotResult{}, fmt.Errorf("pruning orphaned nodes: %w", err)
 	}
@@ -140,18 +152,25 @@ func upsertNodes(
 		INSERT INTO nodes (id, kind, path)
 		SELECT t.id, t.kind, t.path
 		FROM unnest($1::uuid[], $2::text[], $3::text[]) AS t(id, kind, path)
-		ON CONFLICT (kind, path) DO NOTHING
+		ON CONFLICT (kind, path)
+		DO NOTHING
 	`, newIDs, kinds, paths); err != nil {
 		return fmt.Errorf("upserting nodes: %w", err)
 	}
 
 	tag, err := tx.Exec(ctx, `
-		INSERT INTO node_plugin_claims (node_id, plugin_name, snapshot_id, properties)
+		INSERT INTO node_plugin_claims (
+			node_id, plugin_name, snapshot_id, properties
+		)
 		SELECT n.id, $4::text, $5::uuid, t.props::jsonb
 		FROM unnest($1::text[], $2::text[], $3::text[]) AS t(kind, path, props)
-		JOIN nodes n ON n.kind = t.kind AND n.path = t.path
+		JOIN nodes n
+		  ON n.kind = t.kind
+		 AND n.path = t.path
 		ON CONFLICT (node_id, plugin_name)
-		DO UPDATE SET snapshot_id = EXCLUDED.snapshot_id, properties = EXCLUDED.properties
+		DO UPDATE SET
+			snapshot_id = EXCLUDED.snapshot_id,
+			properties = EXCLUDED.properties
 	`, kinds, paths, props, pluginName, snapshotID)
 	if err != nil {
 		return fmt.Errorf("upserting node claims: %w", err)
@@ -203,26 +222,43 @@ func upsertRelations(
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO relations (id, kind, from_node_id, to_node_id)
 		SELECT t.id, t.kind, f.id, tn.id
-		FROM unnest($1::uuid[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
-		  AS t(id, kind, from_kind, from_path, to_kind, to_path)
-		JOIN nodes f  ON f.kind = t.from_kind AND f.path = t.from_path
-		JOIN nodes tn ON tn.kind = t.to_kind AND tn.path = t.to_path
-		ON CONFLICT (kind, from_node_id, to_node_id) DO NOTHING
+		FROM unnest(
+			$1::uuid[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[]
+		) AS t(id, kind, from_kind, from_path, to_kind, to_path)
+		JOIN nodes f
+		  ON f.kind = t.from_kind
+		 AND f.path = t.from_path
+		JOIN nodes tn
+		  ON tn.kind = t.to_kind
+		 AND tn.path = t.to_path
+		ON CONFLICT (kind, from_node_id, to_node_id)
+		DO NOTHING
 	`, newIDs, kinds, fromKinds, fromPaths, toKinds, toPaths); err != nil {
 		return fmt.Errorf("upserting relations: %w", err)
 	}
 
 	tag, err := tx.Exec(ctx, `
-		INSERT INTO relation_plugin_claims (relation_id, plugin_name, snapshot_id, properties)
+		INSERT INTO relation_plugin_claims (
+			relation_id, plugin_name, snapshot_id, properties
+		)
 		SELECT r.id, $7::text, $8::uuid, t.props::jsonb
-		FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[])
-		  AS t(kind, from_kind, from_path, to_kind, to_path, props)
-		JOIN nodes f  ON f.kind = t.from_kind AND f.path = t.from_path
-		JOIN nodes tn ON tn.kind = t.to_kind AND tn.path = t.to_path
+		FROM unnest(
+			$1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[]
+		) AS t(kind, from_kind, from_path, to_kind, to_path, props)
+		JOIN nodes f
+		  ON f.kind = t.from_kind
+		 AND f.path = t.from_path
+		JOIN nodes tn
+		  ON tn.kind = t.to_kind
+		 AND tn.path = t.to_path
 		JOIN relations r
-		  ON r.kind = t.kind AND r.from_node_id = f.id AND r.to_node_id = tn.id
+		  ON r.kind = t.kind
+		 AND r.from_node_id = f.id
+		 AND r.to_node_id = tn.id
 		ON CONFLICT (relation_id, plugin_name)
-		DO UPDATE SET snapshot_id = EXCLUDED.snapshot_id, properties = EXCLUDED.properties
+		DO UPDATE SET
+			snapshot_id = EXCLUDED.snapshot_id,
+			properties = EXCLUDED.properties
 	`, kinds, fromKinds, fromPaths, toKinds, toPaths, props, pluginName, snapshotID)
 	if err != nil {
 		return fmt.Errorf("upserting relation claims: %w", err)
