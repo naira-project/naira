@@ -2,6 +2,12 @@ package pgstore
 
 import "github.com/jackc/pgx/v5/pgxpool"
 
+// SnapshotResult reports the number of graph objects upserted by a snapshot.
+type SnapshotResult struct {
+	NodesUpserted     int
+	RelationsUpserted int
+}
+
 // GraphStore persists the catalog graph.
 type GraphStore struct {
 	pool *pgxpool.Pool

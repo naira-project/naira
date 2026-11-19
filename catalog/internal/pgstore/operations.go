@@ -51,6 +51,7 @@ func (s *OperationStore) Create(ctx context.Context, op operations.Operation) er
 	})
 }
 
+// Get returns the operation with the given name, or an error if it does not exist.
 func (s *OperationStore) Get(ctx context.Context, name string) (operations.Operation, error) {
 	op, err := scanOperation(s.pool.QueryRow(ctx, selectOperationSQL+` WHERE name = $1`, name))
 	if err != nil {
@@ -62,6 +63,7 @@ func (s *OperationStore) Get(ctx context.Context, name string) (operations.Opera
 	return op, nil
 }
 
+// List returns operations matching filter, ordered by creation time descending.
 func (s *OperationStore) List(ctx context.Context, filter operations.Filter) ([]operations.Operation, error) {
 	query := selectOperationSQL + ` WHERE 1=1`
 	var args []any

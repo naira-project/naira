@@ -10,6 +10,7 @@ import (
 	"github.com/naira-project/naira/catalog/internal/catalog"
 )
 
+// ListKinds returns the distinct node kinds in sorted order.
 func (s *GraphStore) ListKinds(ctx context.Context) ([]string, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT kind
@@ -20,12 +21,7 @@ func (s *GraphStore) ListKinds(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("querying node kinds: %w", err)
 	}
 
-	var kind string
-	kinds := make([]string, 0)
-	_, err = pgx.ForEachRow(rows, []any{&kind}, func() error {
-		kinds = append(kinds, kind)
-		return nil
-	})
+	kinds, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
 		return nil, fmt.Errorf("reading node kinds: %w", err)
 	}
@@ -33,6 +29,7 @@ func (s *GraphStore) ListKinds(ctx context.Context) ([]string, error) {
 	return kinds, nil
 }
 
+// ListNodes returns all nodes with their plugin claims.
 func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT n.kind, n.path, c.plugin_name, c.snapshot_id, c.properties
@@ -70,6 +67,7 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 	return result, nil
 }
 
+// GetNode returns the node identified by id, or an error if it does not exist.
 func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.Node, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT c.plugin_name, c.snapshot_id, c.properties
@@ -102,6 +100,7 @@ func (s *GraphStore) GetNode(ctx context.Context, id catalog.NodeID) (catalog.No
 	return node, nil
 }
 
+// ListRelations returns all relations with their plugin claims.
 func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT r.kind, f.kind, f.path, t.kind, t.path,

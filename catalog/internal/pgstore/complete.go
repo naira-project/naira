@@ -11,12 +11,6 @@ import (
 	"github.com/naira-project/naira/catalog/internal/operations"
 )
 
-// SnapshotResult reports the number of graph objects upserted by a snapshot.
-type SnapshotResult struct {
-	NodesUpserted     int
-	RelationsUpserted int
-}
-
 // CompleteSnapshotOperation applies a plugin snapshot and marks the
 // corresponding operation as succeeded in one transaction.
 func (s *SnapshotCommitter) CompleteSnapshotOperation(
