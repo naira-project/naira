@@ -102,8 +102,9 @@ func (s *MemoryStore) UpdateState(_ context.Context, name string, state State, e
 	op.State = state
 	op.Error = err
 
-	if state == StateRunning && op.StartTime.IsZero() {
-		op.StartTime = now
+	if state == StateRunning && op.StartTime == nil {
+		start := now
+		op.StartTime = &start
 	}
 
 	if state == StateSucceeded {
