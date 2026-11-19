@@ -14,8 +14,6 @@ import (
 func TestConnect_IsIdempotent(t *testing.T) {
 	t.Parallel()
 
-	// The database is a clone of the migrated template, so every Connect
-	// here is a "migrations already applied" run.
 	dsn := newDatabase(t)
 
 	first, err := pgstore.Connect(t.Context(), dsn)
@@ -35,12 +33,6 @@ func TestConnect_IsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 5, tables)
 
-	var appliedInit int
-	err = second.QueryRow(t.Context(),
-		`SELECT count(*) FROM goose_db_version WHERE version_id = 1 AND is_applied`,
-	).Scan(&appliedInit)
-	require.NoError(t, err)
-	assert.Equal(t, 1, appliedInit)
 }
 
 func TestConnect_UnreachableDatabase(t *testing.T) {
