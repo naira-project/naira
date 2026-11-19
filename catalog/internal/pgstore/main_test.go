@@ -21,13 +21,8 @@ import (
 	"github.com/naira-project/naira/catalog/internal/pgstore"
 )
 
-// One Postgres container serves the whole package. Migrations are applied
-// once (through the production pgstore.Connect) to templateDB; every test
-// then gets its own database cloned from that template, which is much
-// cheaper than starting a container or re-running migrations per test and
-// lets tests run in parallel without sharing state.
-const templateDB = "catalog_template"
-
+// One Postgres container serves the whole package. Each test gets an isolated
+// database, and pgstore.Connect applies the production migrations to it.
 var (
 	// serverURL points at the container; its path is replaced to address a
 	// specific database.
@@ -53,7 +48,7 @@ func run(m *testing.M) int {
 	ctx := context.Background()
 
 	container, err := postgres.Run(ctx, "postgres:17",
-		postgres.WithDatabase(templateDB),
+		postgres.WithDatabase("catalog"),
 		postgres.WithUsername("catalog"),
 		postgres.WithPassword("catalog"),
 		postgres.BasicWaitStrategies(),
@@ -79,26 +74,12 @@ func run(m *testing.M) int {
 		return 1
 	}
 
-	templatePool, err := pgstore.Connect(ctx, databaseDSN(templateDB))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "migrating template database: %v\n", err)
-		return 1
-	}
-	templatePool.Close()
-
 	adminPool, err = pgxpool.New(ctx, databaseDSN("postgres"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "connecting to maintenance database: %v\n", err)
 		return 1
 	}
 	defer adminPool.Close()
-
-	// CREATE DATABASE ... TEMPLATE fails while anyone is connected to the
-	// template, and server-side sessions can outlive templatePool.Close() briefly.
-	if err := waitForNoSessions(ctx, templateDB); err != nil {
-		fmt.Fprintf(os.Stderr, "waiting for template database to become idle: %v\n", err)
-		return 1
-	}
 
 	return m.Run()
 }
@@ -109,33 +90,13 @@ func databaseDSN(database string) string {
 	return u.String()
 }
 
-func waitForNoSessions(ctx context.Context, database string) error {
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		var sessions int
-		err := adminPool.QueryRow(ctx,
-			`SELECT count(*) FROM pg_stat_activity WHERE datname = $1`, database,
-		).Scan(&sessions)
-		if err != nil {
-			return fmt.Errorf("counting sessions of database %q: %w", database, err)
-		}
-		if sessions == 0 {
-			return nil
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("%d sessions still connected to database %q", sessions, database)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
-
-// newDatabase clones the template into a fresh database that is dropped when
-// the test finishes, and returns its DSN.
+// newDatabase creates a fresh database that is dropped when the test finishes,
+// and returns its DSN.
 func newDatabase(t *testing.T) string {
 	t.Helper()
 
 	name := fmt.Sprintf("test_%d", dbCounter.Add(1))
-	_, err := adminPool.Exec(t.Context(), fmt.Sprintf("CREATE DATABASE %s TEMPLATE %s", name, templateDB))
+	_, err := adminPool.Exec(t.Context(), fmt.Sprintf("CREATE DATABASE %s", name))
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -156,8 +117,7 @@ type env struct {
 	opSeq      atomic.Int64
 }
 
-// newEnv goes through pgstore.Connect (migrations are a no-op on an already
-// migrated clone), so every test also exercises the production path.
+// newEnv creates an isolated database and applies the migrations.
 func newEnv(t *testing.T) *env {
 	t.Helper()
 
