@@ -172,33 +172,33 @@ func TestValidateSnapshotInput_EnforcesPostgresCharacterLimits(t *testing.T) {
 	}{
 		{
 			name:   "plugin name at 40 multibyte characters",
-			plugin: strings.Repeat("界", 40),
+			plugin: strings.Repeat("ą", 40),
 		},
 		{
 			name:    "plugin name exceeds 40 characters",
-			plugin:  strings.Repeat("界", 41),
+			plugin:  strings.Repeat("ą", 41),
 			wantErr: "plugin name exceeds 40 characters",
 		},
 		{
 			name:   "node kind at 40 multibyte characters",
 			plugin: "k8s",
-			nodes:  []NodeClaim{{ID: NodeID{Kind: strings.Repeat("界", 40), Path: "a"}}},
+			nodes:  []NodeClaim{{ID: NodeID{Kind: strings.Repeat("ą", 40), Path: "a"}}},
 		},
 		{
 			name:    "node kind exceeds 40 characters",
 			plugin:  "k8s",
-			nodes:   []NodeClaim{{ID: NodeID{Kind: strings.Repeat("界", 41), Path: "a"}}},
+			nodes:   []NodeClaim{{ID: NodeID{Kind: strings.Repeat("ą", 41), Path: "a"}}},
 			wantErr: "node kind exceeds 40 characters",
 		},
 		{
 			name:   "node path at 300 multibyte characters",
 			plugin: "k8s",
-			nodes:  []NodeClaim{{ID: NodeID{Kind: "service", Path: strings.Repeat("界", 300)}}},
+			nodes:  []NodeClaim{{ID: NodeID{Kind: "service", Path: strings.Repeat("ą", 300)}}},
 		},
 		{
 			name:    "node path exceeds 300 characters",
 			plugin:  "k8s",
-			nodes:   []NodeClaim{{ID: NodeID{Kind: "service", Path: strings.Repeat("界", 301)}}},
+			nodes:   []NodeClaim{{ID: NodeID{Kind: "service", Path: strings.Repeat("ą", 301)}}},
 			wantErr: "node path exceeds 300 characters",
 		},
 		{
@@ -206,7 +206,7 @@ func TestValidateSnapshotInput_EnforcesPostgresCharacterLimits(t *testing.T) {
 			plugin: "k8s",
 			nodes:  validNodes,
 			relations: []RelationClaim{
-				{Kind: strings.Repeat("界", 40), From: validNodes[0].ID, To: validNodes[1].ID},
+				{Kind: strings.Repeat("ą", 40), From: validNodes[0].ID, To: validNodes[1].ID},
 			},
 		},
 		{
@@ -214,7 +214,7 @@ func TestValidateSnapshotInput_EnforcesPostgresCharacterLimits(t *testing.T) {
 			plugin: "k8s",
 			nodes:  validNodes,
 			relations: []RelationClaim{
-				{Kind: strings.Repeat("界", 41), From: validNodes[0].ID, To: validNodes[1].ID},
+				{Kind: strings.Repeat("ą", 41), From: validNodes[0].ID, To: validNodes[1].ID},
 			},
 			wantErr: "relation kind exceeds 40 characters",
 		},
