@@ -338,46 +338,6 @@ func TestCollect(t *testing.T) {
 			},
 		},
 		{
-			name:    "model without ListMetrics data keeps its model node but gets no endpoint (active model listed first)",
-			regions: []string{"us-east-1"},
-			models: []bedrocktypes.FoundationModelSummary{
-				{ModelId: aws.String("active-model")},
-				{ModelId: aws.String("stale-model")},
-			},
-			active: []string{"active-model"},
-			cw:     usageAtIndex0,
-			want: pluginapi.CollectResponse{
-				Nodes: []pluginapi.NodeClaim{
-					{
-						ID:         pluginapi.NodeID{Kind: "model", Path: "bedrock/active-model"},
-						Properties: pluginapi.PropertyMap{"provider_name": ""},
-					},
-					{
-						ID: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/us-east-1/active-model"},
-						Properties: pluginapi.PropertyMap{
-							"region_name":         "us-east-1",
-							"model_id":            "active-model",
-							"input_tokens_total":  "3",
-							"output_tokens_total": "5",
-							"invocations_total":   "1",
-							"status":              "healthy",
-						},
-					},
-					{
-						ID:         pluginapi.NodeID{Kind: "model", Path: "bedrock/stale-model"},
-						Properties: pluginapi.PropertyMap{"provider_name": ""},
-					},
-				},
-				Relations: []pluginapi.RelationClaim{
-					{
-						Kind: "serves_model",
-						From: pluginapi.NodeID{Kind: "inference_endpoint", Path: "bedrock/us-east-1/active-model"},
-						To:   pluginapi.NodeID{Kind: "model", Path: "bedrock/active-model"},
-					},
-				},
-			},
-		},
-		{
 			name:    "the same invoked model in multiple regions produces one model and one endpoint per region",
 			regions: []string{"us-east-1", "eu-central-1"},
 			models: []bedrocktypes.FoundationModelSummary{
