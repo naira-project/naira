@@ -256,11 +256,11 @@ func numericValue(row map[string]any, key string) string {
 // here once pinned — the plugin owns this URL so the UI need not know
 // Langfuse's routing.
 func tracesURL(project projectConfig) string {
-	base := &url.URL{Path: "/project/" + project.ProjectID + "/traces"}
-
-	host, err := url.Parse(project.UIHost)
-	if err != nil {
-		return base.String()
+	// "/" so the fallback stays absolute: JoinPath on a relative URL stays relative.
+	host := &url.URL{Path: "/"}
+	if parsed, err := url.Parse(project.UIHost); err == nil {
+		host = parsed
 	}
-	return host.ResolveReference(base).String()
+	// JoinPath, not ResolveReference: keeps any path prefix in UIHost.
+	return host.JoinPath("project", project.ProjectID, "traces").String()
 }

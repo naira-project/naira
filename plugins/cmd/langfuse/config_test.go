@@ -200,12 +200,14 @@ projects:
     secret_key: sk-lf-demo
     observes:
       - kind: deployment/v1
+        path_prefix: lite/llm
         namespace: ns/sub
         name: app/v1
         trace_name: a/b
 `))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `field "kind" must not contain '/'`)
+	assert.Contains(t, err.Error(), `field "path_prefix" must not contain '/'`)
 	assert.Contains(t, err.Error(), `field "namespace" must not contain '/'`)
 	assert.Contains(t, err.Error(), `field "name" must not contain '/'`)
 	assert.Contains(t, err.Error(), `field "trace_name" must not contain '/'`)

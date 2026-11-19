@@ -5,10 +5,10 @@
 // # Configuration
 //
 // Projects, credentials and their bindings to catalog nodes live in a YAML
-// file, re-read on every collect. Each binding names the observed workload by
-// namespace and name; the cluster id completing its node path is resolved from
-// the cluster. The file holds API secrets, so mount it from a Secret. See
-// sample_config.yaml for the schema.
+// file, re-read on every collect. Each binding names the observed node by
+// namespace and name; its path prefix is either set on the binding or, by
+// default, the cluster id resolved from the cluster. The file holds API
+// secrets, so mount it from a Secret. See sample_config.yaml for the schema.
 //
 // # Metrics
 //
@@ -28,8 +28,8 @@
 //     calls; defaults to 10s.
 //
 //   - LANGFUSE_KUBECONFIG (optional) - path to a kubeconfig used to resolve the
-//     cluster id that catalog node paths are built from; defaults to the
-//     in-cluster config.
+//     cluster id that bindings without a path_prefix build node paths from;
+//     defaults to the in-cluster config.
 //
 //go:generate bash -c "goreadme -use-stdlib-markdown -title 'langfuse plugin' | sed 's/ {#hdr-[^}]*}//g' > README.md"
 package main
@@ -145,18 +145,14 @@ func (p *Plugin) Collect(ctx context.Context) (pluginapi.CollectResponse, error)
 
 	to := p.now().UTC()
 
-	// Only bindings need the cluster id, so an unbound config collects without
-	// cluster access at all.
+	// Only bindings without a path_prefix need the cluster id, so other configs
+	// collect without cluster access at all.
 	var clusterID string
-	for _, project := range cfg.Projects {
-		if len(project.Observes) == 0 {
-			continue
-		}
+	if cfg.needsClusterID() {
 		clusterID, err = p.resolveClusterID(ctx)
 		if err != nil {
 			return pluginapi.CollectResponse{}, fmt.Errorf("resolving cluster id: %w", err)
 		}
-		break
 	}
 
 	var (

@@ -4,7 +4,7 @@ langfuse plugin reads aggregate LLM metrics — cost, latency and user feedback 
 
 ## Configuration
 
-Projects, credentials and their bindings to catalog nodes live in a YAML file, re-read on every collect. Each binding names the observed workload by namespace and name; the cluster id completing its node path is resolved from the cluster. The file holds API secrets, so mount it from a Secret. See sample\_config.yaml for the schema.
+Projects, credentials and their bindings to catalog nodes live in a YAML file, re-read on every collect. Each binding names the observed node by namespace and name; its path prefix is either set on the binding or, by default, the cluster id resolved from the cluster. The file holds API secrets, so mount it from a Secret. See sample\_config.yaml for the schema.
 
 ## Metrics
 
@@ -18,7 +18,7 @@ A failing project re-emits its last good values marked stale rather than failing
 
   - LANGFUSE\_HTTP\_TIMEOUT (optional) - per-request timeout for Langfuse API calls; defaults to 10s.
 
-  - LANGFUSE\_KUBECONFIG (optional) - path to a kubeconfig used to resolve the cluster id that catalog node paths are built from; defaults to the in-cluster config.
+  - LANGFUSE\_KUBECONFIG (optional) - path to a kubeconfig used to resolve the cluster id that bindings without a path\_prefix build node paths from; defaults to the in-cluster config.
 
 ---
 Readme created from Go doc with [goreadme](https://github.com/posener/goreadme)

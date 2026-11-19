@@ -48,13 +48,18 @@ func scopeNodeID(project projectConfig, traceName string) pluginapi.NodeID {
 	return pluginapi.NodeID{Kind: pluginapi.NodeKindLangfuseProject, Path: path}
 }
 
-// appNodeID is the catalog identity of an observed app. The catalog builds
-// these paths as clusterID/namespace/name, so a binding cannot name one as a
-// literal: the cluster id is the kube-system namespace UID, new per cluster.
+// appNodeID is the catalog identity of an observed app:
+// prefix/namespace/name, where prefix is the binding's PathPrefix or else
+// clusterID. Workload plugins key paths by the kube-system namespace UID,
+// which is new per cluster, so bindings cannot name it literally.
 func appNodeID(clusterID string, app observedApp) pluginapi.NodeID {
+	prefix := app.PathPrefix
+	if prefix == "" {
+		prefix = clusterID
+	}
 	return pluginapi.NodeID{
 		Kind: app.Kind,
-		Path: clusterID + "/" + app.Namespace + "/" + app.Name,
+		Path: prefix + "/" + app.Namespace + "/" + app.Name,
 	}
 }
 
@@ -148,8 +153,10 @@ func (l *lastGood) record(path string, properties pluginapi.PropertyMap) {
 }
 
 // degrade returns what to emit for a failed scope: the last good values marked
-// stale, or identity alone if there are none. The first failure after a
-// success sets stale_since; later ones preserve it.
+// stale, or identity alone if there are none. Identity always reflects the
+// current config, and values cached for another host or project_id are
+// dropped. The first failure after a success sets stale_since; later ones
+// preserve it.
 func (l *lastGood) degrade(
 	project projectConfig,
 	traceName string,
@@ -161,8 +168,17 @@ func (l *lastGood) degrade(
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	properties := identityProperties(project, traceName)
-	for key, value := range l.properties[path] {
+	cached := l.properties[path]
+	if cached != nil && (cached[propertyKeyHost] != project.Host || cached[propertyKeyProjectID] != project.ProjectID) {
+		delete(l.properties, path)
+		delete(l.staleSince, path)
+		cached = nil
+	}
+	properties := make(pluginapi.PropertyMap)
+	for key, value := range cached {
+		properties[key] = value
+	}
+	for key, value := range identityProperties(project, traceName) {
 		properties[key] = value
 	}
 

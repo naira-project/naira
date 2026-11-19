@@ -31,10 +31,13 @@
 #     observes       optional; catalog nodes whose detail page shows these
 #                    metrics.
 #       kind         required; node kind, e.g. deployment or application.
-#       namespace    required; namespace of the observed workload.
-#       name         required; name of the observed workload. The plugin
-#                    completes the node path with the cluster id it reads from
-#                    the cluster, so bindings stay valid across rebuilds.
+#       path_prefix  optional; first segment of the node path. Omit it for
+#                    workload nodes (deployment, service): the plugin uses the
+#                    cluster id it reads from the cluster, so bindings stay
+#                    valid across rebuilds. Set it for nodes a plugin keys by
+#                    its own PATH_PREFIX, e.g. litellm for application nodes.
+#       namespace    required; namespace of the observed node.
+#       name         required; name of the observed node.
 #       trace_name   optional; narrows the metrics to this trace name. Apps
 #                    sharing a project with no trace_name share one set of
 #                    numbers; give each its own trace_name to measure them

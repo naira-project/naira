@@ -62,8 +62,11 @@ type projectConfig struct {
 // shows these metrics. Apps sharing an unscoped project share one set of
 // numbers; give each a TraceName to measure them apart.
 type observedApp struct {
-	Kind      string `yaml:"kind"`
-	Namespace string `yaml:"namespace"`
+	Kind string `yaml:"kind"`
+	// PathPrefix replaces the cluster id as the node path's first segment, for
+	// nodes a plugin keys by its own PATH_PREFIX instead, e.g. litellm apps.
+	PathPrefix string `yaml:"path_prefix"`
+	Namespace  string `yaml:"namespace"`
 	Name      string `yaml:"name"`
 	TraceName string `yaml:"trace_name"`
 
@@ -266,6 +269,7 @@ func (c *langfuseConfig) validate() error {
 			// Each of these is a single segment of a node path or kind.
 			for _, field := range []struct{ name, value string }{
 				{"kind", o.Kind},
+				{"path_prefix", o.PathPrefix},
 				{"namespace", o.Namespace},
 				{"name", o.Name},
 				{"trace_name", o.TraceName},
@@ -275,7 +279,7 @@ func (c *langfuseConfig) validate() error {
 				}
 			}
 
-			key := o.Kind + "\x00" + o.Namespace + "\x00" + o.Name
+			key := o.Kind + "\x00" + o.PathPrefix + "\x00" + o.Namespace + "\x00" + o.Name
 			if scopes[key] {
 				report(o.line, "projects[%d].observes[%d]: duplicate binding for %s %q", i, j, o.Kind, o.Namespace+"/"+o.Name)
 			}
@@ -284,6 +288,19 @@ func (c *langfuseConfig) validate() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// needsClusterID reports whether any binding falls back to the cluster id as
+// its path prefix.
+func (c *langfuseConfig) needsClusterID() bool {
+	for _, p := range c.Projects {
+		for _, o := range p.Observes {
+			if o.PathPrefix == "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // scopes returns the distinct scopes to query: one per trace name across the

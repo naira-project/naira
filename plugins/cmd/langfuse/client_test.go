@@ -188,8 +188,22 @@ func TestTracesURLJoinsHostAndProject(t *testing.T) {
 
 func TestTracesURLKeepsHostBasePath(t *testing.T) {
 	assert.Equal(t,
-		"https://example.com/project/cm0demo/traces",
-		tracesURL(testProject("https://example.com")),
+		"https://example.com/langfuse/project/cm0demo/traces",
+		tracesURL(testProject("https://example.com/langfuse")),
+	)
+}
+
+func TestTracesURLFallsBackToRouteOnUnparseableHost(t *testing.T) {
+	assert.Equal(t,
+		"/project/cm0demo/traces",
+		tracesURL(testProject("://nonsense")),
+	)
+}
+
+func TestTracesURLKeepsHostBasePathWithTrailingSlash(t *testing.T) {
+	assert.Equal(t,
+		"https://example.com/langfuse/project/cm0demo/traces",
+		tracesURL(testProject("https://example.com/langfuse/")),
 	)
 }
 

@@ -172,6 +172,41 @@ projects:
 	assert.Empty(t, response.Relations)
 }
 
+// litellm keys application nodes by its PATH_PREFIX, not the cluster id, so a
+// prefixed binding must land on that node and need no cluster access.
+func TestCollectBindsByPathPrefixWithoutClusterLookup(t *testing.T) {
+	server, _ := capturingServer(t, `{"data":[]}`)
+	p := newTestPlugin(t, writeConfig(t, fmt.Sprintf(`
+schema_version: 1
+projects:
+  - id: demo
+    host: %s
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+    observes:
+      - kind: application
+        path_prefix: litellm
+        namespace: naira-deps
+        name: rag-assistant
+`, server.URL)))
+	p.lookupClusterID = func(context.Context) (string, error) {
+		t.Error("cluster id resolved though every binding has a path_prefix")
+		return "", nil
+	}
+
+	response, err := p.Collect(t.Context())
+	require.NoError(t, err)
+
+	appID := pluginapi.NodeID{Kind: "application", Path: "litellm/naira-deps/rag-assistant"}
+	assert.Contains(t, nodesByID(response), appID)
+	assert.Equal(t, []pluginapi.RelationClaim{{
+		Kind: pluginapi.RelationKindObservedBy,
+		From: appID,
+		To:   pluginapi.NodeID{Kind: pluginapi.NodeKindLangfuseProject, Path: "demo"},
+	}}, response.Relations)
+}
+
 // Without the cluster id no binding can name its node, so the run must fail
 // and leave the previous snapshot standing.
 func TestCollectFailsWhenClusterIDIsUnresolvable(t *testing.T) {
