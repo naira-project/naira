@@ -8,12 +8,45 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/operations"
 )
 
 // snapshotLockKey is the advisory lock key ("catalog") held while applying a
 // snapshot. The lock is global: snapshots of all plugins are serialized, which
 // trades throughput for race-free orphan cleanup.
 const snapshotLockKey int64 = 0x636174616c6f67
+
+// CompleteSnapshotOperation applies a plugin snapshot and marks the
+// corresponding operation as succeeded in one transaction.
+func (s *SnapshotCommitter) CompleteSnapshotOperation(
+	ctx context.Context,
+	operationName, pluginName string,
+	snapshotID uuid.UUID,
+	nodes []catalog.NodeClaim,
+	relations []catalog.RelationClaim,
+) (SnapshotResult, error) {
+	if err := catalog.ValidateSnapshotInput(pluginName, snapshotID, nodes, relations); err != nil {
+		return SnapshotResult{}, fmt.Errorf("validate snapshot input: %w", err)
+	}
+
+	var result SnapshotResult
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		result, err = applySnapshot(ctx, tx, pluginName, snapshotID, nodes, relations)
+		if err != nil {
+			return fmt.Errorf("applying snapshot: %w", err)
+		}
+
+		if err := updateOperationState(ctx, tx, operationName, operations.StateSucceeded, nil, result.NodesUpserted, result.RelationsUpserted); err != nil {
+			return fmt.Errorf("marking operation %q succeeded: %w", operationName, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return SnapshotResult{}, fmt.Errorf("completing snapshot operation %q: %w", operationName, err)
+	}
+	return result, nil
+}
 
 // applySnapshot upserts pluginName's claims for nodes/relations, prunes
 // everything previously claimed by pluginName that isn't part of this
