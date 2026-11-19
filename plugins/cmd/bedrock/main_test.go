@@ -541,6 +541,8 @@ func TestCollect_PaginatesGetMetricData(t *testing.T) {
 
 // GetMetricData accepts at most 500 queries per call and each model needs 6,
 // so 84 models (504 queries) is the smallest count that must be split.
+// See the MetricDataQueries limit in the API reference:
+// https://docs.aws.amazon.com/AmazonCloudWatch/latest/APIReference/API_GetMetricData.html
 func TestCollect_SplitsMetricQueriesIntoBatches(t *testing.T) {
 	var (
 		models   []bedrocktypes.FoundationModelSummary
