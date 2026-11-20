@@ -8,18 +8,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateSnapshotInput_DuplicateIDs(t *testing.T) {
+func TestValidateSnapshotInput(t *testing.T) {
 	t.Parallel()
 
 	a := NodeID{Kind: "service", Path: "a"}
 	b := NodeID{Kind: "service", Path: "b"}
+	validNodes := []NodeClaim{
+		{ID: a},
+		{ID: NodeID{Kind: "target", Path: "b"}},
+	}
 
 	tests := []struct {
 		name      string
+		plugin    string
 		nodes     []NodeClaim
 		relations []RelationClaim
 		wantErr   string
 	}{
+		{
+			name: "empty snapshot is valid",
+		},
 		{
 			name: "duplicate node ID",
 			nodes: []NodeClaim{
@@ -54,68 +62,6 @@ func TestValidateSnapshotInput_DuplicateIDs(t *testing.T) {
 				{Kind: "calls", From: b, To: a},
 			},
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := ValidateSnapshotInput("k8s", snapshotV1, tt.nodes, tt.relations)
-
-			if tt.wantErr == "" {
-				assert.NoError(t, err)
-				return
-			}
-			assert.ErrorIs(t, err, ErrInvalidIngestion)
-			assert.ErrorContains(t, err, tt.wantErr)
-		})
-	}
-}
-
-func TestValidateSnapshotInput_RequiresPluginAndSnapshotID(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		pluginName string
-		snapshotID uuid.UUID
-		wantErr    string
-	}{
-		{
-			name:       "empty plugin name",
-			snapshotID: snapshotV1,
-			wantErr:    "plugin name is empty",
-		},
-		{
-			name:       "empty snapshot ID",
-			pluginName: "k8s",
-			wantErr:    "snapshot ID is empty",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := ValidateSnapshotInput(tt.pluginName, tt.snapshotID, nil, nil)
-
-			assert.ErrorIs(t, err, ErrInvalidIngestion)
-			assert.ErrorContains(t, err, tt.wantErr)
-		})
-	}
-}
-
-func TestValidateSnapshotInput_RejectsMalformedIDs(t *testing.T) {
-	t.Parallel()
-
-	a := NodeID{Kind: "service", Path: "a"}
-	b := NodeID{Kind: "service", Path: "b"}
-	nodes := []NodeClaim{{ID: a}, {ID: b}}
-
-	tests := []struct {
-		name      string
-		nodes     []NodeClaim
-		relations []RelationClaim
-		wantErr   string
-	}{
 		{
 			name:    "node with empty kind",
 			nodes:   []NodeClaim{{ID: NodeID{Path: "a"}}},
@@ -128,7 +74,7 @@ func TestValidateSnapshotInput_RejectsMalformedIDs(t *testing.T) {
 		},
 		{
 			name:  "relation kind contains reserved separator",
-			nodes: nodes,
+			nodes: []NodeClaim{{ID: a}, {ID: b}},
 			relations: []RelationClaim{
 				{Kind: "calls/api", From: a, To: b},
 			},
@@ -142,37 +88,19 @@ func TestValidateSnapshotInput_RejectsMalformedIDs(t *testing.T) {
 			},
 			wantErr: `target node "service"/"b" not found`,
 		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			err := ValidateSnapshotInput("k8s", snapshotV1, tt.nodes, tt.relations)
-
-			assert.ErrorIs(t, err, ErrInvalidIngestion)
-			assert.ErrorContains(t, err, tt.wantErr)
-		})
-	}
-}
-
-func TestValidateSnapshotInput_EnforcesPostgresCharacterLimits(t *testing.T) {
-	t.Parallel()
-
-	validNodes := []NodeClaim{
-		{ID: NodeID{Kind: "service", Path: "a"}},
-		{ID: NodeID{Kind: "target", Path: "b"}},
-	}
-
-	tests := []struct {
-		name      string
-		plugin    string
-		nodes     []NodeClaim
-		relations []RelationClaim
-		wantErr   string
-	}{
 		{
 			name:   "plugin name at 40 multibyte characters",
 			plugin: strings.Repeat("ą", 40),
+		},
+		{
+			name:   "plugin name at 40 four-byte code points",
+			plugin: strings.Repeat("🤗", 40),
+		},
+		{
+			// Each 😵‍💫 grapheme contains three code points, so 40 graphemes exceed the 40-rune limit.
+			name:    "plugin name with 40 multi-code-point emoji graphemes exceeds limit",
+			plugin:  strings.Repeat("😵‍💫", 40),
+			wantErr: "plugin name exceeds 40 characters",
 		},
 		{
 			name:    "plugin name exceeds 40 characters",
@@ -224,7 +152,12 @@ func TestValidateSnapshotInput_EnforcesPostgresCharacterLimits(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := ValidateSnapshotInput(tt.plugin, snapshotV1, tt.nodes, tt.relations)
+			plugin := tt.plugin
+			if plugin == "" {
+				plugin = "k8s"
+			}
+
+			err := ValidateSnapshotInput(plugin, snapshotV1, tt.nodes, tt.relations)
 			if tt.wantErr == "" {
 				assert.NoError(t, err)
 				return
@@ -235,8 +168,35 @@ func TestValidateSnapshotInput_EnforcesPostgresCharacterLimits(t *testing.T) {
 	}
 }
 
-func TestValidateSnapshotInput_AllowsEmptySnapshot(t *testing.T) {
+func TestValidateSnapshotInput_RequiresPluginAndSnapshotID(t *testing.T) {
 	t.Parallel()
 
-	assert.NoError(t, ValidateSnapshotInput("k8s", snapshotV1, nil, nil))
+	tests := []struct {
+		name       string
+		pluginName string
+		snapshotID uuid.UUID
+		wantErr    string
+	}{
+		{
+			name:       "empty plugin name",
+			pluginName: "",
+			snapshotID: snapshotV1,
+			wantErr:    "plugin name is empty",
+		},
+		{
+			name:       "empty snapshot ID",
+			pluginName: "k8s",
+			wantErr:    "snapshot ID is empty",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := ValidateSnapshotInput(tt.pluginName, tt.snapshotID, nil, nil)
+
+			assert.ErrorIs(t, err, ErrInvalidIngestion)
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }
