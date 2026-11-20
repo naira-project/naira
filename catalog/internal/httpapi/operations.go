@@ -16,7 +16,7 @@ import (
 // or completed operation.
 type OperationMetadataResource struct {
 	Plugin    string     `json:"plugin"`
-	StartTime time.Time  `json:"startTime,omitzero"`
+	StartTime *time.Time `json:"startTime,omitempty"`
 	EndTime   *time.Time `json:"endTime,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
 }
