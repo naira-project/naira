@@ -6,8 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
+)
+
+// Lengths limits mirror the VARCHAR sizes in migrations/0001_init.sql. Postgres counts
+// characters rather than bytes, so lengths are measured in runes.
+const (
+	maxIdentifierLength = 40  // plugin name, node kind, relation kind
+	maxNodePathLength   = 300 // node path
 )
 
 var (
@@ -50,6 +58,9 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 	if pluginName == "" {
 		return fmt.Errorf("%w: plugin name is empty", ErrInvalidIngestion)
 	}
+	if utf8.RuneCountInString(pluginName) > maxIdentifierLength {
+		return fmt.Errorf("%w: plugin name exceeds %d characters", ErrInvalidIngestion, maxIdentifierLength)
+	}
 
 	if snapshotID == uuid.Nil {
 		return fmt.Errorf("%w: snapshot ID is empty", ErrInvalidIngestion)
@@ -62,13 +73,23 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 		if id.Kind == "" || id.Path == "" {
 			return fmt.Errorf("%w: node ID with empty kind or path", ErrInvalidIngestion)
 		}
+		if utf8.RuneCountInString(id.Kind) > maxIdentifierLength {
+			return fmt.Errorf("%w: node kind exceeds %d characters", ErrInvalidIngestion, maxIdentifierLength)
+		}
+		if utf8.RuneCountInString(id.Path) > maxNodePathLength {
+			return fmt.Errorf("%w: node path exceeds %d characters", ErrInvalidIngestion, maxNodePathLength)
+		}
 		if strings.Contains(id.Kind, "/") {
 			return fmt.Errorf("%w: node kind %q contains reserved separator '/'", ErrInvalidIngestion, id.Kind)
+		}
+		if _, exists := availableNodes[id]; exists {
+			return fmt.Errorf("%w: duplicate node ID %q/%q", ErrInvalidIngestion, id.Kind, id.Path)
 		}
 
 		availableNodes[id] = struct{}{}
 	}
 
+	availableRelations := make(map[RelationID]struct{}, len(relations))
 	for _, relation := range relations {
 		fromID := relation.From
 		toID := relation.To
@@ -76,6 +97,8 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 		switch {
 		case relation.Kind == "" || fromID.Kind == "" || fromID.Path == "" || toID.Kind == "" || toID.Path == "":
 			return fmt.Errorf("%w: relation ID with empty kind, source, or target", ErrInvalidIngestion)
+		case utf8.RuneCountInString(relation.Kind) > maxIdentifierLength:
+			return fmt.Errorf("%w: relation kind exceeds %d characters", ErrInvalidIngestion, maxIdentifierLength)
 		case strings.Contains(relation.Kind, "/"):
 			return fmt.Errorf("%w: relation kind %q contains reserved separator '/'", ErrInvalidIngestion, relation.Kind)
 		case strings.Contains(fromID.Kind, "/"):
@@ -83,6 +106,14 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 		case strings.Contains(toID.Kind, "/"):
 			return fmt.Errorf("%w: target node kind %q contains reserved separator '/'", ErrInvalidIngestion, toID.Kind)
 		}
+
+		relationID := RelationID{Kind: relation.Kind, From: fromID, To: toID}
+		if _, exists := availableRelations[relationID]; exists {
+			return fmt.Errorf("%w: duplicate relation ID %q %q/%q -> %q/%q",
+				ErrInvalidIngestion, relation.Kind, fromID.Kind, fromID.Path, toID.Kind, toID.Path)
+		}
+		availableRelations[relationID] = struct{}{}
+
 		if _, ok := availableNodes[fromID]; !ok {
 			return fmt.Errorf("%w: source node %q/%q not found", ErrInvalidIngestion, fromID.Kind, fromID.Path)
 		}
