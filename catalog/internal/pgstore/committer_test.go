@@ -297,6 +297,7 @@ func TestSnapshotCommitter_FinishedOperationIsRejectedAndNothingApplied(t *testi
 	)
 	require.NoError(t, err)
 
+	// This fails because the operation is already finished.
 	_, err = e.committer.CompleteSnapshotOperation(
 		t.Context(), "op-1", "k8s", snap2, []catalog.NodeClaim{nodeClaim(b, nil)}, nil,
 	)

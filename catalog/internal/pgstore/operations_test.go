@@ -18,12 +18,10 @@ var t0 = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 func inUTC(op operations.Operation) operations.Operation {
 	op.CreatedAt = op.CreatedAt.UTC()
 	if op.StartTime != nil {
-		start := op.StartTime.UTC()
-		op.StartTime = &start
+		op.StartTime = new(op.StartTime.UTC())
 	}
 	if op.EndTime != nil {
-		end := op.EndTime.UTC()
-		op.EndTime = &end
+		op.EndTime = new(op.EndTime.UTC())
 	}
 	return op
 }
@@ -285,6 +283,7 @@ func TestOperationStore_UpdateState_UnsupportedState(t *testing.T) {
 	e := newEnv(t)
 	require.NoError(t, e.operations.Create(t.Context(), pendingOperation("op-1", "litellm", t0)))
 
+	// Pending can only be set when the operation is created.
 	err := e.operations.UpdateState(t.Context(), "op-1", operations.StatePending, nil, 0, 0)
 
 	assert.ErrorContains(t, err, "not handled")
