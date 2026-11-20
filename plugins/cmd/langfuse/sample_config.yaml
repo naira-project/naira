@@ -1,0 +1,73 @@
+# Sample Langfuse plugin configuration.
+#
+# This file is parsed by the plugin's unit tests, so it is always a valid,
+# up-to-date example. Usage details: plugins/cmd/langfuse/README.md.
+#
+# SECURITY: this file carries Langfuse API secrets. Mount it from a Secret,
+# never a ConfigMap, and keep real keys out of version control.
+#
+# Schema (version 1):
+#
+#   schema_version   required; must be 1.
+#   projects         required; use [] to disable collection (the key must be
+#                    present so a deleted block cannot silently wipe every
+#                    metrics node on the next sync).
+#     id             required; lowercase [a-z0-9_-], unique. Becomes the node
+#                    path, so keep it stable.
+#     host           required; absolute base URL the plugin calls the API on.
+#     ui_host        optional; absolute base URL the "View traces" deep link
+#                    points at. Set it when the browser cannot reach `host` —
+#                    an in-cluster service behind a port-forward, say.
+#                    Defaults to `host`.
+#     project_id     required; the Langfuse project id, used for deep links.
+#     public_key     required; Langfuse public key (pk-lf-...).
+#     secret_key     required; Langfuse secret key (sk-lf-...). Key pairs are
+#                    project-scoped, so each project needs its own pair.
+#     window         optional; lookback to aggregate over, in Go duration
+#                    syntax (h, m, s — there is no day unit, so use 168h for
+#                    a week). Default 24h.
+#     score_name     optional; numeric score to aggregate as user feedback.
+#                    Omitted means no feedback widget for this project.
+#     observes       optional; catalog nodes whose detail page shows these
+#                    metrics.
+#       kind         required; node kind, e.g. deployment or application.
+#       path_prefix  optional; first segment of the node path. Omit it for
+#                    workload nodes (deployment, service): the plugin uses the
+#                    cluster id it reads from the cluster, so bindings stay
+#                    valid across rebuilds. Set it for nodes a plugin keys by
+#                    its own PATH_PREFIX, e.g. litellm for application nodes.
+#       namespace    required; namespace of the observed node.
+#       name         required; name of the observed node.
+#       trace_name   optional; narrows the metrics to this trace name. Apps
+#                    sharing a project with no trace_name share one set of
+#                    numbers; give each its own trace_name to measure them
+#                    apart.
+
+schema_version: 1
+
+# One Langfuse project reporting for two applications, told apart by the trace
+# name each of them emits. Every binding also rolls up into the project-wide
+# numbers, so this measures them together as well as apart.
+#
+# Add a second entry under `projects` instead when the applications belong to
+# separate Langfuse projects. API keys are scoped to a project, so each entry
+# carries its own pair; organizations never appear here, because the plugin
+# addresses projects directly. Note that `window` and `score_name` are
+# per-project: applications needing different ones cannot share an entry.
+projects:
+  - id: naira-demo
+    host: https://langfuse.example.com
+    project_id: naira-demo
+    public_key: pk-lf-00000000-0000-0000-0000-000000000000
+    secret_key: sk-lf-00000000-0000-0000-0000-000000000000
+    window: 24h
+    score_name: user_feedback
+    observes:
+      - kind: deployment
+        namespace: naira-deps
+        name: triage-agent
+        trace_name: triage-agent
+      - kind: deployment
+        namespace: naira-deps
+        name: escalation-agent
+        trace_name: escalation-agent
