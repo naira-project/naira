@@ -222,7 +222,9 @@ catalog:
     bedrock:
       # Off by default: AWS credentials are required. Add them to the catalog
       # Secret (keys BEDROCK_AWS_ACCESS_KEY_ID and
-      # BEDROCK_AWS_SECRET_ACCESS_KEY) before enabling.
+      # BEDROCK_AWS_SECRET_ACCESS_KEY) before enabling. The IAM user needs
+      # bedrock:ListFoundationModels, cloudwatch:ListMetrics and
+      # cloudwatch:GetMetricData.
       enabled: false
       image: {repository: naira-plugin-bedrock, tag: ""}
       port: 50060
