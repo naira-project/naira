@@ -52,7 +52,7 @@ func (s *GraphStore) ListNodes(ctx context.Context) ([]catalog.Node, error) {
 
 	// Rows are ordered by the full node key, so one node's rows are adjacent.
 	_, err = pgx.ForEachRow(rows, []any{&id.Kind, &id.Path, &pluginName, &snapshotID, &propsRaw}, func() error {
-		if len(result) == 0 || result[len(result)-1].ID != id {
+		if isNewNode(result, id) {
 			result = append(result, catalog.Node{ID: id, PluginClaims: make(map[string]catalog.PluginClaim)})
 		}
 		node := &result[len(result)-1]
@@ -136,7 +136,7 @@ func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, err
 		&id.Kind, &id.From.Kind, &id.From.Path, &id.To.Kind, &id.To.Path,
 		&pluginName, &snapshotID, &propsRaw,
 	}, func() error {
-		if n := len(result); n == 0 || result[n-1].Kind != id.Kind || result[n-1].From != id.From || result[n-1].To != id.To {
+		if isNewRelation(result, id) {
 			result = append(result, catalog.Relation{
 				Kind:         id.Kind,
 				From:         id.From,
@@ -156,6 +156,19 @@ func (s *GraphStore) ListRelations(ctx context.Context) ([]catalog.Relation, err
 	}
 
 	return result, nil
+}
+
+func isNewNode(nodes []catalog.Node, id catalog.NodeID) bool {
+	return len(nodes) == 0 || nodes[len(nodes)-1].ID != id
+}
+
+func isNewRelation(relations []catalog.Relation, id catalog.RelationID) bool {
+	if len(relations) == 0 {
+		return true
+	}
+
+	last := relations[len(relations)-1]
+	return last.Kind != id.Kind || last.From != id.From || last.To != id.To
 }
 
 // addClaim decodes raw and stores it in claims under name. A nil name
