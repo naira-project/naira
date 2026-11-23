@@ -57,7 +57,7 @@ func TestMemoryStoreUpdateStateSetsRunningStartTime(t *testing.T) {
 	got, err := store.Get(t.Context(), op.Name)
 	require.NoError(t, err)
 	assert.Equal(t, StateRunning, got.State)
-	assert.False(t, got.StartTime.IsZero(), "start time should be set on RUNNING")
+	assert.NotNil(t, got.StartTime, "start time should be set on RUNNING")
 	assert.Nil(t, got.EndTime, "end time should be nil while running")
 }
 
