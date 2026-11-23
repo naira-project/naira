@@ -464,6 +464,7 @@ jobs:
             echo "No teardown key, nothing to delete."
             exit 0
           fi
+          : "${VCLUSTER_PLATFORM_URL:?VCLUSTER_PLATFORM_URL is not set}"
           echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
           cfg="$(mktemp -d)/config.json"
           trap 'rm -rf "$(dirname "${cfg}")" "${TEARDOWN_KEY_FILE}"' EXIT
