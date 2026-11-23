@@ -108,39 +108,33 @@ func TestValidateSnapshotInput(t *testing.T) {
 			wantErr: "plugin name exceeds 40 characters",
 		},
 		{
-			name:   "node kind at 40 multibyte characters",
-			plugin: "k8s",
-			nodes:  []NodeClaim{{ID: NodeID{Kind: strings.Repeat("ą", 40), Path: "a"}}},
+			name:  "node kind at 40 multibyte characters",
+			nodes: []NodeClaim{{ID: NodeID{Kind: strings.Repeat("ą", 40), Path: "a"}}},
 		},
 		{
 			name:    "node kind exceeds 40 characters",
-			plugin:  "k8s",
 			nodes:   []NodeClaim{{ID: NodeID{Kind: strings.Repeat("ą", 41), Path: "a"}}},
 			wantErr: "node kind exceeds 40 characters",
 		},
 		{
-			name:   "node path at 300 multibyte characters",
-			plugin: "k8s",
-			nodes:  []NodeClaim{{ID: NodeID{Kind: "service", Path: strings.Repeat("ą", 300)}}},
+			name:  "node path at 300 multibyte characters",
+			nodes: []NodeClaim{{ID: NodeID{Kind: "service", Path: strings.Repeat("ą", 300)}}},
 		},
 		{
 			name:    "node path exceeds 300 characters",
-			plugin:  "k8s",
 			nodes:   []NodeClaim{{ID: NodeID{Kind: "service", Path: strings.Repeat("ą", 301)}}},
 			wantErr: "node path exceeds 300 characters",
 		},
 		{
-			name:   "relation kind at 40 multibyte characters",
-			plugin: "k8s",
-			nodes:  validNodes,
+			name:  "relation kind at 40 multibyte characters",
+			nodes: validNodes,
 			relations: []RelationClaim{
 				{Kind: strings.Repeat("ą", 40), From: validNodes[0].ID, To: validNodes[1].ID},
 			},
 		},
 		{
-			name:   "relation kind exceeds 40 characters",
-			plugin: "k8s",
-			nodes:  validNodes,
+			name:  "relation kind exceeds 40 characters",
+			nodes: validNodes,
 			relations: []RelationClaim{
 				{Kind: strings.Repeat("ą", 41), From: validNodes[0].ID, To: validNodes[1].ID},
 			},
