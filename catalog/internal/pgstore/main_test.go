@@ -2,6 +2,7 @@ package pgstore_test
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/url"
 	"os"
@@ -45,6 +46,11 @@ func TestMain(m *testing.M) {
 }
 
 func run(m *testing.M) int {
+	flag.Parse()
+	if testing.Short() {
+		return m.Run()
+	}
+
 	ctx := context.Background()
 
 	container, err := postgres.Run(ctx, "postgres:17",
@@ -94,6 +100,10 @@ func databaseDSN(database string) string {
 // and returns its DSN.
 func newDatabase(t *testing.T) string {
 	t.Helper()
+
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
 
 	name := fmt.Sprintf("test_%d", dbCounter.Add(1))
 	_, err := adminPool.Exec(t.Context(), fmt.Sprintf("CREATE DATABASE %s", name))
