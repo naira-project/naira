@@ -67,8 +67,8 @@ type observedApp struct {
 	// nodes a plugin keys by its own PATH_PREFIX instead, e.g. litellm apps.
 	PathPrefix string `yaml:"path_prefix"`
 	Namespace  string `yaml:"namespace"`
-	Name      string `yaml:"name"`
-	TraceName string `yaml:"trace_name"`
+	Name       string `yaml:"name"`
+	TraceName  string `yaml:"trace_name"`
 
 	line int
 }
@@ -82,7 +82,7 @@ func (c *langfuseConfig) UnmarshalYAML(node *yaml.Node) error {
 	type alias langfuseConfig
 	decoded, line, err := decodeStrict[alias](node)
 	if err != nil {
-		return fmt.Errorf("in langfuse config: %w", err)
+		return safeError{fmt.Errorf("in langfuse config: %w", err)}
 	}
 	*c = langfuseConfig(decoded)
 	c.line = line
@@ -93,7 +93,7 @@ func (p *projectConfig) UnmarshalYAML(node *yaml.Node) error {
 	type alias projectConfig
 	decoded, line, err := decodeStrict[alias](node)
 	if err != nil {
-		return fmt.Errorf("in project: %w", err)
+		return safeError{fmt.Errorf("in project: %w", err)}
 	}
 	*p = projectConfig(decoded)
 	p.line = line
@@ -104,32 +104,66 @@ func (o *observedApp) UnmarshalYAML(node *yaml.Node) error {
 	type alias observedApp
 	decoded, line, err := decodeStrict[alias](node)
 	if err != nil {
-		return fmt.Errorf("in observes entry: %w", err)
+		return safeError{fmt.Errorf("in observes entry: %w", err)}
 	}
 	*o = observedApp(decoded)
 	o.line = line
 	return nil
 }
 
-// decodeStrict decodes a mapping node into T, rejecting keys matching no
-// yaml-tagged field so typos surface with their line instead of being dropped.
-// Returns the node's line for validation errors.
+// safeError marks an error whose message holds only field names and lines,
+// never config values, so it may pass through decodeStrict unchanged.
+type safeError struct{ error }
+
+func (e safeError) Unwrap() error { return e.error }
+
+// decodeStrict decodes a mapping node into T one field at a time, rejecting
+// unknown and duplicate keys so typos surface with their line. Returns the
+// node's line for validation errors.
 func decodeStrict[T any](node *yaml.Node) (T, int, error) {
 	var decoded T
-	if err := checkKnownFields(node, yamlFieldNames[T]()); err != nil {
-		return decoded, 0, fmt.Errorf("checking fields: %w", err)
+	if node.Kind != yaml.MappingNode {
+		return decoded, 0, fmt.Errorf("line %d: expected a mapping", node.Line)
 	}
-	if err := node.Decode(&decoded); err != nil {
-		return decoded, 0, fmt.Errorf("decoding node: %w", err)
+
+	fields := yamlFields[T]()
+	target := reflect.ValueOf(&decoded).Elem()
+	seen := make(map[string]bool, len(fields))
+
+	var errs []error
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key, value := node.Content[i], node.Content[i+1]
+
+		index, ok := fields[key.Value]
+		switch {
+		case !ok:
+			errs = append(errs, fmt.Errorf("line %d: unknown field %q", key.Line, key.Value))
+			continue
+		case seen[key.Value]:
+			errs = append(errs, fmt.Errorf("line %d: duplicate field %q", key.Line, key.Value))
+			continue
+		}
+		seen[key.Value] = true
+
+		if err := value.Decode(target.Field(index).Addr().Interface()); err != nil {
+			var safe safeError
+			if errors.As(err, &safe) {
+				errs = append(errs, err)
+				continue
+			}
+			// Not wrapped: yaml.v3 quotes the offending scalar, which may be a secret.
+			errs = append(errs, fmt.Errorf("line %d: field %q: invalid value", value.Line, key.Value))
+		}
 	}
-	return decoded, node.Line, nil
+	return decoded, node.Line, errors.Join(errs...)
 }
 
-// yamlFieldNames derives the accepted mapping keys from T's yaml struct tags,
-// keeping the struct definition the single source of truth.
-func yamlFieldNames[T any]() map[string]bool {
+// yamlFields maps the accepted mapping keys to T's field indexes, derived from
+// its yaml struct tags so the struct definition stays the single source of
+// truth.
+func yamlFields[T any]() map[string]int {
 	t := reflect.TypeFor[T]()
-	allowed := make(map[string]bool, t.NumField())
+	fields := make(map[string]int, t.NumField())
 	for i := range t.NumField() {
 		field := t.Field(i)
 		if !field.IsExported() {
@@ -142,26 +176,9 @@ func yamlFieldNames[T any]() map[string]bool {
 		if name == "" {
 			name = strings.ToLower(field.Name)
 		}
-		allowed[name] = true
+		fields[name] = i
 	}
-	return allowed
-}
-
-// checkKnownFields rejects mapping keys outside the allowed set. The callers'
-// wraps name the mapping the keys belong to.
-func checkKnownFields(node *yaml.Node, allowed map[string]bool) error {
-	if node.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d: expected a mapping", node.Line)
-	}
-
-	var errs []error
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		key := node.Content[i]
-		if !allowed[key.Value] {
-			errs = append(errs, fmt.Errorf("line %d: unknown field %q", key.Line, key.Value))
-		}
-	}
-	return errors.Join(errs...)
+	return fields
 }
 
 // parseConfig unmarshals and validates the Langfuse YAML, reporting all

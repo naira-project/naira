@@ -105,6 +105,20 @@ projects:
 	assert.ErrorContains(t, err, `unknown field "windwo"`)
 }
 
+func TestParseConfigRejectsDuplicateField(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+    secret_key: sk-lf-other
+`))
+	assert.ErrorContains(t, err, `line 9: duplicate field "secret_key"`)
+}
+
 func TestParseConfigRejectsMissingProjectsKey(t *testing.T) {
 	_, err := parseConfig([]byte("schema_version: 1\n"))
 	assert.ErrorContains(t, err, "projects: field is required")
@@ -155,6 +169,24 @@ projects:
 `))
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "supersecret")
+}
+
+// yaml.v3 quotes the scalar when a tag does not fit it, so a mistagged key
+// would reach the log in full.
+func TestParseConfigDecodeErrorsDoNotLeakSecrets(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: !!float pk-lf-supersecret
+    secret_key: !!int sk-lf-supersecret
+`))
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "supersecret")
+	assert.Contains(t, err.Error(), `line 7: field "public_key": invalid value`)
+	assert.Contains(t, err.Error(), `line 8: field "secret_key": invalid value`)
 }
 
 func TestParseConfigRejectsDuplicateProjectID(t *testing.T) {
