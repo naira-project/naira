@@ -11,9 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// Lengths limits mirror the VARCHAR sizes in migrations/0001_init.sql. Postgres counts
+// characters rather than bytes, so lengths are measured in runes.
 const (
-	maxIdentifierLength = 40
-	maxNodePathLength   = 300
+	maxIdentifierLength = 40  // plugin name, node kind, relation kind
+	maxNodePathLength   = 300 // node path
 )
 
 var (
@@ -56,7 +58,7 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 	if pluginName == "" {
 		return fmt.Errorf("%w: plugin name is empty", ErrInvalidIngestion)
 	}
-	if runeLength := utf8.RuneCountInString(pluginName); runeLength > maxIdentifierLength {
+	if utf8.RuneCountInString(pluginName) > maxIdentifierLength {
 		return fmt.Errorf("%w: plugin name exceeds %d characters", ErrInvalidIngestion, maxIdentifierLength)
 	}
 
@@ -71,10 +73,10 @@ func ValidateSnapshotInput(pluginName string, snapshotID uuid.UUID, nodes []Node
 		if id.Kind == "" || id.Path == "" {
 			return fmt.Errorf("%w: node ID with empty kind or path", ErrInvalidIngestion)
 		}
-		if runeLength := utf8.RuneCountInString(id.Kind); runeLength > maxIdentifierLength {
+		if utf8.RuneCountInString(id.Kind) > maxIdentifierLength {
 			return fmt.Errorf("%w: node kind exceeds %d characters", ErrInvalidIngestion, maxIdentifierLength)
 		}
-		if runeLength := utf8.RuneCountInString(id.Path); runeLength > maxNodePathLength {
+		if utf8.RuneCountInString(id.Path) > maxNodePathLength {
 			return fmt.Errorf("%w: node path exceeds %d characters", ErrInvalidIngestion, maxNodePathLength)
 		}
 		if strings.Contains(id.Kind, "/") {
