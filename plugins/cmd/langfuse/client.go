@@ -86,10 +86,11 @@ func (c *client) query(ctx context.Context, project projectConfig, q metricsQuer
 		return nil, fmt.Errorf("encoding metrics query: %w", err)
 	}
 
-	endpoint, err := url.Parse(project.Host + metricsPath)
+	endpoint, err := url.Parse(project.Host)
 	if err != nil {
 		return nil, fmt.Errorf("building metrics URL: %w", err)
 	}
+	endpoint = endpoint.JoinPath(metricsPath)
 	endpoint.RawQuery = url.Values{"query": {string(body)}}.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)

@@ -171,6 +171,41 @@ projects:
 	assert.NotContains(t, err.Error(), "supersecret")
 }
 
+// A key pasted into a field that validation reports on must not be echoed.
+func TestParseConfigValidationErrorsDoNotLeakMisplacedSecrets(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: sk-lf-supersecret
+    host: not-a-url
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: ""
+    window: yesterday
+    observes:
+      - kind: sk-lf-supersecret
+        namespace: sk-lf-supersecret
+        name: sk-lf-supersecret
+      - kind: sk-lf-supersecret
+        namespace: sk-lf-supersecret
+        name: sk-lf-supersecret
+  - id: sk-lf-supersecret
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+`))
+	require.Error(t, err)
+
+	message := err.Error()
+	assert.NotContains(t, message, "supersecret")
+	assert.Contains(t, message, `projects[0]: field "host" must be an absolute URL`)
+	assert.Contains(t, message, `projects[0]: field "secret_key" must not be empty`)
+	assert.Contains(t, message, `projects[0]: field "window" is not a duration`)
+	assert.Contains(t, message, `projects[0].observes[1]: duplicates observes[0]`)
+	assert.Contains(t, message, `projects[1]: field "id" duplicates projects[0]`)
+}
+
 // yaml.v3 quotes the scalar when a tag does not fit it, so a mistagged key
 // would reach the log in full.
 func TestParseConfigDecodeErrorsDoNotLeakSecrets(t *testing.T) {
@@ -204,7 +239,7 @@ projects:
     public_key: pk-lf-other
     secret_key: sk-lf-other
 `))
-	assert.ErrorContains(t, err, `duplicate project id "demo"`)
+	assert.ErrorContains(t, err, `projects[1]: field "id" duplicates projects[0]`)
 }
 
 func TestParseConfigRejectsWindowBelowMinimum(t *testing.T) {

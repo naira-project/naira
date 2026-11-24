@@ -217,7 +217,9 @@ func (c *langfuseConfig) validate() error {
 		report(c.line, "projects: field is required (use [] to disable collection)")
 	}
 
-	projectIDs := make(map[string]bool, len(c.Projects))
+	// Messages identify entries by index and line, never by their values: a
+	// key pasted into the wrong field must not reach the log.
+	projectIDs := make(map[string]int, len(c.Projects))
 	for i := range c.Projects {
 		p := &c.Projects[i]
 
@@ -227,10 +229,11 @@ func (c *langfuseConfig) validate() error {
 		if len(p.ID) > maxIDLength {
 			report(p.line, "projects[%d]: field \"id\" must be at most %d characters, got %d", i, maxIDLength, len(p.ID))
 		}
-		if projectIDs[p.ID] {
-			report(p.line, "projects[%d]: duplicate project id %q", i, p.ID)
+		if first, ok := projectIDs[p.ID]; ok {
+			report(p.line, "projects[%d]: field \"id\" duplicates projects[%d]", i, first)
+		} else {
+			projectIDs[p.ID] = i
 		}
-		projectIDs[p.ID] = true
 
 		for _, field := range []struct{ name, value string }{
 			{"host", p.Host},
@@ -239,7 +242,7 @@ func (c *langfuseConfig) validate() error {
 			{"secret_key", p.SecretKey},
 		} {
 			if strings.TrimSpace(field.value) == "" {
-				report(p.line, "projects[%d] (id %q): field %q must not be empty", i, p.ID, field.name)
+				report(p.line, "projects[%d]: field %q must not be empty", i, field.name)
 			}
 		}
 
@@ -251,7 +254,7 @@ func (c *langfuseConfig) validate() error {
 				continue
 			}
 			if parsed, err := url.Parse(field.value); err != nil || parsed.Scheme == "" || parsed.Host == "" {
-				report(p.line, "projects[%d] (id %q): field %q must be an absolute URL, e.g. https://langfuse.example.com", i, p.ID, field.name)
+				report(p.line, "projects[%d]: field %q must be an absolute URL, e.g. https://langfuse.example.com", i, field.name)
 			}
 		}
 
@@ -264,15 +267,15 @@ func (c *langfuseConfig) validate() error {
 			parsed, err := time.ParseDuration(p.Window)
 			switch {
 			case err != nil:
-				report(p.line, "projects[%d] (id %q): field \"window\" is not a duration (e.g. 24h, 30m)", i, p.ID)
+				report(p.line, "projects[%d]: field \"window\" is not a duration (e.g. 24h, 30m)", i)
 			case parsed < minWindow:
-				report(p.line, "projects[%d] (id %q): field \"window\" must be at least %s", i, p.ID, minWindow)
+				report(p.line, "projects[%d]: field \"window\" must be at least %s", i, minWindow)
 			default:
 				p.window = parsed
 			}
 		}
 
-		scopes := make(map[string]bool, len(p.Observes))
+		bindings := make(map[string]int, len(p.Observes))
 		for j, o := range p.Observes {
 			for _, field := range []struct{ name, value string }{
 				{"kind", o.Kind},
@@ -297,10 +300,11 @@ func (c *langfuseConfig) validate() error {
 			}
 
 			key := o.Kind + "\x00" + o.PathPrefix + "\x00" + o.Namespace + "\x00" + o.Name
-			if scopes[key] {
-				report(o.line, "projects[%d].observes[%d]: duplicate binding for %s %q", i, j, o.Kind, o.Namespace+"/"+o.Name)
+			if first, ok := bindings[key]; ok {
+				report(o.line, "projects[%d].observes[%d]: duplicates observes[%d]", i, j, first)
+			} else {
+				bindings[key] = j
 			}
-			scopes[key] = true
 		}
 	}
 
