@@ -50,17 +50,25 @@ concurrency:
 
 env:
   VCLUSTER_PROJECT: e2e
+  # Pinned here, not taken from mise.toml, because this binary receives
+  # platform keys. Keep the version in step with mise.toml.
+  VCLUSTER_VERSION: 0.37.5
+  VCLUSTER_SHA256: a6720986d05dd3af15d68689b5e19ed769b694bc25d79e3f626f97795c2c56ca
 
 jobs:
-  # A skipped job can't print anything, so fork PRs get the notice here while
-  # authorize and e2e show as skipped.
-  fork-notice:
-    name: E2E skipped for fork PR
+  # A skipped job can't print anything, so skipped PRs get the notice here
+  # while authorize and e2e show as skipped.
+  skip-notice:
+    name: E2E skipped for fork or Dependabot PR
     runs-on: ubuntu-latest
     permissions: {}
-    if: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'skip-e2e') && github.event.pull_request.head.repo.full_name != github.repository }}
+    if: >-
+      ${{ github.event_name == 'pull_request' &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-e2e') &&
+      (github.event.pull_request.head.repo.full_name != github.repository ||
+      github.event.pull_request.user.login == 'dependabot[bot]') }}
     steps:
-      - run: echo "::notice::E2E runs only for branches of this repo."
+      - run: echo "::notice::Fork and Dependabot PRs get no secrets. A maintainer can run E2E for a Dependabot PR with workflow_dispatch."
 
   authorize:
     name: Authorize
@@ -68,11 +76,13 @@ jobs:
     permissions:
       contents: read
       pull-requests: read # read PR state and head repo
-    # Fork PRs skip here, before e2e could request the deployment environment.
+    # Fork and Dependabot PRs skip here, before provision could request the
+    # deployment environment. Their runs get no secrets.
     if: >-
       ${{ github.event_name == 'workflow_dispatch' ||
       (!contains(github.event.pull_request.labels.*.name, 'skip-e2e') &&
-      github.event.pull_request.head.repo.full_name == github.repository) }}
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]') }}
     outputs:
       pr-number: ${{ steps.check.outputs.pr-number }}
       head-sha: ${{ steps.check.outputs.head-sha }}
@@ -149,12 +159,7 @@ jobs:
             echo "VCLUSTER_BIN=${RUNNER_TEMP}/bin/vcluster"
           } >> "$GITHUB_ENV"
 
-      # Pinned here, not taken from mise.toml, because this binary receives
-      # the access key. Keep the version in step with mise.toml.
       - name: Install vcluster CLI
-        env:
-          VCLUSTER_VERSION: 0.37.5
-          VCLUSTER_SHA256: a6720986d05dd3af15d68689b5e19ed769b694bc25d79e3f626f97795c2c56ca
         run: |
           set -euo pipefail
           mkdir -p "$(dirname "${VCLUSTER_BIN}")"
@@ -290,6 +295,16 @@ jobs:
           path: ${{ runner.temp }}/e2e-credentials.enc
           retention-days: 1
 
+      # The provision script cleans up only its own failures. If a later step
+      # fails, e2e never gets the teardown key.
+      - name: Delete vCluster on failure
+        if: ${{ (failure() || cancelled()) && steps.provision.outputs.provisioned-at != '' }}
+        run: |
+          "${VCLUSTER_BIN}" platform delete vcluster "${ENV_ID}" \
+            --project "${VCLUSTER_PROJECT}" \
+            --delete-context=false \
+            --config "${PLATFORM_DIR}/config.json"
+
   e2e:
     name: E2E · litellm_chatbot_to_catalog_api
     needs: [authorize, provision]
@@ -307,6 +322,47 @@ jobs:
       ENV_ID: ${{ needs.provision.outputs.env-id }}
       E2E_IMAGE: ghcr.io/naira-project/naira-e2e
     steps:
+      # Credentials, CLI and tailnet come first, so "Delete vCluster" works
+      # even if checkout or the head check fails.
+      - name: Compute paths
+        run: |
+          {
+            echo "KUBECONFIG=${RUNNER_TEMP}/e2e-kubeconfig"
+            echo "TEARDOWN_KEY_FILE=${RUNNER_TEMP}/vcluster-teardown-key"
+            echo "VCLUSTER_BIN=${RUNNER_TEMP}/bin/vcluster"
+          } >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: e2e-credentials
+          path: ${{ runner.temp }}
+
+      - name: Decrypt run credentials
+        env:
+          E2E_CREDENTIALS_KEY: ${{ secrets.E2E_CREDENTIALS_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:E2E_CREDENTIALS_KEY \
+            -in "${RUNNER_TEMP}/e2e-credentials.enc" | tar -C "${RUNNER_TEMP}" -xf -
+          echo "::add-mask::$(cat "${TEARDOWN_KEY_FILE}")"
+
+      - name: Install vcluster CLI
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "${VCLUSTER_BIN}")"
+          curl -fsSL -o "${VCLUSTER_BIN}" \
+            "https://github.com/loft-sh/vcluster/releases/download/v${VCLUSTER_VERSION}/vcluster-linux-amd64"
+          echo "${VCLUSTER_SHA256}  ${VCLUSTER_BIN}" | sha256sum -c -
+          chmod +x "${VCLUSTER_BIN}"
+
+      - name: Join tailnet
+        uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
+        with:
+          oauth-client-id: ${{ vars.TS_E2E_OAUTH_CLIENT_ID }}
+          audience: ${{ vars.TS_E2E_AUDIENCE }}
+          tags: tag:ci
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: refs/pull/${{ needs.authorize.outputs.pr-number }}/merge
@@ -327,35 +383,8 @@ jobs:
 
       # TAG is the merge commit, not github.sha (main's SHA on dispatch), so
       # images on cached EKS nodes are never shared between PRs.
-      - name: Compute identifiers
-        run: |
-          {
-            echo "TAG=$(git rev-parse HEAD)"
-            echo "KUBECONFIG=${RUNNER_TEMP}/e2e-kubeconfig"
-            echo "TEARDOWN_KEY_FILE=${RUNNER_TEMP}/vcluster-teardown-key"
-          } >> "$GITHUB_ENV"
-
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: e2e-credentials
-          path: ${{ runner.temp }}
-
-      - name: Decrypt run credentials
-        env:
-          E2E_CREDENTIALS_KEY: ${{ secrets.E2E_CREDENTIALS_KEY }}
-        run: |
-          set -euo pipefail
-          umask 077
-          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:E2E_CREDENTIALS_KEY \
-            -in "${RUNNER_TEMP}/e2e-credentials.enc" | tar -C "${RUNNER_TEMP}" -xf -
-          echo "::add-mask::$(cat "${TEARDOWN_KEY_FILE}")"
-
-      - name: Join tailnet
-        uses: tailscale/github-action@99a8333667fff04fdd6cffb46dfd409f8329a7bf # v4.3.0
-        with:
-          oauth-client-id: ${{ vars.TS_E2E_OAUTH_CLIENT_ID }}
-          audience: ${{ vars.TS_E2E_AUDIENCE }}
-          tags: tag:ci
+      - name: Compute image tag
+        run: echo "TAG=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       # From here on, PR code runs.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -366,7 +395,7 @@ jobs:
       # dev, instead of a second set that could drift from it.
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          install_args: kubectl helm vcluster
+          install_args: kubectl helm
 
       # Both credentials expire 1h after provisioning. 10 min of queueing
       # plus the 45 min timeout stays within that. Matters for re-runs of e2e alone.
@@ -445,14 +474,14 @@ jobs:
             exit 0
           fi
           kubectl get pods,services -n "${ENV_ID}" -o wide || true
-          kubectl logs -n "${ENV_ID}" -l app=catalog --all-containers --tail=-1 --prefix=true || true
+          kubectl logs -n "${ENV_ID}" -l app --all-containers --tail=200 --prefix=true --max-log-requests=20 || true
           kubectl get events -n "${ENV_ID}" --sort-by=.lastTimestamp || true
           kubectl describe pods -n "${ENV_ID}" || true
 
       # Deleting the vCluster removes the whole E2E environment. Uses the
-      # teardown key from provision. Skipped without a teardown key; provision
-      # deletes the vCluster itself if it fails. The template's inactivity
-      # auto-delete covers a delete that never runs (e.g. a cancelled run).
+      # teardown key from provision. The template's inactivity auto-delete
+      # (2h) covers a delete that never runs, e.g. a run cancelled before
+      # this job starts.
       - name: Delete vCluster
         if: always()
         env:
@@ -460,22 +489,22 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          if [ ! -s "${TEARDOWN_KEY_FILE:-}" ]; then
-            echo "No teardown key, nothing to delete."
-            exit 0
+          if [ ! -s "${TEARDOWN_KEY_FILE}" ]; then
+            echo "::error::No teardown key. vCluster ${ENV_ID} stays until the 2h inactivity auto-delete." >&2
+            exit 1
           fi
           : "${VCLUSTER_PLATFORM_URL:?VCLUSTER_PLATFORM_URL is not set}"
           echo "::add-mask::${VCLUSTER_PLATFORM_URL}"
           cfg="$(mktemp -d)/config.json"
           trap 'rm -rf "$(dirname "${cfg}")" "${TEARDOWN_KEY_FILE}"' EXIT
-          vcluster platform login "${VCLUSTER_PLATFORM_URL}" \
+          "${VCLUSTER_BIN}" platform login "${VCLUSTER_PLATFORM_URL}" \
             --access-key "$(cat "${TEARDOWN_KEY_FILE}")" \
             --docker-login=false \
             --config "${cfg}"
 
           # No "already gone" exception: vcluster 0.37 also reports "couldn't
           # find vcluster" when the key can't read it, which would hide a leak.
-          vcluster platform delete vcluster "${ENV_ID}" \
+          "${VCLUSTER_BIN}" platform delete vcluster "${ENV_ID}" \
             --project "${VCLUSTER_PROJECT}" \
             --delete-context=false \
             --config "${cfg}"
