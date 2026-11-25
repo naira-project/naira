@@ -241,7 +241,7 @@ catalog:
     langfuse:
       # Off by default: it needs a config file naming projects and their API key
       # pairs (secret.existingSecret or secret.data).
-      enabled: true
+      enabled: false
       image: {repository: naira-plugin-langfuse, tag: ""}
       port: 50061
       schedule: "0 * * * *"
