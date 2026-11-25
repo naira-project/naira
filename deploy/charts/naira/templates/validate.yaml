@@ -29,6 +29,9 @@ silently does nothing.
 {{- if and $p.config (not $p.config.existingConfigMap) (not $p.config.data) }}
 {{- fail (printf "catalog.plugins.%s.config: set existingConfigMap or data" $name) }}
 {{- end }}
+{{- if and $p.secret (not $p.secret.existingSecret) (not $p.secret.data) }}
+{{- fail (printf "catalog.plugins.%s.secret: set existingSecret or data" $name) }}
+{{- end }}
 {{- range $var, $v := $p.env }}
 {{- if and (kindIs "map" $v) (not $v.secretKeyRef.key) }}
 {{- fail (printf "catalog.plugins.%s.env.%s: secretKeyRef.key is required" $name $var) }}

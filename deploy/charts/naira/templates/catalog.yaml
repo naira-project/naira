@@ -42,11 +42,18 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- include "naira.env" (dict "root" $ "env" $p.env) | nindent 12 }}
-          {{- if $p.config }}
+          {{- if or $p.config $p.secret }}
           volumeMounts:
+            {{- if $p.config }}
             - name: plugin-{{ $name }}-config
               mountPath: {{ $p.config.mountPath }}
               readOnly: true
+            {{- end }}
+            {{- if $p.secret }}
+            - name: plugin-{{ $name }}-secret
+              mountPath: {{ $p.secret.mountPath }}
+              readOnly: true
+            {{- end }}
           {{- end }}
           resources:
             {{- include "naira.pluginResources" (dict "root" $ "plugin" $p) | nindent 12 }}
@@ -94,6 +101,11 @@ spec:
         - name: plugin-{{ $name }}-config
           configMap:
             name: {{ $p.config.existingConfigMap | default (printf "plugin-%s-config" $name) }}
+        {{- end }}
+        {{- if and $p.enabled $p.secret }}
+        - name: plugin-{{ $name }}-secret
+          secret:
+            secretName: {{ $p.secret.existingSecret | default (printf "plugin-%s-secret" $name) }}
         {{- end }}
         {{- end }}
 ---

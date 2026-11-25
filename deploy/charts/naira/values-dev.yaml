@@ -81,10 +81,39 @@ catalog:
                 owner: ai-board
                 rationale: >
                   Superseded by hybrid retrieval; migrate existing pipelines.
+    langfuse:
+      # Off while tags.langfuse is false in test-dependencies values-dev.yaml;
+      # enable both together. The key pair equals its secrets.langfuseInit, and
+      # project_id and the trace names its seed.langfuse.apps.
+      enabled: false
+      secret:
+        data:
+          config.yaml: |
+            schema_version: 1
+            projects:
+              - id: naira-demo
+                host: http://langfuse-web.naira-deps.svc.cluster.local:3000
+                # The Tiltfile forwards langfuse-web to 3003; a browser cannot
+                # reach the in-cluster address the plugin calls.
+                ui_host: http://localhost:3003
+                project_id: naira-demo
+                public_key: pk-lf-naira-dev
+                secret_key: sk-lf-naira-dev
+                window: 24h
+                score_name: user_feedback
+                observes:
+                  - kind: deployment
+                    namespace: naira-deps
+                    name: triage-agent
+                    trace_name: triage-agent
+                  - kind: deployment
+                    namespace: naira-deps
+                    name: escalation-agent
+                    trace_name: escalation-agent
     bedrock:
       enabled: false
       env:
-        REGIONS: "eu-central-1"    
+        REGIONS: "eu-central-1"
 
 portal:
   oidc:
