@@ -1,4 +1,10 @@
-{{- if and .Values.catalog.enabled .Values.catalog.clusterValidation.credentialSecrets }}
+{{- $names := list }}
+{{- range .Values.catalog.clusterValidation.credentialSecrets }}
+{{- range . }}
+{{- $names = append $names .name }}
+{{- end }}
+{{- end }}
+{{- if and .Values.catalog.enabled $names }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -10,8 +16,8 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     resourceNames:
-      {{- range .Values.catalog.clusterValidation.credentialSecrets }}
-      - {{ .name | quote }}
+      {{- range ($names | uniq | sortAlpha) }}
+      - {{ . | quote }}
       {{- end }}
     verbs: [get]
 ---

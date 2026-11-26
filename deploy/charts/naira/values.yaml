@@ -30,6 +30,11 @@ catalog:
   image: {repository: naira-catalog, tag: ""}
   port: 8090
 
+  # Exact Secret/key pairs grouped by workspace ID, in this release namespace.
+  # Empty disables Secret credential access. Credentials are never supplied in values.
+  clusterValidation:
+    credentialSecrets: {} # See docs/workspaces.md for configuration examples.
+
   # Pod placement and security, same keys on ui and portal. Empty values render
   # nothing.
   podAnnotations: {}

@@ -4,6 +4,11 @@ image:
   # Tilt builds the images and loads them into kind under their plain names.
   registry: ""
 catalog:
+  clusterValidation:
+    credentialSecrets:
+      test-workspace:
+        - name: naira-registry-test-reader-access
+          key: kubeconfig
   secret:
     create: true
     data:

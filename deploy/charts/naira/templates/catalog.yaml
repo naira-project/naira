@@ -71,6 +71,18 @@ spec:
               value: {{ .Values.keycloak.realm | quote }}
             - name: KEYCLOAK_ISSUER
               value: {{ .Values.keycloak.issuer | quote }}
+            {{- if .Values.catalog.clusterValidation.credentialSecrets }}
+            {{- $workspaces := dict }}
+            {{- range $workspace, $entries := .Values.catalog.clusterValidation.credentialSecrets }}
+            {{- $refs := list }}
+            {{- range $entries }}
+            {{- $refs = append $refs (printf "%s/%s#%s" $.Release.Namespace .name .key) }}
+            {{- end }}
+            {{- $_ := set $workspaces $workspace $refs }}
+            {{- end }}
+            - name: CLUSTER_CREDENTIAL_SECRETS
+              value: {{ $workspaces | toJson | quote }}
+            {{- end }}
           ports:
             - {name: http, containerPort: {{ .Values.catalog.port }}}
           startupProbe:
