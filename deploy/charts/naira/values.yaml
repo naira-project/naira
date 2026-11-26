@@ -97,6 +97,8 @@ catalog:
   #               merged over the same keys of pluginDefaults
   #   rbac.rules  ClusterRole rules, only for plugins that read the cluster
   #   config      {mountPath, existingConfigMap | data}: files mounted as a directory
+  #   secret      {mountPath, existingSecret | data}: as config, from a Secret
+  #               (data renders one: development only)
   plugins:
     litellm:
       enabled: true
@@ -235,6 +237,28 @@ catalog:
         AWS_ACCESS_KEY_ID: {secretKeyRef: {key: BEDROCK_AWS_ACCESS_KEY_ID}}
         AWS_SECRET_ACCESS_KEY: {secretKeyRef: {key: BEDROCK_AWS_SECRET_ACCESS_KEY}}
         METRICS_LOOKBACK: "24h"
+
+    langfuse:
+      # Off by default: it needs a config file naming projects and their API key
+      # pairs (secret.existingSecret or secret.data).
+      enabled: false
+      image: {repository: naira-plugin-langfuse, tag: ""}
+      port: 50061
+      schedule: "0 * * * *"
+      env:
+        LANGFUSE_CONFIG_PATH: /etc/naira/langfuse/config.yaml
+        LANGFUSE_KUBECONFIG: ""
+      secret:
+        mountPath: /etc/naira/langfuse
+        existingSecret: ""
+        data: {}
+      rbac:
+        # The cluster id completing each binding's node path is the kube-system
+        # namespace UID.
+        rules:
+          - apiGroups: [""]
+            resources: ["namespaces"]
+            verbs: ["get", "list"]
 
 ui:
   enabled: true

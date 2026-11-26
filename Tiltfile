@@ -92,6 +92,10 @@ if DEPS_REPO:
     )
     DEPS_AFTER = DEPS_AFTER + ['test-dependencies-subcharts']
 DEPS_VALUES = [DEPS_CHART + '/values.yaml', DEPS_CHART + '/values-dev.yaml']
+# helm blocks until the chart's hooks finish, which outlasts Tilt's 30s default.
+# A kill there strands the release in pending-install and every later apply
+# fails on the lock.
+update_settings(k8s_upsert_timeout_secs=600)
 helm_resource(
     'test-dependencies', DEPS_CHART,
     namespace=DEPS_NAMESPACE,
@@ -119,6 +123,9 @@ for tag, svc, ports in [
     ('mlflow', 'mlflow', '5001:5000'),
     ('vllm', 'vllm', '8000:8000'),
     ('openmetadata', 'openmetadata', '8585:8585'),
+    # 3003, not 3000: the portal has that one. Equals the langfuse plugin's
+    # ui_host in values-dev.yaml.
+    ('langfuse', 'langfuse-web', '3003:3000'),
     ('monitoring', 'test-dependencies-grafana', '3002:80'),
     ('monitoring', 'test-dependencies-kube-pro-prometheus', '9090:9090'),
 ]:

@@ -215,6 +215,50 @@ check "tech-radar registered in plugins.yaml" \
   "localhost:50057" \
   "$(render "${TECH_RADAR[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.tech-radar.address')"
 
+LANGFUSE=(
+  --set catalog.plugins.langfuse.enabled=true
+  --set-string 'catalog.plugins.langfuse.secret.data.config\.yaml=schema_version: 1'
+)
+LANGFUSE_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-langfuse\")"
+
+check "langfuse mounted as a directory" \
+  "/etc/naira/langfuse none" \
+  "$(render "${LANGFUSE[@]}" \
+    | yq "$LANGFUSE_SIDECAR | .volumeMounts[0] | .mountPath + \" \" + (.subPath // \"none\")")"
+check "langfuse reads the file it mounts" \
+  "/etc/naira/langfuse/config.yaml" \
+  "$(render "${LANGFUSE[@]}" \
+    | yq "$LANGFUSE_SIDECAR | .env[] | select(.name == \"LANGFUSE_CONFIG_PATH\") | .value")"
+LANGFUSE_VOLUME="$CATALOG | .volumes[] | select(.name == \"plugin-langfuse-secret\") | .secret.secretName"
+LANGFUSE_SECRET='select(.kind == "Secret" and .metadata.name == "plugin-langfuse-secret")'
+LANGFUSE_EXISTING=(
+  --set catalog.plugins.langfuse.enabled=true
+  --set catalog.plugins.langfuse.secret.existingSecret=lf-config
+)
+check "langfuse mounts the Secret it renders" \
+  "plugin-langfuse-secret" \
+  "$(render "${LANGFUSE[@]}" | yq "$LANGFUSE_VOLUME")"
+check "langfuse Secret carries the config file" \
+  "schema_version: 1" \
+  "$(render "${LANGFUSE[@]}" | yq "$LANGFUSE_SECRET | .stringData[\"config.yaml\"]")"
+check "langfuse renders no ConfigMap" \
+  "" \
+  "$(render "${LANGFUSE[@]}" | yq 'select(.kind == "ConfigMap" and .metadata.name == "plugin-langfuse-config") | .metadata.name')"
+check "langfuse mounts an existing Secret" \
+  "lf-config" \
+  "$(render "${LANGFUSE_EXISTING[@]}" | yq "$LANGFUSE_VOLUME")"
+check "langfuse renders no Secret beside an existing one" \
+  "" \
+  "$(render "${LANGFUSE_EXISTING[@]}" | yq "$LANGFUSE_SECRET | .metadata.name")"
+check "langfuse registered in plugins.yaml" \
+  "localhost:50061 0 * * * *" \
+  "$(render "${LANGFUSE[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.langfuse | .address + " " + .schedule')"
+check "langfuse reads namespaces for the cluster id" \
+  "namespaces" \
+  "$(render "${LANGFUSE[@]}" \
+    | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-langfuse")
+          | .rules[0].resources | join(",")')"
+
 # ── Secrets ──────────────────────────────────────────────────────────────────
 secrets=$(render | yq 'select(.kind == "Secret") | .metadata.name' | grep -c . || true) # grep exits 1 on no match
 check "no Secrets by default" \
@@ -332,6 +376,9 @@ must_fail "portal secret: existing and create" \
 must_fail "tech-radar on without a radar file" \
   "catalog.plugins.tech-radar.config: set existingConfigMap or data" \
   --set catalog.plugins.tech-radar.enabled=true
+must_fail "langfuse on without a config file" \
+  "catalog.plugins.langfuse.secret: set existingSecret or data" \
+  --set catalog.plugins.langfuse.enabled=true
 RENDER=render_raw must_fail "no catalog Secret source" \
   "catalog.plugins.litellm reads LITELLM_API_KEY from the catalog Secret: set catalog.secret.existingSecret or catalog.secret.create" \
   --set portal.enabled=false

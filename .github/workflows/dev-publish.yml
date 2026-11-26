@@ -88,6 +88,10 @@ jobs:
             image-name: "naira-plugin-depl-uses-thalamus"
             dockerfile: "plugins/cmd/depl_uses_thalamus/Dockerfile"
             context: "."
+          - name: Plugin Langfuse
+            image-name: "naira-plugin-langfuse"
+            dockerfile: "plugins/cmd/langfuse/Dockerfile"
+            context: "."
     permissions:
       contents: read
       packages: write
