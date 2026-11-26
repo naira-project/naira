@@ -1,7 +1,8 @@
 // tech_radar plugin renders an admin-managed technology radar
 // configuration file into the catalog. The YAML file is the sole source of
 // truth: it defines the radar metadata, quadrant and ring taxonomies, and the
-// entries with their adoption ring, movement marker, owner, and rationale.
+// entries with their adoption ring, movement marker, owner, rationale, and
+// optional catalog refs linking them to the catalog nodes they are used as.
 //
 // The file is re-read on every collect, so ConfigMap updates take effect on
 // the next sync without a redeployment. An invalid file fails the collect

@@ -1,6 +1,6 @@
       containers:
         - name: catalog
-          image: catalog:${TAG}
+          image: ${E2E_IMAGE}:catalog-${TAG}
           imagePullPolicy: IfNotPresent
           # Mounted as a directory (not via subPath onto a single file) so
           # catalog's whole plugin-config volume uses the standard,

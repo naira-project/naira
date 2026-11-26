@@ -72,14 +72,15 @@ func TestCollectEmitsRadarAndEntries(t *testing.T) {
 	entries := nodesByKind(response, pluginapi.NodeKindTechRadarEntry)
 	require.Len(t, entries, 2)
 	assert.Equal(t, pluginapi.PropertyMap{
-		"title":     "Claude Sonnet",
-		"quadrant":  "models",
-		"ring":      "adopt",
-		"moved":     "in",
-		"owner":     "ml-platform",
-		"rationale": "Default general-purpose model.",
-		"index":     "0",
-		"radar":     "naira",
+		"title":        "Claude Sonnet",
+		"quadrant":     "models",
+		"ring":         "adopt",
+		"moved":        "in",
+		"owner":        "ml-platform",
+		"rationale":    "Default general-purpose model.",
+		"index":        "0",
+		"radar":        "naira",
+		"catalog_refs": `[{"match":"claude-sonnet","kinds":["model","inference_endpoint"]}]`,
 	}, entries["naira/claude-sonnet"])
 	assert.Equal(t, pluginapi.PropertyMap{
 		"title":     "Naive RAG",

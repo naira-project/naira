@@ -1,1 +1,302 @@
 /* You can add global styles to this file, and also import other style files */
+
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/800.css';
+
+:root {
+  --luigi__left-sidenav--width: clamp(220px, 18vw, 320px);
+}
+
+/* Leave the collapsed (snapped) sidebar to Luigi's own sizing. */
+.fd-tool-layout__navigation-container:not(:has(.fd-navigation--snapped)) {
+  width: var(--luigi__left-sidenav--width);
+  flex: 0 0 var(--luigi__left-sidenav--width);
+}
+
+.fd-navigation--snapped .fd-navigation__item--group {
+  display: none;
+}
+
+/*Doubled class beats Luigi's .fd-shellbar and responsive-padding rules. */
+.fd-shellbar.fd-shellbar {
+  padding: 4px 20px;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Sign-in / profile icon in the top bar. */
+.fd-shellbar__action[data-testid='luigi-topnav-profile'] {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  padding: 4px;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.fd-shellbar__action[data-testid='luigi-topnav-profile'] .fd-popover__control {
+  width: 32px;
+  height: 32px;
+
+  .fd-shellbar__button {
+    width: 32px;
+    height: 32px;
+    /* Fundamental Styles also caps the button with max-height. */
+    min-width: 0;
+    min-height: 32px;
+    max-height: 32px;
+  }
+}
+
+/* Replace Luigi's default font-glyph profile icon with the Naira vector. */
+.fd-shellbar__action[data-testid='luigi-topnav-profile']
+  .fd-shellbar__button
+  .sap-icon--customer {
+  display: block;
+  width: 16px;
+  height: 16px;
+  background: url('/assets/icons/profile.svg')
+    center / contain no-repeat;
+
+  &::before {
+    content: none;
+  }
+}
+
+.fd-navigation__container--top {
+  padding-inline: 0;
+}
+
+.fd-navigation__list {
+  --fdNavigation_Item_Spacing: 10px;
+  /* Fundamental Styles clamps the icon box (min/max width and height) to this. */
+  --fdNavigation_Link_Icon_Size: 24px;
+}
+
+/* Items inside a group sit flush. */
+.fd-navigation__list .fd-navigation__list {
+  --fdNavigation_Item_Spacing: 0;
+}
+
+.fd-navigation:not(.fd-navigation--snapped)
+  .fd-navigation__list-item.lui-nav-entry:has(
+    .fd-navigation__link[data-testid='coming-soon_morecomingsoon']
+  ) {
+  margin-top: 10px;
+}
+
+/* Collapsed: groups are hidden, so drop the 10px separator they leave behind
+   and space every entry evenly. */
+.fd-navigation--snapped {
+  .fd-navigation__list {
+    --fdNavigation_Item_Spacing: 8px;
+  }
+
+  .fd-navigation__list-item--separator {
+    display: none;
+  }
+
+  .fd-navigation__list-item.lui-nav-entry:has(
+      .fd-navigation__link[data-testid='coming-soon_morecomingsoon']
+    ) {
+    display: none;
+  }
+
+  .fd-navigation__container--top
+    > .fd-navigation__list
+    > .lui-nav-entry:nth-child(2) {
+    border-top: 0;
+  }
+}
+
+
+/* Luigi category groups: a static title, not a collapsible entry. */
+.fd-navigation__item--group {
+  display: flex;
+  width: 100%;
+  /* Figma exports 151.167px right padding; it is the frame's fill width. */
+  padding: 13px 10px 13px 20.833px;
+  align-items: center;
+
+  .fd-navigation__link {
+    padding-inline: 0;
+    pointer-events: none;
+    cursor: default;
+  }
+
+  .fd-navigation__has-children-indicator {
+    display: none;
+  }
+
+  .fd-navigation__text {
+    color: var(--Deep-Sapphire, #102344);
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-weight: 800;
+    line-height: 24px;
+    text-transform: uppercase;
+  }
+}
+
+/* Dividers only above each group and between Overview and Plugins. */
+.fd-navigation__item--group,
+.fd-navigation__container--top
+  > .fd-navigation__list
+  > .lui-nav-entry:nth-child(2) {
+  border-top: 1px solid rgba(195, 191, 191, 0.22);
+}
+
+.fd-navigation__list-item.lui-nav-entry {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 36px;
+  padding: 0;
+  align-items: center;
+  gap: 10px;
+  align-self: stretch;
+
+  > .fd-navigation__item {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    align-items: center;
+  }
+
+  /* Padding lives on the link so the highlight spans the full row. */
+  .fd-navigation__link {
+    display: flex;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+    padding-inline: 20px 10px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .fd-navigation__link .fd-navigation__icon {
+    display: flex;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    aspect-ratio: 1 / 1;
+    align-items: center;
+    justify-content: center;
+
+    /* Luigi caps nav icons at 18px; the design uses the full 24px. */
+    img {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+    }
+  }
+
+  .fd-navigation__link .fd-navigation__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--Deep-Sapphire, #102344);
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 24px;
+  }
+
+  .fd-navigation__link[data-testid='overview_overview'] .fd-navigation__text {
+    color: var(--Deep-Sapphire, #102344);
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 800;
+    line-height: 24px;
+    text-transform: uppercase;
+  }
+
+  /* Placeholder entry: not navigable, no hover/active highlight. */
+  .fd-navigation__link[data-testid='coming-soon_morecomingsoon'] {
+    pointer-events: none;
+    cursor: default;
+  }
+
+  /* "More Coming Soon" being muted gray styling. */
+  .fd-navigation__link[data-testid='coming-soon_morecomingsoon'] .fd-navigation__text {
+    color: #ABBED1;
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 24px;
+  }
+
+}
+
+/* Active entry: Vivid Blue text and icon. The icon is an <img>, so it is
+   tinted from its #102344 fill with a filter. */
+.fd-navigation__list-item.lui-nav-entry:is(.is-selected, [aria-selected='true'])
+  .fd-navigation__link,
+.fd-navigation__list-item.lui-nav-entry
+  .fd-navigation__item:is(.is-selected, [aria-selected='true'])
+  .fd-navigation__link {
+  background: var(--Solitude, #EAF4FF);
+
+  .fd-navigation__text {
+    color: var(--Vivid-Blue, #1769E8);
+  }
+
+  .fd-navigation__icon img {
+    filter: brightness(0) saturate(100%) invert(23%) sepia(84%) saturate(7635%)
+      hue-rotate(221deg) brightness(124%) contrast(82%);
+  }
+}
+
+.fd-navigation__list-item.lui-nav-entry .fd-navigation__link:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Collapsed sidebar: icons only, centered. */
+.fd-navigation--snapped .fd-navigation__list-item.lui-nav-entry .fd-navigation__link {
+  padding-inline: 0;
+  justify-content: center;
+
+  .fd-navigation__text {
+    display: none;
+  }
+}
+
+/* Luigi hides link children in the collapsed sidebar unless hovered, which
+   also hides the active entry's blue indicator. Keep it visible. */
+.fd-navigation--snapped
+  .fd-navigation__list-item.lui-nav-entry:is(.is-selected, [aria-selected='true'])
+  .fd-navigation__selection-indicator,
+.fd-navigation--snapped
+  .fd-navigation__list-item.lui-nav-entry
+  .fd-navigation__item:is(.is-selected, [aria-selected='true'])
+  .fd-navigation__selection-indicator {
+  display: inline-block;
+}
+
+/* Keep the active highlight rounded on whichever element draws it. */
+.fd-navigation--snapped .fd-navigation__list-item.lui-nav-entry {
+  &:is(.is-selected, [aria-selected='true']),
+  .fd-navigation__item:is(.is-selected, [aria-selected='true']) {
+    border-radius: 4px;
+
+    .fd-navigation__item,
+    .fd-navigation__link {
+      border-radius: inherit;
+    }
+  }
+}
+
+.fd-navigation.fd-navigation--vertical:not(.fd-navigation--snapped) {
+  width: var(--luigi__left-sidenav--width);
+  background: #fff;
+  box-shadow: var(--sds-size-depth-0, 0) var(--sds-size-depth-025, 2px)
+    var(--sds-size-depth-100, 8px) var(--sds-size-depth-0, 0)
+    var(--sds-color-black-100, rgba(12, 12, 12, 0.1));
+}

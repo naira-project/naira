@@ -44,9 +44,8 @@ development Secrets from values.
   `<name>-db`).
   Cluster-scoped RBAC is prefixed with the release name, so several releases
   per cluster are fine as long as their release names differ.
-- Migrating from `deploy/dev/stacks`: uninstall that stack first (`task
-  platform:undeploy` or delete the `catalog`/`ui`/`portal` Deployments in
-  `idp-system`). `helm install` cannot take over those objects: the Deployment
+- Migrating from the former `deploy/dev/stacks`: delete the
+  `catalog`/`ui`/`portal` Deployments in `idp-system` first. `helm install` cannot take over those objects: the Deployment
   selectors differ and are immutable.
 - `keycloak.issuer`, `authUrl`, `baseDomain` and `portal.uiBaseUrl`
   default to `localhost` (kind, port-forward). Anywhere else, set them to the
@@ -75,8 +74,8 @@ on existing volumes, and reruns when its spec, script
 or `database` values change; delete the Job to rerun it by hand, e.g. after
 changing a password in an existing Secret. A server that never answers fails
 the Job after `database.init.waitRetries` or `activeDeadlineSeconds`. Defaults: `catalog`. `values-dev.yaml`
-adds `litellm` and `openmetadata`, used by LiteLLM and OpenMetadata from the
-test-dependencies chart.
+adds `langfuse`, `litellm` and `openmetadata`, used by Langfuse, LiteLLM and
+OpenMetadata from the test-dependencies chart.
 
 ## Plugins
 
@@ -95,6 +94,7 @@ in a value fails the render.
 | tech-radar | 50057 | no | Config file (`config.data` or `config.existingConfigMap`) |
 | mcp-servers | 50058 | yes | — |
 | github | 50059 | no | Secret key `GITHUB_TOKEN`; RBAC: namespaces, deployments |
+| bedrock | 50060 | no | Secret keys `BEDROCK_AWS_ACCESS_KEY_ID`, `BEDROCK_AWS_SECRET_ACCESS_KEY`; no RBAC |
 
 ## Scheduling and security
 

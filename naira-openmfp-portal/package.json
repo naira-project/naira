@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "Naira",
   "engines": {
-    "node": "25.9.0",
-    "npm": "11.16.0"
+    "node": "26.13.0",
+    "npm": "12.2.1"
   },
   "scripts": {
     "npm:install:ui": "cd frontend && npm install",
@@ -20,7 +20,7 @@
     "start:watch": "concurrently 'npm:start:server:watch' 'npm:build:ui:watch'"
   },
   "devDependencies": {
-    "concurrently": "10.0.3"
+    "concurrently": "10.0.6"
   },
   "private": true
 }

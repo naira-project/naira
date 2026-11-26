@@ -16,7 +16,7 @@ import (
 // or completed operation.
 type OperationMetadataResource struct {
 	Plugin    string     `json:"plugin"`
-	StartTime time.Time  `json:"startTime"`
+	StartTime *time.Time `json:"startTime,omitempty"`
 	EndTime   *time.Time `json:"endTime,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
 }
@@ -114,7 +114,7 @@ func matchOperationFilter(operation operations.Operation, filter *equalityFilter
 // - pageToken
 // - filter: only field="value" equality filters
 // Supported operation filter fields: plugin.
-func newListOperationsHandler(runner *pluginrun.Runner, logger *log.Logger) http.HandlerFunc {
+func newListOperationsHandler(runner pluginrun.PluginRunner, logger *log.Logger) http.HandlerFunc {
 	return handleWithListOptions(operationListOptionsSpec, func(w http.ResponseWriter, r *http.Request, options listOptions) error {
 		listed, err := runner.ListOperations(r.Context(), operations.Filter{})
 		if err != nil {
@@ -143,7 +143,7 @@ func newListOperationsHandler(runner *pluginrun.Runner, logger *log.Logger) http
 }
 
 // newGetOperationHandler returns a single operation.
-func newGetOperationHandler(runner *pluginrun.Runner) http.HandlerFunc {
+func newGetOperationHandler(runner pluginrun.PluginRunner) http.HandlerFunc {
 	return handle(func(w http.ResponseWriter, r *http.Request) error {
 		op, err := runner.GetOperation(r.Context(), chi.URLParam(r, "operationId"))
 		if err != nil {

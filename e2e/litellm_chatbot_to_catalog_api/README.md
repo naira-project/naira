@@ -48,6 +48,10 @@ kill %1 %2
 kind delete cluster --name naira-idp-e2e
 ```
 
+To target a remote cluster (e.g. a vCluster) instead of kind, pass
+`--context <ctx> --registry` and set `E2E_IMAGE` to a repository you can push
+to and the cluster can pull from; see [`e2e/README.md`](../README.md).
+
 ## What's in the namespace
 
 | Component | Notes |

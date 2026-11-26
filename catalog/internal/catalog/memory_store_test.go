@@ -7,10 +7,73 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func listKinds(t *testing.T, store *MemoryStore) []string {
+	t.Helper()
+	result, err := store.ListKinds(t.Context())
+	require.NoError(t, err)
+	return result
+}
+
+func listNodes(t *testing.T, store *MemoryStore) []Node {
+	t.Helper()
+	result, err := store.ListNodes(t.Context())
+	require.NoError(t, err)
+	return result
+}
+
+func listRelations(t *testing.T, store *MemoryStore) []Relation {
+	t.Helper()
+	result, err := store.ListRelations(t.Context())
+	require.NoError(t, err)
+	return result
+}
+
+func TestListKinds(t *testing.T) {
+	store := NewMemoryStore()
+	assert.Empty(t, listKinds(t, store))
+
+	appNode := NodeID{
+		Kind: "application",
+		Path: "app-a",
+	}
+	otherAppNode := NodeID{
+		Kind: "application",
+		Path: "app-b",
+	}
+	modelNode := NodeID{
+		Kind: "model",
+		Path: "shared-model",
+	}
+
+	_, _, err := store.ApplyPluginSnapshot(t.Context(),
+		"mlflow",
+		snapshotV1,
+		[]NodeClaim{
+			{ID: appNode},
+			{ID: otherAppNode},
+			{ID: modelNode},
+		},
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"application", "model"}, listKinds(t, store))
+
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
+		"mlflow",
+		snapshotV2,
+		[]NodeClaim{
+			{ID: modelNode},
+		},
+		nil,
+	)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"model"}, listKinds(t, store))
+}
+
 func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	store := NewMemoryStore()
 
-	_, _, err := store.ApplyPluginSnapshot(
+	_, _, err := store.ApplyPluginSnapshot(t.Context(),
 		"mlflow",
 		snapshotV1,
 		[]NodeClaim{
@@ -31,7 +94,7 @@ func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, _, err = store.ApplyPluginSnapshot(
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
 		"litellm",
 		snapshotV2,
 		[]NodeClaim{{
@@ -42,7 +105,7 @@ func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, _, err = store.ApplyPluginSnapshot(
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
 		"mlflow",
 		snapshotV3,
 		[]NodeClaim{{
@@ -53,18 +116,18 @@ func TestApplyPluginSnapshotPrunesPreviousPluginSnapshot(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	nodes := store.ListNodes()
+	nodes := listNodes(t, store)
 	require.Len(t, nodes, 2)
 	assert.Equal(t, NodeID{Kind: "application", Path: "litellm/current-app"}, nodes[0].ID)
 	assert.Equal(t, NodeID{Kind: "model", Path: "mlflow/new-model"}, nodes[1].ID)
-	assert.Empty(t, store.ListRelations())
+	assert.Empty(t, listRelations(t, store))
 }
 
 func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	store := NewMemoryStore()
 
 	// 1. Ingest from plugin mlflow
-	_, _, err := store.ApplyPluginSnapshot(
+	_, _, err := store.ApplyPluginSnapshot(t.Context(),
 		"mlflow",
 		snapshotV1,
 		[]NodeClaim{{
@@ -76,7 +139,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Ingest from plugin litellm
-	_, _, err = store.ApplyPluginSnapshot(
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
 		"litellm",
 		snapshotV2,
 		[]NodeClaim{{
@@ -102,10 +165,10 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 				},
 			},
 		},
-	}, store.ListNodes())
+	}, listNodes(t, store))
 
 	// 4. Update mlflow with a snapshot that doesn't contain the shared-model
-	_, _, err = store.ApplyPluginSnapshot(
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
 		"mlflow",
 		snapshotV3,
 		[]NodeClaim{}, // empty
@@ -125,10 +188,10 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 				// mlflow claim pruned
 			},
 		},
-	}, store.ListNodes())
+	}, listNodes(t, store))
 
 	// 6. Update litellm with a snapshot that doesn't contain the shared-model
-	_, _, err = store.ApplyPluginSnapshot(
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
 		"litellm",
 		snapshotV4,
 		[]NodeClaim{}, // empty
@@ -137,7 +200,7 @@ func TestMultiplePluginsContributingToSameNode(t *testing.T) {
 	require.NoError(t, err)
 
 	// 7. Verify the node is deleted now
-	assert.Empty(t, store.ListNodes())
+	assert.Empty(t, listNodes(t, store))
 }
 
 func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
@@ -147,7 +210,7 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	modelNode := NodeID{Kind: "model", Path: "shared-model"}
 
 	// 1. Both plugins must also report the nodes they reference
-	_, _, err := store.ApplyPluginSnapshot(
+	_, _, err := store.ApplyPluginSnapshot(t.Context(),
 		"mlflow",
 		snapshotV1,
 		[]NodeClaim{
@@ -163,7 +226,7 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, _, err = store.ApplyPluginSnapshot(
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
 		"litellm",
 		snapshotV2,
 		[]NodeClaim{
@@ -196,10 +259,10 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 				},
 			},
 		},
-	}, store.ListRelations())
+	}, listRelations(t, store))
 
 	// 3. mlflow stops reporting this relation
-	_, _, err = store.ApplyPluginSnapshot(
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
 		"mlflow",
 		snapshotV3,
 		[]NodeClaim{
@@ -224,10 +287,10 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 				// mlflow claim pruned
 			},
 		},
-	}, store.ListRelations())
+	}, listRelations(t, store))
 
 	// 5. litellm also stops reporting the relation
-	_, _, err = store.ApplyPluginSnapshot(
+	_, _, err = store.ApplyPluginSnapshot(t.Context(),
 		"litellm",
 		snapshotV4,
 		[]NodeClaim{
@@ -239,5 +302,5 @@ func TestMultiplePluginsContributingToSameRelation(t *testing.T) {
 	require.NoError(t, err)
 
 	// 6. Relation is gone now
-	assert.Empty(t, store.ListRelations())
+	assert.Empty(t, listRelations(t, store))
 }

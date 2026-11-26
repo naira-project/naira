@@ -2,7 +2,16 @@
 // long-running asynchronous work (AIP-151).
 package operations
 
-import "time"
+import (
+	"context"
+	"errors"
+	"time"
+)
+
+var (
+	ErrNotFound      = errors.New("operation not found")
+	ErrAlreadyExists = errors.New("operation already exists")
+)
 
 type State string
 
@@ -16,23 +25,23 @@ const (
 // StatusError is an AIP-193 compliant error representation carried by
 // failed operations.
 type StatusError struct {
-	Message string `json:"message"`
+	Message string
 }
 
 // Operation represents a single asynchronous unit of work
 type Operation struct {
-	Name      string     `json:"name"`
-	Plugin    string     `json:"plugin"`
-	State     State      `json:"state"`
-	StartTime time.Time  `json:"startTime"`
-	EndTime   *time.Time `json:"endTime,omitempty"`
+	Name      string
+	Plugin    string
+	State     State
+	StartTime *time.Time
+	EndTime   *time.Time
 
-	Error *StatusError `json:"error,omitempty"`
+	Error *StatusError
 
-	NodesUpserted     int `json:"nodesUpserted"`
-	RelationsUpserted int `json:"relationsUpserted"`
+	NodesUpserted     int
+	RelationsUpserted int
 
-	CreatedAt time.Time `json:"createdAt"`
+	CreatedAt time.Time
 }
 
 // Filter narrows List results by plugin name and/or state. Zero values are
@@ -43,8 +52,8 @@ type Filter struct {
 }
 
 type Store interface {
-	Create(op Operation) error
-	Get(name string) (Operation, error)
-	List(filter Filter) ([]Operation, error)
-	UpdateState(name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error
+	Create(ctx context.Context, op Operation) error
+	Get(ctx context.Context, name string) (Operation, error)
+	List(ctx context.Context, filter Filter) ([]Operation, error)
+	UpdateState(ctx context.Context, name string, state State, err *StatusError, nodesUpserted, relationsUpserted int) error
 }

@@ -4,106 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
-	"log"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"regexp"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
-	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/operations"
-	"github.com/naira-project/naira/catalog/internal/pluginrun"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/naira-project/naira/catalog/internal/httpapi/mocks"
+	"github.com/naira-project/naira/catalog/internal/operations"
+	"github.com/naira-project/naira/catalog/internal/pluginrun"
 )
-
-func TestRunPluginFlowJSONContract(t *testing.T) {
-	// Names are server-generated (plugin-run-<uuid>)
-	opNamePattern := regexp.MustCompile(`^plugin-run-[0-9a-f-]{36}$`)
-
-	tests := []struct {
-		name              string
-		pluginImpl        pluginrun.Plugin
-		waitForCompletion bool
-		wantInitialJSON   string
-		wantTerminalJSON  string
-	}{
-		{
-			name:       "pending immediately after trigger",
-			pluginImpl: stubPlugin{},
-			wantInitialJSON: `{
-				"name": "{{NAME}}",
-				"done": false,
-				"metadata": {
-					"plugin": "mlflow",
-					"startTime": "{{START}}", "createdAt": "{{CREATED}}"
-				}
-			}`,
-		},
-		{
-			name:              "succeeded after completion",
-			pluginImpl:        stubPlugin{},
-			waitForCompletion: true,
-			wantTerminalJSON: `{
-				"name": "{{NAME}}",
-				"done": true,
-				"metadata": {
-					"plugin": "mlflow",
-					"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
-				},
-				"response": {"nodesUpserted": 0, "relationsUpserted": 0}
-			}`,
-		},
-		{
-			name:              "failed after completion",
-			pluginImpl:        stubPlugin{err: errors.New("sync failed: database offline")},
-			waitForCompletion: true,
-			wantTerminalJSON: `{
-				"name": "{{NAME}}",
-				"done": true,
-				"metadata": {
-					"plugin": "mlflow",
-					"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
-				},
-				"error": {"message": "collecting response from plugin \"mlflow\": sync failed: database offline"}
-			}`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			opStore := operations.NewMemoryStore()
-			router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{
-				"mlflow": tt.pluginImpl,
-			})
-
-			rec := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
-			require.Equal(t, http.StatusAccepted, rec.Code)
-
-			var opRes OperationResource
-			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &opRes))
-			assert.Regexp(t, opNamePattern, opRes.Name)
-
-			if tt.wantInitialJSON != "" {
-				assertOperationJSON(t, tt.wantInitialJSON, rec.Body.Bytes())
-			}
-			if !tt.waitForCompletion {
-				return
-			}
-
-			completed := waitForTerminalState(t, opStore, opRes.Name)
-
-			getRec := doRequest(t, router, http.MethodGet, "/v1/operations/"+url.PathEscape(completed.Name))
-			require.Equal(t, http.StatusOK, getRec.Code)
-			assertOperationJSON(t, tt.wantTerminalJSON, getRec.Body.Bytes())
-		})
-	}
-}
 
 func TestOperationFromCatalogOperationFailedWithoutError(t *testing.T) {
 	resource := operationFromCatalogOperation(operations.Operation{
@@ -117,134 +28,407 @@ func TestOperationFromCatalogOperationFailedWithoutError(t *testing.T) {
 	assert.Equal(t, "operation failed without an error", resource.Error.Message)
 }
 
-func TestRunPluginAsyncEndpointUnknownPlugin(t *testing.T) {
-	router := newTestRouter(t, catalog.NewMemoryStore(), operations.NewMemoryStore(), nil)
+func TestOperationFromCatalogOperationPendingOmitsStartTime(t *testing.T) {
+	resource := operationFromCatalogOperation(operations.Operation{
+		Name:      "plugin-run-1",
+		Plugin:    "mlflow",
+		State:     operations.StatePending,
+		CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+	})
 
-	rec := doRequest(t, router, http.MethodPost, "/v1/plugins/missing:run")
-	assert.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestRunPluginAsyncEndpointConflict(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	block := make(chan struct{})
-	store := catalog.NewMemoryStore()
-	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), store, opStore, map[string]pluginrun.Plugin{"mlflow": blockingStubPlugin{block: block}}, 5*time.Minute, log.New(io.Discard, "", 0))
-	router, err := NewRouter(catalogService, runner, catalog.PluginConfigsByName{"mlflow": {}}, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
+	body, err := json.Marshal(resource)
 	require.NoError(t, err)
-
-	rec1 := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
-	assert.Equal(t, http.StatusAccepted, rec1.Code)
-
-	var firstOp OperationResource
-	require.NoError(t, json.Unmarshal(rec1.Body.Bytes(), &firstOp))
-
-	waitForState(t, opStore, firstOp.Name, func(op operations.Operation) bool {
-		return op.State == operations.StateRunning
-	})
-
-	rec2 := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
-	assert.Equal(t, http.StatusConflict, rec2.Code)
-
-	close(block)
-	runner.Wait()
-}
-
-func TestGetOperationsEndpoint(t *testing.T) {
-	opStore := operations.NewMemoryStore()
-	router := newTestRouter(t, catalog.NewMemoryStore(), opStore, map[string]pluginrun.Plugin{"seed": stubPlugin{}})
-
-	// Trigger "seed" plugin flow
-	runRec := doRequest(t, router, http.MethodPost, "/v1/plugins:run")
-	require.Equal(t, http.StatusAccepted, runRec.Code)
-
-	var runResp RunPluginsResponse
-	require.NoError(t, json.Unmarshal(runRec.Body.Bytes(), &runResp))
-	require.Len(t, runResp.Operations, 1)
-
-	opName := runResp.Operations[0].Name
-	waitForTerminalState(t, opStore, opName)
-
-	// Fetch operations list
-	rec := doRequest(t, router, http.MethodGet, "/v1/operations")
-	assert.Equal(t, http.StatusOK, rec.Code)
-
-	var listResp struct {
-		Operations []json.RawMessage `json:"operations"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listResp))
-	require.Len(t, listResp.Operations, 1)
-
-	wantJSON := `{
-		"name": "{{NAME}}",
-		"done": true,
+	assert.JSONEq(t, `{
+		"name": "plugin-run-1",
+		"done": false,
 		"metadata": {
-			"plugin": "seed",
-			"startTime": "{{START}}", "endTime": "{{END}}", "createdAt": "{{CREATED}}"
+			"plugin": "mlflow",
+			"createdAt": "2026-01-02T03:04:05Z"
+		}
+	}`, string(body))
+}
+
+func TestRunPluginEndpoint(t *testing.T) {
+	tests := []struct {
+		name       string
+		runnerOp   operations.Operation
+		runnerErr  error
+		wantStatus int
+		wantJSON   string
+	}{
+		{
+			name: "accepts and returns the pending operation",
+			runnerOp: operations.Operation{
+				Name:      "plugin-run-1",
+				Plugin:    "mlflow",
+				State:     operations.StatePending,
+				CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+			},
+			wantStatus: http.StatusAccepted,
+			wantJSON: `{
+				"name": "plugin-run-1",
+				"done": false,
+				"metadata": {
+					"plugin": "mlflow",
+					"createdAt": "2026-01-02T03:04:05Z"
+				}
+			}`,
 		},
-		"response": {"nodesUpserted": 0, "relationsUpserted": 0}
-	}`
-	assertOperationJSON(t, wantJSON, listResp.Operations[0])
+		{
+			name:       "unknown plugin is a bad request",
+			runnerErr:  pluginrun.ErrPluginNotFound,
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "plugin already running is a conflict",
+			runnerErr:  pluginrun.ErrPluginAlreadyRunning,
+			wantStatus: http.StatusConflict,
+		},
+		{
+			name:       "unexpected runner failure is an internal error",
+			runnerErr:  errors.New("boom"),
+			wantStatus: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &mocks.PluginRunnerMock{
+				RunPluginAsyncFunc: func(context.Context, string) (operations.Operation, error) {
+					return tt.runnerOp, tt.runnerErr
+				},
+			}
+			router, err := NewRouter(&mocks.CatalogReaderMock{}, runner, nil, discardLogger, testKeycloak)
+			require.NoError(t, err)
+
+			rec := doRequest(t, router, http.MethodPost, "/v1/plugins/mlflow:run")
+
+			require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
+			if tt.wantJSON != "" {
+				assert.JSONEq(t, tt.wantJSON, rec.Body.String())
+			}
+		})
+	}
 }
 
-// --- helpers -----------------------------------------------------------
+func TestRunAllPluginsEndpoint(t *testing.T) {
+	tests := []struct {
+		name string
+		ops  []operations.Operation
+		want string
+	}{
+		{
+			name: "no plugins",
+			ops:  []operations.Operation{},
+			want: `{"operations": []}`,
+		},
+		{
+			name: "one plugin",
+			ops: []operations.Operation{{
+				Name:      "plugin-run-1",
+				Plugin:    "mlflow",
+				State:     operations.StatePending,
+				CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+			}},
+			want: `{
+				"operations": [
+					{
+						"name": "plugin-run-1",
+						"done": false,
+						"metadata": {
+							"plugin": "mlflow",
+							"createdAt": "2026-01-02T03:04:05Z"
+						}
+					}
+				]
+			}`,
+		},
+		{
+			name: "multiple plugins in different states",
+			ops: []operations.Operation{
+				{
+					Name:      "plugin-run-1",
+					Plugin:    "mlflow",
+					State:     operations.StatePending,
+					CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+				},
+				{
+					Name:      "plugin-run-2",
+					Plugin:    "litellm",
+					State:     operations.StateRunning,
+					CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+					StartTime: new(time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC)),
+				},
+				{
+					Name:      "plugin-run-3",
+					Plugin:    "openmetadata",
+					State:     operations.StateFailed,
+					CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+					StartTime: new(time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC)),
+					EndTime:   new(time.Date(2026, 1, 2, 3, 4, 7, 0, time.UTC)),
+					Error:     &operations.StatusError{Message: "sync failed"},
+				},
+			},
+			want: `{
+				"operations": [
+					{
+						"name": "plugin-run-1",
+						"done": false,
+						"metadata": {
+							"plugin": "mlflow",
+							"createdAt": "2026-01-02T03:04:05Z"
+						}
+					},
+					{
+						"name": "plugin-run-2",
+						"done": false,
+						"metadata": {
+							"plugin": "litellm",
+							"startTime": "2026-01-02T03:04:06Z",
+							"createdAt": "2026-01-02T03:04:05Z"
+						}
+					},
+					{
+						"name": "plugin-run-3",
+						"done": true,
+						"metadata": {
+							"plugin": "openmetadata",
+							"startTime": "2026-01-02T03:04:06Z",
+							"endTime": "2026-01-02T03:04:07Z",
+							"createdAt": "2026-01-02T03:04:05Z"
+						},
+						"error": {
+							"message": "sync failed"
+						}
+					}
+				]
+			}`,
+		},
+	}
 
-// doRequest executes an authenticated HTTP request against the provided router.
-func doRequest(t *testing.T, router http.Handler, method, path string) *httptest.ResponseRecorder {
-	t.Helper()
-	req := withAuth(httptest.NewRequest(method, path, nil), testBearerToken)
-	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
-	return rec
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &mocks.PluginRunnerMock{
+				RunAllPluginsAsyncFunc: func(context.Context) []operations.Operation {
+					return tt.ops
+				},
+			}
+			router, err := NewRouter(&mocks.CatalogReaderMock{}, runner, nil, discardLogger, testKeycloak)
+			require.NoError(t, err)
+
+			rec := doRequest(t, router, http.MethodPost, "/v1/plugins:run")
+
+			require.Equal(t, http.StatusAccepted, rec.Code, rec.Body.String())
+			assert.JSONEq(t, tt.want, rec.Body.String())
+		})
+	}
 }
 
-// waitForTerminalState polls until the operation reaches SUCCEEDED or FAILED.
-func waitForTerminalState(t *testing.T, opStore operations.Store, name string) operations.Operation {
-	t.Helper()
-	return waitForState(t, opStore, name, func(op operations.Operation) bool {
-		return op.State == operations.StateSucceeded || op.State == operations.StateFailed
+func TestGetOperationEndpoint(t *testing.T) {
+	tests := []struct {
+		name       string
+		runnerOp   operations.Operation
+		runnerErr  error
+		wantStatus int
+		wantJSON   string
+	}{
+		{
+			name: "running operation",
+			runnerOp: operations.Operation{
+				Name:      "plugin-run-1",
+				Plugin:    "mlflow",
+				State:     operations.StateRunning,
+				CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+				StartTime: new(time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC)),
+			},
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"name": "plugin-run-1",
+				"done": false,
+				"metadata": {
+					"plugin": "mlflow",
+					"startTime": "2026-01-02T03:04:06Z",
+					"createdAt": "2026-01-02T03:04:05Z"
+				}
+			}`,
+		},
+		{
+			name: "succeeded operation carries response",
+			runnerOp: operations.Operation{
+				Name:              "plugin-run-1",
+				Plugin:            "mlflow",
+				State:             operations.StateSucceeded,
+				CreatedAt:         time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+				StartTime:         new(time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC)),
+				EndTime:           new(time.Date(2026, 1, 2, 3, 4, 7, 0, time.UTC)),
+				NodesUpserted:     3,
+				RelationsUpserted: 2,
+			},
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"name": "plugin-run-1",
+				"done": true,
+				"metadata": {
+					"plugin": "mlflow",
+					"startTime": "2026-01-02T03:04:06Z",
+					"endTime": "2026-01-02T03:04:07Z",
+					"createdAt": "2026-01-02T03:04:05Z"
+				},
+				"response": {
+					"nodesUpserted": 3,
+					"relationsUpserted": 2
+				}
+			}`,
+		},
+		{
+			name: "failed operation carries error",
+			runnerOp: operations.Operation{
+				Name:      "plugin-run-1",
+				Plugin:    "mlflow",
+				State:     operations.StateFailed,
+				CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+				StartTime: new(time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC)),
+				EndTime:   new(time.Date(2026, 1, 2, 3, 4, 7, 0, time.UTC)),
+				Error:     &operations.StatusError{Message: "sync failed: database offline"},
+			},
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"name": "plugin-run-1",
+				"done": true,
+				"metadata": {
+					"plugin": "mlflow",
+					"startTime": "2026-01-02T03:04:06Z",
+					"endTime": "2026-01-02T03:04:07Z",
+					"createdAt": "2026-01-02T03:04:05Z"
+				},
+				"error": {
+					"message": "sync failed: database offline"
+				}
+			}`,
+		},
+		{
+			name:       "unknown operation is not found",
+			runnerErr:  operations.ErrNotFound,
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			runner := &mocks.PluginRunnerMock{
+				GetOperationFunc: func(context.Context, string) (operations.Operation, error) {
+					return tt.runnerOp, tt.runnerErr
+				},
+			}
+			router, err := NewRouter(&mocks.CatalogReaderMock{}, runner, nil, discardLogger, testKeycloak)
+			require.NoError(t, err)
+
+			rec := doRequest(t, router, http.MethodGet, "/v1/operations/plugin-run-1")
+
+			require.Equal(t, tt.wantStatus, rec.Code, rec.Body.String())
+			if tt.wantJSON != "" {
+				assert.JSONEq(t, tt.wantJSON, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestListOperationsEndpoint(t *testing.T) {
+	t.Run("lists names of all operations", func(t *testing.T) {
+		runner := &mocks.PluginRunnerMock{
+			ListOperationsFunc: func(context.Context, operations.Filter) ([]operations.Operation, error) {
+				return []operations.Operation{
+					{
+						Name:      "plugin-run-1",
+						Plugin:    "seed",
+						State:     operations.StateSucceeded,
+						CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+						StartTime: new(time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC)),
+						EndTime:   new(time.Date(2026, 1, 2, 3, 4, 7, 0, time.UTC)),
+					},
+					{
+						Name:      "plugin-run-2",
+						Plugin:    "mlflow",
+						State:     operations.StateRunning,
+						CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+						StartTime: new(time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC)),
+					},
+				}, nil
+			},
+		}
+		router, err := NewRouter(&mocks.CatalogReaderMock{}, runner, nil, discardLogger, testKeycloak)
+		require.NoError(t, err)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/operations")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var payload ListOperationsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+		assert.Equal(t, []string{"plugin-run-1", "plugin-run-2"}, operationNames(payload))
+	})
+
+	t.Run("filters plugin lists names", func(t *testing.T) {
+		runner := &mocks.PluginRunnerMock{
+			ListOperationsFunc: func(context.Context, operations.Filter) ([]operations.Operation, error) {
+				return []operations.Operation{
+					{Name: "plugin-run-1", Plugin: "seed", State: operations.StateRunning},
+					{Name: "plugin-run-2", Plugin: "mlflow", State: operations.StateRunning},
+				}, nil
+			},
+		}
+		router, err := NewRouter(&mocks.CatalogReaderMock{}, runner, nil, discardLogger, testKeycloak)
+		require.NoError(t, err)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/operations?filter=plugin=%22seed%22")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var payload ListOperationsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+		assert.Equal(t, []string{"plugin-run-1"}, operationNames(payload))
+	})
+
+	t.Run("paginates", func(t *testing.T) {
+		runner := &mocks.PluginRunnerMock{
+			ListOperationsFunc: func(context.Context, operations.Filter) ([]operations.Operation, error) {
+				return []operations.Operation{
+					{Name: "plugin-run-1", Plugin: "seed", State: operations.StateRunning},
+					{Name: "plugin-run-2", Plugin: "mlflow", State: operations.StateRunning},
+				}, nil
+			},
+		}
+		router, err := NewRouter(&mocks.CatalogReaderMock{}, runner, nil, discardLogger, testKeycloak)
+		require.NoError(t, err)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/operations?pageSize=1")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		var payload ListOperationsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+		assert.Len(t, payload.Operations, 1)
+		assert.NotEmpty(t, payload.NextPageToken)
+		assert.Equal(t, int32(2), payload.TotalSize)
+	})
+
+	t.Run("rejects unsupported filter field", func(t *testing.T) {
+		runner := &mocks.PluginRunnerMock{
+			ListOperationsFunc: func(context.Context, operations.Filter) ([]operations.Operation, error) {
+				return nil, nil
+			},
+		}
+		router, err := NewRouter(&mocks.CatalogReaderMock{}, runner, nil, discardLogger, testKeycloak)
+		require.NoError(t, err)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/operations?filter=state=%22running%22")
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.Empty(t, runner.ListOperationsCalls())
 	})
 }
 
-// waitForState polls until condition is met or times out.
-func waitForState(t *testing.T, opStore operations.Store, name string, condition func(operations.Operation) bool) operations.Operation {
-	t.Helper()
-
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		op, err := opStore.Get(name)
-		if err == nil && condition(op) {
-			return op
-		}
-		time.Sleep(10 * time.Millisecond)
+func operationNames(payload ListOperationsResponse) []string {
+	names := make([]string, 0, len(payload.Operations))
+	for _, op := range payload.Operations {
+		names = append(names, op.Name)
 	}
-
-	op, err := opStore.Get(name)
-	require.NoError(t, err, "operation %q not found", name)
-	t.Fatalf("timed out waiting for operation %q; final state = %s", name, op.State)
-	return operations.Operation{}
-}
-
-// assertOperationJSON compares actual JSON against wantTemplate replacing dynamic placeholders.
-func assertOperationJSON(t *testing.T, wantTemplate string, actual []byte) {
-	t.Helper()
-
-	var got struct {
-		Name     string `json:"name"`
-		Metadata struct {
-			StartTime string `json:"startTime"`
-			EndTime   string `json:"endTime"`
-			CreatedAt string `json:"createdAt"`
-		} `json:"metadata"`
-	}
-	require.NoError(t, json.Unmarshal(actual, &got))
-
-	want := strings.NewReplacer(
-		"{{NAME}}", got.Name,
-		"{{START}}", got.Metadata.StartTime,
-		"{{END}}", got.Metadata.EndTime,
-		"{{CREATED}}", got.Metadata.CreatedAt,
-	).Replace(wantTemplate)
-
-	assert.JSONEq(t, want, string(actual))
+	return names
 }
