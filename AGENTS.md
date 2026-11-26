@@ -22,6 +22,19 @@ Naira doesn't implement directly features e.g. for inferencing, AI Gateways and 
   - `Taskfile.yml` - Developer tasks: lint, tests, proto, chart checks.
   - `mise.toml` - list of tools and versions used for project development.
 
+## Architecture Decisions
+Decisions live in the architecture repo (https://github.com/naira-project/architecture): ADRs in `adr/`,
+RFCs in `rfc/`, DDRs (UI/UX) in `ddr/`. Use a sibling checkout at `../architecture` if present
+(clone it otherwise), and read the latest `origin/main`.
+
+- Before designing or implementing a change that touches architecture, technical implementation or
+  infrastructure, read the relevant ADRs and follow the accepted ones.
+- If a task conflicts with an accepted ADR, stop and tell the user. Don't silently deviate.
+- If a change makes a significant decision no ADR covers, or replaces an existing one, draft an ADR in
+  the architecture repo and tell the user. Follow its `README.md` and the format of recent ADRs;
+  take the next free number, also checking open PRs. It needs its own PR there and is accepted only
+  once merged.
+
 ## Documentation and Code Comments
 - Don't duplicate explanations across files (e.g. plugin README vs. godoc vs. workflow README vs.
   sample config). Duplication drifts out of sync quickly. Pick one source of truth and have
