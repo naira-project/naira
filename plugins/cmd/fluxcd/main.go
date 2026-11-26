@@ -12,7 +12,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"slices"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -77,15 +76,15 @@ func (p *Plugin) collect(ctx context.Context, disc discovery.DiscoveryInterface,
 		// Thus, we don't return an error, but continue trying to scan what we can.
 	}
 
-	kusts, err := listGroupKind(ctx, resourceAPIs, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", namespaces)
+	kusts, err := kubeutil.ListGroupKind(ctx, resourceAPIs, dyn, "kustomize.toolkit.fluxcd.io", "Kustomization", namespaces)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing Kustomizations: %w", err)
 	}
-	helms, err := listGroupKind(ctx, resourceAPIs, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", namespaces)
+	helms, err := kubeutil.ListGroupKind(ctx, resourceAPIs, dyn, "helm.toolkit.fluxcd.io", "HelmRelease", namespaces)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing HelmReleases: %w", err)
 	}
-	repos, err := listGroupKind(ctx, resourceAPIs, dyn, "source.toolkit.fluxcd.io", "GitRepository", namespaces)
+	repos, err := kubeutil.ListGroupKind(ctx, resourceAPIs, dyn, "source.toolkit.fluxcd.io", "GitRepository", namespaces)
 	if err != nil {
 		return pluginapi.CollectResponse{}, fmt.Errorf("listing GitRepositories: %w", err)
 	}
@@ -286,43 +285,6 @@ func helmSourceRepoPath(helm unstructured.Unstructured) (path string, ok bool) {
 	srcName, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "name")
 	srcNs, _, _ := unstructured.NestedString(helm.Object, "spec", "chart", "spec", "sourceRef", "namespace")
 	return nsOrFallback(srcNs, helm.GetNamespace()) + "/" + srcName, true
-}
-
-// listGroupKind returns all resources of the given API group + kind across all
-// provided namespaces.
-// Returns an empty slice (not an error) when the CRD is not installed in the cluster.
-func listGroupKind(ctx context.Context, apiLists []*metav1.APIResourceList, dyn dynamic.Interface, group, kind string, namespaces []string) ([]unstructured.Unstructured, error) {
-	for _, apiList := range apiLists {
-		gv, err := schema.ParseGroupVersion(apiList.GroupVersion)
-		if err != nil {
-			log.Printf("%s: WARN: skipping API group %q due to parsing error: %v", pluginName, apiList.GroupVersion, err)
-			continue
-		}
-		if gv.Group != group {
-			continue
-		}
-		for _, res := range apiList.APIResources {
-			if res.Kind != kind {
-				continue
-			}
-			if !slices.Contains(res.Verbs, "list") {
-				continue
-			}
-			gvr := schema.GroupVersionResource{Group: gv.Group, Version: gv.Version, Resource: res.Name}
-			var items []unstructured.Unstructured
-			for _, ns := range namespaces {
-				// TODO[PERF]: try scanning `.Namespace(metav1.NamespaceAll)` first, only fall back to per-namespace if that fails due to RBAC.
-				list, err := dyn.Resource(gvr).Namespace(ns).List(ctx, metav1.ListOptions{})
-				if err != nil {
-					log.Printf("%s: WARN: listing %s/%s in namespace %q: %v", pluginName, group, kind, ns, err)
-					continue
-				}
-				items = append(items, list.Items...)
-			}
-			return items, nil
-		}
-	}
-	return nil, nil // CRD not installed → no data
 }
 
 func nsOrFallback(ns, fallback string) string {

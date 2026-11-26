@@ -1,0 +1,35 @@
+#WANT_OK: cluster-rbac
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: ["*"]
+  destinations:
+  - {server: "*", namespace: "*"}
+  clusterResourceWhitelist:
+  - {group: "*", kind: "*"}
+---
+
+# A Helm chart from a chart repository (not Git). It renders cluster-scoped
+# resources of a non-core API group (ClusterRole, ClusterRoleBinding), and a
+# namespaced one of the core group (ServiceAccount).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-rbac
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cluster-rbac
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-state-metrics
+    targetRevision: 8.8.0
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]

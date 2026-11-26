@@ -1,0 +1,34 @@
+#WANT_OK: oci-chart
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: ["*"]
+  destinations:
+  - {server: "*", namespace: "*"}
+  clusterResourceWhitelist:
+  - {group: "*", kind: "*"}
+---
+
+# A Helm chart from an OCI registry (an "oci://" URL, not a chart repository
+# or Git).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: oci-chart
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: oci-chart
+  source:
+    repoURL: oci://ghcr.io/prometheus-community/charts/kube-state-metrics
+    targetRevision: 8.8.0
+    path: .
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=true]
