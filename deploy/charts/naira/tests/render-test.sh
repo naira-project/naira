@@ -9,6 +9,12 @@
 #   - guards that must refuse to render (bad values, missing Secrets)
 #   - values-dev.yaml and the kind/CI setup
 #   - pod hardening, scheduling fields and the catalog NetworkPolicy
+#
+# Which plugins are enabled by default is a policy that changes. Only the
+# "Default policy" section may depend on it. Every other check picks its
+# plugins with `only` (all plugins off, the named ones on), so it keeps
+# passing when a plugin is switched on or off in values.yaml.
+#
 # Requires helm and mikefarah yq v4 (both pinned in mise.toml).
 set -euo pipefail
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
@@ -56,9 +62,49 @@ must_fail() {
   fi
 }
 
+# only PLUGIN...: prints helm flags that disable every plugin defined in
+# values.yaml, then enable the named ones (a later --set wins). Use it as
+# NAME=($(only a b)) and pass "${NAME[@]}", so the check does not depend on
+# which plugins are enabled by default. A plugin that needs more to render
+# (tech-radar needs its radar file) still needs those flags on top.
+ALL_PLUGINS=$(yq '.catalog.plugins | keys | .[]' "$CHART/values.yaml")
+only() {
+  local p
+  for p in $ALL_PLUGINS; do echo "--set catalog.plugins.$p.enabled=false"; done
+  for p in "$@"; do echo "--set catalog.plugins.$p.enabled=true"; done
+}
+# shellcheck disable=SC2207  # the flags contain no spaces
+NO_PLUGINS=($(only))
+# shellcheck disable=SC2207
+LITELLM_ONLY=($(only litellm))
+# shellcheck disable=SC2207
+OPENMETADATA_ONLY=($(only openmetadata))
+# shellcheck disable=SC2207
+MLFLOW_ONLY=($(only mlflow))
+# shellcheck disable=SC2207
+PORT_CLASH=($(only litellm mlflow))
+# shellcheck disable=SC2207
+RBAC_ONLY=($(only depl-calls-svc fluxcd))
+
 # yq selectors for the objects the checks look at.
 CATALOG='select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.template.spec'
 pod() { printf 'select(.kind == "Deployment" and .metadata.name == "%s") | .spec.template.spec' "$1"; }
+
+# ── Default policy ───────────────────────────────────────────────────────────
+# The one place that pins what a plain install runs. Changing which plugins
+# are enabled by default in values.yaml means changing DEFAULT_SIDECARS here
+# and nothing else.
+DEFAULT_SIDECARS="plugin-depl-calls-svc,plugin-fluxcd,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata"
+
+check "default sidecars, sorted" \
+  "$DEFAULT_SIDECARS" \
+  "$(render | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
+check "default: no Secret read grant (depl-uses-litellm is opt-in)" \
+  "0" \
+  "$(render | yq ea '[select(.kind == "ClusterRole") | .rules[] | select(.resources[] == "secrets")] | length')"
+check "default: no NetworkPolicy" \
+  "0" \
+  "$(render | yq ea '[select(.kind == "NetworkPolicy")] | length')"
 
 # ── Catalog ──────────────────────────────────────────────────────────────────
 check "chart name" \
@@ -94,84 +140,86 @@ LITELLM_ENV="$LITELLM_SIDECAR | .env[]"
 CHECKSUM='select(.kind == "Deployment" and .metadata.name == "catalog")
           | .spec.template.metadata.annotations["checksum/plugin-config"]'
 
-check "default sidecars (tech-radar off), sorted" \
-  "plugin-depl-calls-svc,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata" \
-  "$(render | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
 check "sidecars are native sidecars" \
   "Always" \
-  "$(render | yq ea "[$CATALOG | .initContainers[].restartPolicy] | unique | join(\",\")")"
+  "$(render "${LITELLM_ONLY[@]}" | yq ea "[$CATALOG | .initContainers[].restartPolicy] | unique | join(\",\")")"
+check "sidecars are sorted by plugin name" \
+  "plugin-litellm,plugin-mlflow" \
+  "$(render "${PORT_CLASH[@]}" --set catalog.plugins.mlflow.port=50052 \
+    | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
 check "plugin image" \
   "ghcr.io/naira-project/naira-plugin-litellm:${APP_VERSION}" \
-  "$(render | yq "$LITELLM_SIDECAR | .image")"
+  "$(render "${LITELLM_ONLY[@]}" | yq "$LITELLM_SIDECAR | .image")"
 check "plugin PORT" \
   "50051" \
-  "$(render | yq "$LITELLM_ENV | select(.name == \"PORT\") | .value")"
+  "$(render "${LITELLM_ONLY[@]}" | yq "$LITELLM_ENV | select(.name == \"PORT\") | .value")"
 check "plugin PATH_PREFIX" \
   "litellm" \
-  "$(render | yq "$LITELLM_ENV | select(.name == \"PATH_PREFIX\") | .value")"
+  "$(render "${LITELLM_ONLY[@]}" | yq "$LITELLM_ENV | select(.name == \"PATH_PREFIX\") | .value")"
 check "plugin env default" \
   "http://litellm.naira-deps.svc.cluster.local:4000" \
-  "$(render | yq "$LITELLM_ENV | select(.name == \"LITELLM_BASE_URL\") | .value")"
+  "$(render "${LITELLM_ONLY[@]}" | yq "$LITELLM_ENV | select(.name == \"LITELLM_BASE_URL\") | .value")"
 check "plugin env override" \
   "http://litellm.run1.svc.cluster.local:4000" \
-  "$(render --set catalog.plugins.litellm.env.LITELLM_BASE_URL=http://litellm.run1.svc.cluster.local:4000 \
+  "$(render "${LITELLM_ONLY[@]}" \
+      --set catalog.plugins.litellm.env.LITELLM_BASE_URL=http://litellm.run1.svc.cluster.local:4000 \
     | yq "$LITELLM_ENV | select(.name == \"LITELLM_BASE_URL\") | .value")"
 check "plugin secret env defaults to catalog-secrets" \
   "catalog-secrets/LITELLM_API_KEY" \
-  "$(render \
+  "$(render "${LITELLM_ONLY[@]}" \
     | yq "$LITELLM_ENV | select(.name == \"LITELLM_API_KEY\")
           | .valueFrom.secretKeyRef | .name + \"/\" + .key")"
 check "plugin resources default" \
   "128Mi" \
-  "$(render | yq "$LITELLM_SIDECAR | .resources.limits.memory")"
+  "$(render "${LITELLM_ONLY[@]}" | yq "$LITELLM_SIDECAR | .resources.limits.memory")"
 check "plugin resources override merges" \
   "256Mi 200m 50m" \
-  "$(render --set catalog.plugins.litellm.resources.limits.memory=256Mi \
+  "$(render "${LITELLM_ONLY[@]}" --set catalog.plugins.litellm.resources.limits.memory=256Mi \
     | yq "$LITELLM_SIDECAR | .resources
           | .limits.memory + \" \" + .limits.cpu + \" \" + .requests.cpu")"
 check "plugins.yaml entry" \
   "localhost:50051 0 0 * * *" \
-  "$(render | yq "$PLUGINS_YAML" | yq '.plugins.litellm | .address + " " + .schedule')"
+  "$(render "${LITELLM_ONLY[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.litellm | .address + " " + .schedule')"
 check "plugins.yaml omits schedule when unset" \
   "null" \
-  "$(render | yq "$PLUGINS_YAML" | yq '.plugins.openmetadata.schedule')"
+  "$(render "${OPENMETADATA_ONLY[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.openmetadata.schedule')"
 check "disabled plugin: no sidecar" \
   "" \
-  "$(render --set catalog.plugins.litellm.enabled=false | yq "$LITELLM_SIDECAR | .name")"
+  "$(render "${LITELLM_ONLY[@]}" --set catalog.plugins.litellm.enabled=false | yq "$LITELLM_SIDECAR | .name")"
 check "disabled plugin: not in plugins.yaml" \
   "false" \
-  "$(render --set catalog.plugins.litellm.enabled=false \
+  "$(render "${LITELLM_ONLY[@]}" --set catalog.plugins.litellm.enabled=false \
     | yq "$PLUGINS_YAML" | yq '.plugins | has("litellm")')"
 check "plugins.yaml mounted" \
   "/etc/catalog/plugins.yaml" \
   "$(render \
     | yq "$CATALOG | .containers[0].volumeMounts[] | select(.name == \"plugin-config\") | .mountPath")"
 
-WITH_LITELLM=$(render | yq "$CHECKSUM")
-WITHOUT_LITELLM=$(render --set catalog.plugins.litellm.enabled=false | yq "$CHECKSUM")
+WITH_LITELLM=$(render "${LITELLM_ONLY[@]}" | yq "$CHECKSUM")
+WITHOUT_LITELLM=$(render "${NO_PLUGINS[@]}" | yq "$CHECKSUM")
 if [ "$WITH_LITELLM" != "$WITHOUT_LITELLM" ]; then checksum_changed=different; else checksum_changed=same; fi
 check "checksum changes with plugins" "different" "$checksum_changed"
 
 # ── RBAC ─────────────────────────────────────────────────────────────────────
 check "ClusterRoles are release-prefixed" \
   "t-catalog,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
-  "$(render | yq ea '[select(.kind == "ClusterRole") | .metadata.name] | sort | join(",")')"
+  "$(render "${RBAC_ONLY[@]}" | yq ea '[select(.kind == "ClusterRole") | .metadata.name] | sort | join(",")')"
 check "bindings match roles" \
   "t-catalog,t-plugin-depl-calls-svc,t-plugin-fluxcd" \
-  "$(render | yq ea '[select(.kind == "ClusterRoleBinding") | .roleRef.name] | sort | join(",")')"
+  "$(render "${RBAC_ONLY[@]}" | yq ea '[select(.kind == "ClusterRoleBinding") | .roleRef.name] | sort | join(",")')"
 check "binding subject is the catalog SA in the release namespace" \
   "catalog/naira" \
-  "$(render \
+  "$(render "${RBAC_ONLY[@]}" \
     | yq 'select(.kind == "ClusterRoleBinding" and .metadata.name == "t-plugin-fluxcd")
           | .subjects[0] | .name + "/" + .namespace')"
 check "plugin rules copied" \
   "namespaces,services" \
-  "$(render \
+  "$(render "${RBAC_ONLY[@]}" \
     | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-depl-calls-svc")
           | .rules[0].resources | join(",")')"
 check "disabled plugin: no RBAC" \
   "" \
-  "$(render --set catalog.plugins.fluxcd.enabled=false \
+  "$(render "${RBAC_ONLY[@]}" --set catalog.plugins.fluxcd.enabled=false \
     | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-fluxcd") | .metadata.name')"
 check "two releases do not collide" \
   "u-catalog" \
@@ -207,9 +255,11 @@ check "existingConfigMap: no generated ConfigMap" \
 check "existingConfigMap: volume points at it" \
   "my-radar" \
   "$(render "${TECH_RADAR_EXISTING[@]}" | yq "$TECH_RADAR_VOLUME | .configMap.name")"
-check "default plus tech-radar and depl-uses-litellm: 8 sidecars" \
-  "8" \
-  "$(render "${TECH_RADAR[@]}" --set catalog.plugins.depl-uses-litellm.enabled=true \
+# shellcheck disable=SC2207
+THREE_PLUGINS=($(only mlflow tech-radar depl-uses-litellm))
+check "mlflow plus tech-radar and depl-uses-litellm: 3 sidecars" \
+  "3" \
+  "$(render "${THREE_PLUGINS[@]}" "${TECH_RADAR[@]}" \
     | yq "$CATALOG | .initContainers | length")"
 check "tech-radar registered in plugins.yaml" \
   "localhost:50057" \
@@ -227,7 +277,7 @@ check "catalog Secret when create=true" \
     | yq 'select(.kind == "Secret" and .metadata.name == "catalog-secrets") | .stringData.LITELLM_API_KEY')"
 check "existingSecret reaches plugin env" \
   "ext" \
-  "$(render --set catalog.secret.existingSecret=ext \
+  "$(render "${LITELLM_ONLY[@]}" --set catalog.secret.existingSecret=ext \
     | yq "$LITELLM_ENV | select(.name == \"LITELLM_API_KEY\") | .valueFrom.secretKeyRef.name")"
 check "portal Secret when create=true" \
   "s3" \
@@ -316,10 +366,10 @@ check "ui disabled" \
 # ── Guards ───────────────────────────────────────────────────────────────────
 must_fail "duplicate plugin port" \
   "both use port 50051" \
-  --set catalog.plugins.mlflow.port=50051
+  "${PORT_CLASH[@]}" --set catalog.plugins.mlflow.port=50051
 must_fail "plugin port equal to the catalog port" \
   "catalog and mlflow both use port 8090" \
-  --set catalog.plugins.mlflow.port=8090
+  "${MLFLOW_ONLY[@]}" --set catalog.plugins.mlflow.port=8090
 check "numeric image tag renders as a string" \
   "ghcr.io/naira-project/naira-catalog:20260924" \
   "$(render --set image.tag=20260924 | yq "$CATALOG | .containers[0].image")"
@@ -334,24 +384,20 @@ must_fail "tech-radar on without a radar file" \
   --set catalog.plugins.tech-radar.enabled=true
 RENDER=render_raw must_fail "no catalog Secret source" \
   "catalog.plugins.litellm reads LITELLM_API_KEY from the catalog Secret: set catalog.secret.existingSecret or catalog.secret.create" \
-  --set portal.enabled=false
+  "${LITELLM_ONLY[@]}" --set portal.enabled=false
 RENDER=render_raw must_fail "no portal Secret source" \
   "portal reads its OIDC client secret: set portal.oidc.secret.existingSecret or portal.oidc.secret.create" \
   --set catalog.secret.existingSecret=x
 check "no Secret needed when nothing reads one" \
   "ok" \
-  "$(render_raw "${DB[@]}" --set portal.enabled=false \
-      --set catalog.plugins.litellm.enabled=false \
-      --set catalog.plugins.openmetadata.enabled=false >/dev/null && echo ok)"
+  "$(render_raw "${DB[@]}" "${MLFLOW_ONLY[@]}" --set portal.enabled=false >/dev/null && echo ok)"
 check "a plugin naming its own Secret needs no catalog Secret" \
   "ok" \
-  "$(render_raw "${DB[@]}" --set portal.enabled=false \
-      --set catalog.plugins.openmetadata.enabled=false \
+  "$(render_raw "${DB[@]}" "${LITELLM_ONLY[@]}" --set portal.enabled=false \
       --set catalog.plugins.litellm.env.LITELLM_API_KEY.secretKeyRef.name=own >/dev/null && echo ok)"
 check "disabled plugin may share a port" \
   "ok" \
-  "$(render --set catalog.plugins.mlflow.port=50051 \
-      --set catalog.plugins.mlflow.enabled=false >/dev/null && echo ok)"
+  "$(render "${LITELLM_ONLY[@]}" --set catalog.plugins.mlflow.port=50051 >/dev/null && echo ok)"
 
 # ── Dev values (kind) ────────────────────────────────────────────────────────
 DEV=(-f "$CHART/values-dev.yaml")
@@ -392,14 +438,14 @@ check "numeric release name renders a string label" \
     | sed 's/!!//;s/str/string/')"
 check "rbac without rules renders no ClusterRole" \
   "" \
-  "$(render --set catalog.plugins.mlflow.rbac.foo=bar \
+  "$(render "${MLFLOW_ONLY[@]}" --set catalog.plugins.mlflow.rbac.foo=bar \
     | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-mlflow") | .metadata.name')"
 must_fail "plugin without an image" \
   "image.repository is required" \
   --set catalog.plugins.newone.enabled=true --set catalog.plugins.newone.port=50099
 must_fail "secretKeyRef without key" \
   "secretKeyRef.key is required" \
-  --set catalog.plugins.litellm.env.LITELLM_API_KEY.secretKeyRef.key=null
+  "${LITELLM_ONLY[@]}" --set catalog.plugins.litellm.env.LITELLM_API_KEY.secretKeyRef.key=null
 RENDER=render_raw must_fail "create with empty data" \
   "catalog.secret.data is empty" \
   --set portal.enabled=false --set catalog.secret.create=true
@@ -407,12 +453,10 @@ RENDER=render_raw must_fail "portal create with empty value" \
   "portal.oidc.secret.value is empty" \
   --set catalog.enabled=false --set portal.oidc.secret.create=true
 
-GITHUB=(--set catalog.plugins.github.enabled=true)
+# shellcheck disable=SC2207
+GITHUB=($(only github))
 GITHUB_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-github\")"
 
-check "github off by default" \
-  "" \
-  "$(render | yq "$GITHUB_SIDECAR | .name")"
 check "github token from the catalog Secret" \
   "catalog-secrets/GITHUB_TOKEN" \
   "$(render "${GITHUB[@]}" \
@@ -427,22 +471,19 @@ check "github RBAC when enabled" \
     | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-github") | .metadata.name')"
 RENDER=render_raw must_fail "github on without a catalog Secret source" \
   "catalog.plugins.github reads GITHUB_TOKEN from the catalog Secret" \
-  --set portal.enabled=false --set catalog.plugins.github.enabled=true \
-  --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
+  "${GITHUB[@]}" --set portal.enabled=false
 
-BEDROCK=(--set catalog.plugins.bedrock.enabled=true)
+# shellcheck disable=SC2207
+BEDROCK=($(only bedrock))
 BEDROCK_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-bedrock\")"
 
-check "bedrock off by default" \
-  "" \
-  "$(render | yq "$BEDROCK_SIDECAR | .name")"
 check "bedrock AWS credentials from the catalog Secret" \
   "catalog-secrets/BEDROCK_AWS_ACCESS_KEY_ID catalog-secrets/BEDROCK_AWS_SECRET_ACCESS_KEY" \
   "$(render "${BEDROCK[@]}" \
     | yq "$BEDROCK_SIDECAR | .env[] | select(.name == \"AWS_ACCESS_KEY_ID\" or .name == \"AWS_SECRET_ACCESS_KEY\")
           | .valueFrom.secretKeyRef | .name + \"/\" + .key" | paste -sd' ' -)"
 check "bedrock registered in plugins.yaml" \
-  "localhost:50060" \
+  "localhost:50061" \
   "$(render "${BEDROCK[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.bedrock.address')"
 check "bedrock needs no RBAC" \
   "" \
@@ -450,12 +491,8 @@ check "bedrock needs no RBAC" \
     | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-bedrock") | .metadata.name')"
 RENDER=render_raw must_fail "bedrock on without a catalog Secret source" \
   "catalog.plugins.bedrock reads AWS_ACCESS_KEY_ID from the catalog Secret" \
-  --set portal.enabled=false --set catalog.plugins.bedrock.enabled=true \
-  --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
+  "${BEDROCK[@]}" --set portal.enabled=false
 
-check "depl-uses-litellm off by default: no Secret read grant" \
-  "0" \
-  "$(render | yq ea '[select(.kind == "ClusterRole") | .rules[] | select(.resources[] == "secrets")] | length')"
 check "depl-uses-litellm enabled: ClusterRole with secrets" \
   "t-plugin-depl-uses-litellm" \
   "$(render --set catalog.plugins.depl-uses-litellm.enabled=true \
@@ -477,12 +514,12 @@ check "catalog runs as the distroless uid" \
           | (.runAsUser | tostring) + \" \" + (.runAsNonRoot | tostring)")"
 check "sidecar security context defaults" \
   "false ALL RuntimeDefault" \
-  "$(render \
+  "$(render "${LITELLM_ONLY[@]}" \
     | yq "$LITELLM_SIDECAR | .securityContext
           | (.allowPrivilegeEscalation | tostring) + \" \" + .capabilities.drop[0] + \" \" + .seccompProfile.type")"
 check "plugin securityContext merges over defaults" \
   "true true" \
-  "$(render --set catalog.plugins.litellm.securityContext.readOnlyRootFilesystem=true \
+  "$(render "${LITELLM_ONLY[@]}" --set catalog.plugins.litellm.securityContext.readOnlyRootFilesystem=true \
     | yq "$LITELLM_SIDECAR | .securityContext
           | (.readOnlyRootFilesystem | tostring) + \" \" + (.runAsNonRoot | tostring)")"
 check "catalog startup probe" \
@@ -549,9 +586,6 @@ check "catalog keeps its checksum annotation with podAnnotations" \
 # ── NetworkPolicy ────────────────────────────────────────────────────────────
 NETWORK_POLICY='select(.kind == "NetworkPolicy") | .spec'
 
-check "no NetworkPolicy by default" \
-  "0" \
-  "$(render | yq ea '[select(.kind == "NetworkPolicy")] | length')"
 check "NetworkPolicy admits the ui pods on the catalog port" \
   "ui 8090" \
   "$(render --set catalog.networkPolicy.enabled=true \
