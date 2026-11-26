@@ -63,14 +63,14 @@ jobs:
           ref: refs/pull/${{ steps.pr.outputs.number }}/merge
           persist-credentials: false
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version: "1.26"
 
       # kind/kubectl/helm versions come from mise.toml — the same source of
       # truth used for local dev — instead of a second, separately hardcoded
       # set of versions here that could drift from it.
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
         with:
           install_args: kind kubectl helm
 
