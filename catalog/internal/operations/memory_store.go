@@ -97,6 +97,9 @@ func (s *MemoryStore) UpdateState(_ context.Context, name string, state State, e
 	if !ok {
 		return fmt.Errorf("operation %q: %w", name, ErrNotFound)
 	}
+	if op.State == StateSucceeded || op.State == StateFailed {
+		return fmt.Errorf("operation %q is %s, cannot move to %s: %w", name, op.State, state, ErrInvalidTransition)
+	}
 
 	now := time.Now()
 	op.State = state

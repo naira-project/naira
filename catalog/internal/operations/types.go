@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	ErrNotFound      = errors.New("operation not found")
-	ErrAlreadyExists = errors.New("operation already exists")
+	ErrNotFound          = errors.New("operation not found")
+	ErrAlreadyExists     = errors.New("operation already exists")
+	ErrInvalidTransition = errors.New("invalid operation state transition")
 )
 
 type State string
@@ -22,13 +23,12 @@ const (
 	StateFailed    State = "FAILED"
 )
 
-// StatusError is an AIP-193 compliant error representation carried by
-// failed operations.
+// StatusError carries an error message for a failed operation.
 type StatusError struct {
 	Message string
 }
 
-// Operation represents a single asynchronous unit of work
+// Operation represents a single asynchronous unit of work.
 type Operation struct {
 	Name      string
 	Plugin    string
