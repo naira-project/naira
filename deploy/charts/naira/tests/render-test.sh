@@ -94,11 +94,14 @@ pod() { printf 'select(.kind == "Deployment" and .metadata.name == "%s") | .spec
 # The one place that pins what a plain install runs. Changing which plugins
 # are enabled by default in values.yaml means changing DEFAULT_SIDECARS here
 # and nothing else.
-DEFAULT_SIDECARS="plugin-depl-calls-svc,plugin-fluxcd,plugin-mcp-servers,plugin-mlflow,plugin-openmetadata"
+DEFAULT_SIDECARS="plugin-depl-calls-svc,plugin-fluxcd,plugin-mcp-servers,plugin-mlflow"
 
 check "default sidecars, sorted" \
   "$DEFAULT_SIDECARS" \
   "$(render | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
+check "default: no plugin reads a Secret" \
+  "0" \
+  "$(render | yq ea '[select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.template.spec.initContainers[].env[]? | select(has("valueFrom"))] | length')"
 check "default: no Secret read grant (depl-uses-litellm is opt-in)" \
   "0" \
   "$(render | yq ea '[select(.kind == "ClusterRole") | .rules[] | select(.resources[] == "secrets")] | length')"
@@ -391,6 +394,7 @@ RENDER=render_raw must_fail "no portal Secret source" \
 check "no Secret needed when nothing reads one" \
   "ok" \
   "$(render_raw "${DB[@]}" "${MLFLOW_ONLY[@]}" --set portal.enabled=false >/dev/null && echo ok)"
+RENDER=render_raw must_fail "OpenMetadata requires a catalog Secret source" "catalog.plugins.openmetadata reads OPENMETADATA_ADMIN_PASSWORD from the catalog Secret: set catalog.secret.existingSecret or catalog.secret.create" "${OPENMETADATA_ONLY[@]}" --set portal.enabled=false
 check "a plugin naming its own Secret needs no catalog Secret" \
   "ok" \
   "$(render_raw "${DB[@]}" "${LITELLM_ONLY[@]}" --set portal.enabled=false \
@@ -405,8 +409,8 @@ DEV=(-f "$CHART/values-dev.yaml")
 check "dev: local image names" \
   "naira-catalog:${APP_VERSION}" \
   "$(render_raw "${DEV[@]}" | yq "$CATALOG | .containers[0].image")"
-check "dev: sidecars (openmetadata off, tech-radar on)" \
-  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-litellm,plugin-mcp-servers,plugin-mlflow,plugin-tech-radar" \
+check "dev: sidecars (openmetadata and LiteLLM off, tech-radar on)" \
+  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-mcp-servers,plugin-mlflow,plugin-openai-api-models,plugin-tech-radar" \
   "$(render_raw "${DEV[@]}" | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
 check "dev: catalog Secret matches test-dependencies master key" \
   "sk-local-litellm" \
@@ -483,7 +487,7 @@ check "bedrock AWS credentials from the catalog Secret" \
     | yq "$BEDROCK_SIDECAR | .env[] | select(.name == \"AWS_ACCESS_KEY_ID\" or .name == \"AWS_SECRET_ACCESS_KEY\")
           | .valueFrom.secretKeyRef | .name + \"/\" + .key" | paste -sd' ' -)"
 check "bedrock registered in plugins.yaml" \
-  "localhost:50061" \
+  "localhost:50060" \
   "$(render "${BEDROCK[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.bedrock.address')"
 check "bedrock needs no RBAC" \
   "" \

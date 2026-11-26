@@ -99,7 +99,7 @@ catalog:
   #   config      {mountPath, existingConfigMap | data}: files mounted as a directory
   plugins:
     litellm:
-      enabled: true
+      enabled: false
       image: {repository: naira-plugin-litellm, tag: ""}
       port: 50051
       schedule: "0 0 * * *"
@@ -173,7 +173,7 @@ catalog:
             verbs: ["get", "list"]
 
     openmetadata:
-      enabled: true
+      enabled: false
       image: {repository: naira-plugin-openmetadata, tag: ""}
       port: 50056
       pathPrefix: openmetadata
