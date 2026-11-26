@@ -4,27 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
-	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
-	"github.com/naira-project/naira/catalog/internal/operations"
-	"github.com/naira-project/naira/catalog/internal/pluginrun"
-	"github.com/naira-project/naira/plugins/pkg/pluginapi"
+	"github.com/naira-project/naira/catalog/internal/httpapi/mocks"
 )
+
+//go:generate moq -out mocks/reader_mock.go -pkg mocks -skip-ensure ../catalog Reader:CatalogReaderMock
+//go:generate moq -out mocks/plugin_runner_mock.go -pkg mocks -skip-ensure ../pluginrun PluginRunner
 
 const testBearerToken = "test-token"
 const testIssuer = "http://localhost:8080/realms/naira"
+
+var (
+	testKeycloak  = keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer}
+	discardLogger = log.New(io.Discard, "", 0)
+)
 
 type stubTokenDecoder struct{}
 
@@ -46,232 +51,330 @@ func withAuth(req *http.Request, bearerToken string) *http.Request {
 	return req
 }
 
-type stubPlugin struct {
-	response catalog.CollectResponse
-	err      error
-}
-
-func (p stubPlugin) Collect(context.Context) (catalog.CollectResponse, error) {
-	return p.response, p.err
-}
-
-// blockingStubPlugin blocks Collect until the block channel is closed.
-type blockingStubPlugin struct {
-	block    chan struct{}
-	response catalog.CollectResponse
-	err      error
-}
-
-func (p blockingStubPlugin) Collect(ctx context.Context) (catalog.CollectResponse, error) {
-	select {
-	case <-p.block:
-	case <-ctx.Done():
-		return catalog.CollectResponse{}, ctx.Err()
-	}
-	return p.response, p.err
-}
-
-func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catalog.NodeClaim, relations []catalog.RelationClaim) {
+// doRequest executes an authenticated HTTP request against the router.
+func doRequest(t *testing.T, router http.Handler, method, path string) *httptest.ResponseRecorder {
 	t.Helper()
 
-	_, _, err := store.ApplyPluginSnapshot("test-plugin", uuid.MustParse("00000000-0000-0000-0000-000000000001"), nodes, relations)
-	require.NoError(t, err)
+	req := withAuth(httptest.NewRequest(method, path, nil), testBearerToken)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	return rec
 }
 
-// newTestRouter wires a fresh catalog.Service and pluginrun.Runner sharing a
-// single graph store, mirroring how main.go wires the real router.
-func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.Store, plugins map[string]pluginrun.Plugin) http.Handler {
-	t.Helper()
-
-	catalogService := catalog.NewService(store)
-	runner := pluginrun.NewRunner(context.Background(), store, opStore, plugins, 5*time.Minute, log.New(io.Discard, "", 0))
-	configs := make(catalog.PluginConfigsByName, len(plugins))
-	for name := range plugins {
-		configs[name] = catalog.PluginConfig{}
+// makePluginClaims builds the claims of a single plugin for catalog fixtures.
+func makePluginClaims(props map[string]string) map[string]catalog.PluginClaim {
+	return map[string]catalog.PluginClaim{
+		"test-plugin": {Properties: props},
 	}
-	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer})
-	require.NoError(t, err)
-	return router
 }
+
+var (
+	modelNode = catalog.Node{
+		ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
+		PluginClaims: makePluginClaims(map[string]string{
+			"source":      "mlflow",
+			"description": "registry model",
+		}),
+	}
+	appNode = catalog.Node{
+		ID:           catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
+		PluginClaims: makePluginClaims(map[string]string{"namespace": "apps"}),
+	}
+	usesModelRelation = catalog.Relation{
+		Kind:         "uses_model",
+		From:         appNode.ID,
+		To:           modelNode.ID,
+		PluginClaims: makePluginClaims(map[string]string{"via": "virtual-key"}),
+	}
+	usedByRelation = catalog.Relation{
+		Kind:         "used_by",
+		From:         modelNode.ID,
+		To:           appNode.ID,
+		PluginClaims: makePluginClaims(nil),
+	}
+)
 
 func TestRouterServesCurrentEndpoints(t *testing.T) {
-	store := catalog.NewMemoryStore()
-	applyPluginSnapshot(t, store,
-		[]catalog.NodeClaim{
-			{
-				ID: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				Properties: pluginapi.PropertyMap{
-					"source":      "mlflow",
-					"description": "registry model",
-				},
-			},
-			{
-				ID: catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-				Properties: pluginapi.PropertyMap{
-					"namespace": "apps",
-				},
-			},
+	reader := &mocks.CatalogReaderMock{
+		ListNodesFunc: func(context.Context) ([]catalog.Node, error) {
+			return []catalog.Node{modelNode, appNode}, nil
 		},
-		[]catalog.RelationClaim{
-			{
-				Kind:       "uses_model",
-				From:       catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-				To:         catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				Properties: pluginapi.PropertyMap{"via": "virtual-key"},
-			},
-			{
-				Kind: "used_by",
-				From: catalog.NodeID{Kind: "model", Path: "mlflow/fraud-detector"},
-				To:   catalog.NodeID{Kind: "application", Path: "litellm/fraud-assistant"},
-			}},
-	)
-
-	router := newTestRouter(t, store, operations.NewMemoryStore(), map[string]pluginrun.Plugin{"seed": stubPlugin{}})
+		GetNodeFunc: func(context.Context, catalog.NodeID) (catalog.Node, error) {
+			return modelNode, nil
+		},
+		ListRelationsFunc: func(context.Context) ([]catalog.Relation, error) {
+			return []catalog.Relation{usesModelRelation, usedByRelation}, nil
+		},
+	}
+	router, err := NewRouter(reader, &mocks.PluginRunnerMock{}, nil, discardLogger, testKeycloak)
+	require.NoError(t, err)
 
 	tests := []struct {
-		name               string
-		method             string
-		path               string
-		expectedStatusCode int
-		validatePayload    func(*testing.T, []byte)
+		name            string
+		path            string
+		validatePayload func(*testing.T, []byte)
 	}{
 		{
-			name:               "returns health status",
-			method:             http.MethodGet,
-			path:               "/healthz",
-			expectedStatusCode: http.StatusOK,
+			name: "returns health status",
+			path: "/healthz",
 			validatePayload: func(t *testing.T, body []byte) {
-				var payload map[string]string
-				require.NoError(t, json.Unmarshal(body, &payload))
-				assert.Equal(t, map[string]string{"status": "ok"}, payload)
+				assert.JSONEq(t, `{"status":"ok"}`, string(body))
 			},
 		},
 		{
-			name:               "lists models",
-			method:             http.MethodGet,
-			path:               "/v1/nodes?filter=kind=%22model%22",
-			expectedStatusCode: http.StatusOK,
+			name: "lists models",
+			path: "/v1/nodes?filter=kind=%22model%22",
 			validatePayload: func(t *testing.T, body []byte) {
 				var payload ListNodesResponse
 				require.NoError(t, json.Unmarshal(body, &payload))
 
-				expected := ListNodesResponse{
-					Nodes: []Node{
-						{
-							Name: "nodes/model/mlflow/fraud-detector",
-							Kind: "model",
-							Path: "mlflow/fraud-detector",
-							PluginClaims: []PluginClaim{
-								{
-									Plugin: "test-plugin",
-									Props: map[string]string{
-										"source":      "mlflow",
-										"description": "registry model",
-									},
-								},
-							},
-						},
-					},
-					TotalSize: 1,
-				}
-				assert.Equal(t, expected, payload)
-			},
-		},
-		{
-			name:               "returns node",
-			method:             http.MethodGet,
-			path:               "/v1/nodes/model/mlflow/fraud-detector",
-			expectedStatusCode: http.StatusOK,
-			validatePayload: func(t *testing.T, body []byte) {
-				var payload Node
-				require.NoError(t, json.Unmarshal(body, &payload))
-
-				expected := Node{
-					Kind: "model",
-					Path: "mlflow/fraud-detector",
-					Name: "nodes/model/mlflow/fraud-detector",
-					PluginClaims: []PluginClaim{
-						{
+				assert.Equal(t, ListNodesResponse{
+					Nodes: []Node{{
+						Name: "nodes/model/mlflow/fraud-detector",
+						Kind: "model",
+						Path: "mlflow/fraud-detector",
+						PluginClaims: []PluginClaim{{
 							Plugin: "test-plugin",
 							Props: map[string]string{
 								"source":      "mlflow",
 								"description": "registry model",
 							},
-						},
-					},
-				}
-				assert.Equal(t, expected, payload)
+						}},
+					}},
+					TotalSize: 1,
+				}, payload)
 			},
 		},
 		{
-			name:               "filters relations by toNode",
-			method:             http.MethodGet,
-			path:               "/v1/relations?filter=toNode=%22nodes/model/mlflow/fraud-detector%22",
-			expectedStatusCode: http.StatusOK,
+			name: "returns node",
+			path: "/v1/nodes/model/mlflow/fraud-detector",
+			validatePayload: func(t *testing.T, body []byte) {
+				var payload Node
+				require.NoError(t, json.Unmarshal(body, &payload))
+
+				assert.Equal(t, Node{
+					Name: "nodes/model/mlflow/fraud-detector",
+					Kind: "model",
+					Path: "mlflow/fraud-detector",
+					PluginClaims: []PluginClaim{{
+						Plugin: "test-plugin",
+						Props: map[string]string{
+							"source":      "mlflow",
+							"description": "registry model",
+						},
+					}},
+				}, payload)
+			},
+		},
+		{
+			name: "filters relations by toNode",
+			path: "/v1/relations?filter=toNode=%22nodes/model/mlflow/fraud-detector%22",
 			validatePayload: func(t *testing.T, body []byte) {
 				var payload ListRelationsResponse
 				require.NoError(t, json.Unmarshal(body, &payload))
 
-				expected := ListRelationsResponse{
-					Relations: []Relation{
-						{
-							Name:     "relations/uses_model/nodes%2Fapplication%2Flitellm%2Ffraud-assistant|nodes%2Fmodel%2Fmlflow%2Ffraud-detector",
-							Kind:     "uses_model",
-							FromNode: "nodes/application/litellm/fraud-assistant",
-							ToNode:   "nodes/model/mlflow/fraud-detector",
-							PluginClaims: []PluginClaim{
-								{
-									Plugin: "test-plugin",
-									Props:  map[string]string{"via": "virtual-key"},
-								},
-							},
-						},
-					},
+				assert.Equal(t, ListRelationsResponse{
+					Relations: []Relation{{
+						Name:     "relations/uses_model/nodes%2Fapplication%2Flitellm%2Ffraud-assistant|nodes%2Fmodel%2Fmlflow%2Ffraud-detector",
+						Kind:     "uses_model",
+						FromNode: "nodes/application/litellm/fraud-assistant",
+						ToNode:   "nodes/model/mlflow/fraud-detector",
+						PluginClaims: []PluginClaim{{
+							Plugin: "test-plugin",
+							Props:  map[string]string{"via": "virtual-key"},
+						}},
+					}},
 					TotalSize: 1,
-				}
-				assert.Equal(t, expected, payload)
+				}, payload)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := withAuth(httptest.NewRequest(tt.method, tt.path, nil), testBearerToken)
+			rec := doRequest(t, router, http.MethodGet, tt.path)
+
+			require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+			tt.validatePayload(t, rec.Body.Bytes())
+		})
+	}
+}
+
+func TestListNodesSortsByName(t *testing.T) {
+	reader := &mocks.CatalogReaderMock{
+		ListNodesFunc: func(context.Context) ([]catalog.Node, error) {
+			return []catalog.Node{modelNode, appNode}, nil // intentionally not sorted
+		},
+	}
+	router, err := NewRouter(reader, &mocks.PluginRunnerMock{}, nil, discardLogger, testKeycloak)
+	require.NoError(t, err)
+
+	rec := doRequest(t, router, http.MethodGet, "/v1/nodes")
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var payload ListNodesResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
+	require.Len(t, payload.Nodes, 2)
+	assert.Equal(t, "nodes/application/litellm/fraud-assistant", payload.Nodes[0].Name)
+	assert.Equal(t, "nodes/model/mlflow/fraud-detector", payload.Nodes[1].Name)
+}
+
+func TestGetNode(t *testing.T) {
+	t.Run("decodes escaped path segments", func(t *testing.T) {
+		node := catalog.Node{
+			ID:           catalog.NodeID{Kind: "owner", Path: "@naira-project/dev"},
+			PluginClaims: makePluginClaims(nil),
+		}
+		reader := &mocks.CatalogReaderMock{
+			GetNodeFunc: func(context.Context, catalog.NodeID) (catalog.Node, error) {
+				return node, nil
+			},
+		}
+		router, err := NewRouter(reader, &mocks.PluginRunnerMock{}, nil, discardLogger, testKeycloak)
+		require.NoError(t, err)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/nodes/owner/%40naira-project/dev")
+
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+		var response Node
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
+		assert.Equal(t, Node{
+			Name: "nodes/owner/@naira-project/dev",
+			Kind: "owner",
+			Path: "@naira-project/dev",
+			PluginClaims: []PluginClaim{{
+				Plugin: "test-plugin",
+				Props:  map[string]string{},
+			}},
+		}, response)
+	})
+
+	t.Run("maps missing node to 404", func(t *testing.T) {
+		reader := &mocks.CatalogReaderMock{
+			GetNodeFunc: func(context.Context, catalog.NodeID) (catalog.Node, error) {
+				return catalog.Node{}, fmt.Errorf("node: %w", catalog.ErrNodeNotFound)
+			},
+		}
+		router, err := NewRouter(reader, &mocks.PluginRunnerMock{}, nil, discardLogger, testKeycloak)
+		require.NoError(t, err)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/nodes/model/missing")
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+	})
+}
+
+func TestListKindsEndpoint(t *testing.T) {
+	newKindsRouter := func(t *testing.T, kinds []string) (http.Handler, *mocks.CatalogReaderMock) {
+		t.Helper()
+		reader := &mocks.CatalogReaderMock{
+			ListKindsFunc: func(context.Context) ([]string, error) { return kinds, nil },
+		}
+		router, err := NewRouter(reader, &mocks.PluginRunnerMock{}, nil, discardLogger, testKeycloak)
+		require.NoError(t, err)
+		return router, reader
+	}
+
+	t.Run("empty catalog", func(t *testing.T) {
+		router, _ := newKindsRouter(t, nil)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/kinds")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"kinds":[],"totalSize":0}`, rec.Body.String())
+	})
+
+	t.Run("returns kinds from the reader", func(t *testing.T) {
+		router, _ := newKindsRouter(t, []string{"application", "model"})
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/kinds")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"kinds":["application","model"],"totalSize":2}`, rec.Body.String())
+	})
+
+	t.Run("pagination", func(t *testing.T) {
+		router, _ := newKindsRouter(t, []string{"application", "model"})
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/kinds?pageSize=1")
+		require.Equal(t, http.StatusOK, rec.Code)
+		var first ListKindsResponse
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &first))
+		require.NotEmpty(t, first.NextPageToken)
+		assert.Equal(t, ListKindsResponse{
+			Kinds:         []string{"application"},
+			NextPageToken: first.NextPageToken,
+			TotalSize:     2,
+		}, first)
+
+		rec = doRequest(t, router, http.MethodGet, "/v1/kinds?pageSize=1&pageToken="+first.NextPageToken)
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"kinds":["model"],"totalSize":2}`, rec.Body.String())
+	})
+
+	for _, path := range []string{
+		"/v1/kinds?pageSize=-1",
+		"/v1/kinds?pageToken=invalid",
+		"/v1/kinds?filter=kind=%22uses_model%22",
+	} {
+		t.Run("rejects "+path, func(t *testing.T) {
+			router, reader := newKindsRouter(t, nil)
+
+			rec := doRequest(t, router, http.MethodGet, path)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Empty(t, reader.ListKindsCalls(), "invalid requests must not reach the reader")
+		})
+	}
+
+	t.Run("maps reader failure to 500", func(t *testing.T) {
+		reader := &mocks.CatalogReaderMock{
+			ListKindsFunc: func(context.Context) ([]string, error) { return nil, errors.New("database offline") },
+		}
+		router, err := NewRouter(reader, &mocks.PluginRunnerMock{}, nil, discardLogger, testKeycloak)
+		require.NoError(t, err)
+
+		rec := doRequest(t, router, http.MethodGet, "/v1/kinds")
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+
+	t.Run("requires authentication", func(t *testing.T) {
+		router, _ := newKindsRouter(t, nil)
+
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/kinds", nil))
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+}
+
+func TestAuthVerify(t *testing.T) {
+	router, err := NewRouter(&mocks.CatalogReaderMock{}, &mocks.PluginRunnerMock{}, nil, discardLogger, testKeycloak)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name               string
+		authorization      string
+		expectedStatusCode int
+	}{
+		{name: "accepts valid token", authorization: "Bearer test-token", expectedStatusCode: http.StatusNoContent},
+		{name: "rejects missing header", authorization: "", expectedStatusCode: http.StatusUnauthorized},
+		{name: "rejects invalid token", authorization: "Bearer wrong-token", expectedStatusCode: http.StatusUnauthorized},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v1/auth/verify", nil)
+			if tt.authorization != "" {
+				req.Header.Set("Authorization", tt.authorization)
+			}
 			rec := httptest.NewRecorder()
 
 			router.ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.expectedStatusCode, rec.Code)
-			if tt.validatePayload != nil {
-				tt.validatePayload(t, rec.Body.Bytes())
-			}
 		})
 	}
-}
-
-func TestGetNodeDecodesEscapedPathSegments(t *testing.T) {
-	store := catalog.NewMemoryStore()
-	applyPluginSnapshot(t, store, []catalog.NodeClaim{{
-		ID: catalog.NodeID{Kind: "owner", Path: "@naira-project/dev"},
-	}}, nil)
-
-	router := newTestRouter(t, store, operations.NewMemoryStore(), nil)
-	req := withAuth(httptest.NewRequest(http.MethodGet, "/v1/nodes/owner/%40naira-project/dev", nil), testBearerToken)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-
-	var response Node
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &response))
-	assert.Equal(t, Node{
-		Name: "nodes/owner/@naira-project/dev",
-		Kind: "owner",
-		Path: "@naira-project/dev",
-		PluginClaims: []PluginClaim{{
-			Plugin: "test-plugin",
-			Props:  map[string]string{},
-		}},
-	}, response)
 }

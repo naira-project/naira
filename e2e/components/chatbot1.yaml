@@ -1,4 +1,4 @@
-# envsubst template — substituted variables: ${NAMESPACE} ${TAG}
+# envsubst template — substituted variables: ${NAMESPACE} ${TAG} ${E2E_IMAGE}
 #
 # LITELLM_API_KEY starts as a deliberately invalid placeholder — the seed
 # step's provision_chatbot1_key.py (seed/provision_chatbot1_key.py) mints a
@@ -34,7 +34,7 @@ spec:
     spec:
       containers:
         - name: chatbot1
-          image: chatbot1:${TAG}
+          image: ${E2E_IMAGE}:chatbot1-${TAG}
           imagePullPolicy: IfNotPresent
           env:
             - name: LITELLM_API_URL

@@ -6,6 +6,13 @@ When running in-cluster, models are collected from thalamus.cloud/v1alpha1 Model
 
 When not running in-cluster (e.g. during local development), the plugin instead queries THALAMUS\_BASE\_URL's OpenAI API-compatible "/v1/models" endpoint directly, emitting a model Node per returned model id with only its "owned\_by" property.
 
+## Related Plugins
+
+This plugin is a part of a family of Thalamus-related plugins, including:
+
+  - thalamus - discovers Thalamus models and their properties from the Thalamus CRDs or OpenAI API-compatible endpoint.
+  - depl\_uses\_thalamus - discovers which Deployments consume the Thalamus gateway, linking them to the models they use.
+
 ## Known Issues
 
 This plugin is third-party and HIGHLY EXPERIMENTAL. Notably, the Thalamus custom resources were NOT SUPPORTED BY THALAMUS yet at the time of writing.

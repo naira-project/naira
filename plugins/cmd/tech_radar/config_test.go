@@ -35,6 +35,12 @@ func TestParseRadarConfigValid(t *testing.T) {
 	require.Len(t, cfg.Entries, 2)
 	assert.Equal(t, "in", cfg.Entries[0].Moved)
 	assert.Equal(t, "none", cfg.Entries[1].Moved, "omitted moved defaults to none")
+	require.Len(t, cfg.Entries[0].CatalogRefs, 1)
+	ref := cfg.Entries[0].CatalogRefs[0]
+	assert.Equal(t, "claude-sonnet", ref.Match)
+	assert.Equal(t, []string{"model", "inference_endpoint"}, ref.Kinds)
+	assert.Nil(t, ref.Plugins, "plugins is optional")
+	assert.Nil(t, cfg.Entries[1].CatalogRefs, "catalog_refs is optional")
 }
 
 func TestParseRadarConfigDefaultsRadarID(t *testing.T) {
@@ -249,6 +255,60 @@ rings:
   - {id: adopt, name: Adopt}
 `,
 			wantErrs: []string{"entries: field is required (use [] for a radar without entries)"},
+		},
+		{
+			name: "invalid catalog refs",
+			config: `schema_version: 1
+radar: {title: Radar, edition: v1, owner: team}
+quadrants:
+  - {id: a, name: A}
+  - {id: b, name: B}
+  - {id: c, name: C}
+  - {id: d, name: D}
+rings:
+  - {id: adopt, name: Adopt}
+entries:
+  - id: e1
+    name: E1
+    quadrant: a
+    ring: adopt
+    owner: o
+    rationale: r
+    catalog_refs:
+      - {kinds: [model]}
+      - {match: " claude", kinds: [model]}
+      - {match: claude, kinds: [model, inference_endpoint]}
+      - {match: Claude, kinds: [inference_endpoint, model]}
+      - {match: ` + strings.Repeat("x", 201) + `, kinds: [model]}
+      - {plugins: [litellm, litellm, ""], kinds: [" model"]}
+      - {match: claude}
+`,
+			wantErrs: []string{
+				`line 18: entries[0] (id "e1"): catalog_refs[0]: set field "match", "plugins", or both`,
+				`line 19: entries[0] (id "e1"): catalog_refs[1]: field "match" " claude" must not have leading or trailing whitespace`,
+				`line 21: entries[0] (id "e1"): catalog_refs[3]: duplicate catalog ref`,
+				`line 22: entries[0] (id "e1"): catalog_refs[4]: field "match" must be at most 200 characters, got 201`,
+				`line 23: entries[0] (id "e1"): catalog_refs[5]: field "kinds" item " model" must not have leading or trailing whitespace`,
+				`line 23: entries[0] (id "e1"): catalog_refs[5]: duplicate "plugins" item "litellm"`,
+				`line 23: entries[0] (id "e1"): catalog_refs[5]: field "plugins" item 2 must not be empty`,
+				`line 24: entries[0] (id "e1"): catalog_refs[6]: field "kinds" must list at least one node kind`,
+			},
+		},
+		{
+			name: "unknown catalog ref field",
+			config: `schema_version: 1
+radar: {title: Radar, edition: v1, owner: team}
+quadrants:
+  - {id: a, name: A}
+  - {id: b, name: B}
+  - {id: c, name: C}
+  - {id: d, name: D}
+rings:
+  - {id: adopt, name: Adopt}
+entries:
+  - {id: e1, name: E1, quadrant: a, ring: adopt, owner: o, rationale: r, catalog_refs: [{match: claude, kind: model}]}
+`,
+			wantErrs: []string{`in catalog ref: checking fields: line 11: unknown field "kind"`},
 		},
 	}
 

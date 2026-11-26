@@ -41,7 +41,7 @@ Built with and for the cloud-native ecosystem, Naira is designed to integrate cl
 
 ### Prerequisites
 
-This project requires several local tools: (for example `kind`, `task`,`go`).
+This project requires several local tools: (for example `kind`, `tilt`, `task`, `go`).
 
 **The Recommended Way (Using mise):**
 We use [mise](https://mise.jdx.dev/) to manage tools automatically. If you have `mise` installed and activated (`eval "$(mise activate zsh)"` - [more info](https://mise.jdx.dev/getting-started.html#activate-mise)), simply run:
@@ -53,39 +53,8 @@ If you prefer not to use mise, you can find the exact versions of all tools in t
 
 ### Local Development
 
-To spin up the full environment on your machine:
-
-1. **Deploy the platform** to a local kind cluster:
-   ```bash
-   task platform:deploy
-   ```
-   This creates a cluster, builds container images, loads them into kind, and applies all Kubernetes manifests.
-
-2. **Port-forward services** to your localhost:
-   ```bash
-   task forward:all
-   ```
-   Once executed, the terminal will display the specific local endpoints for the UI, APIs, and various backend integrations.
-
-3. **Open the UI** — once port-forwarding is running, go to:
-   ```
-   http://localhost:3000
-   ```
-   and login to Keycloak with the default credentials:
-
-    - user: `testuser`
-    - password: `testpass`
-
-   You should see the Naira dashboard.
-
-   You can then for example go to **"Plugins"** and click **"Run All Plugins"**
-   (it's OK if some of them show "Failed"),
-   then go to **"Catalogs"** and open the "Software Catalog".
-
-### Local Development with Tilt (experimental)
-
-The root [`Tiltfile`](Tiltfile) deploys the Helm charts to the kind cluster
-`naira-idp`. Tilt is installed by `mise install`.
+The root [`Tiltfile`](Tiltfile) spins up the full environment on the local kind
+cluster `naira-idp`. Tilt is installed by `mise install`.
 
 1. **Create the cluster** (once); this also selects its kube context:
    ```bash
@@ -107,8 +76,20 @@ The root [`Tiltfile`](Tiltfile) deploys the Helm charts to the kind cluster
    itself, use a checkout: `tilt up -- --deps-repo=<path>`. Tilt forwards only
    the enabled components.
 
-3. **Open the UI** at `http://localhost:3000` once the resources in the Tilt UI
-   are green, and log in as above.
+3. **Open the UI** — once the resources in the Tilt UI are green, go to:
+   ```
+   http://localhost:3000
+   ```
+   and login to Keycloak with the default credentials:
+
+    - user: `testuser`
+    - password: `testpass`
+
+   You should see the Naira dashboard.
+
+   You can then for example go to **"Plugins"** and click **"Run All Plugins"**
+   (it's OK if some of them show "Failed"),
+   then go to **"Catalogs"** and open the "Software Catalog".
 
 Developer tasks (lint, tests, proto, chart checks) are in the Taskfile, and
 do not need Tilt: `task --list`. `task check` verifies the tools.
@@ -120,9 +101,10 @@ do not need Tilt: `task --list`. `task check` verifies the tools.
 ├── plugins/              # Collector plugins (mlflow, litellm, fluxcd, ...)
 ├── ui/                   # React/TypeScript UI
 ├── naira-openmfp-portal/ # OpenMFP Portal (This is the backbone for future UI plugins)
-├── deploy/               # Helm charts + dev environment (kind, k8s manifests)
+├── deploy/charts/        # Helm chart
 ├── docs/                 # Documentation
-└── Taskfile.yml          # Root developer entrypoints
+├── Tiltfile              # Local dev environment (kind)
+└── Taskfile.yml          # Developer tasks (lint, tests, proto, chart checks)
 ```
 
 ## Architecture

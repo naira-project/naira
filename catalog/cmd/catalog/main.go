@@ -40,14 +40,13 @@ func main() {
 	defer stop()
 
 	store := catalog.NewMemoryStore()
-	catalogService := catalog.NewService(store)
 	runner := pluginrun.NewRunner(ctx, store, operations.NewMemoryStore(), registeredPlugins, config.PluginTimeout, logger)
 	scheduler, err := scheduling.NewConfiguredScheduler(config.Plugins, runner.RunPluginAsync, logger)
 	if err != nil {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
 
-	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
+	router, err := httpapi.NewRouter(store, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 		Issuer: config.KeycloakIssuer,

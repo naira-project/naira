@@ -28,7 +28,7 @@ POLL_INTERVAL_SECONDS = 2
 
 def fetch_token():
     """Password-grant token from the realm/user/client seeded by keycloak.yaml
-    (see deploy/dev/stacks/core/infra/keycloak/naira-realm.json for the
+    (see naira-realm.json in the test-dependencies chart for the
     source of truth this mirrors). The catalog API requires a Bearer token
     on every /v1/* route as of the Keycloak auth integration."""
     form = urllib.parse.urlencode({

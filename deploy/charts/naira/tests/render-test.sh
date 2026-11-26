@@ -246,6 +246,47 @@ check "ui catalog upstream override" \
   "http://x:1" \
   "$(render --set ui.catalogUpstream=http://x:1 \
     | yq "$UI | .env[] | select(.name == \"CATALOG_UPSTREAM\") | .value")"
+check "ui prometheus upstream default" \
+  "http://prometheus-operated.naira-deps.svc.cluster.local:9090" \
+  "$(render | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus upstream override" \
+  "http://prom:9090" \
+  "$(render --set ui.prometheus.upstream=http://prom:9090 \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus upstream empty: no env var" \
+  "" \
+  "$(render --set ui.prometheus.upstream= \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_UPSTREAM\") | .value")"
+check "ui prometheus allowed paths and methods default to the image's" \
+  "" \
+  "$(render | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_PATHS\" or .name == \"PROMETHEUS_ALLOWED_METHODS\") | .name")"
+check "ui prometheus allowed paths joined with |" \
+  "query|series" \
+  "$(render --set 'ui.prometheus.allowedPaths[0]=query' --set 'ui.prometheus.allowedPaths[1]=series' \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_PATHS\") | .value")"
+check "ui prometheus allowed methods joined with a space" \
+  "GET HEAD" \
+  "$(render --set 'ui.prometheus.allowedMethods[0]=GET' --set 'ui.prometheus.allowedMethods[1]=HEAD' \
+    | yq "$UI | .env[] | select(.name == \"PROMETHEUS_ALLOWED_METHODS\") | .value")"
+UI_DEPLOY='select(.kind == "Deployment" and .metadata.name == "ui")'
+check "ui config: no ConfigMap by default" \
+  "" \
+  "$(render | yq 'select(.kind == "ConfigMap" and .metadata.name == "ui-config") | .metadata.name')"
+check "ui config: no mount by default" \
+  "null" \
+  "$(render | yq "$UI | .volumeMounts")"
+check "ui config: rendered into config.json" \
+  "http://grafana:3000" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq 'select(.kind == "ConfigMap" and .metadata.name == "ui-config") | .data["config.json"] | from_json | .logs.explorerUrl')"
+check "ui config: mounted over the image's config.json" \
+  "/usr/share/nginx/html/config.json config.json" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq "$UI | .volumeMounts[0] | .mountPath + \" \" + .subPath")"
+check "ui config: pod restarts when it changes" \
+  "true" \
+  "$(render --set ui.config.logs.explorerUrl=http://grafana:3000 \
+    | yq "$UI_DEPLOY | .spec.template.metadata.annotations | has(\"checksum/config\")")"
 check "ui image" \
   "ghcr.io/naira-project/naira-ui:${APP_VERSION}" \
   "$(render | yq "$UI | .image")"
@@ -389,6 +430,29 @@ RENDER=render_raw must_fail "github on without a catalog Secret source" \
   --set portal.enabled=false --set catalog.plugins.github.enabled=true \
   --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
 
+BEDROCK=(--set catalog.plugins.bedrock.enabled=true)
+BEDROCK_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-bedrock\")"
+
+check "bedrock off by default" \
+  "" \
+  "$(render | yq "$BEDROCK_SIDECAR | .name")"
+check "bedrock AWS credentials from the catalog Secret" \
+  "catalog-secrets/BEDROCK_AWS_ACCESS_KEY_ID catalog-secrets/BEDROCK_AWS_SECRET_ACCESS_KEY" \
+  "$(render "${BEDROCK[@]}" \
+    | yq "$BEDROCK_SIDECAR | .env[] | select(.name == \"AWS_ACCESS_KEY_ID\" or .name == \"AWS_SECRET_ACCESS_KEY\")
+          | .valueFrom.secretKeyRef | .name + \"/\" + .key" | paste -sd' ' -)"
+check "bedrock registered in plugins.yaml" \
+  "localhost:50060" \
+  "$(render "${BEDROCK[@]}" | yq "$PLUGINS_YAML" | yq '.plugins.bedrock.address')"
+check "bedrock needs no RBAC" \
+  "" \
+  "$(render "${BEDROCK[@]}" \
+    | yq 'select(.kind == "ClusterRole" and .metadata.name == "t-plugin-bedrock") | .metadata.name')"
+RENDER=render_raw must_fail "bedrock on without a catalog Secret source" \
+  "catalog.plugins.bedrock reads AWS_ACCESS_KEY_ID from the catalog Secret" \
+  --set portal.enabled=false --set catalog.plugins.bedrock.enabled=true \
+  --set catalog.plugins.litellm.enabled=false --set catalog.plugins.openmetadata.enabled=false
+
 check "depl-uses-litellm off by default: no Secret read grant" \
   "0" \
   "$(render | yq ea '[select(.kind == "ClusterRole") | .rules[] | select(.resources[] == "secrets")] | length')"
@@ -524,8 +588,8 @@ check "db-init targets the subchart Service as the admin user" \
 check "db-init reads each database password from its Secret" \
   "catalog-db" \
   "$(render | yq "$DB_JOB | .env[] | select(.name == \"DB_PASSWORD_0\") | .valueFrom.secretKeyRef.name")"
-check "dev: db-init ensures catalog, litellm and openmetadata" \
-  "catalog,litellm,openmetadata" \
+check "dev: db-init ensures catalog, langfuse, litellm and openmetadata" \
+  "catalog,langfuse,litellm,openmetadata" \
   "$(render_raw "${DEV[@]}" | yq "$DB_JOB | .args | join(\",\")")"
 check "dev: litellm Secret has username and password" \
   "litellm litellm-local-password" \
