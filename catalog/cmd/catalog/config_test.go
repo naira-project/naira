@@ -10,6 +10,47 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestClusterCredentialEnvironment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plugins.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("plugins: {}"), 0o600))
+	t.Setenv("PLUGIN_CONFIG_FILE", path)
+	for _, tt := range []struct {
+		name  string
+		value string
+		want  map[string][]string
+	}{
+		{name: "unset"},
+		{name: "empty map", value: `{}`, want: map[string][]string{}},
+		{
+			name:  "workspace allowlists",
+			value: `{"workspace-a":["idp-system/first#kubeconfig","idp-system/shared#config"],"workspace-b":["idp-system/second#config","idp-system/shared#config"]}`,
+			want: map[string][]string{
+				"workspace-a": {"idp-system/first#kubeconfig", "idp-system/shared#config"},
+				"workspace-b": {"idp-system/second#config", "idp-system/shared#config"},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("CLUSTER_CREDENTIAL_SECRETS", tt.value)
+			config, err := loadConfig()
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, config.ClusterCredentialSecrets)
+		})
+	}
+	for _, value := range []string{
+		`idp-system/first#kubeconfig,idp-system/second#config`,
+		`["idp-system/first#kubeconfig"]`,
+		`{"workspace-a":"idp-system/first#kubeconfig"}`,
+		`{"workspace-a":[`,
+	} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("CLUSTER_CREDENTIAL_SECRETS", value)
+			_, err := loadConfig()
+			require.ErrorContains(t, err, "parse workspace credential allowlists")
+		})
+	}
+}
+
 func TestLoadPluginConfig(t *testing.T) {
 	tests := []struct {
 		name             string

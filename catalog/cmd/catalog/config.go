@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -12,27 +13,29 @@ import (
 )
 
 type config struct {
-	Port                    int
-	ReadHeadersTimeout      time.Duration
-	ShutdownTimeout         time.Duration
-	Plugins                 catalog.PluginConfigsByName
-	PluginConnectionTimeout time.Duration
-	PluginTimeout           time.Duration
-	KeycloakBaseURL         string
-	KeycloakRealm           string
-	KeycloakIssuer          string
+	Port                     int
+	ReadHeadersTimeout       time.Duration
+	ShutdownTimeout          time.Duration
+	Plugins                  catalog.PluginConfigsByName
+	PluginConnectionTimeout  time.Duration
+	PluginTimeout            time.Duration
+	KeycloakBaseURL          string
+	KeycloakRealm            string
+	KeycloakIssuer           string
+	ClusterCredentialSecrets map[string][]string
 }
 
 type envConfig struct {
-	Port                    int           `env:"PORT" default:"8090"`
-	ReadHeadersTimeout      time.Duration `env:"READ_HEADERS_TIMEOUT" default:"5s"`
-	ShutdownTimeout         time.Duration `env:"SHUTDOWN_TIMEOUT" default:"5s"`
-	PluginConfigFile        string        `env:"PLUGIN_CONFIG_FILE" default:"/etc/catalog/plugins.yaml"`
-	PluginConnectionTimeout time.Duration `env:"PLUGIN_CONNECTION_TIMEOUT" default:"10s"`
-	PluginTimeout           time.Duration `env:"PLUGIN_TIMEOUT" default:"5m"`
-	KeycloakBaseURL         string        `env:"KEYCLOAK_BASE_URL"`
-	KeycloakRealm           string        `env:"KEYCLOAK_REALM"`
-	KeycloakIssuer          string        `env:"KEYCLOAK_ISSUER"`
+	Port                     int           `env:"PORT" default:"8090"`
+	ReadHeadersTimeout       time.Duration `env:"READ_HEADERS_TIMEOUT" default:"5s"`
+	ShutdownTimeout          time.Duration `env:"SHUTDOWN_TIMEOUT" default:"5s"`
+	PluginConfigFile         string        `env:"PLUGIN_CONFIG_FILE" default:"/etc/catalog/plugins.yaml"`
+	PluginConnectionTimeout  time.Duration `env:"PLUGIN_CONNECTION_TIMEOUT" default:"10s"`
+	PluginTimeout            time.Duration `env:"PLUGIN_TIMEOUT" default:"5m"`
+	KeycloakBaseURL          string        `env:"KEYCLOAK_BASE_URL"`
+	KeycloakRealm            string        `env:"KEYCLOAK_REALM"`
+	KeycloakIssuer           string        `env:"KEYCLOAK_ISSUER"`
+	ClusterCredentialSecrets string        `env:"CLUSTER_CREDENTIAL_SECRETS"`
 }
 
 type pluginConfig struct {
@@ -46,8 +49,14 @@ type pluginEntry struct {
 
 func loadConfig() (config, error) {
 	var raw envConfig
-	if err := env.Load(&raw, nil); err != nil {
+	if err := env.Load(&raw, &env.Options{SliceSep: ","}); err != nil {
 		return config{}, fmt.Errorf("load environment configuration: %w", err)
+	}
+	var credentialSecrets map[string][]string
+	if raw.ClusterCredentialSecrets != "" {
+		if err := json.Unmarshal([]byte(raw.ClusterCredentialSecrets), &credentialSecrets); err != nil {
+			return config{}, fmt.Errorf("parse workspace credential allowlists: %w", err)
+		}
 	}
 
 	plugins, err := loadAndValidatePluginConfig(raw.PluginConfigFile)
@@ -56,15 +65,16 @@ func loadConfig() (config, error) {
 	}
 
 	return config{
-		Port:                    raw.Port,
-		ReadHeadersTimeout:      raw.ReadHeadersTimeout,
-		ShutdownTimeout:         raw.ShutdownTimeout,
-		Plugins:                 plugins,
-		PluginConnectionTimeout: raw.PluginConnectionTimeout,
-		PluginTimeout:           raw.PluginTimeout,
-		KeycloakBaseURL:         raw.KeycloakBaseURL,
-		KeycloakRealm:           raw.KeycloakRealm,
-		KeycloakIssuer:          raw.KeycloakIssuer,
+		Port:                     raw.Port,
+		ReadHeadersTimeout:       raw.ReadHeadersTimeout,
+		ShutdownTimeout:          raw.ShutdownTimeout,
+		Plugins:                  plugins,
+		PluginConnectionTimeout:  raw.PluginConnectionTimeout,
+		PluginTimeout:            raw.PluginTimeout,
+		KeycloakBaseURL:          raw.KeycloakBaseURL,
+		KeycloakRealm:            raw.KeycloakRealm,
+		KeycloakIssuer:           raw.KeycloakIssuer,
+		ClusterCredentialSecrets: credentialSecrets,
 	}, nil
 }
 

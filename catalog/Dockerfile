@@ -14,6 +14,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY catalog/internal/ ./catalog/internal/
 COPY plugins/pkg/pluginapi/ ./plugins/pkg/pluginapi/
+COPY plugins/pkg/kubeaccess/ ./plugins/pkg/kubeaccess/
 COPY catalog/cmd/catalog/ ./catalog/cmd/catalog/
 
 RUN --mount=type=cache,target=/go/pkg/mod \

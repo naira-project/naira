@@ -12,8 +12,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
-	"github.com/naira-project/naira/catalog/internal/sources"
-	"github.com/naira-project/naira/catalog/internal/workspaces"
+	"github.com/naira-project/naira/catalog/internal/clusterregistry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,13 +33,12 @@ func (workspaceTokenDecoder) DecodeAccessToken(_ context.Context, token, _ strin
 	return nil, &claims, nil
 }
 
-func TestWorkspaceRegistrationAPI(t *testing.T) {
-	workspaceService := workspaces.NewService(workspaces.NewMemoryStore())
-	sourceStore := sources.NewMemoryStore()
+func TestFixedWorkspaceRegistrationAPI(t *testing.T) {
+	clusterRegistry := newTestClusterRegistry(t)
 	router, err := NewRouter(nil, nil, nil, nil, keycloak.Config{
 		Client: workspaceTokenDecoder{},
 		Issuer: testIssuer,
-	}, workspaceService, sources.NewService(sourceStore, workspaceService))
+	}, clusterRegistry)
 	require.NoError(t, err)
 	request := func(token, method, path, body string) *httptest.ResponseRecorder {
 		t.Helper()
@@ -52,99 +50,210 @@ func TestWorkspaceRegistrationAPI(t *testing.T) {
 		router.ServeHTTP(rec, req)
 		return rec
 	}
+	const base = "/v1/workspaces/test-workspace"
+	const createBody = `{"name":"cluster-a","credentialRef":"private-reference","kubernetes":{"apiEndpoint":"https://cluster.example.com","context":"production"}}`
 	for _, token := range []string{"", "invalid", "wrong-issuer", "missing-subject"} {
-		assert.Equal(t, http.StatusUnauthorized, request(token, http.MethodGet, "/v1/workspaces", "").Code)
+		for _, attempt := range []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodGet, path: "/v1/workspaces"},
+			{method: http.MethodGet, path: base},
+			{method: http.MethodGet, path: base + "/registrations"},
+			{method: http.MethodPost, path: base + "/registrations"},
+			{method: http.MethodGet, path: base + "/registrations/" + uuid.NewString()},
+			{method: http.MethodPut, path: base + "/registrations/" + uuid.NewString()},
+		} {
+			assert.Equal(t, http.StatusUnauthorized, request(token, attempt.method, attempt.path, createBody).Code)
+		}
 	}
-	for _, body := range []string{
-		`{"name":"production","owner":{"subject":"bob"}}`,
-		`{"name":"production","parentId":"parent"}`,
-		`{"name":"production"} {"name":"another"}`,
-		`{`, `null`, `{"name":""}`,
-		`{"name":"` + strings.Repeat("x", 1<<20) + `"}`,
-	} {
-		assert.Equal(t, http.StatusBadRequest, request("alice", http.MethodPost, "/v1/workspaces", body).Code)
+	for _, token := range []string{"alice", "bob"} {
+		rec := request(token, http.MethodGet, "/v1/workspaces", "")
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"workspaces":[{"id":"test-workspace","name":"test-workspace"}]}`, rec.Body.String())
+		assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+		rec = request(token, http.MethodGet, base, "")
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.JSONEq(t, `{"id":"test-workspace","name":"test-workspace"}`, rec.Body.String())
 	}
-	rec := request("alice", http.MethodPost, "/v1/workspaces", `{"name":"production"}`)
-	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-	var workspace workspaceResource
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &workspace))
-	base := "/v1/workspaces/" + workspace.ID.String()
-	assert.Equal(t, base, rec.Header().Get("Location"))
-	assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
-	assert.NotContains(t, rec.Body.String(), "owner")
-	owner := workspaces.Owner{
-		Issuer:  testIssuer,
-		Subject: "alice",
+	for _, path := range []string{"/v1/workspaces", base} {
+		for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+			rec := request("alice", method, path, `{"name":"renamed"}`)
+			assert.Equal(t, http.StatusMethodNotAllowed, rec.Code, "%s %s", method, path)
+		}
 	}
-	storedWorkspace, err := workspaceService.Get(t.Context(), owner, workspace.ID.String())
-	require.NoError(t, err)
-	assert.Equal(t, owner, storedWorkspace.Owner)
-	assert.Equal(t, http.StatusConflict, request("alice", http.MethodPost, "/v1/workspaces", `{"name":"production"}`).Code)
-	assert.Equal(t, http.StatusCreated, request("bob", http.MethodPost, "/v1/workspaces", `{"name":"production"}`).Code)
-	other := request("alice", http.MethodPost, "/v1/workspaces", `{"name":"development"}`)
-	require.Equal(t, http.StatusCreated, other.Code)
-	var otherWorkspace workspaceResource
-	require.NoError(t, json.Unmarshal(other.Body.Bytes(), &otherWorkspace))
-	var workspaceList struct {
-		Workspaces []workspaceResource `json:"workspaces"`
-	}
-	require.NoError(t, json.Unmarshal(request("alice", http.MethodGet, "/v1/workspaces", "").Body.Bytes(), &workspaceList))
-	assert.Equal(t, []workspaceResource{otherWorkspace, workspace}, workspaceList.Workspaces)
-	assert.Equal(t, http.StatusOK, request("alice", http.MethodGet, base, "").Code)
 	assert.JSONEq(t, `{"registrations":[]}`, request("alice", http.MethodGet, base+"/registrations", "").Body.String())
 
-	const createBody = `{"name":"cluster-a","kind":"kubernetes","credentialRef":"private-reference","kubernetes":{"apiEndpoint":"https://private-endpoint.example.com","context":"production"}}`
-	rec = request("alice", http.MethodPost, base+"/registrations", createBody)
-	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-	var registration registrationResource
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &registration))
-	assert.Equal(t, sources.ValidationPending, registration.ValidationStatus)
-	assert.Equal(t, workspace.ID.String(), registration.WorkspaceID)
-	assert.NotContains(t, rec.Body.String(), "private-reference")
-	assert.NotContains(t, rec.Body.String(), "credentialRef")
-	path := base + "/registrations/" + registration.ID.String()
-	assert.Equal(t, path, rec.Header().Get("Location"))
-	assert.Equal(t, http.StatusConflict, request("alice", http.MethodPost, base+"/registrations", createBody).Code)
-	assert.Equal(t, http.StatusCreated, request("alice", http.MethodPost, base+"/registrations", strings.Replace(createBody, "cluster-a", "cluster-b", 1)).Code)
-	assert.Equal(t, http.StatusCreated, request("alice", http.MethodPost, "/v1/workspaces/"+otherWorkspace.ID.String()+"/registrations", createBody).Code)
-	var registrations struct {
-		Registrations []registrationResource `json:"registrations"`
-	}
-	rec = request("alice", http.MethodGet, base+"/registrations", "")
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &registrations))
-	require.Len(t, registrations.Registrations, 2)
-	assert.NotContains(t, rec.Body.String(), "private-reference")
-	assert.NotContains(t, request("alice", http.MethodGet, path, "").Body.String(), "private-reference")
-
-	for _, attempt := range []struct{ method, path, body string }{
-		{http.MethodGet, base, ""},
-		{http.MethodGet, base + "/registrations", ""},
-		{http.MethodPost, base + "/registrations", createBody},
-		{http.MethodGet, path, ""},
-		{http.MethodPut, path, `{"name":"stolen"}`},
-		{http.MethodPut, base + "/registrations/invalid", "malformed JSON"},
-		{http.MethodGet, "/v1/workspaces/" + uuid.NewString(), ""},
+	for _, body := range []string{
+		`{`, `null`, `{}`, createBody + ` {}`,
+		`{"name":"cluster-a","credentialRef":"private-reference"}`,
+		`{"name":"cluster-a","credentialRef":"private-reference","kubernetes":null}`,
+		`{"name":"cluster-a","credentialRef":"private-reference","kubernetes":{}}`,
+		`{"name":"` + strings.Repeat("x", 1<<20) + `"}`,
 	} {
-		rec := request("bob", attempt.method, attempt.path, attempt.body)
-		require.Equal(t, http.StatusForbidden, rec.Code, rec.Body.String())
-		assert.JSONEq(t, `{"error":"Forbidden"}`, rec.Body.String())
+		assert.Equal(t, http.StatusBadRequest, request("alice", http.MethodPost, base+"/registrations", body).Code)
 	}
-	assert.Equal(t, http.StatusNotFound, request("alice", http.MethodGet, "/v1/workspaces/"+otherWorkspace.ID.String()+"/registrations/"+registration.ID.String(), "").Code)
-	assert.Equal(t, http.StatusBadRequest, request("alice", http.MethodGet, base+"/registrations/invalid", "").Code)
-	for _, field := range []string{`"workspaceId":"other"`, `"id":"chosen"`, `"validationStatus":"READY"`, `"kubeSystemUid":"fake"`, `"credential":"raw-secret"`} {
+	for _, field := range []string{`"kind":"kubernetes"`, `"kind":"github"`, `"workspaceId":"other"`, `"owner":"bob"`, `"id":"chosen"`, `"validationStatus":"READY"`, `"kubeSystemUid":"fake"`, `"credential":"raw-secret"`} {
 		body := strings.TrimSuffix(createBody, "}") + "," + field + "}"
 		assert.Equal(t, http.StatusBadRequest, request("alice", http.MethodPost, base+"/registrations", body).Code)
 	}
+	rec := request("alice", http.MethodPost, base+"/registrations", createBody)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	var registration registrationResource
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &registration))
+	assert.Equal(t, "test-workspace", registration.WorkspaceID)
+	assert.Equal(t, clusterregistry.ValidationPending, registration.ValidationStatus)
+	assert.NotContains(t, rec.Body.String(), "private-reference")
+	assert.NotContains(t, rec.Body.String(), "credentialRef")
+	assert.NotContains(t, rec.Body.String(), `"kind"`)
+	path := base + "/registrations/" + registration.ID.String()
+	assert.Equal(t, path, rec.Header().Get("Location"))
+	assert.Equal(t, http.StatusConflict, request("bob", http.MethodPost, base+"/registrations", createBody).Code)
+	assert.Equal(t, http.StatusCreated, request("bob", http.MethodPost, base+"/registrations", strings.Replace(createBody, "cluster-a", "cluster-b", 1)).Code)
+	for _, token := range []string{"alice", "bob"} {
+		rec = request(token, http.MethodGet, base+"/registrations", "")
+		require.Equal(t, http.StatusOK, rec.Code)
+		var list struct {
+			Registrations []registrationResource `json:"registrations"`
+		}
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &list))
+		require.Len(t, list.Registrations, 2)
+		assert.NotContains(t, rec.Body.String(), "private-reference")
+		rec = request(token, http.MethodGet, path, "")
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.NotContains(t, rec.Body.String(), "private-reference")
+	}
+
+	for _, other := range []string{"other-workspace", "test-workspace-extra", "TEST-WORKSPACE", uuid.NewString()} {
+		otherBase := "/v1/workspaces/" + other
+		for _, attempt := range []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodGet, path: otherBase},
+			{method: http.MethodGet, path: otherBase + "/registrations"},
+			{method: http.MethodPost, path: otherBase + "/registrations"},
+			{method: http.MethodGet, path: otherBase + "/registrations/" + registration.ID.String()},
+			{method: http.MethodPut, path: otherBase + "/registrations/invalid"},
+		} {
+			rec = request("alice", attempt.method, attempt.path, "malformed JSON")
+			require.Equal(t, http.StatusNotFound, rec.Code)
+			assert.JSONEq(t, `{"error":"Not Found"}`, rec.Body.String())
+		}
+	}
+	assert.Equal(t, http.StatusNotFound, request("alice", http.MethodGet, base+"/registrations/"+uuid.NewString(), "").Code)
+	assert.Equal(t, http.StatusBadRequest, request("alice", http.MethodGet, base+"/registrations/invalid", "").Code)
 	const updateBody = `{"name":"renamed","credentialRef":"replacement-reference","kubernetes":{"apiEndpoint":"https://replacement.example.com"}}`
-	assert.Equal(t, http.StatusBadRequest, request("alice", http.MethodPut, path, strings.TrimSuffix(updateBody, "}")+`,"kind":"github"}`).Code)
-	rec = request("alice", http.MethodPut, path, updateBody)
+	for _, field := range []string{`"kind":"github"`, `"workspaceId":"other"`} {
+		assert.Equal(t, http.StatusBadRequest, request("bob", http.MethodPut, path, strings.TrimSuffix(updateBody, "}")+","+field+"}").Code)
+	}
+	for _, invalidConnection := range []string{
+		`{"name":"renamed","credentialRef":"replacement-reference"}`,
+		`{"name":"renamed","credentialRef":"replacement-reference","kubernetes":null}`,
+		`{"name":"renamed","credentialRef":"replacement-reference","kubernetes":{}}`,
+	} {
+		assert.Equal(t, http.StatusBadRequest, request("bob", http.MethodPut, path, invalidConnection).Code)
+		unchanged, err := clusterRegistry.Registrations.Get(t.Context(), clusterregistry.Caller{Issuer: testIssuer, Subject: "bob"}, clusterregistry.Workspace{ID: "test-workspace"}, registration.ID)
+		require.NoError(t, err)
+		assert.Equal(t, registration, registrationResponse(unchanged))
+		assert.Equal(t, "private-reference", unchanged.CredentialRef)
+	}
+	rec = request("bob", http.MethodPut, path, updateBody)
 	require.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
-	stored, err := sourceStore.Get(t.Context(), workspace.ID.String(), registration.ID)
+	stored, err := clusterRegistry.Registrations.Get(t.Context(), clusterregistry.Caller{Issuer: testIssuer, Subject: "bob"}, clusterregistry.Workspace{ID: "test-workspace"}, registration.ID)
 	require.NoError(t, err)
 	assert.Equal(t, registration.ID, stored.ID)
+	assert.Equal(t, "test-workspace", stored.Workspace.ID)
 	assert.Equal(t, registration.CreatedAt, stored.CreatedAt)
-	assert.Equal(t, sources.KindKubernetes, stored.Kind)
+	assert.Equal(t, "renamed", stored.Name)
 	assert.Equal(t, "replacement-reference", stored.CredentialRef)
-	assert.Equal(t, sources.ValidationPending, stored.ValidationStatus)
-	assert.NotContains(t, request("alice", http.MethodGet, path, "").Body.String(), "replacement-reference")
+	rec = request("alice", http.MethodGet, path, "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "renamed")
+	assert.NotContains(t, rec.Body.String(), "replacement-reference")
+	assert.JSONEq(t, `{"workspaces":[{"id":"test-workspace","name":"test-workspace"}]}`, request("alice", http.MethodGet, "/v1/workspaces", "").Body.String())
+}
+
+func TestWorkspaceRoutesCheckAccessBeforeParsing(t *testing.T) {
+	router, err := NewRouter(nil, nil, nil, nil, keycloak.Config{
+		Client: workspaceTokenDecoder{},
+		Issuer: testIssuer,
+	}, newTestClusterRegistry(t))
+	require.NoError(t, err)
+
+	for _, tt := range []struct {
+		name   string
+		method string
+		path   string
+		token  string
+		want   int
+	}{
+		{
+			name:   "workspace with trailing slash",
+			method: http.MethodGet,
+			path:   "/v1/workspaces/test-workspace/",
+			token:  "alice",
+			want:   http.StatusOK,
+		},
+		{
+			name:   "authentication before workspace lookup",
+			method: http.MethodGet,
+			path:   "/v1/workspaces/unknown",
+			want:   http.StatusUnauthorized,
+		},
+		{
+			name:   "authentication before test ID parsing",
+			method: http.MethodPost,
+			path:   "/v1/workspaces/test-workspace/registrations/invalid:test",
+			want:   http.StatusUnauthorized,
+		},
+		{
+			name:   "workspace before create body parsing",
+			method: http.MethodPost,
+			path:   "/v1/workspaces/unknown/registrations",
+			token:  "alice",
+			want:   http.StatusNotFound,
+		},
+		{
+			name:   "workspace before read ID parsing",
+			method: http.MethodGet,
+			path:   "/v1/workspaces/unknown/registrations/invalid",
+			token:  "alice",
+			want:   http.StatusNotFound,
+		},
+		{
+			name:   "workspace before update parsing",
+			method: http.MethodPut,
+			path:   "/v1/workspaces/unknown/registrations/invalid",
+			token:  "alice",
+			want:   http.StatusNotFound,
+		},
+		{
+			name:   "workspace before test ID parsing",
+			method: http.MethodPost,
+			path:   "/v1/workspaces/unknown/registrations/invalid:test",
+			token:  "alice",
+			want:   http.StatusNotFound,
+		},
+		{
+			name:   "test parses ID after access check",
+			method: http.MethodPost,
+			path:   "/v1/workspaces/test-workspace/registrations/invalid:test",
+			token:  "alice",
+			want:   http.StatusBadRequest,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, strings.NewReader("invalid JSON"))
+			if tt.token != "" {
+				req.Header.Set("Authorization", "Bearer "+tt.token)
+			}
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			assert.Equal(t, tt.want, rec.Code, rec.Body.String())
+			if tt.token != "" {
+				assert.Equal(t, "no-store", rec.Header().Get("Cache-Control"))
+			}
+		})
+	}
 }

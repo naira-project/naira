@@ -14,13 +14,12 @@ import (
 	"github.com/Nerzal/gocloak/v13"
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
 	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/clusters"
 	"github.com/naira-project/naira/catalog/internal/httpapi"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginmanager"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
 	"github.com/naira-project/naira/catalog/internal/scheduling"
-	"github.com/naira-project/naira/catalog/internal/sources"
-	"github.com/naira-project/naira/catalog/internal/workspaces"
 )
 
 func main() {
@@ -49,13 +48,15 @@ func main() {
 		logger.Fatalf("failed to configure scheduler: %v", err)
 	}
 
-	workspaceService := workspaces.NewService(workspaces.NewMemoryStore())
-	sourceService := sources.NewService(sources.NewMemoryStore(), workspaceService)
+	clusterRegistry, err := clusters.New(config.ClusterCredentialSecrets)
+	if err != nil {
+		logger.Fatalf("failed to configure cluster registry: %v", err)
+	}
 	router, err := httpapi.NewRouter(catalogService, runner, config.Plugins, logger, keycloak.Config{
 		Client: keycloakClient,
 		Realm:  config.KeycloakRealm,
 		Issuer: config.KeycloakIssuer,
-	}, workspaceService, sourceService)
+	}, clusterRegistry)
 	if err != nil {
 		logger.Fatalf("failed to create router: %v", err)
 	}

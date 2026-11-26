@@ -11,17 +11,30 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/naira-project/naira/catalog/internal/auth/keycloak"
-	"github.com/naira-project/naira/catalog/internal/sources"
-	"github.com/naira-project/naira/catalog/internal/workspaces"
+	"github.com/naira-project/naira/catalog/internal/clusterregistry"
+	"github.com/naira-project/naira/catalog/internal/clusterregistry/connectiontest"
+	"github.com/naira-project/naira/catalog/internal/clusters"
 )
 
 var errInvalidManagementRequest = errors.New("invalid request")
 
+func registerWorkspaceRoutes(router chi.Router, registry *clusters.Registry) {
+	registrations := registry.Registrations
+	router.Get("/workspaces", newListWorkspacesHandler(registrations))
+	router.Route("/workspaces/{workspaceID}", func(r chi.Router) {
+		r.Use(newWorkspaceAccessMiddleware(registrations))
+		r.Get("/", newGetWorkspaceHandler())
+		r.Get("/registrations", newListRegistrationsHandler(registrations))
+		r.Post("/registrations", newCreateRegistrationHandler(registrations))
+		r.Get("/registrations/{registrationID}", newGetRegistrationHandler(registrations))
+		r.Post("/registrations/{registrationID}:test", newTestClusterConnectionHandler(registry.ConnectionTests))
+		r.Put("/registrations/{registrationID}", newUpdateRegistrationHandler(registrations))
+	})
+}
+
 type workspaceResource struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type kubernetesConnection struct {
@@ -30,75 +43,60 @@ type kubernetesConnection struct {
 }
 
 type registrationRequest struct {
-	Name          string                `json:"name"`
-	Kind          sources.Kind          `json:"kind"`
-	CredentialRef string                `json:"credentialRef"`
-	Kubernetes    *kubernetesConnection `json:"kubernetes"`
-}
-
-type registrationUpdateRequest struct {
-	Name          string                `json:"name"`
-	CredentialRef string                `json:"credentialRef"`
-	Kubernetes    *kubernetesConnection `json:"kubernetes"`
+	Name          string               `json:"name"`
+	CredentialRef string               `json:"credentialRef"`
+	Kubernetes    kubernetesConnection `json:"kubernetes"`
 }
 
 // registrationResource deliberately excludes credential references and values.
 type registrationResource struct {
-	ID               uuid.UUID                `json:"id"`
-	WorkspaceID      string                   `json:"workspaceId"`
-	Name             string                   `json:"name"`
-	Kind             sources.Kind             `json:"kind"`
-	Kubernetes       *kubernetesConnection    `json:"kubernetes,omitempty"`
-	KubeSystemUID    string                   `json:"kubeSystemUid,omitempty"`
-	ValidationStatus sources.ValidationStatus `json:"validationStatus"`
-	LastValidationAt *time.Time               `json:"lastValidationAt,omitempty"`
-	CreatedAt        time.Time                `json:"createdAt"`
-	UpdatedAt        time.Time                `json:"updatedAt"`
+	ID               uuid.UUID                         `json:"id"`
+	WorkspaceID      string                            `json:"workspaceId"`
+	Name             string                            `json:"name"`
+	Kubernetes       kubernetesConnection              `json:"kubernetes"`
+	KubeSystemUID    string                            `json:"kubeSystemUid,omitempty"`
+	ValidationStatus clusterregistry.ValidationStatus  `json:"validationStatus"`
+	LastValidationAt *time.Time                        `json:"lastValidationAt,omitempty"`
+	LastValidation   *clusterregistry.ValidationResult `json:"lastValidation,omitempty"`
+	CreatedAt        time.Time                         `json:"createdAt"`
+	UpdatedAt        time.Time                         `json:"updatedAt"`
 }
 
-func requestOwner(r *http.Request) workspaces.Owner {
+func requestCaller(r *http.Request) clusterregistry.Caller {
 	claims := keycloak.ClaimsFromContext(r.Context())
-	return workspaces.Owner{
+	return clusterregistry.Caller{
 		Issuer:  claims.Issuer,
 		Subject: claims.UserID,
 	}
 }
 
-func workspaceResponse(workspace workspaces.Workspace) workspaceResource {
+func testWorkspaceResponse() workspaceResource {
 	return workspaceResource{
-		ID:        workspace.ID,
-		Name:      workspace.Name,
-		CreatedAt: workspace.CreatedAt,
-		UpdatedAt: workspace.UpdatedAt,
+		ID:   clusterregistry.TestWorkspaceID,
+		Name: clusterregistry.TestWorkspaceID,
 	}
 }
 
-func registrationResponse(registration sources.Registration) registrationResource {
-	result := registrationResource{
-		ID:               registration.ID,
-		WorkspaceID:      registration.WorkspaceID,
-		Name:             registration.Name,
-		Kind:             registration.Kind,
+func registrationResponse(registration clusterregistry.Cluster) registrationResource {
+	return registrationResource{
+		ID:          registration.ID,
+		WorkspaceID: registration.Workspace.ID,
+		Name:        registration.Name,
+		Kubernetes: kubernetesConnection{
+			APIEndpoint: registration.Kubernetes.Connection.APIEndpoint,
+			Context:     registration.Kubernetes.Connection.Context,
+		},
+		KubeSystemUID:    registration.Kubernetes.KubeSystemUID,
 		ValidationStatus: registration.ValidationStatus,
 		LastValidationAt: registration.LastValidationAt,
+		LastValidation:   registration.LastValidation,
 		CreatedAt:        registration.CreatedAt,
 		UpdatedAt:        registration.UpdatedAt,
 	}
-	if registration.Kubernetes != nil {
-		result.Kubernetes = &kubernetesConnection{
-			APIEndpoint: registration.Kubernetes.Connection.APIEndpoint,
-			Context:     registration.Kubernetes.Connection.Context,
-		}
-		result.KubeSystemUID = registration.Kubernetes.KubeSystemUID
-	}
-	return result
 }
 
-func connectionParams(connection *kubernetesConnection) *sources.KubernetesConnection {
-	if connection == nil {
-		return nil
-	}
-	return &sources.KubernetesConnection{
+func connectionParams(connection kubernetesConnection) clusterregistry.KubernetesConnection {
+	return clusterregistry.KubernetesConnection{
 		APIEndpoint: connection.APIEndpoint,
 		Context:     connection.Context,
 	}
@@ -123,15 +121,17 @@ func managementHandler(next routeHandler) http.HandlerFunc {
 		if err := next(w, r); err != nil {
 			status := http.StatusInternalServerError
 			switch {
-			case errors.Is(err, workspaces.ErrUnauthenticated):
+			case errors.Is(err, clusterregistry.ErrUnauthenticated):
 				status = http.StatusUnauthorized
-			case errors.Is(err, workspaces.ErrForbidden):
-				status = http.StatusForbidden
-			case errors.Is(err, sources.ErrNotFound):
+			case errors.Is(err, clusterregistry.ErrNotFound), errors.Is(err, clusterregistry.ErrWorkspaceNotFound):
 				status = http.StatusNotFound
-			case errors.Is(err, sources.ErrAlreadyExists), errors.Is(err, workspaces.ErrAlreadyExists):
+			case errors.Is(err, clusterregistry.ErrAlreadyExists):
 				status = http.StatusConflict
-			case errors.Is(err, sources.ErrInvalidRegistration), errors.Is(err, workspaces.ErrInvalid), errors.Is(err, errInvalidManagementRequest):
+			case errors.Is(err, clusterregistry.ErrValidationConflict):
+				status = http.StatusConflict
+			case errors.Is(err, connectiontest.ErrUnavailable):
+				status = http.StatusServiceUnavailable
+			case errors.Is(err, clusterregistry.ErrInvalidCluster), errors.Is(err, clusterregistry.ErrInvalidWorkspace), errors.Is(err, errInvalidManagementRequest):
 				status = http.StatusBadRequest
 			}
 			writeJSON(w, status, map[string]string{"error": http.StatusText(status)})
@@ -139,113 +139,127 @@ func managementHandler(next routeHandler) http.HandlerFunc {
 	}
 }
 
-func registerWorkspaceRoutes(r chi.Router, workspaceService *workspaces.Service, sourceService *sources.Service) {
-	r.Get("/workspaces", managementHandler(func(w http.ResponseWriter, r *http.Request) error {
-		list, err := workspaceService.List(r.Context(), requestOwner(r))
-		if err != nil {
-			return fmt.Errorf("list workspaces: %w", err)
+// newListWorkspacesHandler returns the fixed workspace available to authenticated callers.
+func newListWorkspacesHandler(clusterService *clusterregistry.Service) http.HandlerFunc {
+	return managementHandler(func(w http.ResponseWriter, r *http.Request) error {
+		if err := clusterService.CheckAccess(r.Context(), requestCaller(r), clusterregistry.Workspace{ID: clusterregistry.TestWorkspaceID}); err != nil {
+			return fmt.Errorf("access test workspace: %w", err)
 		}
-		result := make([]workspaceResource, 0, len(list))
-		for _, workspace := range list {
-			result = append(result, workspaceResponse(workspace))
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"workspaces": result})
+		writeJSON(w, http.StatusOK, map[string]any{"workspaces": []workspaceResource{testWorkspaceResponse()}})
 		return nil
-	}))
-	r.Post("/workspaces", managementHandler(func(w http.ResponseWriter, r *http.Request) error {
-		var input struct {
-			Name string `json:"name"`
-		}
-		if err := decodeManagementRequest(w, r, &input); err != nil {
-			return fmt.Errorf("decode workspace: %w", err)
-		}
-		workspace, err := workspaceService.Create(r.Context(), requestOwner(r), input.Name)
-		if err != nil {
-			return fmt.Errorf("create workspace: %w", err)
-		}
-		w.Header().Set("Location", "/v1/workspaces/"+workspace.ID.String())
-		writeJSON(w, http.StatusCreated, workspaceResponse(workspace))
-		return nil
-	}))
-	r.Route("/workspaces/{workspaceID}", func(r chi.Router) {
-		r.Use(func(next http.Handler) http.Handler {
-			return managementHandler(func(w http.ResponseWriter, r *http.Request) error {
-				if err := workspaceService.Authorize(r.Context(), requestOwner(r), chi.URLParam(r, "workspaceID")); err != nil {
-					return fmt.Errorf("authorize workspace: %w", err)
-				}
-				next.ServeHTTP(w, r)
-				return nil
-			})
+	})
+}
+
+// newWorkspaceAccessMiddleware checks the workspace before parsing request data.
+func newWorkspaceAccessMiddleware(clusterService *clusterregistry.Service) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return managementHandler(func(w http.ResponseWriter, r *http.Request) error {
+			if err := clusterService.CheckAccess(r.Context(), requestCaller(r), clusterregistry.Workspace{ID: chi.URLParam(r, "workspaceID")}); err != nil {
+				return fmt.Errorf("authorize workspace: %w", err)
+			}
+			next.ServeHTTP(w, r)
+			return nil
 		})
-		r.Get("/", managementHandler(func(w http.ResponseWriter, r *http.Request) error {
-			workspace, err := workspaceService.Get(r.Context(), requestOwner(r), chi.URLParam(r, "workspaceID"))
-			if err != nil {
-				return fmt.Errorf("get workspace: %w", err)
-			}
-			writeJSON(w, http.StatusOK, workspaceResponse(workspace))
-			return nil
-		}))
-		r.Get("/registrations", managementHandler(func(w http.ResponseWriter, r *http.Request) error {
-			list, err := sourceService.List(r.Context(), requestOwner(r), chi.URLParam(r, "workspaceID"))
-			if err != nil {
-				return fmt.Errorf("list registrations: %w", err)
-			}
-			result := make([]registrationResource, 0, len(list))
-			for _, registration := range list {
-				result = append(result, registrationResponse(registration))
-			}
-			writeJSON(w, http.StatusOK, map[string]any{"registrations": result})
-			return nil
-		}))
-		r.Post("/registrations", managementHandler(func(w http.ResponseWriter, r *http.Request) error {
-			var input registrationRequest
-			if err := decodeManagementRequest(w, r, &input); err != nil {
-				return fmt.Errorf("decode registration: %w", err)
-			}
-			registration, err := sourceService.Create(r.Context(), requestOwner(r), sources.CreateParams{
-				WorkspaceID:   chi.URLParam(r, "workspaceID"),
-				Name:          input.Name,
-				Kind:          input.Kind,
-				CredentialRef: input.CredentialRef,
-				Kubernetes:    connectionParams(input.Kubernetes),
-			})
-			if err != nil {
-				return fmt.Errorf("create registration: %w", err)
-			}
-			w.Header().Set("Location", "/v1/workspaces/"+registration.WorkspaceID+"/registrations/"+registration.ID.String())
-			writeJSON(w, http.StatusCreated, registrationResponse(registration))
-			return nil
-		}))
-		r.Get("/registrations/{registrationID}", managementHandler(func(w http.ResponseWriter, r *http.Request) error {
-			id, err := uuid.Parse(chi.URLParam(r, "registrationID"))
-			if err != nil {
-				return fmt.Errorf("parse registration ID: %w", errInvalidManagementRequest)
-			}
-			registration, err := sourceService.Get(r.Context(), requestOwner(r), chi.URLParam(r, "workspaceID"), id)
-			if err != nil {
-				return fmt.Errorf("get registration: %w", err)
-			}
-			writeJSON(w, http.StatusOK, registrationResponse(registration))
-			return nil
-		}))
-		r.Put("/registrations/{registrationID}", managementHandler(func(w http.ResponseWriter, r *http.Request) error {
-			id, err := uuid.Parse(chi.URLParam(r, "registrationID"))
-			if err != nil {
-				return fmt.Errorf("parse registration ID: %w", errInvalidManagementRequest)
-			}
-			var input registrationUpdateRequest
-			if err := decodeManagementRequest(w, r, &input); err != nil {
-				return fmt.Errorf("decode update: %w", err)
-			}
-			if err := sourceService.Update(r.Context(), requestOwner(r), chi.URLParam(r, "workspaceID"), id, sources.UpdateParams{
-				Name:          input.Name,
-				CredentialRef: input.CredentialRef,
-				Kubernetes:    connectionParams(input.Kubernetes),
-			}); err != nil {
-				return fmt.Errorf("update registration: %w", err)
-			}
-			w.WriteHeader(http.StatusNoContent)
-			return nil
-		}))
+	}
+}
+
+// newGetWorkspaceHandler returns the fixed workspace after workspace access is checked.
+func newGetWorkspaceHandler() http.HandlerFunc {
+	return managementHandler(func(w http.ResponseWriter, _ *http.Request) error {
+		writeJSON(w, http.StatusOK, testWorkspaceResponse())
+		return nil
+	})
+}
+
+// newListRegistrationsHandler lists clusters registered in the requested workspace.
+func newListRegistrationsHandler(clusterService *clusterregistry.Service) http.HandlerFunc {
+	return managementHandler(func(w http.ResponseWriter, r *http.Request) error {
+		list, err := clusterService.List(r.Context(), requestCaller(r), clusterregistry.Workspace{ID: chi.URLParam(r, "workspaceID")})
+		if err != nil {
+			return fmt.Errorf("list registrations: %w", err)
+		}
+		result := make([]registrationResource, 0, len(list))
+		for _, registration := range list {
+			result = append(result, registrationResponse(registration))
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"registrations": result})
+		return nil
+	})
+}
+
+// newCreateRegistrationHandler creates a cluster registration without testing the connection.
+func newCreateRegistrationHandler(clusterService *clusterregistry.Service) http.HandlerFunc {
+	return managementHandler(func(w http.ResponseWriter, r *http.Request) error {
+		var input registrationRequest
+		if err := decodeManagementRequest(w, r, &input); err != nil {
+			return fmt.Errorf("decode registration: %w", err)
+		}
+		registration, err := clusterService.Create(r.Context(), requestCaller(r), clusterregistry.CreateParams{
+			Workspace:     clusterregistry.Workspace{ID: chi.URLParam(r, "workspaceID")},
+			Name:          input.Name,
+			CredentialRef: input.CredentialRef,
+			Kubernetes:    connectionParams(input.Kubernetes),
+		})
+		if err != nil {
+			return fmt.Errorf("create registration: %w", err)
+		}
+		w.Header().Set("Location", "/v1/workspaces/"+registration.Workspace.ID+"/registrations/"+registration.ID.String())
+		writeJSON(w, http.StatusCreated, registrationResponse(registration))
+		return nil
+	})
+}
+
+// newGetRegistrationHandler returns one cluster registration without credential references.
+func newGetRegistrationHandler(clusterService *clusterregistry.Service) http.HandlerFunc {
+	return managementHandler(func(w http.ResponseWriter, r *http.Request) error {
+		id, err := uuid.Parse(chi.URLParam(r, "registrationID"))
+		if err != nil {
+			return fmt.Errorf("parse registration ID: %w", errInvalidManagementRequest)
+		}
+		registration, err := clusterService.Get(r.Context(), requestCaller(r), clusterregistry.Workspace{ID: chi.URLParam(r, "workspaceID")}, id)
+		if err != nil {
+			return fmt.Errorf("get registration: %w", err)
+		}
+		writeJSON(w, http.StatusOK, registrationResponse(registration))
+		return nil
+	})
+}
+
+// newTestClusterConnectionHandler tests a saved connection without running discovery.
+func newTestClusterConnectionHandler(connectionTestService *connectiontest.Service) http.HandlerFunc {
+	return managementHandler(func(w http.ResponseWriter, r *http.Request) error {
+		id, err := uuid.Parse(chi.URLParam(r, "registrationID"))
+		if err != nil {
+			return fmt.Errorf("parse registration ID: %w", errInvalidManagementRequest)
+		}
+		result, err := connectionTestService.TestConnection(r.Context(), requestCaller(r), clusterregistry.Workspace{ID: chi.URLParam(r, "workspaceID")}, id)
+		if err != nil {
+			return fmt.Errorf("test cluster connection: %w", err)
+		}
+		writeJSON(w, http.StatusOK, result)
+		return nil
+	})
+}
+
+// newUpdateRegistrationHandler replaces editable cluster registration fields.
+func newUpdateRegistrationHandler(clusterService *clusterregistry.Service) http.HandlerFunc {
+	return managementHandler(func(w http.ResponseWriter, r *http.Request) error {
+		id, err := uuid.Parse(chi.URLParam(r, "registrationID"))
+		if err != nil {
+			return fmt.Errorf("parse registration ID: %w", errInvalidManagementRequest)
+		}
+		var input registrationRequest
+		if err := decodeManagementRequest(w, r, &input); err != nil {
+			return fmt.Errorf("decode update: %w", err)
+		}
+		if err := clusterService.Update(r.Context(), requestCaller(r), clusterregistry.Workspace{ID: chi.URLParam(r, "workspaceID")}, id, clusterregistry.UpdateParams{
+			Name:          input.Name,
+			CredentialRef: input.CredentialRef,
+			Kubernetes:    connectionParams(input.Kubernetes),
+		}); err != nil {
+			return fmt.Errorf("update registration: %w", err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return nil
 	})
 }

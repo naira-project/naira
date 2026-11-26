@@ -18,10 +18,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/naira-project/naira/catalog/internal/catalog"
+	"github.com/naira-project/naira/catalog/internal/clusterregistry"
+	"github.com/naira-project/naira/catalog/internal/clusterregistry/connectiontest"
+	"github.com/naira-project/naira/catalog/internal/clusters"
 	"github.com/naira-project/naira/catalog/internal/operations"
 	"github.com/naira-project/naira/catalog/internal/pluginrun"
-	"github.com/naira-project/naira/catalog/internal/sources"
-	"github.com/naira-project/naira/catalog/internal/workspaces"
 	"github.com/naira-project/naira/plugins/pkg/pluginapi"
 )
 
@@ -80,6 +81,40 @@ func applyPluginSnapshot(t *testing.T, store *catalog.MemoryStore, nodes []catal
 	require.NoError(t, err)
 }
 
+func newTestClusterRegistry(t *testing.T) *clusters.Registry {
+	t.Helper()
+	registry, err := clusters.New(nil)
+	require.NoError(t, err)
+	return registry
+}
+
+func TestNewRouterRequiresClusterRegistry(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		registry *clusters.Registry
+	}{
+		{name: "missing registry"},
+		{
+			name:     "empty registry",
+			registry: &clusters.Registry{},
+		},
+		{
+			name:     "missing connection tests",
+			registry: &clusters.Registry{Registrations: clusterregistry.NewService(clusterregistry.NewMemoryStore())},
+		},
+		{
+			name:     "missing registrations",
+			registry: &clusters.Registry{ConnectionTests: &connectiontest.Service{}},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			router, err := NewRouter(nil, nil, nil, nil, keycloak.Config{}, tt.registry)
+			require.ErrorContains(t, err, "cluster registry with registration and connection test services is required")
+			assert.Nil(t, router)
+		})
+	}
+}
+
 // newTestRouter wires a fresh catalog.Service and pluginrun.Runner sharing a
 // single graph store, mirroring how main.go wires the real router.
 func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.Store, plugins map[string]pluginrun.Plugin) http.Handler {
@@ -91,8 +126,7 @@ func newTestRouter(t *testing.T, store *catalog.MemoryStore, opStore operations.
 	for name := range plugins {
 		configs[name] = catalog.PluginConfig{}
 	}
-	workspaceService := workspaces.NewService(workspaces.NewMemoryStore())
-	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer}, workspaceService, sources.NewService(sources.NewMemoryStore(), workspaceService))
+	router, err := NewRouter(catalogService, runner, configs, log.New(io.Discard, "", 0), keycloak.Config{Client: stubTokenDecoder{}, Issuer: testIssuer}, newTestClusterRegistry(t))
 	require.NoError(t, err)
 	return router
 }
