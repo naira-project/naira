@@ -1,0 +1,317 @@
+package main
+
+import (
+	"os"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func sampleConfig(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile("sample_config.yaml")
+	require.NoError(t, err)
+	return string(data)
+}
+
+const minimalConfig = `
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+`
+
+func TestParseConfigAcceptsSample(t *testing.T) {
+	cfg, err := parseConfig([]byte(sampleConfig(t)))
+	require.NoError(t, err)
+
+	require.Len(t, cfg.Projects, 1)
+	assert.Equal(t, "naira-demo", cfg.Projects[0].ID)
+	assert.Equal(t, 24*time.Hour, cfg.Projects[0].window)
+	// Two bindings on the one project, each narrowed to its own trace name.
+	assert.Equal(t, []string{"triage-agent", "escalation-agent"}, cfg.Projects[0].scopes())
+}
+
+func TestParseConfigDefaultsWindow(t *testing.T) {
+	cfg, err := parseConfig([]byte(minimalConfig))
+	require.NoError(t, err)
+
+	assert.Equal(t, defaultWindow, cfg.Projects[0].window)
+}
+
+// The deep link is followed by a browser, which may not reach the address the
+// plugin calls the API on.
+func TestParseConfigDefaultsUIHostToHost(t *testing.T) {
+	cfg, err := parseConfig([]byte(minimalConfig))
+	require.NoError(t, err)
+
+	assert.Equal(t, "https://langfuse.example.com", cfg.Projects[0].UIHost)
+}
+
+func TestParseConfigKeepsSeparateUIHost(t *testing.T) {
+	cfg, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: http://langfuse-web.langfuse.svc.cluster.local:3000
+    ui_host: http://localhost:3000
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+`))
+	require.NoError(t, err)
+
+	project := cfg.Projects[0]
+	assert.Equal(t, "http://langfuse-web.langfuse.svc.cluster.local:3000", project.Host)
+	assert.Equal(t, "http://localhost:3000", project.UIHost)
+	assert.Equal(t, "http://localhost:3000/project/cm0demo/traces", tracesURL(project))
+}
+
+func TestParseConfigRejectsRelativeUIHost(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    ui_host: /langfuse
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+`))
+	assert.ErrorContains(t, err, `field "ui_host" must be an absolute URL`)
+}
+
+func TestParseConfigRejectsEmptyFile(t *testing.T) {
+	_, err := parseConfig([]byte("# only a comment\n"))
+	assert.ErrorContains(t, err, "empty or contains no YAML mapping")
+}
+
+func TestParseConfigRejectsUnknownField(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+    windwo: 24h
+`))
+	assert.ErrorContains(t, err, `unknown field "windwo"`)
+}
+
+func TestParseConfigRejectsDuplicateField(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+    secret_key: sk-lf-other
+`))
+	assert.ErrorContains(t, err, `line 9: duplicate field "secret_key"`)
+}
+
+func TestParseConfigRejectsMissingProjectsKey(t *testing.T) {
+	_, err := parseConfig([]byte("schema_version: 1\n"))
+	assert.ErrorContains(t, err, "projects: field is required")
+}
+
+func TestParseConfigAcceptsExplicitlyEmptyProjects(t *testing.T) {
+	cfg, err := parseConfig([]byte("schema_version: 1\nprojects: []\n"))
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Projects)
+}
+
+func TestParseConfigRejectsUnsupportedSchemaVersion(t *testing.T) {
+	_, err := parseConfig([]byte("schema_version: 2\nprojects: []\n"))
+	assert.ErrorContains(t, err, "schema_version: 2 is not supported")
+}
+
+func TestParseConfigReportsEveryFinding(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: Bad_ID
+    host: not-a-url
+    project_id: ""
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+    window: yesterday
+`))
+	require.Error(t, err)
+
+	message := err.Error()
+	assert.Contains(t, message, `field "id" must match`)
+	assert.Contains(t, message, `field "host" must be an absolute URL`)
+	assert.Contains(t, message, `field "project_id" must not be empty`)
+	assert.Contains(t, message, `field "window" is not a duration`)
+}
+
+// The config file holds API secrets, so its errors must not quote values.
+func TestParseConfigErrorsDoNotLeakSecrets(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: not-a-url
+    project_id: cm0demo
+    public_key: pk-lf-supersecret
+    secret_key: sk-lf-supersecret
+    window: yesterday
+`))
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "supersecret")
+}
+
+// A key pasted into a field that validation reports on must not be echoed.
+func TestParseConfigValidationErrorsDoNotLeakMisplacedSecrets(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: sk-lf-supersecret
+    host: not-a-url
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: ""
+    window: yesterday
+    observes:
+      - kind: sk-lf-supersecret
+        namespace: sk-lf-supersecret
+        name: sk-lf-supersecret
+      - kind: sk-lf-supersecret
+        namespace: sk-lf-supersecret
+        name: sk-lf-supersecret
+  - id: sk-lf-supersecret
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+`))
+	require.Error(t, err)
+
+	message := err.Error()
+	assert.NotContains(t, message, "supersecret")
+	assert.Contains(t, message, `projects[0]: field "host" must be an absolute URL`)
+	assert.Contains(t, message, `projects[0]: field "secret_key" must not be empty`)
+	assert.Contains(t, message, `projects[0]: field "window" is not a duration`)
+	assert.Contains(t, message, `projects[0].observes[1]: duplicates observes[0]`)
+	assert.Contains(t, message, `projects[1]: field "id" duplicates projects[0]`)
+}
+
+// yaml.v3 quotes the scalar when a tag does not fit it, so a mistagged key
+// would reach the log in full.
+func TestParseConfigDecodeErrorsDoNotLeakSecrets(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: !!float pk-lf-supersecret
+    secret_key: !!int sk-lf-supersecret
+`))
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "supersecret")
+	assert.Contains(t, err.Error(), `line 7: field "public_key": invalid value`)
+	assert.Contains(t, err.Error(), `line 8: field "secret_key": invalid value`)
+}
+
+func TestParseConfigRejectsDuplicateProjectID(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0other
+    public_key: pk-lf-other
+    secret_key: sk-lf-other
+`))
+	assert.ErrorContains(t, err, `projects[1]: field "id" duplicates projects[0]`)
+}
+
+func TestParseConfigRejectsWindowBelowMinimum(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+    window: 1s
+`))
+	assert.ErrorContains(t, err, `field "window" must be at least`)
+}
+
+func TestParseConfigRejectsSeparatorsInPathSegments(t *testing.T) {
+	_, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+    observes:
+      - kind: deployment/v1
+        path_prefix: lite/llm
+        namespace: ns/sub
+        name: app/v1
+        trace_name: a/b
+`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `field "kind" must not contain '/'`)
+	assert.Contains(t, err.Error(), `field "path_prefix" must not contain '/'`)
+	assert.Contains(t, err.Error(), `field "namespace" must not contain '/'`)
+	assert.Contains(t, err.Error(), `field "name" must not contain '/'`)
+	assert.Contains(t, err.Error(), `field "trace_name" must not contain '/'`)
+}
+
+// Forgetting to bind a project should surface an unattached metrics node, not
+// silently collect nothing.
+func TestScopesCoverAnUnboundProject(t *testing.T) {
+	cfg, err := parseConfig([]byte(minimalConfig))
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{""}, cfg.Projects[0].scopes())
+}
+
+func TestScopesAreDistinctAndOrdered(t *testing.T) {
+	cfg, err := parseConfig([]byte(`
+schema_version: 1
+projects:
+  - id: demo
+    host: https://langfuse.example.com
+    project_id: cm0demo
+    public_key: pk-lf-demo
+    secret_key: sk-lf-demo
+    observes:
+      - kind: deployment
+        namespace: ns
+        name: first
+        trace_name: agent
+      - kind: deployment
+        namespace: ns
+        name: second
+        trace_name: agent
+      - kind: deployment
+        namespace: ns
+        name: third
+`))
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"agent", ""}, cfg.Projects[0].scopes())
+}
