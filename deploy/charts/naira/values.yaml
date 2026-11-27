@@ -53,8 +53,9 @@ catalog:
   # NetworkPolicy ingress rules) for other callers. Egress is not restricted.
   networkPolicy: {enabled: false, extraIngress: []}
 
-  # Secret `catalog-secrets` (or existingSecret) holding LITELLM_API_KEY and
-  # OPENMETADATA_ADMIN_PASSWORD. Supplied by the operator; create is for kind.
+  # Secret `catalog-secrets` (or existingSecret). Needed only when an enabled
+  # plugin reads keys from it (e.g. LITELLM_API_KEY, OPENMETADATA_ADMIN_PASSWORD,
+  # GITHUB_TOKEN, BEDROCK_AWS_*). Supplied by the operator; create is for kind.
   secret:
     existingSecret: ""
     create: false
@@ -99,7 +100,8 @@ catalog:
   #   config      {mountPath, existingConfigMap | data}: files mounted as a directory
   plugins:
     litellm:
-      enabled: true
+      # Off by default: requires a catalog Secret containing LITELLM_API_KEY.
+      enabled: false
       image: {repository: naira-plugin-litellm, tag: ""}
       port: 50051
       schedule: "0 0 * * *"
@@ -173,7 +175,8 @@ catalog:
             verbs: ["get", "list"]
 
     openmetadata:
-      enabled: true
+      # Off by default: requires a catalog Secret containing OPENMETADATA_ADMIN_PASSWORD.
+      enabled: false
       image: {repository: naira-plugin-openmetadata, tag: ""}
       port: 50056
       pathPrefix: openmetadata
