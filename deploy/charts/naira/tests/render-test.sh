@@ -64,29 +64,27 @@ must_fail() {
   fi
 }
 
-# only PLUGIN...: prints helm flags that disable every plugin defined in
-# values.yaml, then enable the named ones (a later --set wins). Use it as
-# NAME=($(only a b)) and pass "${NAME[@]}", so the check does not depend on
-# which plugins are enabled by default. A plugin that needs more to render
-# (tech-radar needs its radar file) still needs those flags on top.
+# only_into ARRAY PLUGIN... fills ARRAY with flags that disable every plugin
+# before enabling the named ones. Tests therefore do not depend on defaults.
 ALL_PLUGINS=$(yq '.catalog.plugins | keys | .[]' "$CHART/values.yaml")
-only() {
-  local p
-  for p in $ALL_PLUGINS; do echo "--set catalog.plugins.$p.enabled=false"; done
-  for p in "$@"; do echo "--set catalog.plugins.$p.enabled=true"; done
+only_into() {
+  local -n out=$1
+  shift
+  local plugin
+  out=()
+  for plugin in $ALL_PLUGINS; do
+    out+=(--set "catalog.plugins.$plugin.enabled=false")
+  done
+  for plugin in "$@"; do
+    out+=(--set "catalog.plugins.$plugin.enabled=true")
+  done
 }
-# shellcheck disable=SC2207  # the flags contain no spaces
-NO_PLUGINS=($(only))
-# shellcheck disable=SC2207
-LITELLM_ONLY=($(only litellm))
-# shellcheck disable=SC2207
-OPENMETADATA_ONLY=($(only openmetadata))
-# shellcheck disable=SC2207
-MLFLOW_ONLY=($(only mlflow))
-# shellcheck disable=SC2207
-PORT_CLASH=($(only litellm mlflow))
-# shellcheck disable=SC2207
-RBAC_ONLY=($(only depl-calls-svc fluxcd))
+only_into NO_PLUGINS
+only_into LITELLM_ONLY litellm
+only_into OPENMETADATA_ONLY openmetadata
+only_into MLFLOW_ONLY mlflow
+only_into PORT_CLASH litellm mlflow
+only_into RBAC_ONLY depl-calls-svc fluxcd
 
 # yq selectors for the objects the checks look at.
 CATALOG='select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.template.spec'
@@ -263,8 +261,7 @@ check "existingConfigMap: no generated ConfigMap" \
 check "existingConfigMap: volume points at it" \
   "my-radar" \
   "$(render "${TECH_RADAR_EXISTING[@]}" | yq "$TECH_RADAR_VOLUME | .configMap.name")"
-# shellcheck disable=SC2207
-THREE_PLUGINS=($(only mlflow tech-radar depl-uses-litellm))
+only_into THREE_PLUGINS mlflow tech-radar depl-uses-litellm
 check "mlflow plus tech-radar and depl-uses-litellm: 3 sidecars" \
   "3" \
   "$(render "${THREE_PLUGINS[@]}" "${TECH_RADAR[@]}" \
@@ -462,8 +459,7 @@ RENDER=render_raw must_fail "portal create with empty value" \
   "portal.oidc.secret.value is empty" \
   --set catalog.enabled=false --set portal.oidc.secret.create=true
 
-# shellcheck disable=SC2207
-GITHUB=($(only github))
+only_into GITHUB github
 GITHUB_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-github\")"
 
 check "github token from the catalog Secret" \
@@ -482,8 +478,7 @@ RENDER=render_raw must_fail "github on without a catalog Secret source" \
   "catalog.plugins.github reads GITHUB_TOKEN from the catalog Secret" \
   "${GITHUB[@]}" --set portal.enabled=false
 
-# shellcheck disable=SC2207
-BEDROCK=($(only bedrock))
+only_into BEDROCK bedrock
 BEDROCK_SIDECAR="$CATALOG | .initContainers[] | select(.name == \"plugin-bedrock\")"
 
 check "bedrock AWS credentials from the catalog Secret" \
