@@ -17,8 +17,7 @@
 # plugins with `flags` (all plugins off, the named ones on), so it keeps
 # passing when a plugin is switched on or off in values.yaml.
 #
-# Requires bash >= 4, helm and mikefarah yq v4 (helm and yq are pinned in
-# mise.toml).
+# Requires helm and mikefarah yq v4 (both pinned in mise.toml).
 set -euo pipefail
 CHART="$(cd "$(dirname "$0")/.." && pwd)"
 # Release PRs bump Chart.yaml, so image tags are read from it, not hardcoded.
@@ -79,9 +78,12 @@ only() {
 # flags ARRAY PLUGIN...: fills ARRAY with the output of `only`. Pass it to
 # helm as "${ARRAY[@]}".
 flags() {
-  local name=$1
+  local name=$1 line
   shift
-  mapfile -t "$name" < <(only "$@")
+  eval "$name=()"
+  while IFS= read -r line; do
+    eval "$name+=(\"\$line\")"
+  done < <(only "$@")
 }
 flags NO_PLUGINS
 flags LITELLM_ONLY litellm
