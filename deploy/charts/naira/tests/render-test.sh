@@ -81,6 +81,7 @@ flags() {
   local name=$1 line
   shift
   eval "$name=()"
+  # shellcheck disable=SC2034 # line is read by the eval below
   while IFS= read -r line; do
     eval "$name+=(\"\$line\")"
   done < <(only "$@")
