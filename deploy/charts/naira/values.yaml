@@ -99,6 +99,7 @@ catalog:
   #   config      {mountPath, existingConfigMap | data}: files mounted as a directory
   plugins:
     litellm:
+      # Off by default: requires a catalog Secret containing LITELLM_API_KEY.
       enabled: false
       image: {repository: naira-plugin-litellm, tag: ""}
       port: 50051
@@ -173,6 +174,7 @@ catalog:
             verbs: ["get", "list"]
 
     openmetadata:
+      # Off by default: requires a catalog Secret containing OPENMETADATA_ADMIN_PASSWORD.
       enabled: false
       image: {repository: naira-plugin-openmetadata, tag: ""}
       port: 50056

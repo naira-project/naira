@@ -7,8 +7,9 @@ the test-dependencies chart.
 
 ## Install
 
-Bare defaults do not render: the chart needs a Secret source for the catalog
-and for the portal (`templates/validate.yaml`).
+Bare defaults do not render: the chart needs a Secret source for the portal
+(`templates/validate.yaml`). A catalog Secret source is required only when an
+enabled plugin reads a Secret.
 
 Minimal:
 
@@ -17,10 +18,10 @@ helm install naira deploy/charts/naira -n idp-system --create-namespace \
   -f deploy/charts/naira/ci/default-values.yaml
 ```
 
-plus Secrets supplied by the operator: `catalog-secrets` (keys
-`LITELLM_API_KEY`, `OPENMETADATA_ADMIN_PASSWORD`), `portal-oidc` (key
-`client-secret`), `postgres-admin` (key `postgres-password`) and `catalog-db`
-(keys `username`, `password`).
+plus Secrets supplied by the operator: `portal-oidc` (key `client-secret`),
+`postgres-admin` (key `postgres-password`) and `catalog-db` (keys `username`,
+`password`). A catalog Secret is needed only if an enabled plugin reads from it;
+its required keys depend on the enabled plugins (see the table below).
 
 Run `helm dependency build deploy/charts/naira` first in a checkout; the
 PostgreSQL subchart is not vendored.
@@ -85,12 +86,12 @@ in a value fails the render.
 
 | Plugin | Port | Enabled by default | Needs |
 |---|---|---|---|
-| litellm | 50051 | yes | Secret key `LITELLM_API_KEY` |
+| litellm | 50051 | no | Secret key `LITELLM_API_KEY` |
 | mlflow | 50052 | yes | — |
 | depl-calls-svc | 50053 | yes | RBAC: namespaces, services, deployments |
 | depl-uses-litellm | 50054 | no | RBAC: namespaces, secrets (cluster-wide), deployments |
 | fluxcd | 50055 | yes | RBAC: deployments, kustomizations, helmreleases, gitrepositories |
-| openmetadata | 50056 | yes | Secret key `OPENMETADATA_ADMIN_PASSWORD` |
+| openmetadata | 50056 | no | Secret key `OPENMETADATA_ADMIN_PASSWORD` |
 | tech-radar | 50057 | no | Config file (`config.data` or `config.existingConfigMap`) |
 | mcp-servers | 50058 | yes | — |
 | github | 50059 | no | Secret key `GITHUB_TOKEN`; RBAC: namespaces, deployments |
