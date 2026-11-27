@@ -1,8 +1,4 @@
-# Smallest values that render: names the Secrets an operator supplies.
-# The chart refuses to render without a Secret source (templates/validate.yaml).
-catalog:
-  secret:
-    existingSecret: catalog-secrets
+# Smallest values that render: names the required portal and database Secrets.
 portal:
   oidc:
     secret:

@@ -22,8 +22,10 @@ CHART="$(cd "$(dirname "$0")/.." && pwd)"
 APP_VERSION=$(yq '.appVersion' "$CHART/Chart.yaml")
 fail=0
 
-# BASE lists flags to add a minimal set of values required to render the chart.
-BASE=(-f "$CHART/ci/default-values.yaml")
+# BASE supplies the operator Secrets needed by the test renders, including
+# tests that explicitly enable plugins which read the catalog Secret. The
+# chart's minimal values remain in ci/default-values.yaml without that Secret.
+BASE=(-f "$CHART/ci/default-values.yaml" --set catalog.secret.existingSecret=catalog-secrets)
 # DB names the operator-supplied database Secrets, for render_raw calls that
 # test something else.
 DB=(--set database.admin.secret.existingSecret=postgres-admin
@@ -91,6 +93,9 @@ CATALOG='select(.kind == "Deployment" and .metadata.name == "catalog") | .spec.t
 pod() { printf 'select(.kind == "Deployment" and .metadata.name == "%s") | .spec.template.spec' "$1"; }
 
 # ── Default policy ───────────────────────────────────────────────────────────
+check "minimal CI values render without a catalog Secret" \
+  "ok" \
+  "$(render_raw -f "$CHART/ci/default-values.yaml" >/dev/null && echo ok)"
 # The one place that pins what a plain install runs. Changing which plugins
 # are enabled by default in values.yaml means changing DEFAULT_SIDECARS here
 # and nothing else.
