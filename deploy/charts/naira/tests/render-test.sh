@@ -410,7 +410,7 @@ check "dev: local image names" \
   "naira-catalog:${APP_VERSION}" \
   "$(render_raw "${DEV[@]}" | yq "$CATALOG | .containers[0].image")"
 check "dev: sidecars (openmetadata and LiteLLM off, tech-radar on)" \
-  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-mcp-servers,plugin-mlflow,plugin-openai-api-models,plugin-tech-radar" \
+  "plugin-depl-calls-svc,plugin-depl-uses-litellm,plugin-fluxcd,plugin-mcp-servers,plugin-mlflow,plugin-tech-radar" \
   "$(render_raw "${DEV[@]}" | yq ea "[$CATALOG | .initContainers[].name] | join(\",\")")"
 check "dev: catalog Secret matches test-dependencies master key" \
   "sk-local-litellm" \
